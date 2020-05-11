@@ -1,0 +1,3010 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="true" IsPlaceable="false" MainGUID="6DD92197-D9FD-47EB-B8C9-D804DE680D2A" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+paperToModel = GLOB_SCALE / 1000
+
+! ======================================================================
+! Scale sensitive Floor Plan Display
+! ======================================================================
+
+homestory = 1
+abovestory = 0
+belowstory = 0
+if bStorySensitive then
+	if GLOB_CH_STORY_DIST > EPS  then
+		abovestory = 1
+		homestory = 0
+	else
+		if GLOB_CH_STORY_DIST < -EPS  then
+			belowstory = 1
+			homestory = 0
+		endif
+	endif
+endif
+
+! ======================================================================
+! Scale sensitive  - Symbol and Text
+! ======================================================================
+
+iHomeStory = FLOOR
+_contentText = symb_text_1_short
+if iSymbolType = FLOOR_OPENING then
+	iHomeStory = FLOOR
+	_contentText = symb_text_1_short
+	if belowStory then
+		iHomeStory = CEILING
+		_contentText = symb_text_2_short
+	endif
+endif
+if iSymbolType = CEILING_OPENING then
+	iHomeStory = CEILING
+	_contentText = symb_text_1_short
+	if aboveStory then
+		iHomeStory = FLOOR
+		_contentText = symb_text_2_short
+	endif
+endif
+if iSymbolType = FLOOR_RECESS then
+	iHomeStory = FLOOR
+	_contentText = symb_text_short
+endif
+
+! ======================================================================
+! TEXT Style
+! ======================================================================
+
+if iFontScale = FONTSCALE_MODEL then
+	fontSizePaper	= gs_font_size / paperToModel
+endif
+
+AC_TextStyle = gs_text_style_bold + 2*gs_text_style_italic + 4*gs_text_style_underline
+
+define style "textStyle"		fontType, fontSizePaper, 8,  AC_TextStyle
+define style "textStyleUnder"	fontType, fontSizePaper, 2,  AC_TextStyle
+define style{2} "fracStyle"		fontType, fontSizePaper, 32+(AC_TextStyle)	! with Superscript
+
+stringWidth		= 0
+stringHeight	= 0
+iMirrored		= 1-2*SYMB_MIRRORED
+
+! --- Oriented View ------------------------------
+!angleViewRot 	= 0
+!readAngle 		= 90
+!qqq = request ("View_Rotangle", "", angleViewRot)
+!totalRotate = (SYMB_ROTANGLE + angleViewRot + angle) MOD 360
+!bTextRotate	= (totalRotate > (readAngle + eps*iMirrored) & totalRotate < (readAngle + 180 + eps*iMirrored))
+!textRotate	= 180 * bTextRotate
+
+!----------- Length Calculation --------------------
+sConversionText = ""
+gosub "displayUnitConversions"
+
+dim sizes[3]
+	sizes[1] = A
+	sizes[2] = B
+	sizes[3] = gs_slab_thickness
+
+dim sizesText[3][2]
+for i = 1 to 3
+	call "quantity_text_formatter" parameters 	lengthValue				= sizes[i],
+												custom_form				= sConversionText,
+												iUnitType				= 0,
+												horizontalAlignment 	= 1,
+												verticalAlignment		= 1,
+												AC_TextFont				= fontType,
+												AC_TextSize				= fontSizePaper,
+												AC_TextStyle			= AC_TextStyle,
+												szPrefix				= "",
+												bShowText				= 1,
+												bShowUnit				= 0,
+												bShowSuperScript		= 0,
+							returned_parameters dummy_lengthOfNote1,
+												dummy_lengthOfNote2,
+												dummy_lengthOfNote3,
+												dummy_lengthOfNote4,
+												dummy_totalLength,
+												dummy_totalHeight,
+												dummy_lengthOfUnit,
+												dummy_lengthOfIntegerPart,
+												note1,				!szPrefix + main
+												note2,				!frac,
+												dummy_note3,		!szUnit,
+												dummy_note4,		!szUnitIndex,
+												dummy_szExtraPrecision,
+												dummy_iAnchorString
+
+	sizesText[i][1]	= note1
+	sizesText[i][2]	= note2
+next i
+
+!----------- Add Str To Text --------------------
+dim stringsNormal[3]
+dim stringsSuper[3]
+for i = 1 to 3
+	stringsNormal[i]	= ""
+	stringsSuper[i]		= ""
+next i
+
+if bShowPrefix then
+	stringsNormal[1]	= stringsNormal[1] + symb_use_short + " "
+endif
+
+if gs_displaytext then
+	stringsNormal[1]	= stringsNormal[1] + _contentText
+endif
+
+if bShowSizes then
+	stringsNormal[1]	= stringsNormal[1] + " "
+
+	if iOpeningType = OPTYPE_CIRCULAR then
+		stringsNormal[1]	= stringsNormal[1] + "Ø"		!FI
+		stringsNormal[1]	= stringsNormal[1] + sizesText[2][1]
+		stringsSuper[1]		= stringsSuper[1] + sizesText[2][2]
+	else
+		stringsNormal[1]	= stringsNormal[1] + sizesText[1][1]
+		stringsSuper[1]		= stringsSuper[1] + sizesText[1][2]
+
+		stringsNormal[2]	= stringsNormal[2] + " /" + sizesText[2][1]
+		stringsSuper[2]		= stringsSuper[2] + sizesText[2][2]
+	endif
+
+	if iSymbSizes = SYMBTEXT_XYZ then
+		stringsNormal[3]	= stringsNormal[3] + " /" + sizesText[3][1]
+		stringsSuper[3]		= stringsSuper[3] + sizesText[3][2]
+	endif
+endif
+
+
+!----------- Paragraph --------------------
+paragraph "paragraph" 2, 0, 0, 0, 1, 0
+	pen gs_font_pen
+
+	set style "textStyle"
+	stringsNormal[1]
+
+	set style "fracStyle"
+	stringsSuper[1]
+
+	set style "textStyle"
+	stringsNormal[2]
+
+	set style "fracStyle"
+	stringsSuper[2]
+
+	set style "textStyle"
+	stringsNormal[3]
+
+	set style "fracStyle"
+	stringsSuper[3]
+endparagraph
+textblock "textblock" gs_text_wrap*gs_text_width/paperToModel, 8, 0, 1, 1, 10/GLOB_SCALE, "paragraph"
+
+qqq = REQUEST ("TEXTBLOCK_INFO", "textblock", stringWidth, stringHeight)
+stringWidth		= stringWidth	* paperToModel 
+stringHeight	= stringHeight	* paperToModel 
+
+bUpperSting = ((gs_displaytext | bShowPrefix | bShowSizes) & stringWidth > EPS)
+
+if iSymbolType = FLOOR_RECESS then add2 -a / 2, -b / 2
+
+! ======================================================================
+! Hotspots
+! ======================================================================
+add2 a / 2, b + stringHeight/ 2
+
+unID = 1
+if bUpperSting then
+	hotspot2 0, 0
+	hotspot2 gs_textoffset_x,	0,					unID,	gs_textoffset_y,	1 + 128	: unID = unID + 1
+	hotspot2 gs_textoffset_x,	-0.1,				unID,	gs_textoffset_y,	3 + 128	: unID = unID + 1
+	hotspot2 gs_textoffset_x,	gs_textoffset_y,	unID,	gs_textoffset_y,	2		: unID = unID + 1
+	hotspot2 0,					gs_textoffset_y,	unID,	gs_textoffset_x,	1 + 128	: unID = unID + 1
+	hotspot2 -0.1,				gs_textoffset_y,	unID,	gs_textoffset_x,	3 + 128	: unID = unID + 1
+	hotspot2 gs_textoffset_x,	gs_textoffset_y,	unID,	gs_textoffset_x,	2		: unID = unID + 1
+endif
+
+del 1
+unID = 7
+
+! ======================================================================
+! Type
+! ======================================================================
+
+if iSymbolType = FLOOR_RECESS then
+	shadowFillType	= backGroundFillType
+	shadowFillPen	= backGroundFillPen
+	shadowFillBgPen	= backGroundFillBgPen
+
+	groundFillType	= backGroundFillType
+	groundFillPen	= backGroundFillPen
+	groundFillBgPen	= backGroundFillBgPen
+else
+	shadowFillType	= gs_opening_filltype
+	shadowFillPen	= gs_opening_fillpen
+	shadowFillBgPen	= gs_opening_backgroundpen
+
+	if iHomeStory = CEILING then
+		groundFillType	= ceilingFillType
+		groundFillPen	= ceilingFillPen
+		groundFillBgPen	= ceilingFillBgPen
+	else
+		groundFillType	= backGroundFillType
+		groundFillPen	= backGroundFillPen
+		groundFillBgPen	= backGroundFillBgPen
+	endif
+endif
+
+if iOpeningType = OPTYPE_RECTANGULAR	then gosub "squareOpening"
+if iOpeningType = OPTYPE_ROUNDED		then gosub "ovalOpening"
+if iOpeningType = OPTYPE_ELLIPTICAL		then gosub "roundedOpening"
+if iOpeningType = OPTYPE_CIRCULAR		then
+	a = b
+	gosub "roundedOpening"
+endif
+
+
+! ======================================================================
+! Text
+! ======================================================================
+if bUpperSting then
+	!----------- Draw Text --------------------
+	add2 a/2+gs_textoffset_x, b+stringHeight/2+gs_textoffset_y
+
+	hotspot2 0,0
+	hotspot2 (stringWidth/2),				0,							unID+1, angle, 4
+	hotspot2 (stringWidth/2)*cos(angle),	(stringWidth/2)*sin(angle),	unID+2, angle, 5
+	hotspot2 0,								0,							unID+3, angle, 6
+	hotspot2 2,								0,							unID+4, angle, 7
+
+	rot2 angle
+	add2 0, -stringHeight/2
+
+	mul2 iMirrored, 1
+
+	if GLOB_CONTEXT = 22 then
+		rect2 -stringWidth/2, 0, stringWidth/2, stringHeight
+	else
+		richtext2 0, 0, "textblock"
+	endif
+
+	del 4
+endif
+
+!----------- Custom Text --------------------
+if bShowCustomText & symb_cust_text <> "" then
+	paragraph "paragraphUnder" 2, 0, 0, 0, 1, 0
+		pen gs_font_pen
+		set style "textStyleUnder"
+		symb_cust_text
+	endparagraph
+	textblock "textblockUnder" gs_text_wrap*gs_text_width/paperToModel, 2, 0, 1, 1, 10/GLOB_SCALE, "paragraphUnder"
+
+	add2 a/2, 0
+	if GLOB_CONTEXT = 22 then
+		qqq = REQUEST ("TEXTBLOCK_INFO", "textblockUnder", stringWidthUnder, stringHeightUnder)
+		stringWidthUnder	= stringWidthUnder	* paperToModel 
+		stringHeightUnder	= stringHeightUnder	* paperToModel 
+
+		rect2 -stringWidthUnder/2, 0, stringWidthUnder/2, -stringHeightUnder
+	else
+		richtext2 0, 0, "textblockUnder"
+	endif
+	del 1
+endif
+
+if iSymbolType = FLOOR_RECESS then del 1
+
+!================================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+!================================================================================
+
+!--------------------------------------------------------------------------------
+"displayUnitConversions":
+!--------------------------------------------------------------------------------
+	if iWorkingUnit = WORKUNIT_PROJECT then
+		n = REQUEST ("Linear_dimension", "",sConversionText)
+
+		! DIN: removing "hide zero wholes" flag
+		zeroFlagPos = STRSTR (sConversionText, "#")
+		if zeroFlagPos > 0 then
+			charNum = STRLEN (sConversionText)
+			format1 = STRSUB (sConversionText, 1, zeroFlagPos - 1)
+			format2 = STRSUB (sConversionText, zeroFlagPos + 1, charNum - zeroFlagPos)
+			sConversionText = format1 + format2
+		endif
+	endif
+
+	if iWorkingUnit = WORKUNIT_MM then
+		if iDecimalOptions = 0 then sConversionText	= "%~0.0mm"
+		if iDecimalOptions = 1 then sConversionText	= "%~0.1mm"
+	endif
+	if iWorkingUnit = WORKUNIT_CM then
+		if iDecimalOptions = 0 then sConversionText	= "%~0.0cm"
+		if iDecimalOptions = 1 then sConversionText	= "%~0.1cm"
+		if iDecimalOptions = 2 then sConversionText	= "%~0.2cm"
+	endif
+	if iWorkingUnit = WORKUNIT_METER then
+		if iDecimalOptions = 0 then sConversionText	= "%~0.0m"
+		if iDecimalOptions = 1 then sConversionText	= "%~0.1m"
+		if iDecimalOptions = 2 then sConversionText	= "%~0.2m"
+		if iDecimalOptions = 3 then sConversionText	= "%~0.3m"
+		if iDecimalOptions = 4 then sConversionText	= "%~0.4m"
+	endif
+	if iWorkingUnit = WORKUNIT_INCH then
+		sConversionText		= "%0.64fi"
+	endif
+return
+
+
+
+!--------------------------------------------------------------------------------
+"squareOpening":
+!--------------------------------------------------------------------------------
+
+	if b > a then
+		x = a / 3.5 * ((b / a / 2) ^ (1 / 2))
+		y = x
+		if y > a-EPS then
+			y = a * magicScale
+			x = y
+		endif
+	else
+		x = b / 3.5 * ((a / b / 2) ^ (1 / 2))
+		y = x
+		if y > b-EPS then
+			y = b * magicScale
+			x = y
+		endif
+	endif
+
+	if iHomeStory = CEILING then
+		pen gs_ceilingCont_pen
+		line_type lineTypeCeiling
+
+		fill groundFillType
+		poly2_B 4, 1 + 2 + 4, groundFillPen, groundFillBgPen,
+			0, 0, 1,
+			0, b, 1,
+			a, b, 1,
+			a, 0, 1
+	
+		if iOpeningSymbolType = 1 then
+			poly2_B 4, 1 + 4, groundFillPen, groundFillBgPen,
+				0, 0, 1,
+				a, b, 0,
+				0, b, 1,
+				a, 0, 0
+		else
+			poly2_B 4, 1 + 4, groundFillPen, groundFillBgPen,
+				0, 0, 0,
+				a, 0, 0,
+				a, b, 1,
+				a - x, y, 1
+		endif
+
+		hotspot2 a / 2, b / 2
+	endif
+
+	if iHomeStory = FLOOR then
+		pen penFloor
+		line_type lineTypeFloor
+
+		fill groundFillType
+		poly2_B 4, 1 + 2 + 4, groundFillPen, groundFillBgPen,
+			0, 0, 1,
+			0, b, 1,
+			a, b, 1,
+			a - x, y, 1
+
+		fill shadowFillType
+		poly2_B 4, 1 + 2 + 4, shadowFillPen, shadowFillBgPen,
+			0, 0, 1,
+			a, 0, 1,
+			a, b, 1,
+			a - x, y, 1
+
+		hotspot2 a - x, y
+	endif
+
+
+	hotspot2 0, 0
+	hotspot2 a, 0
+	hotspot2 a, b
+	hotspot2 0, b
+
+	unID = 10
+
+return
+
+!--------------------------------------------------------------------------------
+"roundedOpening":
+!--------------------------------------------------------------------------------
+
+	add2 a / 2, b / 2
+	mul2 1, b / a
+
+	if iHomeStory = CEILING then
+		pen gs_ceilingCont_pen
+		line_type lineTypeCeiling
+
+		fill groundFillType
+		poly2_B 2, 1 + 2 + 4, groundFillPen, groundFillBgPen,
+			0, 0, 901,
+			a / 2, 360, 4001
+
+		line2 -(sin(45))*(a/2), -(sin(45))*(a/2), (sin(45))*(a/2), (sin(45))*(a/2)
+
+		if iOpeningSymbolType = 1 then
+			line2 (sin(45))*(a/2), -(sin(45))*(a/2), -(sin(45))*(a/2), (sin(45))*(a/2)
+		endif
+	endif
+
+	if iHomeStory = FLOOR then
+		pen penFloor
+		line_type lineTypeFloor
+
+		circle2 0, 0, a / 2
+		line2 -(sin(45)) * (a / 2), -(sin(45)) * (a / 2), (sin(45)) * (a / 2), (sin(45)) * (a / 2)
+
+		fill groundFillType
+		poly2_B 4, 2 + 4, groundFillPen, groundFillBgPen,
+			-(sin(45)) * (a / 2), -(sin(45)) * (a / 2), 1,
+			0, 0, 900,
+			a / 2, -180, 4001,
+			(sin(45)) * (a / 2), (sin(45)) * (a / 2), 1
+
+		fill shadowFillType
+		poly2_B 4, 2 + 4, shadowFillPen, shadowFillBgPen,
+			-(sin(45)) * (a / 2), -(sin(45)) * (a / 2), 1,
+			0, 0, 900,
+			a / 2, 180, 4001,
+			(sin(45)) * (a / 2), (sin(45)) * (a / 2), 1
+	endif
+
+	del 2
+
+	hotspot2 a / 2,	b / 2
+	hotspot2 0,		b / 2
+	hotspot2 a / 2,	0
+	hotspot2 a,		b / 2
+	hotspot2 a / 2,	b
+
+	unID = 20
+
+return
+
+!--------------------------------------------------------------------------------
+"ovalOpening":
+!--------------------------------------------------------------------------------
+
+	x = b / 3.5 * ((a / b / 2) ^ (1 / 2))
+	y = x
+	if y > b-EPS then
+		y = b * magicScale
+		x = y
+	endif
+
+	if iHomeStory = CEILING then
+		pen gs_ceilingCont_pen
+		line_type lineTypeCeiling
+
+		fill groundFillType
+		poly2_B 7, 1 + 2 + 4, groundFillPen, groundFillBgPen,
+			a - b / 2, 0, 1,
+			b / 2, 0, 1,
+			-1, 0, 800,
+			b / 2, b, 1001,
+			a - b / 2, b, 1,
+			1, 0, 800,
+			a - b / 2, 0, 1001
+
+		if iOpeningSymbolType = 1 then
+			poly2_B 4, 1 + 4, shadowFillPen, shadowFillBgPen,
+				b / 2 - (sin(45)) * (b / 2), b / 2 - (sin(45)) * (b / 2), 1,
+				a - b / 2 + (sin(45)) * (b / 2), b / 2 + (sin(45)) * (b / 2), 0,
+				b / 2 - (sin(45)) * (b / 2), b / 2 + (sin(45)) * (b / 2), 1,
+				a - b / 2 + (sin(45)) * (b / 2), b / 2 - (sin(45)) * (b / 2), 0
+			else
+			poly2_B 5, 1 + 4, shadowFillPen, shadowFillBgPen,
+				a - b / 2, y, 1,
+				b / 2, 0, 0,
+				a - b / 2, 0, 0,
+				a - b / 2, b / 2, 900,
+				b / 2, 135, 4001
+		endif
+	endif
+
+	if iHomeStory = FLOOR then
+		pen penFloor
+		line_type lineTypeFloor
+
+		fill groundFillType
+		poly2_B 7, 1 + 2 + 4, groundFillPen, groundFillBgPen,
+			a - b / 2, y, 1,
+			b / 2, 0, 1,
+			-1, 0, 800,
+			b / 2, b, 1001,
+			a - b / 2, b, 1,
+			a - b / 2, b / 2, 900,
+			b / 2, -45, 4001
+
+		fill shadowFillType
+		poly2_B 5, 1 + 2 + 4, shadowFillPen, shadowFillBgPen,
+			a - b / 2, y, 1,
+			b / 2, 0, 1,
+			a - b / 2, 0, 1,
+			a - b / 2, b / 2, 900,
+			b / 2, 135, 4001
+
+		hotspot2 a - b / 2, y
+	endif
+
+	hotspot2 b / 2, 0
+	hotspot2 a - b / 2,	0
+	hotspot2 b / 2,	b
+	hotspot2 a - b / 2,	b
+	hotspot2 a, b / 2
+	hotspot2 0, b / 2
+
+	unID = 30
+
+return
+
+
+
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! Opening Form
+! ==============================================================================
+values "Typ" stOpeningType
+values "iOpeningType" 1, 2, 3 ,4
+if GLOB_MODPAR_NAME = "Typ" then
+	for i = 1 to vardim1(stOpeningType)
+	   if Typ = stOpeningType[i] then iOpeningType = i
+	next i
+	parameters iOpeningType = iOpeningType
+else
+	Typ = stOpeningType[max(min(iOpeningType, vardim1(stOpeningType)), 1)]
+	parameters Typ = Typ
+endif
+
+if iSymbolType <> FLOOR_RECESS then
+	values "openingSymbolType" stOpeningSymbolType
+	values "iOpeningSymbolType" 1, 2
+	if GLOB_MODPAR_NAME = "openingSymbolType" then
+		iOpeningSymbolType = 1
+		if openingSymbolType = stOpeningSymbolType[2] then iOpeningSymbolType = 2
+		parameters iOpeningSymbolType = iOpeningSymbolType
+	else
+		openingSymbolType = stOpeningSymbolType[1]
+		if iOpeningSymbolType = 2 then openingSymbolType = stOpeningSymbolType[2]
+		parameters openingSymbolType = openingSymbolType
+	endif
+endif
+
+! ==============================================================================
+! Story Sensitive
+! ==============================================================================
+if not(bStorySensitive) then
+	if iSymbolType = FLOOR_OPENING then
+		hideparameter	"openingSymbolType",
+						"iOpeningSymbolType",
+						"gs_ceilingCont_pen",
+						"lineTypeCeiling",
+						"ceilingFillType",
+						"ceilingFillPen",
+						"ceilingFillBgPen",
+						"symb_text_2",
+						"iSymbText2",
+						"iSymbText2_prev",
+						"symb_text_2_short",
+						"iSymbText2Short"
+
+		lock			"openingSymbolType",
+						"iOpeningSymbolType",
+						"gs_ceilingCont_pen",
+						"lineTypeCeiling",
+						"ceilingFillType",
+						"ceilingFillPen",
+						"ceilingFillBgPen",
+						"symb_text_2",
+						"iSymbText2",
+						"iSymbText2_prev",
+						"symb_text_2_short",
+						"iSymbText2Short"
+	endif
+
+	if iSymbolType = CEILING_OPENING then
+		hideparameter	"penFloor",
+						"lineTypeFloor",
+						"gs_opening_filltype",
+						"gs_opening_fillpen",
+						"gs_opening_backgroundpen",
+						"backGroundFillType",
+						"backGroundFillPen",
+						"backGroundFillBgPen",
+						"symb_text_2",
+						"iSymbText2",
+						"iSymbText2_prev",
+						"symb_text_2_short",
+						"iSymbText2Short"
+
+		lock			"penFloor",
+						"lineTypeFloor",
+						"gs_opening_filltype",
+						"gs_opening_fillpen",
+						"gs_opening_backgroundpen",
+						"backGroundFillType",
+						"backGroundFillPen",
+						"backGroundFillBgPen",
+						"symb_text_2",
+						"iSymbText2",
+						"iSymbText2_prev",
+						"symb_text_2_short",
+						"iSymbText2Short"
+	endif
+endif
+
+! ==============================================================================
+! Sizes
+! ==============================================================================
+values "gs_hole_width"		range (0,)
+values "gs_hole_diameter"	range (0,)
+values "gs_hole_depth"		range (0,)
+values "gs_slab_thickness"	range (0,)
+values "A"					range (0,)
+values "B"					range (0,)
+values "ZZYZX"				range (0,)
+
+if iOpeningType = OPTYPE_CIRCULAR then
+	lock			"gs_hole_width", "gs_hole_depth"
+	hideparameter	"gs_hole_width", "gs_hole_depth"
+else
+	lock			"gs_hole_diameter"
+	hideparameter	"gs_hole_diameter"
+endif
+
+if GLOB_MODPAR_NAME = "A" | GLOB_MODPAR_NAME = "B" then
+	if iOpeningType = OPTYPE_CIRCULAR then
+		if GLOB_MODPAR_NAME = "A" then
+			gs_hole_diameter = A
+		else
+			gs_hole_diameter = B
+		endif
+
+		parameters gs_hole_diameter = gs_hole_diameter
+	else
+		gs_hole_width	= A 
+		gs_hole_depth	= B
+
+		parameters gs_hole_width =gs_hole_width, gs_hole_depth = gs_hole_depth
+	endif
+else
+	if iOpeningType = OPTYPE_CIRCULAR then
+		A = gs_hole_diameter
+		B = gs_hole_diameter
+	else
+		A = gs_hole_width
+		B = gs_hole_depth
+	endif
+	parameters A = A, B = B
+endif
+
+if GLOB_MODPAR_NAME = "ZZYZX" then
+	gs_slab_thickness = ZZYZX
+	parameters gs_slab_thickness = gs_slab_thickness
+else
+	ZZYZX = gs_slab_thickness
+	parameters ZZYZX = ZZYZX
+endif
+
+
+! ==============================================================================
+! Text Content
+! ==============================================================================
+if not(gs_displaytext) then
+	if iSymbolType <> FLOOR_RECESS then
+		hideparameter	"symb_text_1",
+						"iSymbText1",
+						"iSymbText1_prev",
+						"symb_text_1_short",
+						"iSymbText1Short",
+						"symb_text_2",
+						"iSymbText2",
+						"iSymbText2_prev",
+						"symb_text_2_short",
+						"iSymbText2Short"
+	
+		lock			"symb_text_1",
+						"iSymbText1",
+						"iSymbText1_prev",
+						"symb_text_1_short",
+						"iSymbText1Short",
+						"symb_text_2",
+						"iSymbText2",
+						"iSymbText2_prev",
+						"symb_text_2_short",
+						"iSymbText2Short"
+	else
+		hideparameter	"symb_text",
+						"iSymbText",
+						"iSymbText_prev",
+						"symb_text_short",
+						"iSymbTextShort"
+	
+		lock			"symb_text",
+						"iSymbText",
+						"iSymbText_prev",
+						"symb_text_short",
+						"iSymbTextShort"
+	endif
+endif
+
+if not(bShowPrefix) then
+	hideparameter	"symb_use",
+					"iSymbUse",
+					"iSymbUse_prev",
+					"symb_use_short",
+					"iSymbUseShort"
+
+	lock			"symb_use",
+					"iSymbUse",
+					"iSymbUse_prev",
+					"symb_use_short",
+					"iSymbUseShort"
+endif
+
+if not(bShowSizes) then
+	hideparameter	"symbSizes",
+					"iSymbSizes",
+					"workingUnit",
+					"iWorkingUnit",
+					"iDecimalOptions"
+
+	lock			"symbSizes",
+					"iSymbSizes",
+					"workingUnit",
+					"iWorkingUnit",
+					"iDecimalOptions"
+endif
+
+if not(bShowCustomText) then
+	hideparameter	"symb_cust_text"
+	lock			"symb_cust_text"
+endif
+
+
+dim _stHoleType[]
+dim _stHoleTypeShort[]
+for iv = vardim1(stHoleType) to 1 step -1
+	_stHoleType[iv]			= stHoleType[iv][FULL_NAME]
+	_stHoleTypeShort[iv]	= stHoleType[iv][SHORT_NAME]
+next iv
+
+if iSymbolType <> FLOOR_RECESS then
+	! ------------------------ Text 1 -------------------------
+	values "symb_text_1" _stHoleType, customText
+	values "iSymbText1" 1,2,3,4,5,6,7,8,9,10,11,12,0
+	values "iSymbText1_prev" 1,2,3,4,5,6,7,8,9,10,11,12,0
+	
+	if GLOB_MODPAR_NAME = "symb_text_1" then
+		iSymbText1 = 0
+		for i = 1 to vardim1(_stHoleType)
+			if symb_text_1 = _stHoleType[i] then
+				iSymbText1 = i
+				i = vardim1(_stHoleType)
+			endif
+		next i
+	
+		parameters iSymbText1 = iSymbText1
+	else
+		iSymbText1 = min(max(iSymbText1,0),vardim1(_stHoleType))
+		if iSymbText1 > 0 then
+			symb_text_1 = _stHoleType[iSymbText1]
+		else
+			symb_text_1 = customText
+		endif
+		parameters symb_text_1 = symb_text_1
+	endif
+	if iSymbText1_prev <> iSymbText1 & iSymbText1 <> 0 then
+		symb_text_1_short	= _stHoleTypeShort[iSymbText1]
+		iSymbText1Short		= iSymbText1
+		parameters symb_text_1_short = symb_text_1_short, iSymbText1Short = iSymbText1Short
+	endif
+	parameters iSymbText1_prev = iSymbText1
+	
+	!!values "symb_text_1_short" _stHoleTypeShort, CUSTOM
+	values "iSymbText1Short" 1,2,3,4,5,6,7,8,9,10,11,12,0
+	if GLOB_MODPAR_NAME = "symb_text_1_short" then
+		iSymbText1Short = 0
+		for i = 1 to vardim1(_stHoleTypeShort)
+			if symb_text_1_short = _stHoleTypeShort[i] then
+				iSymbText1Short = i
+				i = vardim1(_stHoleTypeShort)
+			endif
+		next i
+		parameters iSymbText1Short = iSymbText1Short
+	else
+		iSymbText1Short = min(max(iSymbText1Short,0),vardim1(_stHoleTypeShort))
+		if iSymbText1Short > 0 then
+			symb_text_1_short = _stHoleTypeShort[iSymbText1Short]
+			parameters symb_text_1_short = symb_text_1_short
+		endif
+	endif
+	
+	! ------------------------ Text 2 -------------------------
+	values "symb_text_2" _stHoleType, customText
+	values "iSymbText2" 1,2,3,4,5,6,7,8,9,10,11,12,0
+	values "iSymbText2_prev" 1,2,3,4,5,6,7,8,9,10,11,12,0
+	
+	if GLOB_MODPAR_NAME = "symb_text_2" then
+		iSymbText2 = 0
+		for i = 1 to vardim1(_stHoleType)
+			if symb_text_2 = _stHoleType[i] then
+				iSymbText2 = i
+				i = vardim1(_stHoleType)
+			endif
+		next i
+	
+		parameters iSymbText2 = iSymbText2
+	else
+		iSymbText2 = min(max(iSymbText2,0),vardim1(_stHoleType))
+		if iSymbText2 > 0 then
+			symb_text_2 = _stHoleType[iSymbText2]
+		else
+			symb_text_2 = customText
+		endif
+		parameters symb_text_2 = symb_text_2
+	endif
+	if iSymbText2_prev <> iSymbText2 & iSymbText2 <> 0 then
+		symb_text_2_short	= _stHoleTypeShort[iSymbText2]
+		iSymbText2Short		= iSymbText2
+		parameters symb_text_2_short = symb_text_2_short, iSymbText2Short = iSymbText2Short
+	endif
+	parameters iSymbText2_prev = iSymbText2
+	
+	!!values "symb_text_2_short" _stHoleTypeShort, CUSTOM
+	values "iSymbText2Short" 1,2,3,4,5,6,7,8,9,10,11,12,0
+	if GLOB_MODPAR_NAME = "symb_text_2_short" then
+		iSymbText2Short = 0
+		for i = 1 to vardim1(_stHoleTypeShort)
+			if symb_text_2_short = _stHoleTypeShort[i] then
+				iSymbText2Short = i
+				i = vardim1(_stHoleTypeShort)
+			endif
+		next i
+		parameters iSymbText2Short = iSymbText2Short
+	else
+		iSymbText2Short = min(max(iSymbText2Short,0),vardim1(_stHoleTypeShort))
+		if iSymbText2Short > 0 then
+			symb_text_2_short = _stHoleTypeShort[iSymbText2Short]
+			parameters symb_text_2_short = symb_text_2_short
+		endif
+	endif
+else
+	! ------------------------ Text -------------------------
+	values "symb_text"	_stHoleType[1],
+						_stHoleType[3],
+						_stHoleType[4],
+						_stHoleType[6],
+						_stHoleType[7],
+						_stHoleType[9],
+						_stHoleType[10],
+						_stHoleType[12],
+						customText
+	values "iSymbText" 1,3,4,6,7,9,10,12,0
+	values "iSymbText_prev" 1,3,4,6,7,9,10,12,0
+	
+	if GLOB_MODPAR_NAME = "symb_text" then
+		iSymbText = 0
+		for i = 1 to vardim1(_stHoleType)
+			if symb_text = _stHoleType[i] then
+				iSymbText = i
+				i = vardim1(_stHoleType)
+			endif
+		next i
+	
+		parameters iSymbText = iSymbText
+	else
+		iSymbText = min(max(iSymbText,0),vardim1(_stHoleType))
+		if iSymbText > 0 then
+			symb_text = _stHoleType[iSymbText]
+		else
+			symb_text = customText
+		endif
+		parameters symb_text = symb_text
+	endif
+	if iSymbText_prev <> iSymbText & iSymbText <> 0 then
+		symb_text_short	= _stHoleTypeShort[iSymbText]
+		iSymbTextShort	= iSymbText
+		parameters symb_text_short = symb_text_short, iSymbTextShort = iSymbTextShort
+	endif
+	parameters iSymbText_prev = iSymbText
+	
+	values "iSymbTextShort" 1,3,4,6,7,9,10,12,0
+	if GLOB_MODPAR_NAME = "symb_text_short" then
+		iSymbTextShort = 0
+		for i = 1 to vardim1(_stHoleTypeShort)
+			if symb_text_short = _stHoleTypeShort[i] then
+				iSymbTextShort = i
+				i = vardim1(_stHoleTypeShort)
+			endif
+		next i
+		parameters iSymbTextShort = iSymbTextShort
+	else
+		iSymbTextShort = min(max(iSymbTextShort,0),vardim1(_stHoleTypeShort))
+		if iSymbTextShort > 0 then
+			symb_text_short = _stHoleTypeShort[iSymbTextShort]
+			parameters symb_text_short = symb_text_short
+		endif
+	endif
+endif
+
+! ------------------------ Prefix -------------------------
+dim _stUsedType[]
+dim _stUsedTypeShort[]
+for iv = 1 to vardim1(stUsedType)
+	_stUsedType[iv] = stUsedType[iv][FULL_NAME]
+	_stUsedTypeShort[iv] = stUsedType[iv][SHORT_NAME]
+next iv
+
+values "symb_use" _stUsedType, customText
+values "iSymbUse" 1,2,3,4,5,0
+values "iSymbUse_prev" 1,2,3,4,5,0
+
+if GLOB_MODPAR_NAME = "symb_use" then
+	iSymbUse = 0
+	for i = 1 to vardim1(_stUsedType)
+		if symb_use = _stUsedType[i] then
+			iSymbUse = i
+			i = vardim1(_stUsedType)
+		endif
+	next i
+
+	parameters iSymbUse = iSymbUse
+else
+	iSymbUse = min(max(iSymbUse,0),vardim1(_stUsedType))
+	if iSymbUse > 0 then
+		symb_use = _stUsedType[iSymbUse]
+	else
+		symb_use = customText
+	endif
+	parameters symb_use = symb_use
+endif
+if iSymbUse_prev <> iSymbUse & iSymbUse <> 0 then
+	symb_use_short	= _stUsedTypeShort[iSymbUse]
+	iSymbUseShort	= iSymbUse
+	parameters symb_use_short = symb_use_short, iSymbUseShort = iSymbUseShort
+endif
+parameters iSymbUse_prev = iSymbUse
+
+!!values "symb_use_short" _stUsedTypeShort, CUSTOM
+values "iSymbUseShort" 1,2,3,4,5,0
+if GLOB_MODPAR_NAME = "symb_use_short" then
+	iSymbUseShort = 0
+	for i = 1 to vardim1(_stUsedTypeShort)
+		if symb_use_short = _stUsedTypeShort[i] then
+			iSymbUseShort = i
+			i = vardim1(_stUsedTypeShort)
+		endif
+	next i
+	parameters iSymbUseShort = iSymbUseShort
+else
+	iSymbUseShort = min(max(iSymbUseShort,0),vardim1(_stUsedTypeShort))
+	if iSymbUseShort > 0 then
+		symb_use_short = _stUsedTypeShort[iSymbUseShort]
+		parameters symb_use_short = symb_use_short
+	endif
+endif
+
+if not(bShowPrefix) then
+	hideparameter	"symb_use",
+					"iSymbUse",
+					"iSymbUse_prev",
+					"symb_use_short",
+					"iSymbUseShort"
+
+	lock			"symb_use",
+					"iSymbUse",
+					"iSymbUse_prev",
+					"symb_use_short",
+					"iSymbUseShort"
+endif
+
+! ------------------------ Sizes ------------------------
+values "symbSizes" stSizes
+values "iSymbSizes" 1,2
+if GLOB_MODPAR_NAME = "symbSizes" then
+	for i = 1 to vardim1(stSizes)
+		if symbSizes = stSizes[i] then
+			iSymbSizes = i
+			i = vardim1(stSizes)
+		endif
+	next i
+	parameters iSymbSizes = iSymbSizes
+else
+	symbSizes = stSizes[min(max(iSymbSizes,1),vardim1(stSizes))]
+	parameters symbSizes = symbSizes
+endif
+
+if not(bShowSizes) then
+	hideparameter	"symbSizes", "iSymbSizes", "workingUnit", "iWorkingUnit", "iDecimalOptions"
+	lock			"symbSizes", "iSymbSizes", "workingUnit", "iWorkingUnit", "iDecimalOptions"
+endif
+
+! ------------------------ Working Unit -------------------------
+values "workingUnit" stUnitFormats
+values "iWorkingUnit" 1, 2, 3, 4, 5
+if GLOB_MODPAR_NAME = "workingUnit" then
+	for i = 1 to vardim1(stUnitFormats)
+		if workingUnit = stUnitFormats[i] then
+			iWorkingUnit = i
+			i = vardim1(stUnitFormats)
+		endif
+	next i
+	parameters iWorkingUnit = iWorkingUnit
+else
+	workingUnit = stUnitFormats[min(max(iWorkingUnit,1),vardim1(stUnitFormats))]
+	parameters workingUnit = workingUnit
+endif
+
+if iWorkingUnit = WORKUNIT_MM then values "iDecimalOptions" 0, 1
+if iWorkingUnit = WORKUNIT_CM then values "iDecimalOptions" 0, 1, 2
+if iWorkingUnit = WORKUNIT_METER then values "iDecimalOptions" 0, 1, 2, 3, 4
+
+if iWorkingUnit = WORKUNIT_INCH or iWorkingUnit = WORKUNIT_PROJECT then
+	hideparameter	"iDecimalOptions"
+	lock			"iDecimalOptions"
+endif
+
+! ------------------------ Custom Text -------------------------
+if not(bShowCustomText) then
+	hideparameter	"symb_cust_text"
+	lock			"symb_cust_text"
+endif
+
+
+! ==============================================================================
+! Text Style
+! ==============================================================================
+
+values "fontScale" stFontScale
+values "iFontScale" FONTSCALE_PAPER, FONTSCALE_MODEL
+if GLOB_MODPAR_NAME = "fontScale" then
+	iFontScale = FONTSCALE_PAPER
+	if fontScale = stFontScale[2] then iFontScale = FONTSCALE_MODEL
+	parameters iFontScale = iFontScale
+else
+	fontScale = stFontScale[1]
+	if iFontScale = FONTSCALE_MODEL then fontScale = stFontScale[2]
+	parameters fontScale = fontScale
+endif
+
+values "fontSizePaper" range (0,) 
+values "gs_font_size" range (0,) 
+
+if iFontScale = FONTSCALE_PAPER then
+	lock			"gs_font_size"
+	hideparameter	"gs_font_size"
+else
+	lock			"fontSizePaper"
+	hideparameter	"fontSizePaper"
+endif
+
+
+if gs_text_width < EPS then parameters gs_text_width = 0
+if not(gs_text_wrap) then
+	hideparameter	"gs_text_width"
+	lock			"gs_text_width"
+endif
+
+if gs_displaytext + bShowPrefix + bShowSizes + bShowCustomText < 1 then
+	hideparameter	"gs_text",
+					"fontSizePaper",
+					"gs_font_size",
+					"gs_font_pen",
+					"gs_text_style_bold",
+					"gs_text_style_italic",
+					"gs_text_style_underline",
+					"fontType",
+					"fontScale",
+					"iFontScale",
+					"gs_text_wrap",
+					"gs_text_width",
+					"angle",
+					"gs_textoffset_x",
+					"gs_textoffset_y"
+
+	lock			"gs_text",
+					"fontSizePaper",
+					"gs_font_size",
+					"gs_font_pen",
+					"gs_text_style_bold",
+					"gs_text_style_italic",
+					"gs_text_style_underline",
+					"fontType",
+					"fontScale",
+					"iFontScale",
+					"gs_text_wrap",
+					"gs_text_width",
+					"angle",
+					"gs_textoffset_x",
+					"gs_textoffset_y"
+endif
+
+
+! ==============================================================================
+! 3D Representation
+! ==============================================================================
+if not(bShow3D) then
+	hideparameter	"bSolid3D", "gs_mat_solid", "gs_3D_cont_pen"
+	lock			"bSolid3D", "gs_mat_solid", "gs_3D_cont_pen"
+endif
+if not(bSolid3D) then
+	hideparameter	"gs_mat_solid"
+	lock			"gs_mat_solid"
+endif
+
+
+! ==============================================================================
+! UI Support
+! ==============================================================================
+for i = 1 to 5 - (gs_displaytext + bShowPrefix + bShowSizes + bShowCustomText < EPS) - (iSymbolType = FLOOR_RECESS)
+	put i
+next i
+values "gs_ui_current_page" get(nsp)
+
+! ==============================================================================
+! Levels
+! ==============================================================================
+parameters ac_bottomlevel	= -gs_slab_thickness - EPS
+parameters ac_toplevel		= 0 + EPS
+
+
+
+]]>
+</Script_VL>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_FixSize/>
+			<STBit_UIUseHierarchicalPages/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Dimension 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.7</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Dimension 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.4</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Height"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.2</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Show 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>-0.20001</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1e-005</Value>
+		</Length>
+		<Integer Name="iSymbolType">
+			<Description><![CDATA["Symbol Type"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="Typ">
+			<Description><![CDATA["Opening Form"]]></Description>
+			<Value><![CDATA["Прямоугольный"]]></Value>
+		</String>
+		<Integer Name="iOpeningType">
+			<Description><![CDATA["Opening Form"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="openingSymbolType">
+			<Description><![CDATA["Ceiling Opening Symbol"]]></Description>
+			<Value><![CDATA["Тип 1"]]></Value>
+		</String>
+		<Integer Name="iOpeningSymbolType">
+			<Description><![CDATA["Ceiling Opening Symbol"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+
+		<!-- gs_sizes: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_sizes">
+			<Description><![CDATA["Sizes"]]></Description>
+		</Title>
+		<Length Name="gs_hole_width">
+			<Description><![CDATA["Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.7</Value>
+		</Length>
+		<Length Name="gs_hole_diameter">
+			<Description><![CDATA["Diameter"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.4</Value>
+		</Length>
+		<Length Name="gs_hole_depth">
+			<Description><![CDATA["Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.4</Value>
+		</Length>
+		<Length Name="gs_slab_thickness">
+			<Description><![CDATA["Slab Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.2</Value>
+		</Length>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D Representation"]]></Description>
+		</Title>
+		<Boolean Name="bStorySensitive">
+			<Description><![CDATA["Story Sensitive Symbol"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- story_current: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="story_current">
+			<Description><![CDATA["Home Story - Ceiling Opening"]]></Description>
+		</Title>
+		<PenColor Name="gs_ceilingCont_pen">
+			<Description><![CDATA["Ceiling Opening Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<LineType Name="lineTypeCeiling">
+			<Description><![CDATA["Ceiling Opening Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<FillPattern Name="ceilingFillType">
+			<Description><![CDATA["Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="ceilingFillPen">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="ceilingFillBgPen">
+			<Description><![CDATA["Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+
+		<!-- story_up: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="story_up">
+			<Description><![CDATA["One Story up - as Floor Opening"]]></Description>
+		</Title>
+		<PenColor Name="penFloor">
+			<Description><![CDATA["Contour Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<LineType Name="lineTypeFloor">
+			<Description><![CDATA["Floor Opening Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</LineType>
+		<FillPattern Name="gs_opening_filltype">
+			<Description><![CDATA["Shadow Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>64</Value>
+		</FillPattern>
+		<PenColor Name="gs_opening_fillpen">
+			<Description><![CDATA["Shadow Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_opening_backgroundpen">
+			<Description><![CDATA["Shadow Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<FillPattern Name="backGroundFillType">
+			<Description><![CDATA["Hole Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="backGroundFillPen">
+			<Description><![CDATA["Hole Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="backGroundFillBgPen">
+			<Description><![CDATA["Hole Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+
+		<!-- gs_text_content: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_text_content">
+			<Description><![CDATA["Text Content"]]></Description>
+		</Title>
+		<String Name="stHoleType">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="12" SecondDimension="2">
+				<AVal Column="1" Row="1"><![CDATA["Деформационный Шов Пола"]]></AVal>
+				<AVal Column="2" Row="1"><![CDATA["ДШП"]]></AVal>
+				<AVal Column="1" Row="2"><![CDATA["Проем в Полу"]]></AVal>
+				<AVal Column="2" Row="2"><![CDATA["ПолПр"]]></AVal>
+				<AVal Column="1" Row="3"><![CDATA["Углубление в Полу"]]></AVal>
+				<AVal Column="2" Row="3"><![CDATA["УП"]]></AVal>
+				<AVal Column="1" Row="4"><![CDATA["Шов Потолка"]]></AVal>
+				<AVal Column="2" Row="4"><![CDATA["ШПот"]]></AVal>
+				<AVal Column="1" Row="5"><![CDATA["Проем в Потолке"]]></AVal>
+				<AVal Column="2" Row="5"><![CDATA["ПотПр"]]></AVal>
+				<AVal Column="1" Row="6"><![CDATA["Углубление в Потолке"]]></AVal>
+				<AVal Column="2" Row="6"><![CDATA["УПот"]]></AVal>
+				<AVal Column="1" Row="7"><![CDATA["Шов Конструкции Пола"]]></AVal>
+				<AVal Column="2" Row="7"><![CDATA["ШКП"]]></AVal>
+				<AVal Column="1" Row="8"><![CDATA["Проем в Конструкции Пола"]]></AVal>
+				<AVal Column="2" Row="8"><![CDATA["ПКП"]]></AVal>
+				<AVal Column="1" Row="9"><![CDATA["Углубление в Конструкции Пола"]]></AVal>
+				<AVal Column="2" Row="9"><![CDATA["УКП"]]></AVal>
+				<AVal Column="1" Row="10"><![CDATA["Шов Фундамента"]]></AVal>
+				<AVal Column="2" Row="10"><![CDATA["ШФ"]]></AVal>
+				<AVal Column="1" Row="11"><![CDATA["Проем в Фундаменте"]]></AVal>
+				<AVal Column="2" Row="11"><![CDATA["ПФ"]]></AVal>
+				<AVal Column="1" Row="12"><![CDATA["Углубление в Фундаменте"]]></AVal>
+				<AVal Column="2" Row="12"><![CDATA["УФ"]]></AVal>
+			</ArrayValues>
+		</String>
+		<String Name="stUsedType">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="5" SecondDimension="2">
+				<AVal Column="1" Row="1"><![CDATA["Условное Обозначение"]]></AVal>
+				<AVal Column="2" Row="1"><![CDATA["Э"]]></AVal>
+				<AVal Column="1" Row="2"><![CDATA["Газ"]]></AVal>
+				<AVal Column="2" Row="2"><![CDATA["Г"]]></AVal>
+				<AVal Column="1" Row="3"><![CDATA["Отопление"]]></AVal>
+				<AVal Column="2" Row="3"><![CDATA["О"]]></AVal>
+				<AVal Column="1" Row="4"><![CDATA["Вентиляция"]]></AVal>
+				<AVal Column="2" Row="4"><![CDATA["В"]]></AVal>
+				<AVal Column="1" Row="5"><![CDATA["Санитария"]]></AVal>
+				<AVal Column="2" Row="5"><![CDATA["С"]]></AVal>
+			</ArrayValues>
+		</String>
+		<Boolean Name="gs_displaytext">
+			<Description><![CDATA["Show Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="symb_text_1">
+			<Description><![CDATA["Home Story Opening Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Проем в Потолке"]]></Value>
+		</String>
+		<Integer Name="iSymbText1">
+			<Description><![CDATA["Home Story Opening Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>5</Value>
+		</Integer>
+		<Integer Name="iSymbText1_prev">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>5</Value>
+		</Integer>
+		<String Name="symb_text_1_short">
+			<Description><![CDATA["Home Story Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["ПотПр"]]></Value>
+		</String>
+		<Integer Name="iSymbText1Short">
+			<Description><![CDATA["Home Story Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>5</Value>
+		</Integer>
+		<String Name="symb_text_2">
+			<Description><![CDATA["Home +-1 Story Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Проем в Полу"]]></Value>
+		</String>
+		<Integer Name="iSymbText2">
+			<Description><![CDATA["Home +-1 Story Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Integer Name="iSymbText2_prev">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="symb_text_2_short">
+			<Description><![CDATA["1 Story up Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["ПолПр"]]></Value>
+		</String>
+		<Integer Name="iSymbText2Short">
+			<Description><![CDATA["1 Story up Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="symb_text">
+			<Description><![CDATA["Home Story Opening Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Проем в Полу"]]></Value>
+		</String>
+		<Integer Name="iSymbText">
+			<Description><![CDATA["Home Story Opening Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Integer Name="iSymbText_prev">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="symb_text_short">
+			<Description><![CDATA["Home Story Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["ПолПр"]]></Value>
+		</String>
+		<Integer Name="iSymbTextShort">
+			<Description><![CDATA["Home Story Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Boolean Name="bShowPrefix">
+			<Description><![CDATA["Show Prefix"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="symb_use">
+			<Description><![CDATA["Opening is Used for"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Вентиляция"]]></Value>
+		</String>
+		<Integer Name="iSymbUse">
+			<Description><![CDATA["Opening is Used for"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>4</Value>
+		</Integer>
+		<Integer Name="iSymbUse_prev">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>4</Value>
+		</Integer>
+		<String Name="symb_use_short">
+			<Description><![CDATA["Prefix Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["В"]]></Value>
+		</String>
+		<Integer Name="iSymbUseShort">
+			<Description><![CDATA["Prefix Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>4</Value>
+		</Integer>
+		<Boolean Name="bShowSizes">
+			<Description><![CDATA["Show Sizes"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="symbSizes">
+			<Description><![CDATA["Show Sizes"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Только Ширина / Длина"]]></Value>
+		</String>
+		<Integer Name="iSymbSizes">
+			<Description><![CDATA["Show Sizes"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="workingUnit">
+			<Description><![CDATA["Size Units"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["по Параметрам Проекта"]]></Value>
+		</String>
+		<Integer Name="iWorkingUnit">
+			<Description><![CDATA["Size Units"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="iDecimalOptions">
+			<Description><![CDATA["Decimal Options"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Boolean Name="bShowCustomText">
+			<Description><![CDATA["Show Custom Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="symb_cust_text">
+			<Description><![CDATA["Custom Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+
+		<!-- gs_text: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_text">
+			<Description><![CDATA["Text"]]></Description>
+		</Title>
+		<RealNum Name="fontSizePaper">
+			<Description><![CDATA["Font Size (mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</RealNum>
+		<Length Name="gs_font_size">
+			<Description><![CDATA["Font Size (model)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.3</Value>
+		</Length>
+		<PenColor Name="gs_font_pen">
+			<Description><![CDATA["Font Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<Boolean Name="gs_text_style_bold">
+			<Description><![CDATA["Bold"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_text_style_italic">
+			<Description><![CDATA["Italic"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_text_style_underline">
+			<Description><![CDATA["Underline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="fontType">
+			<Description><![CDATA["Font Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<String Name="fontScale">
+			<Description><![CDATA["Scale"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Не Масштабировать (Размер Бумаги)"]]></Value>
+		</String>
+		<Integer Name="iFontScale">
+			<Description><![CDATA["Scale"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_text_wrap">
+			<Description><![CDATA["Wrap Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="gs_text_width">
+			<Description><![CDATA["Text Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.7</Value>
+		</Length>
+		<Angle Name="angle">
+			<Description><![CDATA["Text Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Length Name="gs_textoffset_x">
+			<Description><![CDATA["Text Offset X Direction"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_textoffset_y">
+			<Description><![CDATA["Text Offset Y Direction"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+		</Title>
+		<Boolean Name="bShow3D">
+			<Description><![CDATA["Show Opening in 3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bSolid3D">
+			<Description><![CDATA["Fill Opening with Solid Shape"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Material Name="gs_mat_solid">
+			<Description><![CDATA["Solid Shape Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>99</Value>
+		</Material>
+		<PenColor Name="gs_3D_cont_pen">
+			<Description><![CDATA["3D Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<Integer Name="gs_ui_current_page">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="LibraryLangCode">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="1" length_in_bytes="1262" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000001680000
+	00B40203000000C4005EA600000009504C5445FF0000000000FFFFFFCA92C399
+	0000000174524E530040E6D8660000048949444154785EEDDAC16AE33C1007F0
+	F810BF410B9BA7C923E450E5E07377A1F3343DAC0D9FCF9160FE4FF98112A14A
+	FF1164931A165603BD0CC3AF926C4B8AD0EEBBA3478F1E3D7AB82FF156027BE7
+	8E064075B13446597E468E8A9E80DF2CBF007AAAE9290255F94796F552B60480
+	1E4916003EDA6529A85C26A4582ED4126AF620D1F046A3A95C0252C885115FD1
+	AF37E35494FE4AC4CF8256B9C91E97AA933C22436ADF5C94EA8DD0A25CB0DEE8
+	B5A447018050D263B819F2D5182188B1A0A47DAA2EE9C30A00EB67411FF48A04
+	7CCD1FB020861469015275494BE0F18F7DE41E0A34128A2A9DAA6B5A6371410F
+	408886408DE62D44FB6B75490FB13C14C46E8CEAD53FE6D2AB1A7D2D695CAB89
+	5E81B5A40F88D9F8F759D01AFF985E004C15BD8F6D13A603A042342432442BA0
+	A8E811D0983DD6C58250168F407405A93CD398B0183424183456AC44A776301D
+	2016BDAE161D540C1AB298B4FE844507B168FD058B5EC4A4B19AB4A65A2E665A
+	F17CAB61B73AC8F363EDEDB19E166CFD863CF15EC37EAF437AAF9FF81ABDFD35
+	4E91D9740E7962E6833DF38534F33D315F7B7BBE9E68BEDE609579786D84BD36
+	86BC363EBCA27B7B459F6845DF601FB2DDEE69C33DDF863BD5EDF6D75BFE2AF8
+	77A3478F1E3D7AF4E8D1CF545F9CDB3DB37B12E4B8D0A6F4F4D89E8FE9DFB495
+	F6BBC776AA4CF34EFAF4CC996A6B13BCA7DAF6996A42E09B3421A99690995B11
+	E9E33DF48189743E01A83B1AD936AD6FDC9DEA7D3A24C29D385B3EDF363D5C53
+	91E0EAD9BD99C66CA7E1898EADA324A0CEB9C7E931B78E07D5175FDE9009E7EE
+	A65DA4695067E7DCE90E9A7A93DF3DB569750D5AEFA20FA9E3C653F4E55C367E
+	A58F26ED889E6D7AFE06DA99B4BA16ED1BB412AD36EDBF81F6363D37E9F96E7A
+	B669F7C7B427DA99B46FD3EE5E5A6D7AFE737AAE696FD3AE49EB7DF46B7E7DF9
+	D9F2D7C8B3569B1E0167D2739BF62DDA55B4323DA6F1B0673E771F3D5C7B4EF3
+	75CC9A86A69610AD353D33BD9398350DEF9AF45C755EA2406BA32B869A9EEE89
+	69A571FD91FB9D63F489AE56F499D234E3E478B1E82102757E8F9465DA39A6F7
+	944AFF909F6E82E903F3CEA2874C180AEFA493C0CF9C9BF892096AF689B7D7FC
+	D03F924BF49008B2394DC0C6BF0AFEFEE8D1A3478F1E3D7AF4E867AAFD4CF57D
+	BB33D5773E1DFBAF71A62AF6996A68D0FACEDD113A53B5EEE264FAB3415FF84C
+	35125CBDE2621A8B9D86673A449ACF54056A1A6B830E5FE9915A97927C5B2B13
+	93DE4D4BA46950E98E590A69D0CB85CE5461D22A0D5A89A6814A4A00949F22DD
+	E7CB347034E989E8D5A6D73FA6856831699516ED1BB412AD30E980161D5A346A
+	3AD8F4DAA497BBE9D5A6A549AF0DDA132D26EDD1A4A7061D6A5A61D26B9B9606
+	BDD474B06969D24AB4399BBDE6D797EEA902F6D7A8454B9AF4088849AF6DDAB7
+	E8A9A215448F693CEC99EFDCA2A5600684D438BEA70ACB5027B05708ADE935D3
+	7C3F940DEF80063D579D17C9FDA67BAAA0B5D19F539ACF54A78AFE91FBCDF754
+	81FA4CF5CC6981D19BF63E640238BF87BBE595687746A41FDD3D3969EC9EBC13
+	10FD2D7BBE384C4C3FBF53FD70D337EEAFFF9D33D51E3D7AFC0FF7FFD441E067
+	615F0000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="2" length_in_bytes="334" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000001680000
+	003C020300000036E3C81300000009504C5445FF0000000000FFFFFFCA92C399
+	0000000174524E530040E6D866000000E949444154785EED97B10DC2301045CF
+	85B30114992623A4C04D46C83429188114B9291172F1145D6164032EB8577E3D
+	9E4082D8C8A7711CC77112A4DB5988294D62C1839803677D55789CFD45F52E86
+	8BEA318B185515BD948EAA7A4CA6BCAAEA3E8B5115BD985E781F10B2BF8B558D
+	6ED24468C05533B355D14BE9C84734111AA8E8C5F490375C467656E6727ACCDB
+	26766467652EA7573633B2B33257A503EE519F0E246050988C8A5E911E15B6EA
+	74FC5E7A78EBEB848AFE07694F7BFAA7BFC65099EEF1E46B7F5EF73865DACFC6
+	1E277AFB3DA4C3EDA9FDCED7E1A6DA7EBFFED5BF82FE388EF3040EA58A8EDA7F
+	540F0000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>6ACDA889-69B2-4EC5-936C-CB1DA7032A92</MainGUID>
+	<MainGUID>FC8F03DA-42F9-41B0-97A8-B7B37574FF0F</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+if NOT(bShow3D) then END
+
+if GLOB_CONTEXT < 40 and not(bSolid3D) then model wire
+
+pen gs_3D_cont_pen
+unID = 1
+material gs_mat_solid
+
+if iSymbolType = FLOOR_RECESS then add -a / 2, -b / 2, 0
+
+add a/2, b/2, -gs_slab_thickness
+
+if iOpeningType = OPTYPE_RECTANGULAR then
+	prism_ 5, gs_slab_thickness,
+		-a/2,	-b/2,	15,
+		-a/2,	b/2,	15,
+		a/2,	b/2,	15,
+		a/2,	-b/2,	15,
+		-a/2,	-b/2,	-1
+
+	del 1
+
+	hotspot 0,		0,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a,		0,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot 0,		b,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a,		b,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a/2,	b/2,	-gs_slab_thickness, unID : unID = unID + 1
+
+	hotspot 0,		0,		0, unID : unID = unID + 1
+	hotspot a,		0,		0, unID : unID = unID + 1
+	hotspot 0,		b,		0, unID : unID = unID + 1
+	hotspot a,		b,		0, unID : unID = unID + 1
+	hotspot a/2,	b/2,	0, unID : unID = unID + 1
+endif
+
+if iOpeningType = OPTYPE_CIRCULAR | iOpeningType = OPTYPE_ELLIPTICAL then
+	if iOpeningType = OPTYPE_CIRCULAR then a = b
+	muly b/a
+
+	cylind gs_slab_thickness, a/2
+
+	del 2
+
+	hotspot 0,		b/2,	-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a/2,	0,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a/2,	b/2,	-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a,		b/2,	-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a/2,	b,		-gs_slab_thickness, unID : unID = unID + 1
+
+	hotspot 0,		b/2,	0, unID : unID = unID + 1
+	hotspot a/2,	0,		0, unID : unID = unID + 1
+	hotspot a/2,	b/2,	0, unID : unID = unID + 1
+	hotspot a,		b/2,	0, unID : unID = unID + 1
+	hotspot a/2,	b,		0, unID : unID = unID + 1
+endif
+
+if iOpeningType = OPTYPE_ROUNDED then
+	prism_ 8, gs_slab_thickness,
+		-a/2+b/2,	-b/2,	15+64,
+		-a/2+b/2,	0,		900,
+		b/2,		-180,	4000,
+		-a/2+b/2,	b/2,	1+4+8,
+		a/2-b/2,	b/2,	15+64,
+		a/2-b/2,	0,		900,
+		b/2,		-180,	4000,
+		a/2-b/2,	-b/2,	1+4+8
+
+	del 1
+
+	hotspot a,		b/2,	-gs_slab_thickness, unID : unID = unID + 1
+	hotspot b/2,	0,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot b/2,	b,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a-b/2,	0,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a-b/2,	b,		-gs_slab_thickness, unID : unID = unID + 1
+	hotspot a/2,	b/2,	-gs_slab_thickness, unID : unID = unID + 1
+	hotspot 0,		b/2,	-gs_slab_thickness, unID : unID = unID + 1
+
+	hotspot a,		b/2,	0, unID : unID = unID + 1
+	hotspot b/2,	0,		0, unID : unID = unID + 1
+	hotspot b/2,	b,		0, unID : unID = unID + 1
+	hotspot a-b/2,	0,		0, unID : unID = unID + 1
+	hotspot a-b/2,	b,		0, unID : unID = unID + 1
+	hotspot a/2,	b/2,	0, unID : unID = unID + 1
+	hotspot 0,		b/2,	0, unID : unID = unID + 1
+endif
+
+if iSymbolType = FLOOR_RECESS then del 1
+
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+EPS			= 0.00001
+EPSFONT		= 0.01
+magicScale	= 0.35
+
+FLOOR_OPENING	= 1
+CEILING_OPENING	= 2
+FLOOR_RECESS	= 3
+
+FLOOR			= 1
+CEILING			= 2
+
+dim	stOpeningType[4]
+	stOpeningType[1] = `Прямоугольный`	! Square in 16
+	stOpeningType[2] = `Круглый`		! Oval in 16
+	stOpeningType[3] = `Эллиптический`		! Oval in 16
+	stOpeningType[4] = `Закругленный`		! Rounded in 16
+
+! iOpeningType
+	OPTYPE_RECTANGULAR	= 1
+	OPTYPE_CIRCULAR		= 2
+	OPTYPE_ELLIPTICAL	= 3
+	OPTYPE_ROUNDED		= 4
+
+dim	stOpeningSymbolType[2]
+	stOpeningSymbolType[1] = `Тип 1`
+	stOpeningSymbolType[2] = `Тип 2`
+
+! iOpeningSymbolType
+
+dim	stFontScale[2]
+	stFontScale[1] = `Не Масштабировать (Размер Бумаги)`
+	stFontScale[2] = `В Масштабе Плана (Размер Модели)`
+
+! iFontScale
+	FONTSCALE_PAPER		= 1
+	FONTSCALE_MODEL		= 2
+
+dim stUnitFormats[5]
+	stUnitFormats[1] = `по Параметрам Проекта`
+	stUnitFormats[2] = `мм`
+	stUnitFormats[3] = `см`
+	stUnitFormats[4] = `м`
+	stUnitFormats[5] = `дюймы`
+
+! iWorkingUnit
+	WORKUNIT_PROJECT	= 1
+	WORKUNIT_MM			= 2
+	WORKUNIT_CM			= 3
+	WORKUNIT_METER		= 4
+	WORKUNIT_INCH		= 5
+
+! iDecimalOptions
+	dim stNumDecimal[5]
+		stNumDecimal[1] = `0`
+		stNumDecimal[2] = `1`
+		stNumDecimal[3] = `2`
+		stNumDecimal[4] = `3`
+		stNumDecimal[5] = `4`
+
+! stHoleType
+! stUsedType
+	FULL_NAME	= 1
+	SHORT_NAME	= 2
+
+customText = `Специальный`
+
+dim stSizes[2]
+if iOpeningType <> OPTYPE_CIRCULAR then
+	stSizes[1]	= `Только Ширина / Длина`
+	if iSymbolType = FLOOR_RECESS then
+		stSizes[2]	= `Ширина / Длина / Высота Углубления`
+	else
+		stSizes[2]	= `Ширина / Длина / Толщина Перекрытия`
+	endif
+else
+	stSizes[1]	= `Только Диаметр`
+	if iSymbolType = FLOOR_RECESS then
+		stSizes[2]	= `Диаметр / Высота Углубления`
+	else
+		stSizes[2]	= `Диаметр / Толщина Перекрытия`
+	endif
+endif
+
+! iSymbSizes
+	SYMBTEXT_XY		= 1
+	SYMBTEXT_XYZ	= 2
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! =============================================================================
+! Localization
+! =============================================================================
+
+dim	stUIDimensions[12]
+	stUIDimensions[1] = `Форма Проема`
+	stUIDimensions[2] = `Символ Потолка`
+	stUIDimensions[3] = `Размеры`
+	stUIDimensions[4] = `Ширина`
+	stUIDimensions[5] = `Длина`
+	stUIDimensions[6] = `Толщина Перекрытия`
+	stUIDimensions[7] = `Прим.:`
+	stUIDimensions[8] = `Для отображения символа на релевантных этажах выберите значение "Все Релевантные Этажи" в панели "Представления на Плане и в Разрезе".`
+	stUIDimensions[9] = `Диаметр`
+	stUIDimensions[10] = `Тип Символа`
+	stUIDimensions[11] = `Высота Углубления`
+	stUIDimensions[12] = `Символ Зависит от Этажа`
+
+dim stUI2D[12]
+	stUI2D[1] = `Собств. Этаж - Проем в Потолке`
+	stUI2D[2] = `Перо Контура`
+	stUI2D[3] = `Тип Линии`
+	stUI2D[4] = `Тип Штриховки`
+	stUI2D[5] = `Перо Штриховки`
+	stUI2D[6] = `Перо Фона`
+	stUI2D[7] = `Этажом Выше - Проем в Полу`
+	stUI2D[8] = `Штриховка Тени`
+	stUI2D[9] = `Штриховка Отверстия`
+	stUI2D[10] = `Этажом Ниже - Проем в Потолке`
+	stUI2D[11] = `Собств. Этаж - Проем в Полу`
+	stUI2D[12] = `Реквизиты`
+
+dim stUIContent[13]
+	stUIContent[1] = `Показ Текста`
+	stUIContent[2] = `Текст на Собственном Этаже`
+	stUIContent[3] = `Тип Проема`
+	stUIContent[4] = `Текст на Плане`
+	stUIContent[5] = `Текст Этажом Выше`
+	stUIContent[6] = `Текст Этажом Ниже`
+	stUIContent[7] = `Показ Префикса`
+	stUIContent[8] = `Проем Используется для`
+	stUIContent[9] = `Префикс на Плане`
+	stUIContent[10] = `Показ Размеров`
+	stUIContent[11] = `Единицы Измерения`
+	stUIContent[12] = `Специальный Текст`
+	stUIContent[13] = `Десятичные Знаки`
+
+dim stUIText[12]
+	stUIText[1] = `мм`
+	stUIText[2] = ``
+	stUIText[3] = `Тип Шрифта`
+	stUIText[4] = `Масштаб`
+	stUIText[5] = `Выравнивание Текста`
+	stUIText[6] = `Ширина Текстового Блока`
+	stUIText[7] = `Угол Наклона Текста`
+	stUIText[8] = `Смещение Текста в Направлении X`
+	stUIText[9] = `Смещение Текста в Направлении Y`
+	stUIText[10] = `Жирный`
+	stUIText[11] = `Курсив`
+	stUIText[12] = `Подчеркнутый`
+
+dim stUI3D[10]
+	stUI3D[1] = `Показ Проема в 3D`
+	stUI3D[2] = `Перо 3D`
+	stUI3D[3] = `Твердотельный Элемент Проема`
+	stUI3D[4] = `Покрытие Твердотельного Элемента`
+	stUI3D[5] = `1.`
+	stUI3D[6] = `2.`
+	stUI3D[7] = `3.`
+	stUI3D[8] = `Включите опцию "Показа Проема в 3D".`
+	stUI3D[9] = `Разместите символ Проема на перекрытии`
+	stUI3D[10] = `Примените Операцию Твердотельного Моделирования "Вычитание", назначив перекрытие Целью, а Символ - Оператором.`
+
+
+! =============================================================================
+! Called Tabpages
+! =============================================================================
+
+TABID_ROOT					= -1
+
+if iSymbolType = FLOOR_RECESS then
+	TABID_DIMENSION			= 0
+	TABID_2DREPRESENTATION	= 1
+	TABID_CONTENT			= 2
+	if gs_displaytext + bShowPrefix + bShowSizes + bShowCustomText > 0 then
+		TABID_TEXT				= 3
+		TABID_3DREPRESENTATION	= 4
+	else
+		TABID_TEXT				= 0
+		TABID_3DREPRESENTATION	= 3
+	endif
+else
+	TABID_DIMENSION			= 1
+	TABID_2DREPRESENTATION	= 2
+	TABID_CONTENT			= 3
+		if gs_displaytext + bShowPrefix + bShowSizes + bShowCustomText > 0 then
+		TABID_TEXT				= 4
+		TABID_3DREPRESENTATION	= 5
+	else
+		TABID_TEXT				= 0
+		TABID_3DREPRESENTATION	= 4
+	endif
+endif
+
+
+file_dependence "uiTab_Dimension_flat(1)"
+file_dependence "uiTab_2DRepr_flat(1)"
+file_dependence "uiTab_Descriptions_flat(1)"
+file_dependence "uiTab_Text_flat(1)"
+file_dependence "uiTab_3DRepr_flat(1)"
+
+! =============================================================================
+! General Variables
+! =============================================================================
+
+pageStartY			= 5
+uiTotalWidth		= 444
+uiTotalHeight		= 266
+xCenter				= uiTotalWidth / 2
+yCenter				= uiTotalHeight / 2 - 1
+
+textElevInfield		= 3
+textElevBoolean		= 3
+textElevPen			= 4
+textElevMaterial	= 6 + 1
+infieldHeight		= 19
+booleanHeight		= 19
+penHeight			= 20
+penWidth			= 34
+matHeight			= 25
+lineTypeHeight		= 25
+outfieldHeight		= 18
+outfieldHeight2		= 15
+
+
+! =============================================================================
+! Tabpages
+! =============================================================================
+
+ui_dialog `Параметры`
+ui_current_page gs_ui_current_page
+
+if TABID_DIMENSION > 0 then
+	ui_page TABID_DIMENSION, TABID_ROOT, `Форма и Размеры`, "uiTab_Dimension_flat(1)"
+	gosub "dimensionPage"
+endif
+
+if TABID_2DREPRESENTATION > 0 then
+	ui_page TABID_2DREPRESENTATION, TABID_ROOT, `2D-отображение`, "uiTab_2DRepr_flat(1)"
+	gosub "2DRepPage"
+endif
+
+if TABID_CONTENT > 0 then
+	ui_page TABID_CONTENT, TABID_ROOT, `Данные`, "uiTab_Descriptions_flat(1)"
+	gosub "contentPage"
+endif
+
+if TABID_TEXT > 0 then
+	ui_page TABID_TEXT, TABID_ROOT, `Текст`, "uiTab_Text_flat(1)"
+	gosub "textPage"
+endif
+
+if TABID_3DREPRESENTATION > 0 then
+	ui_page TABID_3DREPRESENTATION, TABID_ROOT, `3D-отображение`, "uiTab_3DRepr_flat(1)"
+	gosub "3DRepPage"
+endif
+
+! =============================================================================
+end
+! =============================================================================
+
+"dimensionPage":
+! =============================================================================
+! Shape and Dimensions Tabpage
+! =============================================================================
+	sepXPosFromCenter	= 0
+	
+	totalColWidth	= 215 + sepXPosFromCenter
+	xPos			= 230 - 230
+	x2				= 37
+	yPos			= pageStartY
+	yCurrent		= yPos
+	fieldVerDist	= 22
+
+
+	ui_separator uiTotalWidth / 2 + sepXPosFromCenter, pageStartY + 4, uiTotalWidth / 2 + sepXPosFromCenter, pageStartY + 172
+	
+	infieldWidth	= 0
+	ui_style 0, 1
+	ui_outfield stUIDimensions[1], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Opening Form
+	ui_style 0, 0
+	yCurrent = yCurrent - textElevInfield + fieldVerDist
+	infieldWidth	= 100
+	ui_infield{3} "iOpeningType", xPos + totalColWidth - infieldWidth, yCurrent, infieldWidth, 60,
+		2, 2, 4, 1,		!openingForm.png
+		90, 60, 90, 60,
+		1, stOpeningType[1], 1,
+		2, stOpeningType[2], 2,
+		3, stOpeningType[3], 3,
+		4, stOpeningType[4], 4
+	yCurrent = yCurrent + textElevInfield + 60 + 12
+	
+
+	infieldWidth	= 0
+	ui_style 0, 1
+	ui_outfield stUIDimensions[2], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight			!Ceiling Symbol
+	ui_style 0, 0
+	yCurrent = yCurrent - textElevInfield + fieldVerDist
+	infieldWidth	= 100
+	ui_infield{3} "iOpeningSymbolType", xPos + totalColWidth - infieldWidth, yCurrent, infieldWidth, 60,
+		2, 1, 12, 3,		!openingTypes.png
+		90, 60, 90, 60,
+		iOpeningType, stOpeningSymbolType[1], 1,
+		iOpeningType + 8, stOpeningSymbolType[2], 2
+	yCurrent = yCurrent + textElevInfield + 60
+
+	!--------------------------------
+	ui_separator 0, yCurrent, 444, yCurrent
+	!-------------------------------
+	
+	yCurrent = yCurrent + 7
+	ui_style 0,1
+	ui_infield{3} "bStorySensitive", 1, yCurrent-2, uiTotalWidth/2, outfieldHeight2,
+		7, "", 0, 0,
+		0, 0, 0, 0,
+		0, stUIDimensions[12], 0,
+		0, stUIDimensions[12], 1
+	yCurrent = yCurrent + fieldVerDist - 4
+	if bStorySensitive then
+		ui_style 1, 0
+		ui_outfield stUIDimensions[7], 0, yCurrent, x2-1, outfieldHeight2		!Note:
+		ui_outfield stUIDimensions[8], x2, yCurrent, 444-x2, 2*outfieldHeight2
+		ui_style 0, 0
+	endif
+	
+	!-------------------------------
+	gosub "uiSizes"
+return
+
+"2DRepPage":
+! =============================================================================
+! 2D Representation Tabpage
+! =============================================================================
+	sepXPosFromCenter	= 0
+	
+	totalColWidth	= 215 + sepXPosFromCenter
+	xPos			= 230 - 230
+	yPos			= pageStartY
+	yCurrent		= yPos
+	fieldVerDist	= 23
+	
+	if iSymbolType <> FLOOR_RECESS then
+		if iSymbolType = CEILING_OPENING then
+			gosub "current2Drep"
+		else
+			gosub "up2Drep"
+			yCurrent = yCurrent + 5
+		endif	
+	
+		!----------------------------------------
+		ui_separator 0, yCurrent-3, 444, yCurrent-3
+		!----------------------------------------
+
+		if iSymbolType = CEILING_OPENING then
+			yPos		= yCurrent + 5
+			yCurrent	= yPos
+			gosub "up2Drep"
+		else
+			yCurrent	= yCurrent + 2
+			yPos		= yCurrent
+			gosub "current2Drep"
+		endif
+
+	else
+
+		ui_separator uiTotalWidth / 2 + sepXPosFromCenter, yCurrent, uiTotalWidth / 2 + sepXPosFromCenter, pageStartY + 85
+		fieldVerDist	= 22
+		infieldWidth	= 0
+		ui_style 0, 1
+		ui_outfield stUIDimensions[10], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight	!Symbol Type
+		ui_style 0, 0
+		
+		yCurrent = yCurrent + 20
+		infieldWidth	= 100
+		ui_infield{3} "iOpeningType", xPos + totalColWidth - infieldWidth, yCurrent, infieldWidth, 60,
+			2, 1, 12, 3,		!openingTypes.png
+			90, 60, 90, 60,
+			9,  stOpeningType[1], 1,
+			10, stOpeningType[2], 2,
+			11, stOpeningType[3], 3,
+			12, stOpeningType[4], 4
+		yCurrent = yCurrent + textElevInfield + 90
+		
+		!-------------------------------
+		gosub "uiSizes"
+		
+		yCurrent = pageStartY + 97
+		!-----------------------------------
+		ui_separator 0, yCurrent, 444, yCurrent
+		!-----------------------------------
+		yCurrent = yCurrent + 16
+
+		yPos = yCurrent
+		fieldVerDist	= 23
+		gosub "current2Drep"
+	endif
+return
+
+"contentPage":
+! =============================================================================
+! Content Tabpage
+! =============================================================================
+
+	x1				= 1
+	x2				= 294
+	x3				= 305
+	x4				= 443
+	yPos			= pageStartY - 4
+	yCurrent		= yPos
+	fieldVerDist	= 21
+	infieldWidth1	= 100
+	infieldWidth2	= 40
+
+	
+	ui_style 0, 1
+	ui_infield{3} "gs_displaytext", x1, yCurrent, x2-x1, infieldHeight,
+		7, "", 0, 0,
+		0, 0, 0, 0,
+		0, stUIContent[1], 0,
+		0, stUIContent[1], 1
+	ui_style 0, 0
+	iFlag		= 4*not(gs_displaytext)
+	yCurrent	= yCurrent + fieldVerDist + 3
+	
+	ui_style 0, 1	
+	ui_outfield stUIContent[2], x1, yCurrent, x2-x1, outfieldHeight2, iFlag		!Home Story Text
+	ui_style 0, 0
+	yCurrent	= yCurrent + fieldVerDist	
+
+	ui_outfield stUIContent[3], x1, yCurrent, x2-x1-infieldWidth1-1, outfieldHeight, iFlag		!Opening Type
+	if iSymbolType = FLOOR_RECESS then
+		ui_infield{3} "iSymbText", x2-infieldWidth1, yCurrent-textElevInfield, infieldWidth1, infieldHeight,
+			8, "", 0, 0,
+			0, 0, 0, 0,
+			0, stHoleType[1][FULL_NAME], 1,
+			0, stHoleType[2][FULL_NAME], 2,
+			0, stHoleType[3][FULL_NAME], 3,
+			0, stHoleType[4][FULL_NAME], 4,
+			0, stHoleType[5][FULL_NAME], 5,
+			0, stHoleType[6][FULL_NAME], 6,
+			0, stHoleType[7][FULL_NAME], 7,
+			0, stHoleType[8][FULL_NAME], 8,
+			0, stHoleType[9][FULL_NAME], 9,
+			0, stHoleType[10][FULL_NAME], 10,
+			0, stHoleType[11][FULL_NAME], 11,
+			0, stHoleType[12][FULL_NAME], 12,
+			0, customText, 0
+	else
+		ui_infield{3} "iSymbText1", x2-infieldWidth1, yCurrent-textElevInfield, infieldWidth1, infieldHeight,
+			8, "", 0, 0,
+			0, 0, 0, 0,
+			0, stHoleType[1][FULL_NAME], 1,
+			0, stHoleType[2][FULL_NAME], 2,
+			0, stHoleType[3][FULL_NAME], 3,
+			0, stHoleType[4][FULL_NAME], 4,
+			0, stHoleType[5][FULL_NAME], 5,
+			0, stHoleType[6][FULL_NAME], 6,
+			0, stHoleType[7][FULL_NAME], 7,
+			0, stHoleType[8][FULL_NAME], 8,
+			0, stHoleType[9][FULL_NAME], 9,
+			0, stHoleType[10][FULL_NAME], 10,
+			0, stHoleType[11][FULL_NAME], 11,
+			0, stHoleType[12][FULL_NAME], 12,
+			0, customText, 0
+	endif
+	ui_outfield stUIContent[4], x3, yCurrent, x4-x3-infieldWidth2-1, outfieldHeight, iFlag		!Text on Plan
+	if iSymbolType = FLOOR_RECESS then
+		ui_infield "symb_text_short", x4-infieldWidth2, yCurrent-textElevInfield, infieldWidth2, infieldHeight
+	else
+		ui_infield "symb_text_1_short", x4-infieldWidth2, yCurrent-textElevInfield, infieldWidth2, infieldHeight
+	endif
+	yCurrent	= yCurrent + fieldVerDist	
+
+	if iSymbolType <> FLOOR_RECESS then
+		ui_style 0, 1
+		iFlag = 4*(not(gs_displaytext) | not(bStorySensitive))
+		if iSymbolType = CEILING_OPENING then	ui_outfield stUIContent[5], x1, yCurrent, x2-x1, outfieldHeight2, iFlag	!1 Story Up Text
+		if iSymbolType = FLOOR_OPENING then		ui_outfield stUIContent[6], x1, yCurrent, x2-x1, outfieldHeight2, iFlag	!1 Story Down Text
+		yCurrent	= yCurrent + fieldVerDist
+		ui_style 0, 0
+
+		ui_outfield stUIContent[3], x1, yCurrent, x2-x1-infieldWidth1-1, outfieldHeight, iFlag		!Opening Type
+		ui_infield{3} "iSymbText2", x2-infieldWidth1, yCurrent-textElevInfield, infieldWidth1, infieldHeight,
+			8, "", 0, 0,
+			0, 0, 0, 0,
+			0, stHoleType[1][FULL_NAME], 1,
+			0, stHoleType[2][FULL_NAME], 2,
+			0, stHoleType[3][FULL_NAME], 3,
+			0, stHoleType[4][FULL_NAME], 4,
+			0, stHoleType[5][FULL_NAME], 5,
+			0, stHoleType[6][FULL_NAME], 6,
+			0, stHoleType[7][FULL_NAME], 7,
+			0, stHoleType[8][FULL_NAME], 8,
+			0, stHoleType[9][FULL_NAME], 9,
+			0, stHoleType[10][FULL_NAME], 10,
+			0, stHoleType[11][FULL_NAME], 11,
+			0, stHoleType[12][FULL_NAME], 12,
+			0, customText, 0
+		ui_outfield stUIContent[4], x3, yCurrent, x4-x3-infieldWidth2-1, outfieldHeight, iFlag		!Text on Plan
+		ui_infield "symb_text_2_short", x4-infieldWidth2, yCurrent-textElevInfield, infieldWidth2, infieldHeight
+		yCurrent	= yCurrent + fieldVerDist
+	endif
+
+	!----------------------------------------------------
+	ui_separator 0, yCurrent-1, 444, yCurrent-1
+	!----------------------------------------------------
+	yCurrent	= yCurrent + 8
+
+	ui_style 0, 1
+	ui_infield{3} "bShowPrefix", x1, yCurrent-textElevBoolean, x2-x1-infieldWidth1-2, infieldHeight,
+		7, "", 0, 0,
+		0, 0, 0, 0,
+		0, stUIContent[7], 0,
+		0, stUIContent[7], 1
+	ui_style 0, 0
+	yCurrent	= yCurrent + fieldVerDist
+
+	iFlag = 4 * not(bShowPrefix)
+	ui_outfield stUIContent[8], x1, yCurrent, x2-x1-infieldWidth1-1, outfieldHeight, iFlag		!Opening is Used for
+	ui_infield{3} "iSymbUse", x2-infieldWidth1, yCurrent-textElevInfield, infieldWidth1, infieldHeight,
+			8, "", 0, 0,
+			0, 0, 0, 0,
+			0, stUsedType[1][FULL_NAME], 1,
+			0, stUsedType[2][FULL_NAME], 2,
+			0, stUsedType[3][FULL_NAME], 3,
+			0, stUsedType[4][FULL_NAME], 4,
+			0, stUsedType[5][FULL_NAME], 5,
+			0, customText, 0
+	ui_outfield stUIContent[9], x3, yCurrent, x4-x3-infieldWidth2-1, outfieldHeight, iFlag		!Prefix on Plan
+	ui_infield "symb_use_short", x4-infieldWidth2, yCurrent-textElevInfield, infieldWidth2, infieldHeight
+	yCurrent	= yCurrent + fieldVerDist
+
+	!----------------------------------------------------
+	ui_separator 0, yCurrent-1, 444, yCurrent-1
+	!----------------------------------------------------
+	yCurrent	= yCurrent + 8
+
+	ui_style 0, 1
+	ui_infield{3} "bShowSizes", x1, yCurrent-textElevBoolean, x2-x1-infieldWidth1-2, infieldHeight,
+		7, "", 0, 0,
+		0, 0, 0, 0,
+		0, stUIContent[10], 0,
+		0, stUIContent[10], 1
+	ui_style 0, 0
+
+	iFlag = 4 * not(bShowSizes)
+	ui_infield{3} "iSymbSizes", x2-infieldWidth1, yCurrent-textElevInfield, infieldWidth1, infieldHeight,
+		8, "",
+		0, 0,
+		0, 0, 0, 0,
+		0, stSizes[1], SYMBTEXT_XY,
+		0, stSizes[2], SYMBTEXT_XYZ
+	yCurrent	= yCurrent + fieldVerDist
+
+	ui_outfield stUIContent[11], x1, yCurrent, x2-x1-infieldWidth1-1, outfieldHeight, iFlag		!Units
+	ui_infield{3} "iWorkingUnit", x2-infieldWidth1, yCurrent-textElevInfield, infieldWidth1, infieldHeight,
+		8, "",
+		0, 0,
+		0, 0, 0, 0,
+		0, stUnitFormats[1], 1,
+		0, stUnitFormats[2], 2,
+		0, stUnitFormats[3], 3,
+		0, stUnitFormats[4], 4,
+		0, stUnitFormats[5], 5
+
+	iFlag = 4 * (not(bShowSizes) | (iWorkingUnit = WORKUNIT_PROJECT | iWorkingUnit = WORKUNIT_INCH))
+	ui_outfield stUIContent[13], x3, yCurrent, x4-x3-infieldWidth2-1, outfieldHeight, iFlag		!Decimals
+	ui_infield{3} "iDecimalOptions", x4-infieldWidth2, yCurrent-textElevInfield, infieldWidth2, infieldHeight,
+		8, "",
+		0, 0,
+		0, 0, 0, 0,
+		0, stNumDecimal[1], 0,
+		0, stNumDecimal[2], 1,
+		0, stNumDecimal[3], 2,
+		0, stNumDecimal[4], 3,
+		0, stNumDecimal[5], 4
+
+	yCurrent	= yCurrent + fieldVerDist
+
+	!----------------------------------------------------
+	ui_separator 0, yCurrent-1, 444, yCurrent-1
+	!----------------------------------------------------
+	yCurrent	= yCurrent + 8
+
+	ui_style 0, 1
+	ui_infield{3} "bShowCustomText", x1, yCurrent-textElevBoolean, x2-infieldWidth1-2, infieldHeight,
+		7, "", 0, 0,
+		0, 0, 0, 0,
+		0, stUIContent[12], 0,
+		0, stUIContent[12], 1
+	ui_style 0, 0
+	ui_infield "symb_cust_text", x2-infieldWidth1, yCurrent-textElevInfield, infieldWidth1, infieldHeight
+return
+
+"textPage":
+! =============================================================================
+! Text Style Tabpage
+! =============================================================================
+
+	totalColWidth	= 294
+	xPos			= 0
+	yPos			= pageStartY + 4
+	yCurrent		= yPos
+	fieldVerDist	= 24
+	yCurrent		= yPos
+	infieldWidth	= 60
+	buttonX			= 24
+	buttonY			= 24
+	buttonSpace		= 16
+	
+
+	ui_pict "ui_FontSize_flat(1)", xPos, yCurrent, 27, 14, 1
+	if iFontScale = FONTSCALE_PAPER then
+		ui_infield{3} "fontSizePaper", xPos + 42, yCurrent-textElevInfield, infieldWidth, infieldHeight
+		ui_outfield stUIText[1], xPos + 105, yCurrent+1, 40, outfieldHeight
+	else
+		ui_infield{3} "gs_font_size", xPos + 42, yCurrent-textElevInfield, infieldWidth, infieldHeight
+		ui_outfield stUIText[2], xPos + 105, yCurrent+1, 40, outfieldHeight
+	endif
+
+	ui_infield{3} "gs_text_style_bold", xPos + totalColWidth - 3*buttonX - 2*buttonSpace, yCurrent-2, buttonX, buttonY,
+		6, "ui_bold_flat(1)", 1, 1,			!ui_bold_flat(1).png
+		16, 16, 16, 16,
+		1, stUIText[10], 1,
+		1, stUIText[10], 2	ui_tooltip stUIText[10]
+
+	ui_infield{3} "gs_text_style_italic", xPos + totalColWidth - 2*buttonX - buttonSpace, yCurrent-2, buttonX, buttonY,
+		6, "ui_italic_flat(1)", 1, 1,			!ui_italic_flat(1).png
+		16, 16, 16, 16,
+		1, stUIText[11], 1,
+		1, stUIText[11], 2	ui_tooltip stUIText[11]
+
+	ui_infield{3} "gs_text_style_underline", xPos + totalColWidth - buttonX, yCurrent-2, buttonX, buttonY,
+		6, "ui_underline_flat(1)", 1, 1,			!ui_underline_flat(1).png
+		16, 16, 16, 16,
+		1, stUIText[12], 1,
+		1, stUIText[12], 2	ui_tooltip stUIText[12]
+
+
+	yCurrent = yCurrent + fieldVerDist + 9
+	
+	ui_pict "ui_text_pen_flat(1)", xPos, yCurrent - 3, 24, 17, 1
+	yCurrent = yCurrent - textElevPen
+	ui_infield "gs_font_pen", xPos + 70, yCurrent, penWidth, penHeight
+	yCurrent = yCurrent + fieldVerDist + textElevPen - textElevInfield + 11
+	
+	
+	infieldWidth	= 154
+	ui_outfield stUIText[3], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight
+	ui_infield{3} "fontType", xPos + totalColWidth - infieldWidth, yCurrent-textElevInfield, infieldWidth, infieldHeight
+	yCurrent = yCurrent + fieldVerDist
+
+	ui_outfield stUIText[4], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight
+	ui_infield{3} "iFontScale", xPos + totalColWidth - infieldWidth, yCurrent-textElevInfield, infieldWidth, infieldHeight,
+		8, "", 0, 0,
+		0, 0, 0, 0,
+		0, stFontScale[1], 1,
+		0, stFontScale[2], 2
+	yCurrent = yCurrent + fieldVerDist
+	
+	infieldWidth	= 70
+	ui_infield{3} "gs_text_wrap", xPos, yCurrent-2, totalColWidth - infieldWidth - 2, outfieldHeight,
+		7, "", 0, 0,
+		0, 0, 0, 0,
+		0, stUIText[5], 0,
+		0, stUIText[5], 1
+	yCurrent = yCurrent + fieldVerDist
+
+	ui_outfield stUIText[6], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, 4*not(gs_text_wrap)		!Text Width
+	ui_infield{3} "gs_text_width", xPos + totalColWidth - infieldWidth, yCurrent-textElevInfield, infieldWidth, infieldHeight
+	yCurrent = yCurrent + fieldVerDist
+	
+	ui_outfield stUIText[7], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Text Angle
+	ui_infield{3} "angle", xPos + totalColWidth - infieldWidth, yCurrent-textElevInfield, infieldWidth, infieldHeight
+	yCurrent = yCurrent + fieldVerDist
+	
+	ui_outfield stUIText[8], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Text Offset X Direction
+	ui_infield{3} "gs_textoffset_x", xPos + totalColWidth - infieldWidth, yCurrent-textElevInfield, infieldWidth, infieldHeight
+	yCurrent = yCurrent + fieldVerDist
+	
+	ui_outfield stUIText[9], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Text Offset Y Direction
+	ui_infield{3} "gs_textoffset_y", xPos + totalColWidth - infieldWidth, yCurrent-textElevInfield, infieldWidth, infieldHeight
+	yCurrent = yCurrent + fieldVerDist
+return
+
+"3DRepPage":
+! =============================================================================
+! 3D Representation Tabpage
+! =============================================================================
+
+	xPos			= 0
+	x2				= 13
+	x3				= 230
+	totalColWidth	= x3-xPos
+	yPos			= pageStartY
+	yCurrent		= yPos
+	fieldVerDist	= 22
+	
+	yCurrent = yCurrent - textElevBoolean
+	ui_infield{3} "bShow3D", xPos, yCurrent, 444, outfieldHeight,
+		7, "", 0, 0,
+		0, 0, 0, 0,
+		0, stUI3D[1], 0,
+		0, stUI3D[1], 1
+	
+	iFlag = 4*not(bShow3D)
+	
+	yCurrent = yCurrent + fieldVerDist
+	
+	ui_outfield stUI3D[2], xPos, yCurrent + 3, 252, outfieldHeight2, iFlag
+	ui_infield "gs_3D_cont_pen", 254, yCurrent, penWidth, penHeight
+	
+	yCurrent = yCurrent + fieldVerDist	
+	
+	ui_infield{3} "bSolid3D", xPos, yCurrent, 444, outfieldHeight,
+		7, "", 0, 0,
+		0, 0, 0, 0,
+		0, stUI3D[3], 0,
+		0, stUI3D[3], 1
+	
+	yCurrent = yCurrent + fieldVerDist - 2
+	
+	infieldWidth	= 190
+	ui_outfield stUI3D[4], xPos, yCurrent + 5, 444- infieldWidth - 3, outfieldHeight2, 4*(not(bShow3D) | not(bSolid3D))
+	
+	ui_infield "gs_mat_solid", 444 - infieldWidth, yCurrent, infieldWidth, matHeight
+	
+	yCurrent = yCurrent + fieldVerDist + 12
+	
+	!----------------------------------------------------
+	ui_separator xPos, yCurrent - 3, uiTotalWidth, yCurrent - 3
+	!----------------------------------------------------
+	
+	yCurrent = yCurrent + 5
+	infieldWidth	= -160
+	ui_style 1,0
+	ui_outfield stUI3D[5], xPos, yCurrent, x2-1-xPos, outfieldHeight, iFlag
+	ui_outfield stUI3D[8], x2, yCurrent, 444 - x2 - 2, outfieldHeight, iFlag
+	yCurrent = yCurrent + fieldVerDist
+	
+	ui_outfield stUI3D[6], xPos, yCurrent, x2-1-xPos, outfieldHeight, iFlag
+	ui_outfield stUI3D[9], x2, yCurrent, 444 - x2 - 2, outfieldHeight, iFlag
+	yCurrent = yCurrent + fieldVerDist
+	
+	ui_outfield stUI3D[7], xPos, yCurrent, x2-1-xPos, outfieldHeight, iFlag
+	ui_outfield stUI3D[10], x2, yCurrent, 444 - x2 - 2, outfieldHeight*2, iFlag
+	yCurrent = yCurrent + fieldVerDist
+return
+
+
+! --------------------------------------------------------------
+"uiSizes":
+! --------------------------------------------------------------
+	xPos			= 230
+	yCurrent		= yPos
+	infieldWidth	= 0
+	ui_style 0, 1
+	ui_outfield stUIDimensions[3], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Sizes
+	ui_style 0, 0
+	yCurrent = yCurrent + fieldVerDist
+
+	infieldWidth	= 75
+	if iOpeningType = OPTYPE_CIRCULAR then
+		ui_outfield stUIDimensions[9], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Diameter
+		yCurrent = yCurrent - textElevInfield
+		ui_infield "gs_hole_diameter", xPos + totalColWidth - infieldWidth-1, yCurrent, infieldWidth, infieldHeight
+		yCurrent = yCurrent + fieldVerDist + textElevInfield
+	else
+		ui_outfield stUIDimensions[4], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Width
+		yCurrent = yCurrent - textElevInfield
+		ui_infield "gs_hole_width", xPos + totalColWidth - infieldWidth-1, yCurrent, infieldWidth, infieldHeight
+		yCurrent = yCurrent + fieldVerDist + textElevInfield
+
+		ui_outfield stUIDimensions[5], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Depth
+		yCurrent = yCurrent - textElevInfield
+		ui_infield "gs_hole_depth", xPos + totalColWidth - infieldWidth-1, yCurrent, infieldWidth, infieldHeight
+		yCurrent = yCurrent + fieldVerDist + textElevInfield
+	endif
+
+	if iSymbolType = FLOOR_RECESS then
+		ui_outfield stUIDimensions[11], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Cut Thickness
+	else
+		ui_outfield stUIDimensions[6], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight		!Slab Thickness
+	endif
+	yCurrent = yCurrent - textElevInfield
+	ui_infield "gs_slab_thickness", xPos + totalColWidth - infieldWidth-1, yCurrent, infieldWidth, infieldHeight
+	yCurrent = yCurrent + fieldVerDist + textElevInfield
+return
+
+! --------------------------------------------------------------
+"current2Drep":
+! --------------------------------------------------------------
+	iFlag			= 0
+	if iSymbolType = FLOOR_OPENING then
+		iFlag = 4*not(bStorySensitive)
+	endif
+	xPos			= 0
+	infieldWidth	= 0
+	ui_style 0, 1
+	if iSymbolType = FLOOR_RECESS		then ui_outfield stUI2D[12], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight			!Attributes
+	if iSymbolType = CEILING_OPENING	then ui_outfield stUI2D[1],  xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag		!Home Story - Ceiling Opening
+	if iSymbolType = FLOOR_OPENING		then ui_outfield stUI2D[10], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag		!1 Story Down - as Ceiling Opening
+	ui_style 0, 0
+	yCurrent = yCurrent + fieldVerDist
+
+	ui_outfield stUI2D[2], xPos, yCurrent, totalColWidth - penWidth - 2, outfieldHeight2, iFlag			!Contour Pen
+	yCurrent = yCurrent - textElevPen
+	if iSymbolType = FLOOR_RECESS then
+		ui_infield "penFloor", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	else
+		ui_infield "gs_ceilingCont_pen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	endif
+	yCurrent = yCurrent + fieldVerDist + textElevPen
+	
+	infieldWidth	= 120
+	ui_outfield stUI2D[3], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag		!Line Type
+	yCurrent = yCurrent - textElevMaterial
+	if iSymbolType = FLOOR_RECESS then
+		ui_infield "lineTypeFloor", xPos + totalColWidth - infieldWidth, yCurrent+2, infieldWidth, lineTypeHeight
+	else
+		ui_infield "lineTypeCeiling", xPos + totalColWidth - infieldWidth, yCurrent+2, infieldWidth, lineTypeHeight
+	endif
+	yCurrent = yCurrent + fieldVerDist + textElevMaterial
+	
+
+	yCurrent	= yPos + fieldVerDist
+	xPos		= 229
+	
+	infieldWidth	= 120
+	ui_outfield stUI2D[4], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag		!Fill Type
+	yCurrent = yCurrent - textElevMaterial
+	if iSymbolType = FLOOR_RECESS then
+		ui_infield "backGroundFillType", xPos + totalColWidth - infieldWidth, yCurrent, infieldWidth, matHeight
+	else
+		ui_infield "ceilingFillType", xPos + totalColWidth - infieldWidth, yCurrent, infieldWidth, matHeight
+	endif
+	yCurrent = yCurrent + fieldVerDist + textElevMaterial
+	
+	ui_outfield stUI2D[5], xPos, yCurrent, totalColWidth - penWidth - 2, outfieldHeight, iFlag			!Fill Pen
+	yCurrent = yCurrent - textElevPen
+	if iSymbolType = FLOOR_RECESS then
+		ui_infield "backGroundFillPen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	else
+		ui_infield "ceilingFillPen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	endif
+	yCurrent = yCurrent + fieldVerDist + textElevPen
+
+	ui_outfield stUI2D[6], xPos, yCurrent, totalColWidth - penWidth - 2, outfieldHeight2, iFlag			!Background Pen
+	yCurrent = yCurrent - textElevPen
+	if iSymbolType = FLOOR_RECESS then
+		ui_infield "backGroundFillBgPen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	else
+		ui_infield "ceilingFillBgPen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	endif
+	yCurrent = yCurrent + fieldVerDist + textElevPen
+return
+
+
+! --------------------------------------------------------------
+"up2Drep":
+! --------------------------------------------------------------
+	iFlag			= 0
+	if iSymbolType = CEILING_OPENING then
+		iFlag = 4*not(bStorySensitive)
+	endif
+	xPos			= 0
+	infieldWidth	= 0
+	ui_style 0, 1
+	if iSymbolType = CEILING_OPENING	then ui_outfield stUI2D[7], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag		!1 Story Up - as Floor Opening
+	if iSymbolType = FLOOR_OPENING		then ui_outfield stUI2D[11], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag	!Home Story - Floor Opening
+	ui_style 0, 0
+	yCurrent = yCurrent + fieldVerDist
+
+	ui_outfield stUI2D[2], xPos, yCurrent, totalColWidth - penWidth - 2, outfieldHeight2, iFlag			!Contour Pen
+	yCurrent = yCurrent - textElevPen
+	ui_infield "penFloor", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	yCurrent = yCurrent + fieldVerDist + textElevPen
+
+	infieldWidth	= 0
+	ui_style 0, 1
+	ui_outfield stUI2D[8], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight2, iFlag		!Shadow Fill
+	ui_style 0, 0
+	yCurrent = yCurrent + fieldVerDist
+
+	infieldWidth	= 120
+	ui_outfield stUI2D[4], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag		!Fill Type
+	yCurrent = yCurrent - textElevMaterial
+	ui_infield "gs_opening_filltype", xPos + totalColWidth - infieldWidth, yCurrent, infieldWidth, matHeight
+	yCurrent = yCurrent + fieldVerDist + textElevMaterial
+
+	ui_outfield stUI2D[5], xPos, yCurrent, totalColWidth - penWidth - 2, outfieldHeight2, iFlag			!Fill Pen
+	yCurrent = yCurrent - textElevPen
+	ui_infield "gs_opening_fillpen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	yCurrent = yCurrent + fieldVerDist + textElevPen
+
+	ui_outfield stUI2D[6], xPos, yCurrent, totalColWidth - penWidth - 2, outfieldHeight2, iFlag			!Background Pen
+	yCurrent = yCurrent - textElevPen
+	ui_infield "gs_opening_backgroundpen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	yCurrent = yCurrent + fieldVerDist + textElevPen
+
+	!----------------------------------------
+	yCurrent		= yPos + fieldVerDist
+	xPos			= 229
+
+	infieldWidth	= 120
+	ui_outfield stUI2D[3], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag		!Line Type
+	yCurrent = yCurrent - textElevMaterial
+	ui_infield "lineTypeFloor", xPos + totalColWidth - infieldWidth, yCurrent, infieldWidth, lineTypeHeight
+	yCurrent = yCurrent + fieldVerDist + textElevMaterial
+
+	infieldWidth	= 0
+	ui_style 0, 1
+	ui_outfield stUI2D[9], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight2, iFlag		!Hole Fill
+	ui_style 0, 0
+	yCurrent = yCurrent + fieldVerDist
+
+	infieldWidth	= 120
+	ui_outfield stUI2D[4], xPos, yCurrent, totalColWidth - infieldWidth - 2, outfieldHeight, iFlag		!Fill Type
+	yCurrent = yCurrent - textElevMaterial
+	ui_infield "backGroundFillType", xPos + totalColWidth - infieldWidth, yCurrent, infieldWidth, matHeight
+	yCurrent = yCurrent + fieldVerDist + textElevMaterial
+
+	ui_outfield stUI2D[5], xPos, yCurrent, totalColWidth - penWidth - 2, outfieldHeight2, iFlag			!Fill Pen
+	yCurrent = yCurrent - textElevPen
+	ui_infield "backGroundFillPen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	yCurrent = yCurrent + fieldVerDist + textElevPen
+
+	ui_outfield stUI2D[6], xPos, yCurrent, totalColWidth - penWidth - 2, outfieldHeight2, iFlag			!Background Pen
+	yCurrent = yCurrent - textElevPen
+	ui_infield "backGroundFillBgPen", xPos + totalColWidth - penWidth, yCurrent, penWidth, penHeight
+	yCurrent = yCurrent + fieldVerDist + textElevPen
+return
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["quantity_text_formatter"]]></MName>
+		<MainGUID>5E4D02A3-CF83-4DE5-8F7D-C5FF522A117A</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_BWM>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

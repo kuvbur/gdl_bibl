@@ -1,0 +1,1251 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="6928D558-1F4B-4E42-8289-4464FA4FC42E" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>56A4A77E-2509-450D-94D0-A816189B7DF4</MainGUID>
+	<MainGUID>06BA412F-7262-4221-A9B3-1A3E410E9170</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! *****************************************************************************
+! DOWNSPOUT 3D
+! *****************************************************************************
+
+if gs_detlevel_3D_m=1 or (GLOB_CONTEXT>20 and GLOB_CONTEXT<40) then gs_resol=4	! Simple
+if gs_detlevel_3D_m=0 then END	!!Off
+
+resol gs_resol
+pen gs_cont_pen
+material gs_gutter_ds_mat
+
+if gs_shadow=0 then SHADOW OFF
+if gs_shadow=1 then SHADOW ON
+
+rotx gs_gutter_ds_ang
+
+if gs_gutter_ds_profile_num = 1 then 	!! round profile
+	sizeA = gs_gutter_dd
+	sizeB = gs_gutter_dd
+else
+	sizeA = gs_gutter_aa
+	sizeB = gs_gutter_bb
+endif
+
+addy - (dis_wall - sizeB)
+
+! -----------------------------------------------------------------------------
+! Downspout 3D body
+! -----------------------------------------------------------------------------
+call "m_DSProfiles" parameters 	gs_gutter_ds_profile_num	= gs_gutter_ds_profile_num,
+								gs_mask						= 1,
+								gs_gutter_aa				= gs_gutter_aa,
+								gs_gutter_bb				= gs_gutter_bb,
+								gs_gutter_dd				= gs_gutter_dd
+
+
+! ---  Cutting at toP ---
+addz gs_gutter_ds_lgth
+if abs(topCut) <= EPS then
+	cutplane gs_gutter_topangle
+	lengthAddBottom = ABS(sizeB * TAN(gs_gutter_bottomangle))
+	LengthAddTop = ABS(sizeB * TAN(gs_gutter_topangle))
+	temp_Length = lengthAddTop + gs_gutter_ds_lgth
+else
+	rotz -90
+	cutplane topCut
+	del 1
+	lengthAddBottom = 0
+	lengthAddTop = ABS(sizeA * TAN(topCut))
+	temp_Length = lengthAddTop + gs_gutter_ds_lgth
+endif
+del 1
+
+! ---  Cutting at bottom ---
+cutplane (180 + gs_gutter_bottomangle) % 360
+
+tube nsp/3, 4, 16+32,
+	get(nsp),
+	0,	0,		temp_Length + 1,		0,
+	0,	0,		temp_Length,			0,
+	0,	0,		-lengthAddBottom,		0,
+	0,	0,		-lengthAddBottom - 1,	0
+
+cutend
+cutend
+
+! -----------------------------------------------------------------------------
+! 3D hotspots
+! -----------------------------------------------------------------------------
+
+unID=gs_unID
+
+if gs_HtpsMacro=0 then 													! not used in Downspout Complex
+	if gs_gutter_ds_profile_num=1 then									! round profile
+		AA = 0			 	: BB = 0				: gosub "length_settings"
+		AA = 0			 	: BB = gs_gutter_dd		: tempdir = -1 :gosub "width_length"
+		AA = 0			 	: BB =  -gs_gutter_dd	: tempdir = 1 :	gosub "width_length"
+		AA = gs_gutter_dd 	: BB = 0				: tempdir = 0 :	gosub "width_length"
+		AA = - gs_gutter_dd : BB = 0				: tempdir = 0 :	gosub "width_length"
+		AA = - gs_gutter_dd	: BB = gs_gutter_dd		: gosub "hanger_offset"
+		AA = gs_gutter_dd	: BB = gs_gutter_dd		: gosub "hanger_offset"
+		AA = gs_gutter_dd	: BB = -dis_wall		: gosub "wall_distance"
+	else																! not round profile
+		AA = 0			 	: BB = 0				: gosub "length_settings"
+		AA = gs_gutter_aa 	: BB = gs_gutter_bb 	: tempdir = -1 :gosub "width_length"
+		AA = gs_gutter_aa 	: BB = - gs_gutter_bb 	: tempdir = 1 :	gosub "width_length"
+		AA = - gs_gutter_aa : BB = gs_gutter_bb 	: tempdir = -1 :gosub "width_length"
+		AA = - gs_gutter_aa : BB = - gs_gutter_bb 	: tempdir = 1 :	gosub "width_length"
+		AA = - gs_gutter_aa : BB = gs_gutter_bb		: gosub "hanger_offset"
+		AA = gs_gutter_aa 	: BB = gs_gutter_bb		: gosub "hanger_offset"
+		AA = gs_gutter_aa	: BB = -dis_wall		: gosub "wall_distance"
+	endif
+endif
+del 1
+
+! -----------------------------------------------------------------------------
+! DS hangers 3D / hotspots
+! -----------------------------------------------------------------------------
+if gs_gutter_ds_h = 1 then
+	temp_tanang = tan(gs_gutter_ds_ang)
+	temp_cosang = cos(gs_gutter_ds_ang)
+	temp_sinang = sin(gs_gutter_ds_ang)
+	
+	IF gs_gutter_ds_h_positioning = HANGER_UNIFORM THEN
+		for i=1 to INT((gs_gutter_ds_lgth - gs_gutter_ds_h_off - sthw)/gs_gutter_ds_h_dist)+1
+	
+			! --- Hanger position ---
+			if gs_HtpsMacro=0 then 											! not used in Downspout Complex
+				add 0,-gs_gutter_bb-sth - (dis_wall - gs_gutter_bb),0
+	
+				HOTSPOT 0,	0,	0,								unID,	gs_gutter_ds_h_pos[i],	1+128	:unID=unID+1
+				HOTSPOT 0,	0,	-1,								unID,	gs_gutter_ds_h_pos[i],	3		:unID=unID+1
+				HOTSPOT 0,	0,	gs_gutter_ds_h_pos[i]+sthw/2,	unID,	gs_gutter_ds_h_pos[i],	2		:unID=unID+1
+	
+				del 1
+			endif
+	
+			temp_diswall = gs_gutter_ds_h_pos[i] * temp_tanang + dis_wall / temp_cosang
+			add 0, temp_diswall - dis_wall, gs_gutter_ds_h_pos[i]
+			
+			call "m_DSHanger" parameters	gs_gutter_ds_profile_num	= gs_gutter_ds_profile_num,
+											gs_gutter_ds_h_mat			= gs_gutter_ds_h_mat,
+											gs_detlevel_3D_m			= gs_detlevel_3D_m,
+											gs_resol					= gs_resol,
+											gs_shadow					= gs_shadow,
+											gs_cont_pen					= gs_cont_pen,
+											gs_gutter_aa				= gs_gutter_aa,
+											gs_gutter_bb				= gs_gutter_bb,
+											gs_gutter_dd				= gs_gutter_dd,
+											dis_wall					= temp_diswall
+			del 1
+		next i
+	else
+		for i=1 to hangeri
+	
+			! --- Hanger position ---
+			if gs_HtpsMacro=0 then 											! not used in Downspout Complex
+				add 0,-gs_gutter_bb-sth - (dis_wall - gs_gutter_bb),0
+	
+				HOTSPOT 0,	0,	0,								unID,	gs_gutter_ds_h_pos[i],	1+128	:unID=unID+1
+				HOTSPOT 0,	0,	-1,								unID,	gs_gutter_ds_h_pos[i],	3		:unID=unID+1
+				HOTSPOT 0,	0,	gs_gutter_ds_h_pos[i]+sthw/2,	unID,	gs_gutter_ds_h_pos[i],	2		:unID=unID+1
+	
+				del 1
+			endif
+	
+			temp_diswall = gs_gutter_ds_h_pos[i] * temp_tanang + dis_wall / temp_cosang
+			add 0, temp_diswall - dis_wall, gs_gutter_ds_h_pos[i]
+
+			call "m_DSHanger" parameters 	gs_gutter_ds_profile_num	= gs_gutter_ds_profile_num,
+											gs_gutter_ds_h_mat			= gs_gutter_ds_h_mat,
+											gs_detlevel_3D_m			= gs_detlevel_3D_m,
+											gs_resol					= gs_resol,
+											gs_shadow					= gs_shadow,
+											gs_cont_pen					= gs_cont_pen,
+											gs_gutter_aa				= gs_gutter_aa,
+											gs_gutter_bb				= gs_gutter_bb,
+											gs_gutter_dd				= gs_gutter_dd,
+											dis_wall					= temp_diswall
+
+			del 1
+		next i
+	endif
+endif
+
+del 1
+
+end
+! =============================================================================
+!END	!END	!END	!END	!END	!END	!END	!END	!END	!END
+! =============================================================================
+
+! -----------------------------------------------------------------------------
+"length_settings":
+! -----------------------------------------------------------------------------
+HOTSPOT AA,		BB,		0,						unID,	gs_gutter_ds_lgth,	1+256	:unID=unID+1
+HOTSPOT AA,		BB,		gs_gutter_ds_lgth-100,	unID,	gs_gutter_ds_lgth,	3		:unID=unID+1
+HOTSPOT AA,		BB,		gs_gutter_ds_lgth,		unID,	gs_gutter_ds_lgth,	2		:unID=unID+1
+return
+
+! -----------------------------------------------------------------------------
+"width_length":
+! -----------------------------------------------------------------------------
+HOTSPOT AA,		BB,		tempdir * lengthAddBottom,					unID	:unID=unID+1
+HOTSPOT AA,		BB,		gs_gutter_ds_lgth + tempdir * lengthAddTop,	unID	:unID=unID+1
+return
+
+! -----------------------------------------------------------------------------
+"hanger_offset":
+! -----------------------------------------------------------------------------
+if gs_gutter_ds_h = 1 then
+	HOTSPOT AA,		BB,	0,						unID,	gs_gutter_ds_h_off, 1+128	:unID=unID+1
+	HOTSPOT AA,		BB,	-1,						unID,	gs_gutter_ds_h_off, 3		:unID=unID+1
+	HOTSPOT AA,		BB,	gs_gutter_ds_h_pos[1],	unID,	gs_gutter_ds_h_off, 2		:unID=unID+1
+endif
+return
+
+! -----------------------------------------------------------------------------
+"wall_distance":		!3D Hotsports for Dis. Between Downspout Axes and Wall
+! -----------------------------------------------------------------------------
+	!new editable hotspots, using fix unID because of migration
+	hotspot AA,		-BB,	0,	20001, dis_wall, 1+128
+	hotspot AA,		0,		0,	20002, dis_wall, 2
+	hotspot AA,		BB + 1,	0,	20003, dis_wall, 3
+
+	hotspot -AA,	-BB,	0,	20004, dis_wall, 1+128
+	hotspot -AA,	0,		0,	20005, dis_wall, 2
+	hotspot -AA,	BB + 1,	0,	20006, dis_wall, 3
+
+	hotspot AA,		-BB,	gs_gutter_ds_lgth,	20007, dis_wall, 1+128
+	hotspot AA,		0,		gs_gutter_ds_lgth,	20008, dis_wall, 2
+	hotspot AA,		BB + 1,	gs_gutter_ds_lgth,	20009, dis_wall, 3
+
+	hotspot -AA,	-BB,	gs_gutter_ds_lgth,	20010, dis_wall, 1+128
+	hotspot -AA,	0,		gs_gutter_ds_lgth,	20011, dis_wall, 2
+	hotspot -AA,	BB + 1,	gs_gutter_ds_lgth,	20012, dis_wall, 3
+return
+
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+if gs_gutter_ds_profile_num = 1 then
+	add2 0, - (dis_wall - gs_gutter_dd)
+else
+	add2 0, - (dis_wall - gs_gutter_bb)
+endif
+
+call "m_DSProfiles" parameters 		gs_gutter_ds_profile_num	= gs_gutter_ds_profile_num,
+									gs_gutter_aa				= gs_gutter_aa,
+									gs_gutter_bb				= gs_gutter_bb,
+									gs_gutter_dd				= gs_gutter_dd
+
+pen gs_cont_pen
+line_type gs_line_type
+fill gs_fill_type
+
+! -----------------------------------------------------------------------------
+! Downspout Profile
+! -----------------------------------------------------------------------------
+
+if ABS(gs_gutter_ds_ang) < EPS then				! ang = 0
+	gosub "profile_contour"
+	gosub "flush_buffer"
+else												! ang < 0, negativ
+	if gs_gutter_ds_ang < 0 then
+		gosub "profile_contour"
+		gosub "side_countour"
+		add2 0,-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang)
+		gosub "profile_contour"
+		del 1
+		gosub "flush_buffer"
+	else											! ang > 0, positive
+		gosub "profile_contour"
+		gosub "side_countour"
+		add2 0,-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang)
+		gosub "profile_contour"
+		del 1
+		gosub "flush_buffer"
+	endif
+endif
+
+! -----------------------------------------------------------------------------
+! Downspout 2D HOTSPOTS
+! -----------------------------------------------------------------------------
+unID=gs_unID
+
+if gs_gutter_ds_profile_num=1 then							! round profile
+	if ABS(gs_gutter_ds_ang) < EPS then						! round profile, ang = 0
+		gosub "htsp_round_prof"
+	else													! round profile, ang not= 0
+		if 90 - ABS(gs_gutter_ds_ang) < EPS then
+			mul2 1,COS(89.9999999)
+			if gs_gutter_ds_ang < EPS then 	add2 0,-gs_gutter_ds_lgth*TAN(-89.9999999)
+			if gs_gutter_ds_ang > EPS then 	add2 0,-gs_gutter_ds_lgth*TAN(89.9999999)
+		else
+			mul2 1,COS(gs_gutter_ds_ang)
+			add2 0,-gs_gutter_ds_lgth*TAN(gs_gutter_ds_ang)
+		endif
+
+		gosub "htsp_round_prof"
+		del 2
+	endif
+
+else														! not round profile
+	if ABS(gs_gutter_ds_ang) < EPS then						! not round, ang = 0
+		gosub "htsp_ntround_prof"
+	else													! not round, ang not= 0
+		if 90 - ABS(gs_gutter_ds_ang) < EPS then
+			mul2 1,COS(89.9999999)
+		else
+			mul2 1,COS(gs_gutter_ds_ang)
+		endif
+		gosub "htsp_ntround_prof"
+
+		if 90 - ABS(gs_gutter_ds_ang) < EPS then
+			if gs_gutter_ds_ang < EPS then 	add2 0,-gs_gutter_ds_lgth*TAN(-89.9999999)
+			if gs_gutter_ds_ang > EPS then 	add2 0,-gs_gutter_ds_lgth*TAN(89.9999999)
+		else
+			add2 0,-gs_gutter_ds_lgth*TAN(gs_gutter_ds_ang)
+		endif
+		gosub "htsp_ntround_prof"
+		del 2
+	endif
+endif
+
+del 1
+
+! -----------------------------------------------------------------------------
+! Gutter (displayed only if ang=0)
+! -----------------------------------------------------------------------------
+if gs_gutter_ds_h = 1	then
+
+	! --- DS Hangers 2D, ang = 0 ---
+	if ABS(gs_gutter_ds_ang) < EPS then
+		for i=1 to INT((gs_gutter_ds_lgth - gs_gutter_ds_h_off - sthw)/gs_gutter_ds_h_dist)+1
+			add2 0, -gs_gutter_ds_h_pos[i] * SIN(gs_gutter_ds_ang)
+			call "m_DSHanger" parameters 	gs_gutter_ds_profile_num	= gs_gutter_ds_profile_num,
+											gs_gutter_aa				= gs_gutter_aa,
+											gs_gutter_bb				= gs_gutter_bb,
+											gs_gutter_dd				= gs_gutter_dd,
+											gs_cont_pen					= gs_cont_pen,
+											gs_fill_type				= gs_fill_type,
+											gs_fill_pen					= gs_fill_pen,
+											gs_back_pen					= gs_back_pen,
+											dis_wall 					= dis_wall
+
+			del 1
+		next i
+	endif
+endif
+
+
+END
+! =============================================================================
+!END	!END	!END	!END	!END	!END	!END	!END	!END	!END
+! =============================================================================
+
+! -----------------------------------------------------------------------------
+"profile_contour":	!downspout [perpendicunal/not] projection of profile contour
+! -----------------------------------------------------------------------------
+	if ABS(gs_gutter_ds_ang) < EPS then
+		poly2_b{2} nsp/3, 1+2+4+64,	gs_fill_pen, gs_back_pen,
+			0, 0, 0,
+			use (nsp)
+	else
+		if 90 - ABS(gs_gutter_ds_ang) < EPS then
+			mul2 1, 0.00000001
+		else
+			mul2 1, COS(gs_gutter_ds_ang)
+		endif
+		poly2_b{2} nsp/3, 1+2+4+64,	gs_fill_pen, gs_back_pen,
+			0, 0, 0,
+			use (nsp)
+		del 1
+	endif
+return
+
+! -----------------------------------------------------------------------------
+"side_countour":							!downspout projection of side contour
+! -----------------------------------------------------------------------------
+if not(ABS(gs_gutter_ds_ang) < EPS) then
+		if gs_gutter_ds_profile_num = 1 then	!!round
+			poly2_b{2} 4, 1+2+4+64,	gs_fill_pen, gs_back_pen,
+				0,0,0,
+				gs_gutter_dd,		-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang),		 1,
+				gs_gutter_dd,		 0,												 0,
+				-gs_gutter_dd,		 0,												 1,
+				-gs_gutter_dd,		-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang),		 0
+		else
+			poly2_b{2} 4, 1+2+4+64,	gs_fill_pen, gs_back_pen,
+				0,0,0,
+				gs_gutter_aa,		-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang),		 1,
+				gs_gutter_aa,		 0,												 0,
+				-gs_gutter_aa,		 0,												 1,
+				-gs_gutter_aa,		-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang),		 0
+		endif
+endif
+return
+
+! -----------------------------------------------------------------------------
+"flush_buffer":														!flush buffer
+! -----------------------------------------------------------------------------
+	for i=1 to nsp
+		temp = get(1)
+	next i
+return
+
+! -----------------------------------------------------------------------------
+"htsp_round_prof":									!round profile 2D hotspots
+! -----------------------------------------------------------------------------
+	HOTSPOT2  0,	0,				unID:	unID=unID+1
+
+	HOTSPOT2  0,	dis_wall,		10001, 	dis_wall, 1+128, 	dis_wall
+	HOTSPOT2  0,	0,				unID, 	dis_wall, 2, 		dis_wall	:	unID=unID+1
+	HOTSPOT2  0,	1 + dis_wall,	10002, 	dis_wall, 3,		dis_wall
+
+	for kk=1 to 4
+		! ---  RADIUS ---
+		HOTSPOT2 0, 0, unID, gs_gutter_dd, 1+128, gs_gutter_dd2 : unID=unID+1
+		HOTSPOT2 -1, 0, unID, gs_gutter_dd, 3, gs_gutter_dd2 : unID=unID+1
+		HOTSPOT2 gs_gutter_dd, 0, unID, gs_gutter_dd, 2, gs_gutter_dd2 : unID=unID+1
+		ROT2 90
+		next kk
+	del 4
+return
+
+! -----------------------------------------------------------------------------
+"htsp_ntround_prof":							!not-round profile 2D hotspots
+! -----------------------------------------------------------------------------
+		HOTSPOT2  0,	 dis_wall,		20003, 	dis_wall, 1+128, 	dis_wall
+		HOTSPOT2  0,	 0,				unID, 	dis_wall, 2, 		dis_wall	:	unID=unID+1
+		HOTSPOT2  0,	 1 + dis_wall,	20004, 	dis_wall, 3, 		dis_wall
+
+		HOTSPOT2  0,	 gs_gutter_bb,	unID:	unID=unID+1
+
+		! ---  WIDTH ---
+		add2 0,gs_gutter_bb
+			HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 -1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+
+			HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 -gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+		del 1
+		add2 0,-gs_gutter_bb
+			HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 -1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+
+			HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 -gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+		del 1
+
+		! ---  LENGTH ---
+		add2 gs_gutter_aa,0
+			HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, -1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+
+			HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, 1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, -gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+		del 1
+		add2 -gs_gutter_aa,0
+			HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, -1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+
+			HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, 1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, -gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+		del 1
+
+return
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+!------------  Hanger Positioning Type -----------------------------------------
+HANGER_CUSTOM			= 1
+HANGER_UNIFORM			= 2
+
+
+EPS = 0.0001		! precision of zero
+sth = 0.002					! hanger thickness
+sthw = 0.03					! hanger width
+dswh = 0.04					! downspout-hanger width
+
+! -----------------------------------------------------------------------------
+! USA profiles
+! -----------------------------------------------------------------------------
+if gs_gutter_ds_profile=`Круглый 3"` OR gs_gutter_ds_profile=`Круглый 4"` OR gs_gutter_ds_profile=`Специальный - Круглый` then
+	parameters gs_gutter_ds_profile_num=1
+endif
+
+if gs_gutter_ds_profile=`Прямоугольный 2"*3"` OR gs_gutter_ds_profile=`Прямоугольный 3"*2"` OR gs_gutter_ds_profile=`Прямоугольный 3"*4"` OR gs_gutter_ds_profile=`Прямоугольный 4"*3"` OR gs_gutter_ds_profile=`Специальный - Прямоугольный` then
+	parameters gs_gutter_ds_profile_num=2
+endif
+
+if gs_gutter_ds_profile=`Закругленный 2"*3"` OR gs_gutter_ds_profile=`Закругленный 3"*2"` OR gs_gutter_ds_profile=`Закругленный 3"*4"` OR gs_gutter_ds_profile=`Закругленный 4"*3"` OR gs_gutter_ds_profile=`Специальный - Закругленный` then
+	parameters gs_gutter_ds_profile_num=3
+endif
+
+
+if gs_gutter_ds_profile=`Круглый 3"` then
+	parameters gs_gutter_dd=3*0.5*0.0254
+				gs_gutter_dd=3*0.5*0.0254
+	parameters gs_gutter_dd2=gs_gutter_dd*2
+				gs_gutter_dd2=gs_gutter_dd*2
+	lock "gs_gutter_dd2"
+endif
+if gs_gutter_ds_profile=`Круглый 4"` then
+	parameters gs_gutter_dd=4*0.5*0.0254
+				gs_gutter_dd=4*0.5*0.0254
+	parameters gs_gutter_dd2=gs_gutter_dd*2
+				gs_gutter_dd2=gs_gutter_dd*2
+	lock "gs_gutter_dd2"
+endif
+
+if gs_gutter_ds_profile=`Прямоугольный 2"*3"` OR gs_gutter_ds_profile=`Закругленный 2"*3"` then
+	parameters gs_gutter_aa=0.0254
+				gs_gutter_aa=0.0254
+	parameters gs_gutter_aa2=gs_gutter_aa*2
+				gs_gutter_aa2=gs_gutter_aa*2
+	parameters gs_gutter_bb=0.0381
+				gs_gutter_bb=0.0381
+	parameters gs_gutter_bb2=gs_gutter_bb*2
+				gs_gutter_bb2=gs_gutter_bb*2
+	lock "gs_gutter_aa2"
+	lock "gs_gutter_bb2"
+endif
+
+if gs_gutter_ds_profile=`Прямоугольный 3"*2"` OR gs_gutter_ds_profile=`Закругленный 3"*2"` then
+	parameters gs_gutter_aa=0.0381
+				gs_gutter_aa=0.0381
+	parameters gs_gutter_aa2=gs_gutter_aa*2
+				gs_gutter_aa2=gs_gutter_aa*2
+	parameters gs_gutter_bb=0.0254
+				gs_gutter_bb=0.0254
+	parameters gs_gutter_bb2=gs_gutter_bb*2
+				gs_gutter_bb2=gs_gutter_bb*2
+	lock "gs_gutter_aa2"
+	lock "gs_gutter_bb2"
+endif
+
+if gs_gutter_ds_profile=`Прямоугольный 3"*4"` OR gs_gutter_ds_profile=`Закругленный 3"*4"` then
+	parameters gs_gutter_aa=0.0381
+				gs_gutter_aa=0.0381
+	parameters gs_gutter_aa2=gs_gutter_aa*2
+				gs_gutter_aa2=gs_gutter_aa*2
+	parameters gs_gutter_bb=0.0508
+				gs_gutter_bb=0.0508
+	parameters gs_gutter_bb2=gs_gutter_bb*2
+				gs_gutter_bb2=gs_gutter_bb*2
+	lock "gs_gutter_aa2"
+	lock "gs_gutter_bb2"
+endif
+
+if gs_gutter_ds_profile=`Прямоугольный 4"*3"` OR gs_gutter_ds_profile=`Закругленный 4"*3"` then
+	parameters gs_gutter_aa=0.0508
+				gs_gutter_aa=0.0508
+	parameters gs_gutter_aa2=gs_gutter_aa*2
+				gs_gutter_aa2=gs_gutter_aa*2
+	parameters gs_gutter_bb=0.0381
+				gs_gutter_bb=0.0381
+	parameters gs_gutter_bb2=gs_gutter_bb*2
+				gs_gutter_bb2=gs_gutter_bb*2
+	lock "gs_gutter_aa2"
+	lock "gs_gutter_bb2"
+endif
+
+! -----------------------------------------------------------------------------
+! Downspout Hanger parameters
+! -----------------------------------------------------------------------------
+! Change downspout length or change ds hanger offset
+IF gs_gutter_ds_h_positioning = HANGER_UNIFORM THEN
+	if GLOB_MODPAR_NAME = "gs_gutter_ds_lgth" OR GLOB_MODPAR_NAME = "gs_gutter_ds_h_off" OR GLOB_MODPAR_NAME = "gs_gutter_ds_h_positioning" then
+		for i=1 to INT((gs_gutter_ds_lgth - gs_gutter_ds_h_off - sthw)/gs_gutter_ds_h_dist)+1
+			if gs_gutter_ds_h_pos_mod[i] = 0 then
+				PARAMETERS gs_gutter_ds_h_pos[i]=(i-1)*gs_gutter_ds_h_dist+gs_gutter_ds_h_off
+			endif
+		next i
+	endif
+	
+	! Change distance between ds hangers
+	if GLOB_MODPAR_NAME = "gs_gutter_ds_h_dist" then
+		for i=1 to INT((gs_gutter_ds_lgth - gs_gutter_ds_h_off - sthw)/gs_gutter_ds_h_dist)+1
+			if gs_gutter_ds_h_pos_mod[i] = 0 then
+				PARAMETERS gs_gutter_ds_h_pos[i]=(i-1)*gs_gutter_ds_h_dist+gs_gutter_ds_h_off
+			endif
+		next i
+	endif
+	
+	! Set the items of the position_modified_ARRAY 0 if the hanger isn't dragged, or is on the right place; OR it is dragged from its position
+!	for i=1 to INT((gs_gutter_ds_lgth - gs_gutter_ds_h_off - sthw)/gs_gutter_ds_h_dist)+1
+!		if ABS(gs_gutter_ds_h_pos[i] - ((i-1) * gs_gutter_ds_h_dist + gs_gutter_ds_h_off) ) < EPS then
+!			PARAMETERS gs_gutter_ds_h_pos_mod[i] = 0
+!		else
+!			PARAMETERS gs_gutter_ds_h_pos_mod[i] = 1
+!		endif
+!	next i
+
+ELSE
+
+	hangeri = 1
+	j = 0
+	WHILE j <= gs_gutter_ds_lgth AND hangeri < 99 AND gs_gutter_ds_h_pos_helper[hangeri] > EPS DO
+		j = gs_gutter_ds_h_pos_helper[hangeri]
+		hangeri = hangeri + 1
+	ENDWHILE
+
+	hangeri = hangeri-1
+
+	if GLOB_MODPAR_NAME = "gs_gutter_ds_h_pos_helper" THEN
+		lenght = 0
+		FOR i=1 to hangeri
+			lenght = lenght + gs_gutter_ds_h_pos_helper[i]
+			PARAMETERS gs_gutter_ds_h_pos[i] = lenght
+		NEXT i
+		FOR i=hangeri+1 to vardim1(gs_gutter_ds_h_pos)
+			PARAMETERS gs_gutter_ds_h_pos[i] = 0
+		NEXT i
+	ENDIF
+
+	if GLOB_MODPAR_NAME = "gs_gutter_ds_h_pos" THEN
+			PARAMETERS gs_gutter_ds_h_pos_helper[1] = gs_gutter_ds_h_pos[1]
+		FOR i = 2 to hangeri
+			PARAMETERS gs_gutter_ds_h_pos_helper[i] = (gs_gutter_ds_h_pos[i] - gs_gutter_ds_h_pos[i-1])
+		NEXT i
+	ENDIF
+	
+	j = 0
+	FOR i = 1 to vardim1(gs_gutter_ds_h_pos)
+		j = gs_gutter_ds_h_pos[i]
+		IF j >= gs_gutter_ds_lgth OR gs_gutter_ds_h_pos[i] < 0 THEN 
+			PARAMETERS gs_gutter_ds_h_pos[i] = 0
+		ENDIF
+	NEXT i
+ENDIF
+
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+parameters ac_bottomlevel = 0
+parameters ac_toplevel = ZZYZX
+
+VALUES "gs_gutter_ds_profile_num" 1,2,3										! 1-Round, 2-Rectangular, 3-Corrugated
+VALUES "gs_detlevel_3D_m" 2, 1, 0											! 2-Detailed, 1-Simple, 0-Off
+
+VALUES "gs_resol" RANGE [3,)
+if gs_detlevel_3D_m=1 OR gs_gutter_ds_profile_num=2 then lock "gs_resol"	! 1-Simple, 2-Rectangular
+if gs_detlevel_3D_m=1 then													! (Simple)
+	LOCK "gs_gutter_ds_h","gs_gutter_ds_h_dist","gs_gutter_ds_h_off","gs_gutter_ds_h_pos","gs_gutter_ds_h_pos_mod"
+endif
+
+if gs_cont_pen= 0 then parameters gs_cont_pen=2
+if gs_fill_pen=0 then parameters gs_fill_pen=91
+
+! -----------------------------------------------------------------------------
+! A, B, ZZYZX
+! -----------------------------------------------------------------------------
+if gs_gutter_ds_profile_num=1 then 											! round profile
+	parameters A=gs_gutter_dd2
+	parameters B=gs_gutter_dd2
+	else
+	parameters A=gs_gutter_aa2
+	parameters B=gs_gutter_bb2
+endif
+
+parameters ZZYZX=gs_gutter_ds_lgth
+LOCK "A","B","ZZYZX"
+
+
+! -----------------------------------------------------------------------------
+! Downspout profile parameters
+! -----------------------------------------------------------------------------
+
+VALUES "gs_gutter_ds_ang" RANGE [-90,90]
+VALUES "gs_gutter_ds_h_off" RANGE [0,)
+VALUES "gs_gutter_ds_h_dist" RANGE [0,)
+
+if GLOB_MODPAR_NAME = "gs_gutter_aa" or GLOB_MODPAR_NAME = "gs_gutter_ds_profile" then
+	parameters 	gs_gutter_aa2 = gs_gutter_aa*2
+				gs_gutter_aa2 = gs_gutter_aa*2
+endif
+
+if GLOB_MODPAR_NAME = "gs_gutter_aa2" or GLOB_MODPAR_NAME = "gs_gutter_ds_profile" then
+	parameters 	gs_gutter_aa = gs_gutter_aa2/2
+				gs_gutter_aa = gs_gutter_aa2/2
+endif
+
+if GLOB_MODPAR_NAME = "gs_gutter_bb" or GLOB_MODPAR_NAME = "gs_gutter_ds_profile" then
+	parameters 	gs_gutter_bb2 = gs_gutter_bb*2
+				gs_gutter_bb2 = gs_gutter_bb*2
+endif
+
+if GLOB_MODPAR_NAME = "gs_gutter_bb2" or GLOB_MODPAR_NAME = "gs_gutter_ds_profile" then
+	parameters 	gs_gutter_bb = gs_gutter_bb2/2
+				gs_gutter_bb = gs_gutter_bb2/2
+endif
+
+if GLOB_MODPAR_NAME = "gs_gutter_dd" or GLOB_MODPAR_NAME = "gs_gutter_ds_profile" then
+	parameters 	gs_gutter_dd2 = gs_gutter_dd*2
+				gs_gutter_dd2 = gs_gutter_dd*2
+endif
+
+if GLOB_MODPAR_NAME = "gs_gutter_dd2" or GLOB_MODPAR_NAME = "gs_gutter_ds_profile" then
+	parameters 	gs_gutter_dd = gs_gutter_dd2/2
+				gs_gutter_dd = gs_gutter_dd2/2
+endif
+
+VALUES "gs_gutter_aa" RANGE (0,)
+VALUES "gs_gutter_aa2" RANGE (0,)
+VALUES "gs_gutter_bb" RANGE (0,)
+VALUES "gs_gutter_bb2" RANGE (0,)
+VALUES "gs_gutter_dd" RANGE (0,)
+VALUES "gs_gutter_dd2" RANGE (0,)
+VALUES "gs_gutter_ds_lgth" RANGE (0,)
+VALUES "TopCut" RANGE [-45,45]
+
+if gs_gutter_ds_profile_num = 1 then										! round profile
+	HIDEPARAMETER "gs_gutter_aa2"
+	HIDEPARAMETER "gs_gutter_bb2"
+else
+	HIDEPARAMETER "gs_gutter_dd2"
+endif
+
+if not(gs_gutter_ds_h) then
+	LOCK "gs_gutter_ds_h_dist","gs_gutter_ds_h_off","gs_gutter_ds_h_pos", "gs_gutter_ds_h_positioning"
+endif
+
+if gs_gutter_ds_profile_num = 1 then
+	values "dis_wall" range [gs_gutter_dd, )
+else
+	values "dis_wall" range [gs_gutter_bb, )
+endif
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_UIDefault/>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>0</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Dimension 1"]]></Description>
+			<Fix/>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Dimension 2"]]></Description>
+			<Fix/>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Height"]]></Description>
+			<Fix/>
+			<Value>1.8</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Show 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_gutter_ds_lgth">
+			<Description><![CDATA["Downspout Length"]]></Description>
+			<Value>1.8</Value>
+		</Length>
+		<Angle Name="gs_gutter_ds_ang">
+			<Description><![CDATA["Downspout Angle"]]></Description>
+			<Value>0</Value>
+		</Angle>
+		<Angle Name="TopCut">
+			<Description><![CDATA["Top Cut Angle"]]></Description>
+			<Value>0</Value>
+		</Angle>
+		<Angle Name="gs_gutter_topangle">
+			<Description><![CDATA["0 = perp. axis"]]></Description>
+			<Value>0</Value>
+		</Angle>
+		<Angle Name="gs_gutter_bottomangle">
+			<Description><![CDATA["0 = perp. axis"]]></Description>
+			<Value>0</Value>
+		</Angle>
+
+		<!-- Gutter_DS_sp0: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="Gutter_DS_sp0">
+			<Description><![CDATA["Downspout"]]></Description>
+		</Title>
+		<String Name="gs_gutter_ds_profile">
+			<Description><![CDATA["Downspout Profile"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Прямоугольный"]]></Value>
+		</String>
+		<Integer Name="gs_gutter_ds_profile_num">
+			<Description><![CDATA["Downspout Profile (1-Round,2-Rect.,3-Corrug.)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Length Name="gs_gutter_aa">
+			<Description><![CDATA["Profile Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_gutter_aa2">
+			<Description><![CDATA["Profile Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="gs_gutter_bb">
+			<Description><![CDATA["Profile Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_gutter_bb2">
+			<Description><![CDATA["Profile Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="gs_gutter_dd">
+			<Description><![CDATA["Profile Radius"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_gutter_dd2">
+			<Description><![CDATA["Profile Diameter"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+
+		<!-- gs_gutter_ds_h: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="gs_gutter_ds_h">
+			<Description><![CDATA["Downspout Hanger"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="gs_gutter_ds_h_positioning">
+			<Description><![CDATA["Hanger Positioning"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="gs_gutter_ds_h_dist">
+			<Description><![CDATA["Distance between Hangers"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.3</Value>
+		</Length>
+		<Length Name="gs_gutter_ds_h_off">
+			<Description><![CDATA["Offset of Hangers"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.3</Value>
+		</Length>
+		<Length Name="gs_gutter_ds_h_pos">
+			<Description><![CDATA["Hanger Position"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="33" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+				<AVal Row="5">0</AVal>
+				<AVal Row="6">0</AVal>
+				<AVal Row="7">0</AVal>
+				<AVal Row="8">0</AVal>
+				<AVal Row="9">0</AVal>
+				<AVal Row="10">0</AVal>
+				<AVal Row="11">0</AVal>
+				<AVal Row="12">0</AVal>
+				<AVal Row="13">0</AVal>
+				<AVal Row="14">0</AVal>
+				<AVal Row="15">0</AVal>
+				<AVal Row="16">0</AVal>
+				<AVal Row="17">0</AVal>
+				<AVal Row="18">0</AVal>
+				<AVal Row="19">0</AVal>
+				<AVal Row="20">0</AVal>
+				<AVal Row="21">0</AVal>
+				<AVal Row="22">0</AVal>
+				<AVal Row="23">0</AVal>
+				<AVal Row="24">0</AVal>
+				<AVal Row="25">0</AVal>
+				<AVal Row="26">0</AVal>
+				<AVal Row="27">0</AVal>
+				<AVal Row="28">0</AVal>
+				<AVal Row="29">0</AVal>
+				<AVal Row="30">0</AVal>
+				<AVal Row="31">0</AVal>
+				<AVal Row="32">0</AVal>
+				<AVal Row="33">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="gs_gutter_ds_h_pos_helper">
+			<Description><![CDATA["Hanger Position Helper"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="33" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+				<AVal Row="5">0</AVal>
+				<AVal Row="6">0</AVal>
+				<AVal Row="7">0</AVal>
+				<AVal Row="8">0</AVal>
+				<AVal Row="9">0</AVal>
+				<AVal Row="10">0</AVal>
+				<AVal Row="11">0</AVal>
+				<AVal Row="12">0</AVal>
+				<AVal Row="13">0</AVal>
+				<AVal Row="14">0</AVal>
+				<AVal Row="15">0</AVal>
+				<AVal Row="16">0</AVal>
+				<AVal Row="17">0</AVal>
+				<AVal Row="18">0</AVal>
+				<AVal Row="19">0</AVal>
+				<AVal Row="20">0</AVal>
+				<AVal Row="21">0</AVal>
+				<AVal Row="22">0</AVal>
+				<AVal Row="23">0</AVal>
+				<AVal Row="24">0</AVal>
+				<AVal Row="25">0</AVal>
+				<AVal Row="26">0</AVal>
+				<AVal Row="27">0</AVal>
+				<AVal Row="28">0</AVal>
+				<AVal Row="29">0</AVal>
+				<AVal Row="30">0</AVal>
+				<AVal Row="31">0</AVal>
+				<AVal Row="32">0</AVal>
+				<AVal Row="33">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Boolean Name="gs_gutter_ds_h_pos_mod">
+			<Description><![CDATA["Hanger Position Modified"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="33" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+				<AVal Row="5">0</AVal>
+				<AVal Row="6">0</AVal>
+				<AVal Row="7">0</AVal>
+				<AVal Row="8">0</AVal>
+				<AVal Row="9">0</AVal>
+				<AVal Row="10">0</AVal>
+				<AVal Row="11">0</AVal>
+				<AVal Row="12">0</AVal>
+				<AVal Row="13">0</AVal>
+				<AVal Row="14">0</AVal>
+				<AVal Row="15">0</AVal>
+				<AVal Row="16">0</AVal>
+				<AVal Row="17">0</AVal>
+				<AVal Row="18">0</AVal>
+				<AVal Row="19">0</AVal>
+				<AVal Row="20">0</AVal>
+				<AVal Row="21">0</AVal>
+				<AVal Row="22">0</AVal>
+				<AVal Row="23">0</AVal>
+				<AVal Row="24">0</AVal>
+				<AVal Row="25">0</AVal>
+				<AVal Row="26">0</AVal>
+				<AVal Row="27">0</AVal>
+				<AVal Row="28">0</AVal>
+				<AVal Row="29">0</AVal>
+				<AVal Row="30">0</AVal>
+				<AVal Row="31">0</AVal>
+				<AVal Row="32">0</AVal>
+				<AVal Row="33">0</AVal>
+			</ArrayValues>
+		</Boolean>
+		<Length Name="dis_wall">
+			<Description><![CDATA["Distance Between Downspout Axes and Wall"]]></Description>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_3d_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3d_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+		</Title>
+		<Integer Name="gs_detlevel_3D_m">
+			<Description><![CDATA["3D Detail Level (0-Off,1-Simple,2-Detailed)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Integer Name="gs_resol">
+			<Description><![CDATA["Resolution"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>12</Value>
+		</Integer>
+		<Boolean Name="gs_shadow">
+			<Description><![CDATA["Shadow"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D Representation"]]></Description>
+		</Title>
+		<LineType Name="gs_line_type">
+			<Description><![CDATA["Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Contour Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>91</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Fill Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>91</Value>
+		</PenColor>
+		<PenColor Name="cut_pen">
+			<Description><![CDATA["Cut Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>24</Value>
+		</PenColor>
+		<LineType Name="overhead_Line_Type">
+			<Description><![CDATA["Overhead Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</LineType>
+
+		<!-- gs_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_material">
+			<Description><![CDATA["Surfaces"]]></Description>
+		</Title>
+		<Material Name="gs_gutter_ds_mat">
+			<Description><![CDATA["Downspout"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>47</Value>
+		</Material>
+		<Material Name="gs_gutter_ds_h_mat">
+			<Description><![CDATA["Bracket"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>40</Value>
+		</Material>
+		<Boolean Name="gs_HtpsMacro">
+			<Description><![CDATA["Hotspots not called in Macro"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="gs_unID">
+			<Description><![CDATA["Start unID Num. of Hotspots"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+	</Parameters>
+</ParamSection>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["m_DSProfiles"]]></MName>
+		<MainGUID>2AA24506-3E95-489A-A896-6C35F18C006F</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["m_DSHanger"]]></MName>
+		<MainGUID>C5B1E626-6D93-4FF1-A9F7-0F1D107137DA</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="830" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000800000
+	00800803000000F4E091F900000054504C5445FFFFFFDAD6E0D5D2DB75727886
+	838A96939AE5E3E929292B3432345351549D9AA16B696DC3C2C4484649B5B1BA
+	A5A3A8EEEDF0CECBD2ADABB21A191B6D6A70BDBAC28D8B91E0DEE5B0ADB5302E
+	30A29FA67D7B81745198C30000029B49444154785EE59B09B2E2561004C97C9B
+	76F8FB8C7DFF7B1A85091F81F204AD03BC8AA217653F74F983C3CDDE2F3D2660
+	ABCBAFAFAF433122E2BD94F6D7B25C8FEDEBFA2BA0A0B7B2AEF3E767A9AD7DD7
+	80015DDFDEB6F7D66AA9B5DE120200405BAD7F271C001474A9F533214051D1F6
+	5D4B4680289C0E944415A002D06ACC014568D11CD05340ED2907145AFDCEFD04
+	AAA703310180A99FE04D0520E900A8ED3B9584FFCD82D4340454979A73408255
+	808F48550164FBC00DE20E10EF84E96184AA2C210720EC008A4A300740D556EA
+	5A7A30096B59C7C718D7670BD8DE54C5763FFF2E607AB28079DAE7B5B4E5701D
+	E363DAC778B680DF633A9FE97EFC980249789DA6F1EF3346C934A2EDBDD575DD
+	A729358C5450C35CA0313443F595DF887C043907C8921190262314CC3910CE81
+	9BAA00410700C8911180409A0B585EB613A2593ACE7341980D0124E880E95980
+	90DE0F000437240AF96988493A56C5566A31D38840B095328D7D3E220EA0B632
+	8D001D5FF7B9D4766CD04E3C0DE0F938E9F41EFB797EED9BCF16701EFFA0E375
+	0D548147AB65DE4F196B8E8C90EDBD66B76444D91085F0AD9946AF6E25796523
+	613C17D0D8ED392AAA4B508088AD45F13C7F65635E40B40CC995A1F4381911CE
+	01A239708B972142763F004477440AE47744E47744C6C631A0EA124C42544F3A
+	4E96A1B594792A6D8B75C25AF6049C1E0F36C665FF885C5E3FD8782ED3FDF8F5
+	DAB6A70B98C629E1A4E3794FD0712B65DEC7E9C31CA902E9AAC7514B104EB7D7
+	7E2B06CD4F4324EC408F3A4012CF4D6FCBF355802AC9372295F09F5AF9BF34A2
+	F292B7660AE687918437A5D25B7DE92D1961385548E5C0CF4FB81101A0104D42
+	A087A761AC0FDC001548AEE9E0953FF552EC0F07DA25FB9DD1F59288DE3B88B6
+	E3928B7ED771F9C3E31F54111C4F3E0803E60000000049454E44AE426082
+	]]>
+</Picture>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_BWM>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

@@ -1,0 +1,1567 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="true" IsPlaceable="true" MainGUID="7E20739E-E11B-4D7E-B84D-1B144EDA82B5" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>784EAEA1-5041-4AA6-B6F4-EF263A891EE7</MainGUID>
+	<MainGUID>21DE7666-EF71-4885-8222-629F88CB3F4A</MainGUID>
+	<MainGUID>66F6D7C2-637D-4243-91FD-6DB3FC8F91BE</MainGUID>
+	<MainGUID>D7ABD606-2B18-4723-97E6-324DB7E12A09</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+if gs_detlevel_3D=`Откл.` then End
+
+if shadow_cast=1 then
+	shadow on
+else
+	shadow off
+endif
+
+if gs_gdl_debug then
+	pen 10
+	addz ac_ref_height
+	roty 90
+	arrow=sqr((ac_ref_coords[1][3]-ac_ref_coords[1][1])^2+(ac_ref_coords[1][4]-ac_ref_coords[1][2])^2)
+	cylind	arrow-0.20, 0.02
+	addz arrow-0.20
+	cone 0.20, 0.05, 0, 90, 90
+	del 3
+endif
+
+pen gs_cont_pen
+
+! -----------------------------
+! Do the covering with the cuts
+! -----------------------------
+
+diff_x=ac_whole_poly[1][7]-ac_whole_poly[1][1]
+diff_y=ac_whole_poly[1][8]-ac_whole_poly[1][2]
+
+!print "diff_x=",diff_x
+!print "diff_y=",diff_y
+
+if abs(diff_y)>eps And abs(diff_x)>eps then
+	if ac_ref_coords[1][1]>ac_ref_coords[1][3] then extra=180
+	alfa=atn(diff_y/diff_x)+extra
+else
+	if abs(diff_x)<eps then
+		if diff_y>0 then
+			alfa=90
+		else
+			alfa=-90
+		endif
+	endif
+	if abs(diff_y)<eps then
+		if diff_x>0 then
+			alfa=0
+		else
+			alfa=180
+		endif
+	endif
+endif
+
+!print "alfa=",alfa
+
+! ---------------
+! Do the covering
+! ---------------
+
+!u=whole_loc_poly[1][1]
+!v=whole_loc_poly[1][2]
+a_size=whole_loc_poly[1][7]-whole_loc_poly[1][1]-2*oversize
+b_size=whole_loc_poly[1][6]-whole_loc_poly[1][2]-2*oversize
+ins_diff=(whole_loc_poly[1][2]+oversize)*tan(ac_pitch)
+
+addz fudgez
+for i=1 to vardim1(ac_coords)
+	hotspot ac_coords[i][2],ac_coords[i][3],ac_coords[i][3]*tan(ac_pitch)
+next i
+del 1
+
+group "geometry"
+	put	whole_loc_poly[1][1], whole_loc_poly[1][2], 15
+	put	whole_loc_poly[1][3], whole_loc_poly[1][4], 15
+	put whole_loc_poly[1][5], whole_loc_poly[1][6], 15
+	put whole_loc_poly[1][7], whole_loc_poly[1][8], 15
+	put whole_loc_poly[1][1], whole_loc_poly[1][2], -1
+
+	for i=1 to crd_begend[1][2]
+		if i<>crd_begend[1][2] then
+			put ac_coords[i][2], ac_coords[i][3], 15
+		else
+			put ac_coords[i][2], ac_coords[i][3], -1
+		endif
+	next i
+
+	addz ac_ref_height+ac_thickness+fudgez+ins_diff-sgn(ac_pitch)*0.50 ! whole_loc_poly[1][1],whole_loc_poly[1][2],
+	prism_	nsp/3, temp_zz+(whole_loc_poly[1][6]-whole_loc_poly[1][2]-2*oversize)*tan(ac_pitch)+sgn(ac_pitch)*1,
+			get(nsp)
+
+	if vardim1(crd_begend)>1 then
+		for j=2 to vardim1(crd_begend)
+			for i=crd_begend[j][1] to crd_begend[j][2]
+				if i<>crd_begend[1][2] then
+					put ac_coords[i][2], ac_coords[i][3], 15
+				else
+					put ac_coords[i][2], ac_coords[i][3], -1
+				endif
+			next i
+
+			prism_	nsp/3, temp_zz+(whole_loc_poly[1][6]-whole_loc_poly[1][2]-2*oversize)*tan(ac_pitch)+sgn(ac_pitch)*1,
+					get(nsp)
+
+		next j
+	endif
+
+	del 1
+endgroup
+
+if gs_gdl_debug then
+	model wire
+	placegroup "geometry"
+	model solid
+endif
+
+!!!!print " (a) a_size=",a_size," (b) b_size=",b_size," ac_pitch=",ac_pitch,"rooftype=",rooftype
+
+group "covering"
+	add whole_loc_poly[1][1]+oversize,whole_loc_poly[1][2]+oversize,ac_ref_height+ac_thickness+fudgez+ins_diff
+
+	if rooftype=`Волнистый Лист` then
+		call "Corrugated Sheet_macro" parameters a=a_size, b=b_size, wawe_h=wawe_h, wawe_l=wawe_l, ac_pitch=ac_pitch, sheet_mat=wawe_mat, res=seam_res
+	endif
+
+	if rooftype=`Профилированный Лист` then
+		call "Trapezoid Sheet_macro" parameters a=a_size, b=b_size, wawe_h=wawe_h, wawe_l=wawe_l, ac_pitch=ac_pitch, sheet_mat=wawe_mat
+	endif
+
+	if rooftype=`Стоячий Фальц` then
+		call "Standing Seam_macro" parameters a=a_size, b=b_size, ac_pitch=ac_pitch, seam_space=seam_space,
+										seam_height=seam_height, seam_rib=seam_rib, sheet_mat=sheet_mat,
+										seam_joint=seam_joint, joint_dist=joint_dist, gs_detlevel_3Dm=gs_detlevel_3Dm
+	endif
+
+	if rooftype=`Обычная Черепица` or rooftype=`Скругленная Черепица` or rooftype=`Итальянская Черепица` then
+		call "Tile Covering" parameters a=a_size, b=b_size, tile_type=tile_type, tile_width=tile_width, tile_length=tile_length, random_mat=random_mat,
+										tile_thk=tile_thk, tile_space=tile_space, res=tile_res, ac_pitch=ac_pitch, gs_detlevel_3Dm=gs_detlevel_3Dm,
+										mat_1=tile_mat_1,mat_2=tile_mat_2,mat_3=tile_mat_3
+	endif
+	del 1
+endgroup
+
+!!!!if ac_accessory_debug then
+!!!!	add whole_loc_poly[1][1]+oversize,whole_loc_poly[1][2]+oversize,ac_ref_height+ac_thickness+fudgez+ins_diff
+!!!!	prism_	5,
+!!!!endif
+
+!!!!placegroup "covering"
+
+finish=subgroup("covering","geometry")
+placegroup finish
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! -----------
+! For testing
+! -----------
+
+if 0 then
+	pen 2
+	!fill 25
+	poly2   4, 1+2+4,
+			ac_whole_poly[1][1], ac_whole_poly[1][2],
+			ac_whole_poly[1][3], ac_whole_poly[1][4],
+			ac_whole_poly[1][5], ac_whole_poly[1][6],
+			ac_whole_poly[1][7], ac_whole_poly[1][8]
+
+			hotspot2 ac_whole_poly[1][1], ac_whole_poly[1][2], 1
+			hotspot2 ac_whole_poly[1][3], ac_whole_poly[1][4], 2
+			hotspot2 ac_whole_poly[1][5], ac_whole_poly[1][6], 3
+			hotspot2 ac_whole_poly[1][7], ac_whole_poly[1][8], 4
+
+	pen 8
+	fill 64
+	poly2   4, 1+2+4,
+			whole_loc_poly[1][1], whole_loc_poly[1][2],
+			whole_loc_poly[1][3], whole_loc_poly[1][4],
+			whole_loc_poly[1][5], whole_loc_poly[1][6],
+			whole_loc_poly[1][7], whole_loc_poly[1][8]
+
+			hotspot2 whole_loc_poly[1][1], whole_loc_poly[1][2], 1
+			hotspot2 whole_loc_poly[1][3], whole_loc_poly[1][4], 2
+			hotspot2 whole_loc_poly[1][5], whole_loc_poly[1][6], 3
+			hotspot2 whole_loc_poly[1][7], whole_loc_poly[1][8], 4
+endif
+
+! -------------
+! Making the 2D
+! -------------
+
+pen gs_cont_pen
+for i=1 to vardim1(ac_coords)
+	hotspot2 ac_coords[i][2],ac_coords[i][3]
+
+	mask=1
+	if ac_coords[i][1]>1 1/2" then mask=-1
+
+	put ac_coords[i][2], ac_coords[i][3], mask
+next i
+if gs_detlevel_2D=`Простой` then
+	pen gs_cont_pen
+	fill gs_fill_type
+	poly2_b{2} vardim1(ac_coords), 1+2+4+8+64, gs_fill_pen, gs_back_pen, 0, 0, 0,
+			get(3*vardim1(ac_coords))
+else
+	gosub 100
+
+	pen gs_cont_pen
+	fill rooftype
+	poly2_b{2} vardim1(ac_coords), 1+2+4+8+64, gs_fill_pen, gs_back_pen, 0, 0, 0,
+			get(3*vardim1(ac_coords))
+endif
+
+end
+
+100:
+gamma=0
+file_dependence "RA_Rounded"
+DEFINE SYMBOL_FILL	`Скругленная Черепица`  129, 129,  66,  60,  24,  24,  36, 195,
+	0.3,     0,     0, 0.300139,      gamma,
+	tile_width/0.15, tile_space*cos(ac_pitch)/0.15,
+	"RA_Rounded"
+
+file_dependence "RA_Normal"
+DEFINE SYMBOL_FILL	`Обычная Черепица`    8,  28,  42,  73, 255,  74,  44,  24,
+	0.3,     0,     0, 0.300139,      gamma,
+	tile_width/0.15, tile_space*cos(ac_pitch)/0.15,
+	"RA_Normal"
+
+file_dependence "RA_Italian"
+DEFINE SYMBOL_FILL	`Итальянская Черепица`   72,  72,  72, 204, 132, 132, 135, 252,
+			0.29,     0,     0, 0.222,      gamma,
+			1,     1,
+			"RA_Italian"
+
+define filla `Стоячий Фальц`  81, 162,  69, 138,  21,  42,  84, 168,
+			seam_space, 1, gamma, 4,
+			1, 0, 90, 1/20, 0, 0,
+			1, 0, 90, 0, 0, 0,
+			1, 0, 90, -1/20, 0, 0,
+			1/(seam_rib+1), 0, 90, 1/(seam_rib+1), 1, 0
+
+define filla `Волнистый Лист`	 81, 162,  69, 138,  21,  42,  84, 168,
+			wawe_l, 1, gamma, 1,
+			1, 0, 90, 0, 0, 0
+
+define filla `Профилированный Лист`	 81, 162,  69, 138,  21,  42,  84, 168,
+			wawe_l, 1, gamma, 4,
+			1, 0, 90, 0, 0, 0,
+			1, 0, 90, 1/3, 0, 0,
+			1, 0, 90, 1/2, 0, 0,
+			1, 0, 90, 5/6, 0, 0
+return
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+eps=0.00001
+main_cp_num=vardim1(ac_coords)
+cp_all_num=vardim1(ac_coords)
+
+if ac_pitch < EPS then
+	if rooftype=`Волнистый Лист` or rooftype=`Профилированный Лист` then temp_zz = wawe_h
+	if rooftype=`Стоячий Фальц` then temp_zz = seam_height
+	if rooftype=`Обычная Черепица` or rooftype=`Скругленная Черепица` or rooftype=`Итальянская Черепица` then temp_zz = 0.15+tile_thk
+else
+	temp_zz = 0
+endif
+
+r=1
+cp_num=0
+for i=1 to vardim1(ac_coords)
+	if ac_coords[i][1]>1 1/2" then cp_num=cp_num+1
+next i
+
+If cp_num=1 And (abs(ac_coords[1][2]-ac_coords[vardim1(ac_coords)][2])>eps Or abs(ac_coords[1][3]-ac_coords[vardim1(ac_coords)][3])>eps) Then
+	ac_coords[vardim1(ac_coords)][1]=1"
+	last_line=vardim1(ac_coords)+1
+	ac_coords[last_line][1]=2"
+	ac_coords[last_line][2]=ac_coords[1][2]
+	ac_coords[last_line][3]=ac_coords[1][3]
+EndIf
+
+!------------------
+! Scan the polygons
+!------------------
+
+exam=1
+crd_end = 0
+dim crd_begend[][]
+for i=1 to cp_num
+	crd_num=0
+	crd_beg=crd_end+1
+	r=crd_beg
+
+	while  ac_coords[r][1]<1 1/2" and exam<>0 do   !ac_coords[r][1]>eps and
+		crd_num=crd_num+1
+		r=r+1
+		if r=vardim1(ac_coords) then
+			exam=0
+		endif
+	endwhile
+	crd_end=crd_beg+crd_num
+
+	crd_begend[i][1]=crd_beg
+	crd_begend[i][2]=crd_end
+next i
+
+! ---------------------------------------------------
+! Scan the global boundary rectangle for the required
+! boundary rectangle in the local coordinate system
+! ---------------------------------------------------
+
+oversize=max(0.5,3/2*seam_space)	! Oversize for the cutting body
+
+dim whole_loc_poly[][]
+
+for i=1 to vardim1(ac_coords)
+	put ac_coords[i][2]
+next i
+
+min_x=min(use(nsp))
+max_x=max(get(nsp))
+
+for i=1 to vardim1(ac_coords)
+	put ac_coords[i][3]
+next i
+
+min_y=min(use(nsp))
+max_y=max(get(nsp))
+
+whole_loc_poly[1][1]=min_x-oversize
+whole_loc_poly[1][2]=min_y-oversize
+whole_loc_poly[1][3]=min_x-oversize
+whole_loc_poly[1][4]=max_y+oversize
+whole_loc_poly[1][5]=max_x+oversize
+whole_loc_poly[1][6]=max_y+oversize
+whole_loc_poly[1][7]=max_x+oversize
+whole_loc_poly[1][8]=min_y-oversize
+
+if rooftype=`Обычная Черепица` then tile_type=1
+if rooftype=`Скругленная Черепица` then tile_type=2
+if rooftype=`Итальянская Черепица` then tile_type=3
+
+if gs_detlevel_3D=`Детальный` then gs_detlevel_3Dm=2
+if gs_detlevel_3D=`Простой` then gs_detlevel_3Dm=1
+if gs_detlevel_3D=`Откл.` then gs_detlevel_3Dm=0
+
+if rooftype=`Обычная Черепица` or rooftype=`Скругленная Черепица` or rooftype=`Итальянская Черепица` then
+	fudgez=batten_height
+else
+	if rooftype=`Стоячий Фальц` then
+		fudgez=seam_dist
+	else
+		fudgez=wawe_dist
+	endif
+endif
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+ui_dialog `Параметры Покрытия Кровли`,444,266
+
+ui_page 1
+page=1
+
+! ------------------------------------------------------------------------------
+! General Settings
+! ------------------------------------------------------------------------------
+
+row=25
+
+col_1=95
+col_2=80
+col_3=60
+
+pos_x=0
+pos_y=5
+
+ui_style 2,1
+ui_outfield `Общие Параметры:`,pos_x,pos_y,col_1+col_2,19
+ui_style 1,0
+
+! Pictures
+pos_y=pos_y+row
+ui_style 0,0
+ui_infield "rooftype",pos_x,pos_y-1,col_1+col_2,15
+ui_style 1,0
+
+pos_y=pos_y+row
+ui_outfield `3D-детализация:`,pos_x,pos_y,col_1,15
+ui_infield "gs_detlevel_3D",pos_x+col_1,pos_y-1,col_2,15
+
+pos_y=pos_y+row
+ui_outfield `2D-детализация`,pos_x,pos_y,col_1,15
+ui_infield "gs_detlevel_2D",pos_x+col_1,pos_y-1,col_2,15
+
+pos_y=pos_y+row
+ui_outfield `Отбрасывание Теней:`,pos_x,pos_y,col_1,15
+ui_infield "shadow_cast",pos_x+col_1,pos_y-1,col_2,15
+
+pos_y=pos_y+row+10
+ui_style 2,1
+ui_outfield `2D-отображение`,pos_x,pos_y,col_1+col_2,19
+ui_style 1,0
+
+pos_y=pos_y+row
+ui_outfield `Тип Штриховки:`,pos_x,pos_y,col_1,15
+ui_infield "gs_fill_type",pos_x+col_1,pos_y-4,col_2,21
+
+col_2=35
+pos_y=pos_y+row
+ui_outfield `Перо Контура:`,pos_x,pos_y,col_1,15
+ui_infield "gs_cont_pen",pos_x+col_1,pos_y-4,col_2,21
+
+pos_y=pos_y+row
+ui_outfield `Перо Штриховки:`,pos_x,pos_y,col_1,15
+ui_infield "gs_fill_pen",pos_x+col_1,pos_y-4,col_2,21
+
+pos_y=pos_y+row
+ui_outfield `Перо Фона:`,pos_x,pos_y,col_1,15
+ui_infield "gs_back_pen",pos_x+col_1,pos_y-4,col_2,21
+
+! ------------------------------------------------------------------------------
+! Geometry
+! ------------------------------------------------------------------------------
+
+pos_x=190
+pos_y=5
+
+ui_style 2,1
+ui_outfield `Геометрия:`,pos_x,pos_y,150,19
+ui_style 1,0
+
+col_1=50
+col_2=50
+col_3=80
+col_5=80	! Infield Width(Pictures)
+par_id=0
+
+if rooftype=`Стоячий Фальц` then
+	pos_y=pos_y+row : par_id=par_id+1 : seam_sp_id=par_id
+	ui_infield "seam_space",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : seam_hgt_id=par_id
+	ui_infield "seam_height",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : seam_dst_id=par_id
+	ui_infield "seam_dist",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : seam_rib_id=par_id
+	ui_infield "seam_rib",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : seam_joi_id=par_id
+	ui_infield "seam_joint",pos_x,pos_y-1,17,15
+	ui_pict "SheetJoint",pos_x+17,pos_y-1, 35, 15,1
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	if seam_joint then
+		pos_y=pos_y+row : par_id=par_id+1 : joi_dst_id=par_id
+		ui_infield "joint_dist",pos_x,pos_y-1,col_1,15
+		ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+	endif
+
+	ifs_mat="sheet_mat"
+
+	! --------------------------------------------------------------------------
+	! Figure
+	! --------------------------------------------------------------------------
+
+	pos_y=35
+	pos_x=444-180
+	if seam_joint then
+		ui_pict "SSSheetSectionJoint",444-180,pos_y, 180, 140, 1
+	else
+		ui_pict "SSSheetSection",444-180,pos_y, 180, 140, 1
+	endif
+	ui_pict "StandingSeam",pos_x+5,pos_y, 142, 15, 1
+
+	pict_name="number_"+str(seam_dst_id,1,0)
+	ui_pict pict_name,pos_x+130,pos_y+95, 7, 9, 1
+
+	pict_name="number_"+str(joi_dst_id,1,0)
+	ui_pict pict_name,pos_x+93,pos_y+68, 7, 9, 1
+
+	sp_x=120/(seam_rib+1)
+	rib_sp = 0
+	pict_name="number_"+str(seam_rib_id,1,0)
+	for i=1 to seam_rib
+		rib_sp=rib_sp+sp_x
+		ui_pict "SSRib",pos_x+11+rib_sp,pos_y+8, 8, 9, 1
+		ui_pict pict_name,pos_x+11+rib_sp,pos_y-5, 7, 9, 1
+	next i
+
+	call "ui_arrow_02" parameters	dir=1, pixel=121, x=pos_x+15, y=pos_y+35, type=3,
+								auto_type=1, num=seam_sp_id, num_pos=2, sec_pos=2
+
+	call "ui_arrow_02" parameters	dir=0, pixel=15, x=pos_x+158, y=pos_y, type=3,
+								auto_type=1, num=seam_hgt_id, num_pos=6, sec_pos=6
+endif
+
+if rooftype=`Волнистый Лист` or rooftype=`Профилированный Лист` then
+	pos_y=pos_y+row : par_id=par_id+1 : wawe_h_id=par_id
+	ui_infield "wawe_h",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : wawe_l_id=par_id
+	ui_infield "wawe_l",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : wawe_dst_id=par_id
+	ui_infield "wawe_dist",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	if rooftype=`Волнистый Лист` then
+		pos_y=pos_y+row : par_id=par_id+1 : seam_res_id=par_id
+		ui_infield "seam_res",pos_x,pos_y-1,col_1,15
+		ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+		pos_y=pos_y+row
+		ui_outfield "("+str(par_id,1,0)+") * "+`Аппроксимация`,pos_x,pos_y,col_1+col_2,15
+	endif
+
+	ifs_mat="wawe_mat"
+
+	! --------------------------------------------------------------------------
+	! Figure
+	! --------------------------------------------------------------------------
+
+	pos_y=35
+	pos_x=444-180
+	ui_pict "SSSheetSection",444-180,pos_y, 180, 140, 1
+	if rooftype=`Волнистый Лист` then
+		ui_pict "CorrugatedSheet",pos_x+5,pos_y, 108, 32, 1
+	else
+		ui_pict "TrapezoidSheet",pos_x+5,pos_y, 108, 32, 1
+	endif
+
+	pict_name="number_"+str(wawe_dst_id,1,0)
+	ui_pict pict_name,pos_x+130,pos_y+95, 7, 9, 1
+
+	pict_name="number_"+str(joi_dst_id,1,0)
+	ui_pict pict_name,pos_x+93,pos_y+68, 7, 9, 1
+
+	call "ui_arrow_02" parameters	dir=0, pixel=32, x=pos_x+135, y=pos_y, type=3,
+								auto_type=1, num=wawe_h_id, num_pos=4, sec_pos=4
+
+	call "ui_arrow_02" parameters	dir=1, pixel=60, x=pos_x+29, y=pos_y+50, type=3,
+								auto_type=1, num=wawe_l_id, num_pos=2, sec_pos=2
+endif
+
+if rooftype=`Обычная Черепица` or rooftype=`Скругленная Черепица` or rooftype=`Итальянская Черепица` then
+	pos_y=pos_y+row : par_id=par_id+1 : tile_w_id=par_id
+	ui_infield "tile_width",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : tile_l_id=par_id
+	ui_infield "tile_length",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : tile_thk_id=par_id
+	ui_infield "tile_thk",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : tile_sp_id=par_id
+	ui_infield "tile_space",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	pos_y=pos_y+row : par_id=par_id+1 : bat_hgt_id=par_id
+	ui_infield "batten_height",pos_x,pos_y-1,col_1,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+5,pos_y,col_2,15
+
+	if rooftype=`Скругленная Черепица` or rooftype=`Итальянская Черепица` then
+		pos_y=pos_y+row : par_id=par_id+1 : tile_res_id=par_id
+		ui_infield "tile_res",pos_x,pos_y-1,col_1,15
+		ui_outfield "("+str(par_id,1,0)+") *",pos_x+col_1+5,pos_y,col_2,15
+
+		pos_y=pos_y+row
+		ui_outfield "("+str(par_id,1,0)+") * "+`Аппроксимация`,pos_x,pos_y,col_1+col_2,15
+	endif
+
+	ifs_mat="tile_mat_1"
+	ifs_mat_2="tile_mat_2"
+	ifs_mat_3="tile_mat_3"
+
+	! --------------------------------------------------------------------------
+	! Figure
+	! --------------------------------------------------------------------------
+
+	pos_y=30
+	pos_x=444-180
+	if rooftype=`Обычная Черепица` or rooftype=`Скругленная Черепица` then
+		ui_pict "NRTileSection",pos_x,pos_y, 180, 140, 1
+		if rooftype=`Обычная Черепица` then
+			ui_pict "NormalTile",pos_x+5,pos_y, 58, 72, 1
+		else
+			ui_pict "RoundedTile",pos_x+5,pos_y, 58, 72, 1
+			if GLOB_MODPAR_NAME="tile_res" then ui_pict "RoundedTileResol",pos_x+2,pos_y+35, 38, 38, 1
+		endif
+
+		pict_name="number_"+str(tile_sp_id,1,0)
+		ui_pict pict_name,pos_x+132,pos_y+34, 7, 9, 1
+
+		pict_name="number_"+str(bat_hgt_id,1,0)
+		ui_pict pict_name,pos_x+110,pos_y+108, 7, 9, 1
+
+		call "ui_arrow_02" parameters	dir=0, pixel=72, x=pos_x+80, y=pos_y, type=3,
+									auto_type=1, num=tile_l_id, num_pos=6, sec_pos=6
+
+		call "ui_arrow_02" parameters	dir=1, pixel=3, x=pos_x+59, y=pos_y+36, type=3,
+									auto_type=1, num=tile_thk_id, num_pos=1, sec_pos=1
+
+		call "ui_arrow_02" parameters	dir=1, pixel=32, x=pos_x+5, y=pos_y+90, type=3,
+									auto_type=1, num=tile_w_id, num_pos=2, sec_pos=2
+	else
+		ui_pict "ITTileSection",pos_x,pos_y, 180, 140, 1
+		ui_pict "ItalianTile",pos_x+5,pos_y, 91, 26, 1
+
+		pict_name="number_"+str(tile_l_id,1,0)
+		ui_pict pict_name,pos_x+113,pos_y+30, 7, 9, 1
+
+		pict_name="number_"+str(bat_hgt_id,1,0)
+		ui_pict pict_name,pos_x+139,pos_y+90, 7, 9, 1
+
+		pict_name="number_"+str(tile_sp_id,1,0)
+		ui_pict pict_name,pos_x+60,pos_y+61, 7, 9, 1
+
+		call "ui_arrow_02" parameters	dir=1, pixel=53, x=pos_x+24, y=pos_y+50, type=3,
+									auto_type=1, num=tile_w_id, num_pos=2, sec_pos=2
+
+		call "ui_arrow_02" parameters	dir=0, pixel=3, x=pos_x+50, y=pos_y+22, type=3,
+									auto_type=1, num=tile_thk_id, num_pos=2, sec_pos=2
+	endif
+
+endif
+
+! Material Settings
+pos_x=190
+pos_y=215
+if rooftype<>`Профилированный Лист` and rooftype<>`Волнистый Лист` and rooftype<>`Стоячий Фальц` then
+	ui_style 2,1
+	if random_mat then
+		ui_outfield `Покрытия`,pos_x,pos_y,col_1+col_2,19
+	else
+		ui_outfield `Покрытие`,pos_x,pos_y,col_1+col_2,19
+	endif
+	ui_style 1,0
+
+	ui_outfield `Перемешать Покрытия`,444-130,pos_y,120,15
+	ui_infield "random_mat",444-17,pos_y,17,15
+
+	pos_y=pos_y+row
+	if random_mat then
+		col_mat=(444-pos_x)/3
+		ui_infield ifs_mat_2,pos_x+col_mat,pos_y-4,col_mat,21
+		ui_infield ifs_mat_3,pos_x+2*col_mat,pos_y-4,col_mat,21
+	else
+		col_mat=(444-pos_x)
+	endif
+else
+	ui_style 2,1
+	ui_outfield `Покрытие`,pos_x,pos_y,col_1+col_2,19
+	ui_style 1,0
+
+	pos_y=pos_y+row
+	col_mat=(444-pos_x)
+endif
+
+ui_infield ifs_mat,pos_x,pos_y-4,col_mat,21
+
+file_dependence "number_1"
+file_dependence "number_2"
+file_dependence "number_3"
+file_dependence "number_4"
+file_dependence "number_5"
+file_dependence "number_6"
+file_dependence "number_7"
+file_dependence "number_8"
+file_dependence "number_9"
+file_dependence "number_10"
+
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+call "FM_types_Accessories" parameters
+
+if GLOB_MODPAR_NAME="A" then
+	parameters ac_rooflength=A/cos(ac_pitch)
+	parameters zzyzx=A*tan(ac_pitch)
+endif
+if GLOB_MODPAR_NAME="ZZYZX" then
+	parameters ac_rooflength=sqr(A^2+zzyzx^2)
+	parameters ac_pitch=atn(zzyzx/A)
+endif
+if GLOB_MODPAR_NAME="ac_pitch" then
+	parameters zzyzx=tan(ac_pitch)*A
+	parameters ac_rooflength=A/cos(ac_pitch)
+endif
+if GLOB_MODPAR_NAME="ac_rooflength" then
+	parameters A=ac_rooflength*cos(ac_pitch)
+	parameters zzyzx=ac_rooflength*sin(ac_pitch)
+endif
+
+
+if not(ac_accessory_debug) then hideparameter "gs_accessory_addon"
+
+values "gs_detlevel_2D" `Детальный`,`Простой`
+values "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+
+values "rooftype" `Стоячий Фальц`,`Волнистый Лист`,`Профилированный Лист`,`Обычная Черепица`,`Скругленная Черепица`,`Итальянская Черепица`
+
+if rooftype=`Стоячий Фальц` then
+	hideparameter "gs_corrugated","gs_tile"
+	if not(seam_joint) then hideparameter "joint_dist"
+else
+	if rooftype=`Волнистый Лист` or rooftype=`Профилированный Лист` then
+		hideparameter "gs_standing_seam","gs_tile"
+	else
+		hideparameter "gs_standing_seam","gs_corrugated"
+	endif
+endif
+
+if GLOB_MODPAR_NAME="rooftype" and (rooftype=`Обычная Черепица` or rooftype=`Скругленная Черепица`) then
+	parameters tile_width=0.15, tile_thk=0.02, tile_length=0.40, tile_space=0.15
+endif
+
+if GLOB_MODPAR_NAME="rooftype" and rooftype=`Итальянская Черепица` then
+	parameters tile_width=0.30, tile_thk=0.02, tile_length=0.40, tile_space=0.325
+endif
+
+if not(random_mat) then
+	hideparameter "tile_mat_2","tile_mat_3"
+endif
+
+if GLOB_MODPAR_NAME="wawe_mat" then
+	parameters sheet_mat=wawe_mat
+endif
+if GLOB_MODPAR_NAME="sheet_mat" then
+	parameters wawe_mat=sheet_mat
+endif
+
+
+if GLOB_MODPAR_NAME="wawe_dist" then
+	parameters seam_dist=wawe_dist
+endif
+if GLOB_MODPAR_NAME="seam_dist" then
+	parameters wawe_dist=seam_dist
+endif
+
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_UIDefault/>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Value>5</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Value>5</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Размер Z"]]></Description>
+			<Fix/>
+			<Value>2.88675134595</Value>
+		</Length>
+		<Length Name="ac_rooflength">
+			<Description><![CDATA["Длина Крыши"]]></Description>
+			<Value>5.7735026919</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Показ Узловых 2D Точек в 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Отметка Низа"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Отметка Верха"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="gs_detlevel_2D">
+			<Description><![CDATA["2D-детализация"]]></Description>
+			<Fix/>
+			<Value><![CDATA["Детальный"]]></Value>
+		</String>
+		<String Name="gs_detlevel_3D">
+			<Description><![CDATA["3D-детализация"]]></Description>
+			<Fix/>
+			<Value><![CDATA["Простой"]]></Value>
+		</String>
+		<String Name="rooftype">
+			<Description><![CDATA["Тип Кровли"]]></Description>
+			<Value><![CDATA["Стоячий Фальц"]]></Value>
+		</String>
+		<Boolean Name="shadow_cast">
+			<Description><![CDATA["Отбрасывание Теней"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_corrugated: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_corrugated">
+			<Description><![CDATA["Волнистая и Профилированная"]]></Description>
+		</Title>
+		<Length Name="wawe_h">
+			<Description><![CDATA["Высота Волны"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="wawe_l">
+			<Description><![CDATA["Длина Волны"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="wawe_dist">
+			<Description><![CDATA["Расстояние от Крыши"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Integer Name="seam_res">
+			<Description><![CDATA["Аппроксимация"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>12</Value>
+		</Integer>
+		<Material Name="wawe_mat">
+			<Description><![CDATA["Покрытие Картин"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>47</Value>
+		</Material>
+
+		<!-- gs_standing_seam: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_standing_seam">
+			<Description><![CDATA["Стоячий Фальц"]]></Description>
+		</Title>
+		<Length Name="seam_space">
+			<Description><![CDATA["Расстояние Между Фальцами"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.4</Value>
+		</Length>
+		<Length Name="seam_height">
+			<Description><![CDATA["Высота Фальца"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.04</Value>
+		</Length>
+		<Length Name="seam_dist">
+			<Description><![CDATA["Расстояние от Крыши"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Integer Name="seam_rib">
+			<Description><![CDATA["Количество Ребер Жесткости"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="seam_joint">
+			<Description><![CDATA["Показать Стыки Картин"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="joint_dist">
+			<Description><![CDATA["Расстояние Между Стыками"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1.5</Value>
+		</Length>
+		<Material Name="sheet_mat">
+			<Description><![CDATA["Покрытие Картин"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>47</Value>
+		</Material>
+
+		<!-- gs_tile: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_tile">
+			<Description><![CDATA["Параметры Черепицы"]]></Description>
+		</Title>
+		<Length Name="tile_width">
+			<Description><![CDATA["Ширина Черепицы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.3</Value>
+		</Length>
+		<Length Name="tile_length">
+			<Description><![CDATA["Длина Черепицы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.4</Value>
+		</Length>
+		<Length Name="tile_thk">
+			<Description><![CDATA["Толщина Черепицы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+		<Length Name="tile_space">
+			<Description><![CDATA["Расстояние Меду Рядами Черепицы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.325</Value>
+		</Length>
+		<Integer Name="tile_res">
+			<Description><![CDATA["Аппроксимация"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>12</Value>
+		</Integer>
+		<Boolean Name="random_mat">
+			<Description><![CDATA["Перемешать Покрытия"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Material Name="tile_mat_1">
+			<Description><![CDATA["Покрытие Черепицы 1"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>66</Value>
+		</Material>
+		<Material Name="tile_mat_2">
+			<Description><![CDATA["Покрытие Черепицы 2"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Material>
+		<Material Name="tile_mat_3">
+			<Description><![CDATA["Покрытие Черепицы 3"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>5</Value>
+		</Material>
+		<Length Name="batten_height">
+			<Description><![CDATA["Толщина Обрешетки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Length Name="batten_width">
+			<Description><![CDATA["Ширина Обрешетки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D-отображение"]]></Description>
+			<Fix/>
+		</Title>
+		<Boolean Name="AC_special_2D_symbol">
+			<Description><![CDATA["Символ Зависит от Этажа"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="AC_plane_definition">
+			<Description><![CDATA["Определение Плоскости Крыши"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="6" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+				<AVal Row="5">0</AVal>
+				<AVal Row="6">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Integer Name="AC_symb_display_option">
+			<Description><![CDATA["Показ на Плане Этажа"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="AC_symb_show_projection_to">
+			<Description><![CDATA["Показать Проекцию"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Перо Контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>92</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Перо Фона Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Перо Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>92</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Тип Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>24</Value>
+		</FillPattern>
+
+		<!-- gs_accessory_addon: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_accessory_addon">
+			<Description><![CDATA["Параметры Расширения Аксессуаров"]]></Description>
+			<Fix/>
+		</Title>
+		<Boolean Name="ac_accessory_debug">
+			<Description><![CDATA["Функция Отладки Аксессуара"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_ref_coords">
+			<Description><![CDATA["Базисный Вектор"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="4">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0.5</AVal>
+				<AVal Column="4" Row="1">1</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="ac_ref_height">
+			<Description><![CDATA["Базисная Высота"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_thickness">
+			<Description><![CDATA["Толщина по Вертикали"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Angle Name="ac_pitch">
+			<Description><![CDATA["Скат Плоскости Крыши"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>30</Value>
+		</Angle>
+		<Boolean Name="ac_roof_type">
+			<Description><![CDATA["Сторона Крыши для Расширения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="ac_coords">
+			<Description><![CDATA["Координаты Контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="10" SecondDimension="3">
+				<AVal Column="1" Row="1">0.0254</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="1" Row="2">0.0254</AVal>
+				<AVal Column="2" Row="2">2.5</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="1" Row="3">0.0254</AVal>
+				<AVal Column="2" Row="3">2</AVal>
+				<AVal Column="3" Row="3">2</AVal>
+				<AVal Column="1" Row="4">0.0254</AVal>
+				<AVal Column="2" Row="4">0.5</AVal>
+				<AVal Column="3" Row="4">2</AVal>
+				<AVal Column="1" Row="5">0.0508</AVal>
+				<AVal Column="2" Row="5">0</AVal>
+				<AVal Column="3" Row="5">0</AVal>
+				<AVal Column="1" Row="6">0.0254</AVal>
+				<AVal Column="2" Row="6">1</AVal>
+				<AVal Column="3" Row="6">0.5</AVal>
+				<AVal Column="1" Row="7">0.0254</AVal>
+				<AVal Column="2" Row="7">1.5</AVal>
+				<AVal Column="3" Row="7">0.5</AVal>
+				<AVal Column="1" Row="8">0.0254</AVal>
+				<AVal Column="2" Row="8">1.5</AVal>
+				<AVal Column="3" Row="8">1</AVal>
+				<AVal Column="1" Row="9">0.0254</AVal>
+				<AVal Column="2" Row="9">1</AVal>
+				<AVal Column="3" Row="9">1</AVal>
+				<AVal Column="1" Row="10">0.0508</AVal>
+				<AVal Column="2" Row="10">1</AVal>
+				<AVal Column="3" Row="10">0.5</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="ac_whole_poly">
+			<Description><![CDATA["Прямоугольник Границы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="8">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">2</AVal>
+				<AVal Column="5" Row="1">2.5</AVal>
+				<AVal Column="6" Row="1">2</AVal>
+				<AVal Column="7" Row="1">2.5</AVal>
+				<AVal Column="8" Row="1">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Material Name="ac_top_mat">
+			<Description><![CDATA["Верхнее Покрытие"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Material>
+		<Material Name="ac_bottom_mat">
+			<Description><![CDATA["Нижняя Поверхность"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Material>
+		<Material Name="ac_side_mat">
+			<Description><![CDATA["Боковое Покрытие"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Material>
+		<PenColor Name="ac_roof_pen">
+			<Description><![CDATA["Перо Крыши"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<PenColor Name="ac_cont_pen">
+			<Description><![CDATA["Перо Контура Штриховки Сечения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<PenColor Name="ac_back_pen">
+			<Description><![CDATA["Перо Фона Штриховки Сечения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<PenColor Name="ac_fill_pen">
+			<Description><![CDATA["Перо Штриховки Сечения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<FillPattern Name="ac_fill_type">
+			<Description><![CDATA["Тип Штриховки Сечения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</FillPattern>
+		<Boolean Name="gs_gdl_debug">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_list: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_list">
+			<Description><![CDATA["Параметры Спецификаций"]]></Description>
+			<Fix/>
+		</Title>
+		<RealNum Name="gs_list_cost">
+			<Description><![CDATA["Цена"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_manufacturer">
+			<Description><![CDATA["Производитель"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_note">
+			<Description><![CDATA["Примечания"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_location">
+			<Description><![CDATA["Расположение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_accessories">
+			<Description><![CDATA["Аксессуары"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_Type">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Другой"]]></Value>
+		</String>
+		<Integer Name="iFMType">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>25</Value>
+		</Integer>
+		<String Name="FM_InventoryNumber">
+			<Description><![CDATA["Инвентарный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_SerialNumber">
+			<Description><![CDATA["Серийный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductionYear">
+			<Description><![CDATA["Год Производства"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ObjectWeight">
+			<Description><![CDATA["Вес Изделия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ObjectWeightUnit">
+			<Description><![CDATA["Единица Веса"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["кг"]]></Value>
+		</String>
+		<String Name="gs_list_custom1">
+			<Description><![CDATA["Пользовательское Значение 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom2">
+			<Description><![CDATA["Пользовательское Значение 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom3">
+			<Description><![CDATA["Пользовательское Значение 3"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom4">
+			<Description><![CDATA["Пользовательское Значение 4"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom5">
+			<Description><![CDATA["Пользовательское Значение 5"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="1393" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000007F0000
+	007F0803000000F163ED2100000045504C5445FFFFFF8C8C945A5A637B84846B
+	73736B6B73BDBDC67B7B844A4A524A5252ADB5B58C8C8CEFEFEFC6C6C69C9C9C
+	D6D6D6B5BDBD4A4A4A7373735252525A6363ADADAD63636330F0F1C1000004DD
+	4944415478DAED59616FDB3A0C1C13A7B5278796445BFFFFA7AE72DE8345AB39
+	5A4586EC830F58066155A93B1F4F74F6EBC48913274E9C3871E2C4BF87717A6F
+	7D4E6F2D3FB9F0D6FA3EC6F73DFAAF3F4EFCBBCADF9D6376C18FE37BEABB8C39
+	E44F5EFC7DCAE7F0772097F3AF755E4688AE00CFF13E157A28653EDCF2CAFA4B
+	2E18832B71CDCB4D8FF1A63A555E597F74197251F593A8E52D3CCEF17FA7BED2
+	28DE39478A7EF5349C24B7E9C1B17B69EEE5DF7B099AAF5EC6B03F0D177A78E4
+	2D6F361FE4FB402A1E8ED62A9F234CE3736FA543EEEB105F7DBA5A2BD97C9AF9
+	4CCA5B72C87D41F1E5BD1903ABD6005AB14FAEE85BFF69F1FFFD0DDF28915485
+	4E9D66D03F3CECF7167DEB6439427F969DFC0C9EC6B0D34A2D2909E918C9E768
+	745FE880196BAD1CD06AFDE1C568BED970DF55FDCA76AD262BFA136A3E1102C9
+	041B37AE476733FA09F0755AE03910E07BD57B65D5EA6EB86F98F71440859018
+	0595B016272F4718FD1C777C07A46807F8AAA7B1F9CADB8307F277AF96D535C9
+	48ABCE41FA535BF46BADC05E758959EE4B434BF4E36B522AAD50F38D98EF8A7D
+	9C61ADE41B6FD8D10F15ED8038F55EAEB432DD27802FEDE36CC65AB94A2BD87C
+	19015D754E1201BE50AB5B7BF4D763E0A0EC5E6B859ACF8A7E7EFC140143CD02
+	F9DAD7249B731769BE30CEB0FBE45A8D5066F4CBACF94245B156A2A2305AEEFB
+	C0F16D47BF437B29ADC27AC37D2230FA0714FD02A37FA38FE62E417C3909E22B
+	B656DC3EF5EB0021C5B7F19AC4EEB3F9DE021FF606A9BD1CADE8F7FF1164304B
+	20F7E119B53DFAEDC1568CE86F775FAD28EB25E40BDF90FA23D19F8C388BCF93
+	98D280AE0D998F4DFDA42AECA39FFF5AF4FBEFE2ACD715C2AD2438B76875911F
+	453FB7443F81BD66F437BE47B55F9387A29F61F6A1ACB7B522D37DBD31C9E2AB
+	0EBB8F88B8F9EB465041453FDA4B5FE82FF913B9CFE6DB0D06DF7A2F3D90B5CA
+	7FDBD14FB00237447FA40222F9D39B632F03BE559C3DBFEA886E031570FD7A1A
+	33FA3B14FD9704BCB19991560C8969C32DE44F3BFAE9E7EF9CC356FB0B315009
+	59DD37D95F376ABEE0A5BED64A1754F43393D6E6C351A8AF49A22E3015C8D15F
+	2C2F9257DE8CFED6F7A84D72498E5441759A70CC7DB175EA2FF9560537A4009A
+	0FB80F45FF85345F26FDBCCB659F2AF7995FF89011FD3BBE1D95D066EC0219D1
+	AF0BE0E83FC0F7AA977224FA496618FDC1950F3C44C09792769F1DFD0F826C44
+	7FA168C5B75CFF2CFA7BCD572FA3AE2033E04B9D5EF63F69BEA188FE5CE1A2F9
+	826EABA3DF19D18FBE42DBAEAF0297C0806F34DD6747FF9CCD580ACCB0DBC0F2
+	6A45BF7F363C94E9D6E938437C9D68ADD67FFD80F4EBF728D8DE01F0ADB5BA35
+	BAAFE64B92205F1485E9E0E0C165BCC45E57309ACFD6EAD0FF343D57B407DD96
+	9740AB23D19FC23EBF1CBC4C61F4F7EDCD97C25E515771D8009B4FEFB5070FBF
+	869B15672A6C2ABE60EF2C6C44FF4A50D78B3D8CB366AD347D8D69BAFBC52F50
+	D1B9C97D75F4F32F13E378BFFBE5B17519B4A2435941C22EFA411482A91F9D63
+	F4FCBCBD4300637E7D4D7EC2C1039FE3F7438FA5537203BEF535598DBDEDE798
+	C66529F95F48F30573088CFE763D56977E026F901310FDEDC03ECD70200A5D04
+	53FF8BCE31DE9E376E17ACE67BE573C960714A0C81D1FFFA734C8B7E189F0DEE
+	7BBD3F6242CDF7F7CF31E573B8F1D78913274E9C3871E2C4897F077F00FCAB14
+	708B7E2CD70000000049454E44AE426082
+	]]>
+</Picture>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["RA_Rounded"]]></MName>
+		<MainGUID>00000000-0000-0000-0000-000000000000</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["RA_Normal"]]></MName>
+		<MainGUID>00000000-0000-0000-0000-000000000000</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["RA_Italian"]]></MName>
+		<MainGUID>00000000-0000-0000-0000-000000000000</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["Corrugated Sheet_macro"]]></MName>
+		<MainGUID>F18482BF-F0D4-4A9B-A62C-755F205AE7EB</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["Trapezoid Sheet_macro"]]></MName>
+		<MainGUID>B5998E0C-113F-4DFE-AB8B-E640AA7674F2</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["Standing Seam_macro"]]></MName>
+		<MainGUID>D14DBE9D-24EE-4951-AF76-651E07C14FAA</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["Tile Covering"]]></MName>
+		<MainGUID>40E8E9C5-465F-4997-AFCE-B0BD2543102E</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["ui_arrow_02"]]></MName>
+		<MainGUID>A5F4B302-59A7-49A0-BB20-B81F9C85B76B</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["FM_types_Accessories"]]></MName>
+		<MainGUID>23793CBC-F997-4EDA-9334-CFC48102E97E</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

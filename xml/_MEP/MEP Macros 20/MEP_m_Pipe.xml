@@ -1,0 +1,1787 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="7FB3000C-BA15-4531-A162-2194F402EA90" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>B2970E4C-8680-4061-8670-2F4B638F3953</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! MEP_m_Pipe
+! Zsolt Feke/2007
+
+
+RESOL res
+PEN gs_cont_pen
+
+IF gs_detlevel_3D = `Откл.` THEN END
+
+HptsUnIDBeginForConnEnds = 30000
+
+hceID_1 = HptsUnIDBeginForConnEnds+100
+hceID_2 = HptsUnIDBeginForConnEnds+200
+
+operatedMode = 0
+addStatus1 = 0
+addStatus2 = 0
+addStatus3 = 0
+IF GLOB_CONTEXT > 40 AND GLOB_CONTEXT < 50 THEN
+	operatedMode = 1
+	addStatus1 = 1
+	addStatus2 = 2
+	addStatus3 = 3
+ENDIF
+
+IF pipe_show THEN		! -----> pipe straight <----- !
+	MATERIAL gs_PipeMat
+
+	pipeRadius = MEP_NumConnectionData[1][12]/2
+	IF MEP_NumberConnections > 2 AND operatedMode < EPS THEN
+		ith = 0
+		insul = 0
+		GOSUB 200
+
+		GROUP "pipeStraight"
+	ENDIF
+
+	XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+			MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+			MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+	ROTy 90
+	ADDz connectorWidthA
+
+	alpha_i = 360/res
+	rr = pipeDiameterA/2
+	yy = 0: zz = 0: mm = 1
+	GOSUB 100
+
+	rr = pipeDiameterB/2
+	yy = MEP_offset_y: zz = -MEP_offset_z: mm = MEP_StraightLength-connectorWidthA-connectorWidthB
+	GOSUB 100
+
+	RULED NSP/6, addStatus3+4+16+32,
+
+		GET(NSP)
+
+	DEL 3
+
+	IF MEP_NumberConnections > 2 AND operatedMode < EPS THEN
+		ENDGROUP
+		PLACEGROUP SUBGROUP("pipeStraight", "holes")
+	ENDIF
+
+
+	XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+			MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+			MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+	ROTy 90
+
+	BASE
+	VERT    0,    0,    0
+	VERT    pipeRadius,    0,    0
+	VERT    0,    1,    0
+	VERT    0,    0,    1
+	COOR    3,    -1,   -2,    -3,    -4
+
+	DEL 2
+
+	BODY -1
+ENDIF
+
+
+XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+		MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+		MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+IF pipe_show AND showHtps THEN
+	IF editable AND ABS(MEP_offset_y) < EPS AND ABS(MEP_offset_z) < EPS AND connectedA + connectedB < 1 + EPS THEN
+		HOTSPOT 0, 0, 0, hceID_1, MEP_StraightLength, 1+256*(connectedA < EPS)
+		HOTSPOT -1, 0, 0, HptsUnIDBeginForConnEnds, MEP_StraightLength, 3
+		IF ABS(connectedA) < EPS AND ABS(connectedB - 1) < EPS THEN
+			hID = hceID_2+1
+			IF nonEditHtps THEN
+				ROTy 90
+				HOTSPOT -MEP_offset_z, MEP_offset_y, MEP_StraightLength, hceID_2
+				DEL 1
+			ENDIF
+		ELSE
+			hID = hceID_2
+		ENDIF
+		HOTSPOT MEP_StraightLength, 0, 0, hID, MEP_StraightLength, 2+128*connectedB
+	ELSE
+		IF nonEditHtps THEN
+			ROTy 90
+			HOTSPOT 0, 0, 0, hceID_1
+			HOTSPOT -MEP_offset_z, MEP_offset_y, MEP_StraightLength, hceID_2
+			DEL 1
+		ENDIF
+	ENDIF
+ENDIF
+
+ROTy 90
+
+IF MEP_cline_show_3D AND operatedMode < EPS THEN LIN_ 0, 0, cutbackCLA, -MEP_offset_z, MEP_offset_y, MEP_StraightLength-cutbackCLB
+IF MEP_StatusLine AND operatedMode < EPS THEN HOTLINE 0, 0, 0, 0, 0, MEP_StraightLength, 0
+
+
+IF pipe_show THEN		! -----> pipe flanges <----- !
+	MATERIAL gs_PipeMat
+
+	IF flangeA THEN
+		EXTRUDE 2, 0, 0, connectorWidthA, 1+addStatus2+16+32,
+			0, 0, 901,
+			connectorDiameterA/2, 360, 4001
+
+		IF connectorDiameterA-pipeDiameterA > EPS AND operatedMode < EPS THEN
+			ADDz connectorWidthA
+			POLY_ 4,
+				0, 0, 901,
+				connectorDiameterA/2, 360, 4001,
+				0, 0, 901,
+				pipeDiameterA/2, 360, 4001
+			DEL 1
+		ENDIF
+
+		BASE
+		VERT    0,    0,    0
+		VERT    connectorDiameterA/2,    0,    0
+		VERT    0,    1,    0
+		VERT    0,    0,    1
+		COOR    3,    -1,   -2,    -3,    -4
+		BODY -1
+	ENDIF
+
+	IF flangeB THEN
+		ADD -MEP_offset_z, MEP_offset_y, MEP_StraightLength-connectorWidthB
+		EXTRUDE 2, 0, 0, connectorWidthB, addStatus1+2+16+32,
+			0, 0, 901,
+			connectorDiameterB/2, 360, 4001
+		IF connectorDiameterB-pipeDiameterB > 0 AND operatedMode < EPS THEN
+			POLY_ 4,
+				0, 0, 901,
+				connectorDiameterB/2, 360, 4001,
+				0, 0, 901,
+				pipeDiameterB/2, 360, 4001
+		ENDIF
+
+		BASE
+		VERT    0,    0,    0
+		VERT    connectorDiameterB/2,    0,    0
+		VERT    0,    1,    0
+		VERT    0,    0,    1
+		COOR    3,    -1,   -2,    -3,    -4
+		BODY -1
+
+		DEL 1
+	ENDIF
+ENDIF
+DEL 2
+
+
+IF MEP_InsShow THEN			! -----> insulation <----- !
+	MATERIAL gs_InsMat
+
+	pipeRadius = MEP_NumConnectionData[1][12]/2
+	IF MEP_NumberConnections > 2 AND operatedMode < EPS THEN
+		ith = MEP_InsThickness
+		insul = 1
+		GOSUB 200
+
+		GROUP "pipeStraightIns"
+	ENDIF
+
+	XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+			MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+			MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+	ROTy 90
+
+	IF ABS(pipeDiameterA-pipeDiameterB) < EPS THEN
+		ADDz cutbackIA
+		EXTRUDE 2, 0, 0, MEP_StraightLength-cutbackIA-cutbackIB, addStatus3+16+32,
+			0, 0, 901,
+			pipeDiameterA/2+MEP_InsThickness, 360, 4001
+		DEL 1
+	ELSE
+		IF flangeA THEN
+			EXTRUDE 2, 0, 0, connectorWidthA, 16,
+				0, 0, 901,
+				pipeDiameterA/2+MEP_InsThickness, 360, 4001
+		ENDIF
+
+		ADDz connectorWidthA
+
+		alpha_i = 360/res
+		rr = pipeDiameterA/2+MEP_InsThickness
+		yy = 0: zz = 0: mm = 1
+		GOSUB 100
+
+		rr = pipeDiameterB/2+MEP_InsThickness
+		yy = MEP_offset_y: zz = -MEP_offset_z: mm = MEP_StraightLength-connectorWidthA-connectorWidthB
+		GOSUB 100
+
+		RULED NSP/6, addStatus3+4+16*NOT(flangeA)+32*NOT(flangeB),
+
+			GET(NSP)
+
+		DEL 1
+
+		IF flangeB THEN
+			ADD -MEP_offset_z, MEP_offset_y, MEP_StraightLength-connectorWidthB
+			EXTRUDE 2, 0, 0, connectorWidthB, addStatus3+32,
+				0, 0, 901,
+				pipeDiameterB/2+MEP_InsThickness, 360, 4001
+			DEL 1
+		ENDIF
+	ENDIF
+	DEL 2
+
+	IF MEP_NumberConnections > 2 AND operatedMode < EPS THEN
+		ENDGROUP
+		PLACEGROUP SUBGROUP("pipeStraightIns", "holesIns")
+	ENDIF
+
+
+	XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+			MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+			MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+	ROTy 90
+
+	BASE
+	VERT    0,    0,    0
+	VERT    pipeDiameterA/2+MEP_InsThickness,    0,    0
+	VERT    0,    1,    0
+	VERT    0,    0,    1
+	COOR    3,    -1,   -2,    -3,    -4
+
+	DEL 2
+
+	BODY -1
+ENDIF
+
+END
+
+
+100:
+	alpha = 0
+	FOR i = 1 TO res
+		PUT rr*COS(alpha)+zz, rr*SIN(alpha)+yy, mm
+		alpha = alpha + alpha_i
+	NEXT i
+RETURN
+
+200:
+	IF insul < 1 THEN
+		GROUP "holes"
+	ELSE
+		GROUP "holesIns"
+	ENDIF
+
+	FOR j = 3 TO MEP_NumberConnections
+		holeRadius = MEP_NumConnectionData[j][12]/2 + ith - 0.00002
+
+		DIM tMatrix[][]
+
+		tMatrix[1][1] = MEP_NumConnectionData[j][4]
+		tMatrix[1][2] = MEP_NumConnectionData[j][5]
+		tMatrix[1][3] = MEP_NumConnectionData[j][6]
+
+		tMatrix[2][1] = MEP_NumConnectionData[j][7]
+		tMatrix[2][2] = MEP_NumConnectionData[j][8]
+		tMatrix[2][3] = MEP_NumConnectionData[j][9]
+
+		tMatrix[3][1] = -tMatrix[2][2]*tMatrix[1][3]+tMatrix[2][3]*tMatrix[1][2]
+		tMatrix[3][2] = -tMatrix[2][3]*tMatrix[1][1]+tMatrix[2][1]*tMatrix[1][3]
+		tMatrix[3][3] = -tMatrix[2][1]*tMatrix[1][2]+tMatrix[2][2]*tMatrix[1][1]
+
+		posX = MEP_NumConnectionData[j][1]
+		posY = MEP_NumConnectionData[j][2]
+		posZ = MEP_NumConnectionData[j][3]
+
+		XFORM	tMatrix[1][1], tMatrix[2][1], tMatrix[3][1], posX,
+				tMatrix[1][2], tMatrix[2][2], tMatrix[3][2], posY,
+				tMatrix[1][3], tMatrix[2][3], tMatrix[3][3], posZ
+		ROTy 90
+
+		ax = MEP_Position[2][1]
+		ay = MEP_Position[2][2]
+		az = MEP_Position[2][3]
+
+		bx = MEP_NumConnectionData[j][7]
+		by = MEP_NumConnectionData[j][8]
+		bz = MEP_NumConnectionData[j][9]
+
+		arcVal = (ax*bx + ay*by + az*bz)/((SQR(ax^2+ay^2+az^2))*(SQR(bx^2+by^2+bz^2)))
+		IF arcVal < -1 THEN arcVal = -1
+		IF arcVal > 1 THEN arcVal = 1
+		angY = ACS(arcVal)
+
+		bx = MEP_NumConnectionData[j][4]
+		by = MEP_NumConnectionData[j][5]
+		bz = MEP_NumConnectionData[j][6]
+
+		arcVal = (ax*bx + ay*by + az*bz)/((SQR(ax^2+ay^2+az^2))*(SQR(bx^2+by^2+bz^2)))
+		IF arcVal < -1 THEN arcVal = -1
+		IF arcVal > 1 THEN arcVal = 1
+		ang = ACS(arcVal)
+
+		dist = pipeRadius/(SIN(ang))+MEP_NumConnectionData[j][23]
+
+		ADDz -dist
+
+		ang_temp = ang
+		IF ang_temp > 90 AND angY < 90 THEN ang = ang_temp/2
+		IF ang_temp < 90 AND angY < 90 THEN ang = ang_temp*2
+		IF ABS(ang_temp - 90) < EPS THEN ang = ang_temp
+
+		CUTPLANE 90+ang
+
+		ADDz -dist
+		dist = dist*6
+
+!!		CUTPOLYA 2, 2, dist,
+		PRISM_ 2, dist,
+			0, 0, 908,
+			holeRadius, 360, 4008
+
+		CUTEND
+
+		DEL 4
+	NEXT j
+	ENDGROUP
+RETURN
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! MEP_m_Pipe
+! Zsolt Feke/2007
+
+
+PEN gs_cont_pen
+IF gs_fill_pen THEN SET FILL gs_fill_type
+
+IF ABS(dx) < EPS THEN dx = 0
+IF ABS(dy) < EPS THEN dy = 0
+IF ABS(dz) < EPS THEN dz = 0
+
+HptsUnIDBeginForConnEnds = 30000
+
+hceID_1 = HptsUnIDBeginForConnEnds+100
+hceID_2 = HptsUnIDBeginForConnEnds+200
+
+IF SGN(dz) = 0 THEN		! -----> the pipe in the xy-plane <----- !
+
+	ADD2 rx1, ry1
+	ROT2 dirAngOnXYPlane
+
+	IF ABS(MEP_Position[3][3]) < EPS THEN
+		offset = MEP_offset_y
+		IF SGN(dZz) = -1 THEN MUL2 1, -1
+	ELSE
+		offset = -MEP_offset_z
+		IF SGN(MEP_Position[3][3]) = -1 THEN MUL2 1, -1
+	ENDIF
+
+	IF editable AND ABS(MEP_offset_y) < EPS AND ABS(MEP_offset_z) < EPS AND connectedA + connectedB < 1 + EPS THEN
+		HOTSPOT2 0, 0, hceID_1, MEP_StraightLength, 1+256*(connectedA < EPS)
+		HOTSPOT2 -1, 0, HptsUnIDBeginForConnEnds, MEP_StraightLength, 3
+		IF ABS(connectedA) < EPS AND ABS(connectedB - 1) < EPS THEN
+			hID = hceID_2+1
+			HOTSPOT2 MEP_StraightLength, offset, hceID_2
+		ELSE
+			hID = hceID_2
+		ENDIF
+		HOTSPOT2 MEP_StraightLength, 0, hID, MEP_StraightLength, 2+128*connectedB
+	ELSE
+		HOTSPOT2 0, 0, hceID_1
+		HOTSPOT2 MEP_StraightLength, offset, hceID_2
+	ENDIF
+
+	pipeRadiusA = pipeDiameterA/2
+	connectorRadiusA = connectorDiameterA/2
+
+	pipeRadiusB = pipeDiameterB/2
+	connectorRadiusB = connectorDiameterB/2
+
+	IF flangeA THEN
+		PUT connectorWidthA, pipeRadiusA, 1
+		PUT connectorWidthA, connectorRadiusA, 1
+		PUT 0, connectorRadiusA, 1
+		PUT 0, -connectorRadiusA, 1
+		PUT connectorWidthA, -connectorRadiusA, 1
+		PUT connectorWidthA, -pipeRadiusA, 1
+
+!!		HOTSPOT2 0, connectorRadiusA
+!!		HOTSPOT2 0, -connectorRadiusA
+!!		HOTSPOT2 connectorWidthA, connectorRadiusA
+!!		HOTSPOT2 connectorWidthA, -connectorRadiusA
+
+		LINE2 connectorWidthA, -pipeRadiusA, connectorWidthA, pipeRadiusA
+	ELSE
+		PUT cutbackA, pipeRadiusA, 1
+		PUT cutbackA, -pipeRadiusA, 1
+	ENDIF
+
+	IF flangeB THEN
+		PUT MEP_StraightLength-connectorWidthB, offset-pipeRadiusB, 1
+		PUT MEP_StraightLength-connectorWidthB, offset-connectorRadiusB, 1
+		PUT MEP_StraightLength, offset-connectorRadiusB, 1
+		PUT MEP_StraightLength, offset+connectorRadiusB, 1
+		PUT MEP_StraightLength-connectorWidthB, offset+connectorRadiusB, 1
+		PUT MEP_StraightLength-connectorWidthB, offset+pipeRadiusB, 1
+
+!!		HOTSPOT2 MEP_StraightLength, offset+connectorRadiusB
+!!		HOTSPOT2 MEP_StraightLength, offset-connectorRadiusB
+!!		HOTSPOT2 MEP_StraightLength-connectorWidthB, offset+connectorRadiusB
+!!		HOTSPOT2 MEP_StraightLength-connectorWidthB, offset-connectorRadiusB
+
+		LINE2 MEP_StraightLength-connectorWidthB, offset-pipeRadiusB, MEP_StraightLength-connectorWidthB, offset+pipeRadiusB
+	ELSE
+		PUT MEP_StraightLength-cutbackB, offset-pipeRadiusB, 1
+		PUT MEP_StraightLength-cutbackB, offset+pipeRadiusB, 1
+	ENDIF
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+
+	IF MEP_InsShow THEN			! -----> insulation <----- !
+		PEN gs_cont_pen
+
+		IF ABS(pipeDiameterA-pipeDiameterB) < EPS THEN
+			POLY2_ 5, 1,
+				cutbackIA, pipeRadiusA+MEP_InsThickness, 0,
+				cutbackIA, -pipeRadiusA-MEP_InsThickness, 1,
+				MEP_StraightLength-cutbackIB, offset-pipeRadiusB-MEP_InsThickness, 0,
+				MEP_StraightLength-cutbackIB, offset+pipeRadiusB+MEP_InsThickness, 1,
+				cutbackIA, pipeRadiusA+MEP_InsThickness, -1
+		ELSE
+			IF flangeA THEN
+				POLY2_ 5, 1,
+					0, pipeRadiusA+MEP_InsThickness, 0,
+					0, -pipeRadiusA-MEP_InsThickness, 1,
+					connectorWidthA, -pipeRadiusA-MEP_InsThickness, 0,
+					connectorWidthA, pipeRadiusA+MEP_InsThickness, 1,
+					0, pipeRadiusA+MEP_InsThickness, -1
+			ENDIF
+
+			POLY2_ 5, 1,
+				connectorWidthA, pipeRadiusA+MEP_InsThickness, 0,
+				connectorWidthA, -pipeRadiusA-MEP_InsThickness, 1,
+				MEP_StraightLength-connectorWidthB, offset-pipeRadiusB-MEP_InsThickness, 0,
+				MEP_StraightLength-connectorWidthB, offset+pipeRadiusB+MEP_InsThickness, 1,
+				connectorWidthA, pipeRadiusA+MEP_InsThickness, -1
+
+			IF flangeB THEN
+				POLY2_ 5, 1,
+					MEP_StraightLength, offset+pipeRadiusB+MEP_InsThickness, 0,
+					MEP_StraightLength, offset-pipeRadiusB-MEP_InsThickness, 1,
+					MEP_StraightLength-connectorWidthB, offset-pipeRadiusB-MEP_InsThickness, 0,
+					MEP_StraightLength-connectorWidthB, offset+pipeRadiusB+MEP_InsThickness, 1,
+					MEP_StraightLength, offset+pipeRadiusB+MEP_InsThickness, -1
+			ENDIF
+		ENDIF
+	ENDIF
+
+	IF MEP_cline_show THEN		! -----> center line <----- !
+		PEN MEP_cline_pen
+		SET LINE_TYPE MEP_cline_type
+
+		LINE2 cutbackCLA, 0, MEP_StraightLength-cutbackCLB, offset
+
+		HOTLINE2 cutbackCLA, 0, MEP_StraightLength-cutbackCLB, offset
+	ENDIF
+	END
+ENDIF
+
+
+		! -----> if it is reducer and there is no in the xy-plane <----- !
+
+IF ABS(pipeDiameterA-pipeDiameterB) > EPS THEN
+	rx = rx1+MEP_Position[2][1]*MEP_StraightLength+MEP_Position[3][1]*MEP_offset_y+dZx*MEP_offset_z
+	ry = ry1+MEP_Position[3][2]*MEP_offset_y+MEP_Position[2][2]*MEP_StraightLength+dZy*MEP_offset_z
+
+	HOTSPOT2 rx1, ry1, hceID_1
+	HOTSPOT2 rx, ry, hceID_2
+
+	SET FILL gs_fill_type
+
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN PEN gs_fill_pen
+	PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0, PARAMETERS pipe_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0, gs_detlevel_3D = `Детальный`
+	PEN gs_cont_pen
+	PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0, PARAMETERS pipe_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0, gs_detlevel_3D = `Детальный`
+
+	IF MEP_InsShow THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS duct_show = 0, MEP_InsShow = 1, MEP_cline_show_3D = 0, gs_detlevel_3D = `Детальный`
+
+	IF MEP_cline_show THEN		! -----> center line <----- !
+		PEN MEP_cline_pen
+		SET LINE_TYPE MEP_cline_type
+
+		PROJECT2{3} 3, 270, 3+32, 8, 0, 0, 0, 0, PARAMETERS macroCallin2D = 1, pipe_show = 0, MEP_InsShow = 0, MEP_cline_show_3D = 1, gs_detlevel_3D = `Детальный`
+	ENDIF
+
+	HOTLINE2 rx1, ry1, rx, ry
+	END
+ENDIF
+
+
+IF SGN(dx) = 0 AND SGN(dy) = 0 THEN		! -----> the pipe on the xy-plane <----- !
+	ADD2 rx1, ry1
+	ROT2 dirAngOnXYPlane
+
+	pipeRadiusA = pipeDiameterA/2
+	connectorRadiusA = connectorDiameterA/2
+
+	pipeRadiusB = pipeDiameterB/2
+	connectorRadiusB = connectorDiameterB/2
+
+	HOTSPOT2 0, 0, hceID_2
+
+	IF rz1 > rz2 THEN
+		SYMB_POS_Z_temp = SYMB_POS_Z
+		SYMB_POS_Z = SYMB_POS_Z-MEP_StraightLength
+
+		flangeA_temp = flangeA
+		flangeA = flangeB
+		flangeB = flangeA_temp
+
+		connectorDiameterA_temp = connectorDiameterA
+		connectorDiameterA = connectorDiameterB
+		connectorDiameterB = connectorDiameterA_temp
+
+		pipeDiameterA_temp = pipeDiameterA
+		pipeDiameterA = pipeDiameterB
+		pipeDiameterB = pipeDiameterA_temp
+
+		connectedA_temp 			= connectedA
+		connectedA 					= connectedB
+		connectedB 					= connectedA_temp
+	ENDIF
+
+	drawIns = 0
+	IF GLOB_CONTEXT <> 5 AND AC_AutoOnStoryVisibility THEN
+		IF  GLOB_CSTORY_ELEV - SYMB_POS_Z < EPS THEN
+			IF (GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT) - (SYMB_POS_Z  + MEP_StraightLength) > -EPS THEN
+!!				TEXT2 0, 0, "1. case"
+				DRAWINDEX 10
+				IF flangeA THEN GOSUB 20
+				DRAWINDEX 20
+				IF flangeB THEN GOSUB 30
+				DRAWINDEX 30
+				SYMB_SECT_PEN = gs_cont_pen
+				GOSUB 10
+
+				drawIns = 1
+			ENDIF
+			IF  GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT > SYMB_POS_Z AND GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT < SYMB_POS_Z + MEP_StraightLength THEN
+!!				TEXT2 0, 0, "2a. case"
+				connectedB = 0
+				IF flangeA THEN GOSUB 20
+				PEN SYMB_SECT_PEN
+				GOSUB 10
+
+				drawIns = 1
+			ENDIF
+		ELSE
+			IF GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT < SYMB_POS_Z + MEP_StraightLength THEN
+!!				TEXT2 0, 0, "2b. case"
+				connectedB = 0
+				PEN SYMB_SECT_PEN
+				GOSUB 10
+
+				drawIns = 1
+			ENDIF
+			IF GLOB_CSTORY_ELEV < SYMB_POS_Z  + MEP_StraightLength AND (GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT) - (SYMB_POS_Z  + MEP_StraightLength) > -EPS THEN
+!!				TEXT2 0, 0, "2c. case"
+				IF flangeB THEN GOSUB 30
+				SYMB_SECT_PEN = gs_cont_pen
+				GOSUB 10
+
+				drawIns = 1
+			ENDIF
+		ENDIF
+	ELSE
+!!		TEXT2 0, 0, "1. case"
+		connectedB = 0
+		DRAWINDEX 10
+		IF flangeA THEN GOSUB 20
+		DRAWINDEX 20
+		IF flangeB THEN GOSUB 30
+		DRAWINDEX 30
+		SYMB_SECT_PEN = gs_cont_pen
+		GOSUB 10
+
+		drawIns = 1
+	ENDIF
+
+	SYMB_POS_Z = SYMB_POS_Z_temp
+
+	IF MEP_InsShow AND drawIns THEN			! -----> insulation <----- !
+		CIRCLE2 0, 0, pipeRadiusA+MEP_InsThickness
+	ENDIF
+	DEL 2
+
+	END
+ENDIF
+
+
+							! -----< other positions of the pipe >----- !
+
+Length=SQR(dx^2+dy^2)
+ar = ABS(dz)/MEP_StraightLength
+br = Length/MEP_StraightLength
+cr = ABS(dz)/Length
+
+IF rz1 > rz2 THEN
+	SYMB_POS_Z_temp = SYMB_POS_Z
+	SYMB_POS_Z = SYMB_POS_Z-ABS(dz)
+
+	flangeA_temp = flangeA
+	flangeA = flangeB
+	flangeB = flangeA_temp
+
+	connectorDiameterA_temp = connectorDiameterA
+	connectorDiameterA = connectorDiameterB
+	connectorDiameterB = connectorDiameterA_temp
+
+	pipeDiameterA_temp = pipeDiameterA
+	pipeDiameterA = pipeDiameterB
+	pipeDiameterB = pipeDiameterA_temp
+
+	connectorWidthA_temp = connectorWidthA
+	connectorWidthA = connectorWidthB
+	connectorWidthB = connectorWidthA_temp
+
+	cutbackA_temp = cutbackA
+	cutbackA = cutbackB
+	cutbackB = cutbackA_temp
+
+	connectedA_temp 			= connectedA
+	connectedA 					= connectedB
+	connectedB 					= connectedA_temp
+ENDIF
+
+pipeRadiusA = pipeDiameterA/2
+pipeRadiusB = pipeDiameterB/2
+
+decreaseLenA = MAX((pipeRadiusA+MEP_InsThickness)*br*MEP_InsShow, (connectorDiameterA*br+connectorWidthA*ar)*flangeA, pipeRadiusA*br)
+decreaseLenB = MAX((pipeRadiusA+MEP_InsThickness)*br*MEP_InsShow, (connectorDiameterB*br+connectorWidthB*ar)*flangeB, pipeRadiusB*br)
+
+dzForSpecCase = ABS(dz) - decreaseLenA - decreaseLenB
+specCase = 0
+IF dzForSpecCase < EPS OR AC_AutoOnStoryVisibility < 0.5 THEN specCase = 1
+
+dz_temp = ABS(dz)
+dz = ABS(dz)-cutbackA*ar-cutbackB*ar
+SYMB_POS_Z_temp = SYMB_POS_Z
+SYMB_POS_Z = SYMB_POS_Z+cutbackA*ar
+
+HOTLINE2 rx1, ry1, rx2, ry2
+
+ADD2 rx1, ry1
+ROT2 dirAngOnXYPlane
+
+IF rz1 > rz2 THEN
+	ADD2 Length, 0
+	MUL2 -1, 1
+ENDIF
+
+HOTSPOT2 0, 0, hceID_1
+HOTSPOT2 Length, 0, hceID_2
+
+	IF GLOB_CSTORY_ELEV - SYMB_POS_Z < EPS OR GLOB_CONTEXT = 5 OR specCase THEN
+		IF (GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT) - (SYMB_POS_Z  + dz) > -EPS OR GLOB_CONTEXT = 5 OR specCase THEN
+!!			TEXT2 0, 0, "1. case"
+			ratio = ar
+			start_ratio = ar
+			end_ratio = ar
+
+			cont_pen = gs_cont_pen
+			start_cont_pen = gs_cont_pen
+			end_cont_pen = gs_cont_pen
+
+			startSegment = cutbackA*br+connectorWidthA*br*flangeA
+			endSegment = MEP_StraightLength*br-cutbackB*br-connectorWidthB*br*flangeB
+			halfWidth = pipeDiameterA/2
+
+			IF flangeA THEN
+				length = startSegment
+				pos = 0
+				halfWidth2 = connectorDiameterA/2
+				DRAWINDEX 10
+				GOSUB 21
+			ENDIF
+
+			DRAWINDEX 20
+			GOSUB 11
+
+			IF flangeB THEN
+				length = connectorWidthB*br
+				pos = endSegment
+				halfWidth = pipeDiameterB/2
+				halfWidth2 = connectorDiameterB/2
+				DRAWINDEX 30
+				GOSUB 21
+			ENDIF
+
+			SYMB_SECT_PEN = gs_cont_pen
+			endSegment = MEP_StraightLength*br-cutbackB*br
+			DRAWINDEX 40
+			IF NOT(connectedB) THEN GOSUB 50
+
+			startSegment = cutbackIA*br
+			endSegment = MEP_StraightLength*br-cutbackIB*br
+
+			IF MEP_InsShow THEN			! -----> insulation <----- !
+				PEN gs_cont_pen
+
+				LINE2 startSegment, pipeRadiusA+MEP_InsThickness, endSegment, pipeRadiusB+MEP_InsThickness
+				LINE2 startSegment, -pipeRadiusA-MEP_InsThickness, endSegment, -pipeRadiusB-MEP_InsThickness
+
+				GOSUB 40
+			ENDIF
+
+			startSegment = cutbackCLA*br
+			endSegment = MEP_StraightLength*br-cutbackCLB*br
+
+			IF MEP_cline_show THEN		! -----> center line <----- !
+				PEN MEP_cline_pen
+				SET LINE_TYPE MEP_cline_type
+
+				LINE2 startSegment, 0, endSegment, 0
+			ENDIF
+
+!!			HOTSPOT2 startSegment, 0
+!!			HOTSPOT2 endSegment, 0
+
+			END
+		ENDIF
+		IF  GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT > SYMB_POS_Z AND GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT < SYMB_POS_Z + dz THEN
+!!			TEXT2 0, 0, "2a. case"
+
+			IF MEP_InsShow AND (GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT - SYMB_POS_Z) < (pipeRadiusA+MEP_InsThickness)*br THEN
+				endSegmentI = startSegment+(pipeRadiusA+MEP_InsThickness)*(br/cr)
+			ENDIF
+
+			IF flangeA THEN
+				ratio = ar
+				start_ratio = ar
+				end_ratio = 1/ar
+
+				cont_pen = gs_cont_pen
+				start_cont_pen = gs_cont_pen
+				end_cont_pen = SYMB_SECT_PEN
+
+				startSegment = connectorWidthA*br*flangeA
+				endSegment = (GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT - SYMB_POS_Z)/cr
+				IF (GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT - SYMB_POS_Z) < connectorWidthA*ar+(connectorDiameterA/2)*br THEN
+					endSegment = startSegment+(connectorDiameterA/2)*(br/cr)
+				ENDIF
+				IF (-GLOB_CSTORY_ELEV - GLOB_CSTORY_HEIGHT + SYMB_POS_Z + dz) < connectorWidthB*ar+(connectorDiameterB/2)*br THEN
+					endSegment = (dz-connectorWidthB*ar)/cr-(connectorDiameterB/2)*(br/cr)
+				ENDIF
+				endSegment = MAX(endSegment, endSegmentI)
+
+				halfWidth = pipeDiameterA/2
+
+				length = startSegment
+				pos = 0
+				halfWidth2 = connectorDiameterA/2
+				DRAWINDEX 10
+				GOSUB 21
+
+				DRAWINDEX 20
+				GOSUB 11
+			ELSE
+				start_ratio = ar
+				end_ratio = 1/ar
+
+				start_cont_pen = gs_cont_pen
+				end_cont_pen = SYMB_SECT_PEN
+
+				halfWidth = pipeDiameterA/2
+				startSegment = cutbackA*br
+				endSegment = startSegment+(GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT - SYMB_POS_Z)/cr
+				IF (GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT - SYMB_POS_Z) < (halfWidth*(1/ar-ar))*cr THEN
+					endSegment = startSegment+(halfWidth*(1/ar-ar))
+				ENDIF
+				endSegment = MAX(endSegment, endSegmentI)
+				GOSUB 11
+			ENDIF
+
+			GOSUB 50
+
+			IF MEP_InsShow THEN			! -----> insulation <----- !
+				startSegment = 0
+				endSegment = endSegment
+
+				PEN gs_cont_pen
+
+				LINE2 startSegment, pipeRadiusA+MEP_InsThickness, endSegment, pipeRadiusB+MEP_InsThickness
+				LINE2 startSegment, -pipeRadiusA-MEP_InsThickness, endSegment, -pipeRadiusB-MEP_InsThickness
+
+				GOSUB 40
+			ENDIF
+
+			startSegment = cutbackCLA*br
+
+			IF MEP_cline_show THEN		! -----> center line <----- !
+				PEN MEP_cline_pen
+				SET LINE_TYPE MEP_cline_type
+
+				LINE2 startSegment, 0, endSegment, 0
+			ENDIF
+
+			endSegment = dz_temp/cr-cutbackCLB*br
+
+!!			HOTSPOT2 startSegment, 0
+!!			HOTSPOT2 endSegment, 0
+		ENDIF
+	ELSE
+		IF GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT < SYMB_POS_Z + dz THEN
+!!			TEXT2 0, 0, "2b. case"
+
+			start_ratio = 1/ar
+			end_ratio = 1/ar
+
+			start_cont_pen = SYMB_SECT_PEN
+			end_cont_pen = SYMB_SECT_PEN
+
+			halfWidth = pipeDiameterA/2
+			startSegment = (GLOB_CSTORY_ELEV-SYMB_POS_Z)/cr
+			startSegment_temp = startSegment
+			IF (GLOB_CSTORY_ELEV - SYMB_POS_Z) < (halfWidth*(1/ar-ar))*cr AND NOT(flangeA) THEN
+				startSegment = startSegment+((halfWidth*(1/ar-ar))*cr-(GLOB_CSTORY_ELEV - SYMB_POS_Z))/cr
+			ENDIF
+			IF (GLOB_CSTORY_ELEV - SYMB_POS_Z_temp) < connectorWidthA*ar+(connectorDiameterA/2)*br AND flangeA THEN
+				adz = GLOB_CSTORY_ELEV-SYMB_POS_Z_temp
+				startSegment = startSegment+connectorWidthA*br*flangeA+(connectorDiameterA/2)*(br/cr)-adz/cr
+			ENDIF
+			IF MEP_InsShow AND (GLOB_CSTORY_ELEV - SYMB_POS_Z) < (pipeRadiusA+MEP_InsThickness)*br THEN
+				startSegmentI = (pipeRadiusA+MEP_InsThickness)*(br/cr)
+			ENDIF
+			startSegment = MAX(startSegment, startSegmentI)
+
+			endSegment = startSegment_temp+GLOB_CSTORY_HEIGHT*(br/ar)
+			IF SYMB_POS_Z_temp+dz_temp-GLOB_CSTORY_ELEV-GLOB_CSTORY_HEIGHT < connectorWidthB*ar+(connectorDiameterB/2)*br AND flangeB THEN
+				adz = SYMB_POS_Z_temp+dz_temp-GLOB_CSTORY_ELEV-GLOB_CSTORY_HEIGHT
+				endSegment = endSegment-connectorWidthB*br*flangeB-(connectorDiameterB/2)*(br/cr)+adz/cr
+			ENDIF
+			halfWidth = pipeDiameterA/2
+			GOSUB 11
+
+			GOSUB 50
+
+			IF MEP_InsShow THEN			! -----> insulation <----- !
+				PEN gs_cont_pen
+
+				LINE2 startSegment, pipeRadiusA+MEP_InsThickness, endSegment, pipeRadiusB+MEP_InsThickness
+				LINE2 startSegment, -pipeRadiusA-MEP_InsThickness, endSegment, -pipeRadiusB-MEP_InsThickness
+
+				GOSUB 40
+			ENDIF
+
+			IF MEP_cline_show THEN		! -----> center line <----- !
+				PEN MEP_cline_pen
+				SET LINE_TYPE MEP_cline_type
+
+				LINE2 startSegment, 0, endSegment, 0
+			ENDIF
+
+			startSegment = cutbackCLA*br
+			endSegment = dz_temp/cr-cutbackCLB*br
+
+!!			HOTSPOT2 startSegment, 0
+!!			HOTSPOT2 endSegment, 0
+		ENDIF
+		IF GLOB_CSTORY_ELEV < SYMB_POS_Z  + dz AND (GLOB_CSTORY_ELEV + GLOB_CSTORY_HEIGHT) - (SYMB_POS_Z  + dz) > -EPS THEN
+!!			TEXT2 0, 0, "2c. case"
+
+			IF flangeB THEN
+				ratio = ar
+				start_ratio = 1/ar
+				end_ratio = ar
+				cont_pen = gs_cont_pen
+				start_cont_pen = SYMB_SECT_PEN
+				end_cont_pen = gs_cont_pen
+
+				halfWidth = pipeDiameterA/2
+				startSegment = (GLOB_CSTORY_ELEV-SYMB_POS_Z)/cr
+				IF (GLOB_CSTORY_ELEV - SYMB_POS_Z) < connectorWidthA*ar+(connectorDiameterA/2)*br THEN
+					startSegment = connectorWidthA*br*flangeA+(connectorDiameterA/2)*(br/cr)
+				ENDIF
+				IF (-GLOB_CSTORY_ELEV + SYMB_POS_Z + dz) < connectorWidthB*ar+(connectorDiameterB/2)*br THEN
+					startSegment = (dz-connectorWidthB*ar)/cr-(connectorDiameterB/2)*(br/cr)
+				ENDIF
+				endSegment = (dz-connectorWidthB*ar)/cr
+				DRAWINDEX 10
+				GOSUB 11
+
+				length = connectorWidthB*br
+				pos = endSegment
+				halfWidth = pipeDiameterB/2
+				halfWidth2 = connectorDiameterB/2
+				DRAWINDEX 20
+				GOSUB 21
+			ELSE
+				start_ratio = 1/ar
+				end_ratio = ar
+
+				start_cont_pen = SYMB_SECT_PEN
+				end_cont_pen = gs_cont_pen
+
+				halfWidth = pipeDiameterA/2
+				startSegment = (GLOB_CSTORY_ELEV-SYMB_POS_Z_temp)/cr
+				IF (GLOB_CSTORY_ELEV - SYMB_POS_Z) < (halfWidth*(1/ar-ar))*cr THEN
+					startSegment = startSegment+((halfWidth*(1/ar-ar))*cr-(GLOB_CSTORY_ELEV - SYMB_POS_Z))/cr
+				ENDIF
+				endSegment = (dz_temp-cutbackB*ar)/cr
+				GOSUB 11
+			ENDIF
+
+			SYMB_SECT_PEN = gs_cont_pen
+			endSegment = MEP_StraightLength*br-cutbackB*br
+			IF NOT(connectedB) THEN GOSUB 50
+
+			IF MEP_InsShow THEN			! -----> insulation <----- !
+				endSegment = dz/cr
+
+				PEN gs_cont_pen
+
+				LINE2 startSegment, pipeRadiusA+MEP_InsThickness, endSegment, pipeRadiusB+MEP_InsThickness
+				LINE2 startSegment, -pipeRadiusA-MEP_InsThickness, endSegment, -pipeRadiusB-MEP_InsThickness
+
+				GOSUB 40
+			ENDIF
+
+			endSegment = dz_temp/cr-cutbackCLB*br
+
+			IF MEP_cline_show THEN		! -----> center line <----- !
+				PEN MEP_cline_pen
+				SET LINE_TYPE MEP_cline_type
+
+				LINE2 startSegment, 0, endSegment, 0
+			ENDIF
+
+			startSegment = cutbackCLA*br
+
+!!			HOTSPOT2 startSegment, 0
+!!			HOTSPOT2 endSegment, 0
+		ENDIF
+	ENDIF
+DEL 2
+
+SYMB_POS_Z = SYMB_POS_Z_temp
+
+END
+
+10:
+	SET FILL 65
+
+		PUT 0, 0, 901
+		PUT pipeDiameterA/2, 360, 4001
+
+	POLY2_B NSP/3, 1+2+4+64, -1, -1,
+
+		GET (NSP)
+
+	IF NOT(connectedB) THEN
+		alpha = 180-2*ATN(pipeRadiusA/(pipeRadiusA*0.75))
+		rr = pipeRadiusA/SIN(alpha)
+
+		ROT2 45
+
+		PUT 0, pipeRadiusA, 1
+		PUT 0, 0, 901
+		PUT 0, -pipeRadiusA, 3001
+		PUT -(rr-pipeRadiusA*0.75), 0, 901
+		PUT 0, pipeRadiusA, 3001
+
+		POLY2_B NSP/3, 1+2+4+64, SYMB_SECT_PEN, SYMB_SECT_PEN,
+
+			GET (NSP)
+
+		DEL 1
+	ENDIF
+RETURN
+
+11:
+	PEN start_cont_pen
+	MUL2 start_ratio, 1
+
+		PUT startSegment*(1/start_ratio), -halfWidth, 1
+		PUT startSegment*(1/start_ratio), 0, 900
+		PUT halfWidth, -180, 4000
+		PUT startSegment*(1/start_ratio), halfWidth, -1
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN SET FILL gs_fill_type
+	DEL 1
+
+	MUL2 end_ratio, 1
+
+!!		PUT startSegment*(1/end_ratio), halfWidth, 1
+!!		PUT endSegment*(1/end_ratio), halfWidth, 0
+!!		PUT endSegment*(1/end_ratio), 0, 901
+!!		PUT halfWidth, 180, 4001
+!!		PUT startSegment*(1/end_ratio), -halfWidth, 0
+!!		PUT startSegment*(1/end_ratio), halfWidth, 0
+!!		PUT startSegment*(1/end_ratio), halfWidth, -1
+
+		PUT startSegment*(1/end_ratio), halfWidth, 1
+		PUT endSegment*(1/end_ratio), halfWidth, 0
+		PUT endSegment*(1/end_ratio), -halfWidth, 1
+		PUT startSegment*(1/end_ratio), -halfWidth, 0
+		PUT startSegment*(1/end_ratio), halfWidth, 0
+		PUT startSegment*(1/end_ratio), halfWidth, -1
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+
+	PEN end_cont_pen
+	SET FILL 65
+
+		PUT endSegment*(1/end_ratio), 0, 901
+		PUT pipeDiameterA/2, 360, 4001
+
+	POLY2_B NSP/3, 1+2+4+64, -1, -1,
+
+		GET (NSP)
+
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN SET FILL gs_fill_type
+	DEL 1
+RETURN
+
+20:
+	IF gs_fill_pen THEN SET FILL gs_fill_type
+
+		PUT 0, 0, 901
+		PUT connectorDiameterA/2, 360, 4001
+		PUT 0, 0, 900
+		PUT pipeDiameterA/2, 360, 4000
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+RETURN
+
+21:
+	MUL2 ratio, 1
+	length_temp = length
+	IF length < EPS THEN length = EPS
+
+		PUT pos*(1/ratio), halfWidth2, 1
+		PUT (pos+length)*(1/ratio), halfWidth2, 1
+		PUT (pos+length)*(1/ratio), -halfWidth2, 1001
+		PUT pos*(1/ratio), -halfWidth2, 1
+		PUT pos*(1/ratio), halfWidth2, 1000
+		PUT pos*(1/ratio), halfWidth2, -1
+		PUT (pos+length)*(1/ratio), 0, 900
+		PUT halfWidth, 360, 4000
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+
+	length = length_temp
+	IF length > EPS THEN ARC2 (pos+length)*(1/ratio), 0, halfWidth2, 90, 270
+
+	PEN cont_pen
+	SET FILL 65
+
+		PUT (pos+length)*(1/ratio), 0, 901
+		PUT halfWidth, 360, 4001
+
+	POLY2_B NSP/3, 1+2+4+64, -1, -1,
+
+		GET (NSP)
+
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN SET FILL gs_fill_type
+	DEL 1
+RETURN
+
+30:
+	IF gs_fill_pen THEN SET FILL gs_fill_type
+
+		PUT 0, 0, 901
+		PUT connectorDiameterB/2, 360, 4001
+		PUT 0, 0, 900
+		PUT pipeDiameterB/2, 360, 4000
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+RETURN
+
+40:
+	PEN start_cont_pen
+	MUL2 start_ratio, 1
+
+	ARC2  startSegment*(1/start_ratio), 0, pipeRadiusA+MEP_InsThickness, 90, 270
+
+	DEL 1
+
+	PEN end_cont_pen
+	MUL2 end_ratio, 1
+
+	CIRCLE2 endSegment*(1/end_ratio), 0, pipeRadiusB+MEP_InsThickness
+
+	PEN gs_cont_pen
+	DEL 1
+RETURN
+
+50:
+	MUL2 end_ratio, 1
+
+	PEN SYMB_SECT_PEN
+	SET FILL 65
+
+	alpha = 180-2*ATN(halfWidth/(halfWidth*0.75))
+	rr = halfWidth/SIN(alpha)
+
+	ADD2 endSegment*(1/end_ratio), 0
+	ROT2 45
+
+	PUT 0, pipeRadiusA, 1
+	PUT 0, 0, 901
+	PUT 0, -pipeRadiusA, 3001
+	PUT -(rr-pipeRadiusA*0.75), 0, 901
+	PUT 0, pipeRadiusA, 3001
+
+	POLY2_B NSP/3, 1+2+4+64, SYMB_SECT_PEN, SYMB_SECT_PEN,
+
+		GET (NSP)
+
+	DEL 2
+
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN SET FILL gs_fill_type
+	DEL 1
+RETURN
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! MEP_m_Pipe
+! Zsolt Feke/2007
+
+
+EPS = 0.00001
+
+
+IF gs_detlevel_3D = `Детальный` THEN res = 24
+IF gs_detlevel_3D = `Простой` THEN res = 8
+IF gs_detlevel_3D = `Откл.` THEN res = 24
+
+pipeDiameterA		= MEP_NumConnectionData[1][12]
+connectorDiameterA	= MEP_NumConnectionData[1][15]
+IF connectorDiameterA < pipeDiameterA THEN connectorDiameterA = pipeDiameterA
+connectorWidthA		= MEP_NumConnectionData[1][17]
+connectedA			= MEP_NumConnectionData[1][18]
+connectionSexA		= MEP_NumConnectionData[1][20]
+connectionStyleA	= gs_AddConnections[1][1]
+
+pipeDiameterB		= MEP_NumConnectionData[2][12]
+connectorDiameterB	= MEP_NumConnectionData[2][15]
+IF connectorDiameterB < pipeDiameterB THEN connectorDiameterB = pipeDiameterB
+connectorWidthB		= MEP_NumConnectionData[2][17]
+connectedB			= MEP_NumConnectionData[2][18]
+connectionSexB		= MEP_NumConnectionData[2][20]
+connectionStyleB	= gs_AddConnections[2][1]
+
+flangeA = 1
+IF connectorWidthA < EPS OR ABS(gs_AddConnections[1][1] - 1) < EPS THEN
+	flangeA = 0
+	connectorWidthA = 0
+ENDIF
+cutbackA = connectorWidthA
+cutbackCLA = connectorWidthA*(ABS(connectionStyleA-3) < EPS AND ABS(connectionSexA-2) < EPS AND ABS(connectedA-1) < EPS)
+cutbackIA = connectorWidthA*(ABS(connectionStyleA-3) < EPS AND ABS(connectionSexA-1) < EPS)
+IF ABS(connectionStyleA-3) < EPS AND ABS(connectionSexA-1) < EPS THEN
+	flangeA = 0
+	IF GLOB_CONTEXT = 5 OR ABS(connectedA) < EPS THEN
+		cutbackA = 0
+		connectorWidthA = 0
+	ENDIF
+ENDIF
+edgeVisibleA = 1
+IF flangeA THEN
+	edgeVisibleA = 0
+	cutbackA = 0
+ENDIF
+
+flangeB = 1
+IF connectorWidthB < EPS OR ABS(gs_AddConnections[2][1] - 1) < EPS THEN
+	flangeB = 0
+	connectorWidthB = 0
+ENDIF
+cutbackB = connectorWidthB
+cutbackCLB = connectorWidthB*(ABS(connectionStyleB-3) < EPS AND ABS(connectionSexB-2) < EPS AND ABS(connectedB-1) < EPS)
+cutbackIB = connectorWidthB*(ABS(connectionStyleB-3) < EPS AND ABS(connectionSexB-1) < EPS)
+IF ABS(connectionStyleB-3) < EPS AND ABS(connectionSexB-1) < EPS THEN
+	flangeB = 0
+	IF GLOB_CONTEXT = 5 OR ABS(connectedB) < EPS THEN
+		cutbackB = 0
+		connectorWidthB = 0
+	ENDIF
+ENDIF
+edgeVisibleB = 1
+IF flangeB THEN
+	edgeVisibleB = 0
+	cutbackB = 0
+ENDIF
+
+
+						! ---------------- !
+						! --- Z vector --- !
+						! ---------------- !
+
+dZx = -MEP_Position[3][2]*MEP_Position[2][3]+MEP_Position[3][3]*MEP_Position[2][2]
+dZy = -MEP_Position[3][3]*MEP_Position[2][1]+MEP_Position[3][1]*MEP_Position[2][3]
+dZz = -MEP_Position[3][1]*MEP_Position[2][2]+MEP_Position[3][2]*MEP_Position[2][1]
+
+
+						! ------------------------ !
+						! --- 2 points of pipe --- !
+						! ------------------------ !
+
+! --- x,y,z coordinates of 1st point ---
+
+rx1 = MEP_Position[1][1]
+ry1 = MEP_Position[1][2]
+rz1 = MEP_Position[1][3]
+
+
+! --- x,y,z coordinates of 2nd point ---
+
+rx2 = rx1+MEP_Position[2][1]*MEP_StraightLength
+ry2 = ry1+MEP_Position[2][2]*MEP_StraightLength
+rz2 = rz1+MEP_Position[2][3]*MEP_StraightLength
+
+dx = rx2-rx1
+dy = ry2-ry1
+dz = rz2-rz1
+
+! --- dirAngOnXYPlane of the route ---
+
+IF ABS(ABS(MEP_Position[2][3])-1) < EPS THEN
+	 arCosVal = MEP_Position[3][1]/1
+	IF ABS(arCosVal) > 1 AND SGN(arCosVal) = -1 THEN arCosVal = -1
+	IF ABS(arCosVal) > 1 AND SGN(arCosVal) = 1 THEN arCosVal = 1
+	dirAngOnXYPlane = ACS(arCosVal)-90
+	IF SGN(MEP_Position[3][2]) = -1 THEN dirAngOnXYPlane = 180-dirAngOnXYPlane
+ELSE
+	IF ABS(dx)>EPS OR ABS(dy)>EPS THEN
+		arCosVal = dx/(SQR(dx^2+dy^2))
+
+		IF ABS(arCosVal) > 1 AND SGN(arCosVal) = -1 THEN arCosVal = -1
+		IF ABS(arCosVal) > 1 AND SGN(arCosVal) = 1 THEN arCosVal = 1
+
+		dirAngOnXYPlane = ACS(arCosVal)
+		IF SGN(dy) = -1 THEN dirAngOnXYPlane = 360-dirAngOnXYPlane
+	ENDIF
+ENDIF
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! MEP_m_Pipe
+! Zsolt Feke/2007
+
+
+VALUES "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Show 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="MEP_StraightLength">
+			<Description><![CDATA["Length"]]></Description>
+			<Value>2</Value>
+		</Length>
+		<Boolean Name="MEP_InsShow">
+			<Description><![CDATA["Show Insulation"]]></Description>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="MEP_InsThickness">
+			<Description><![CDATA["Insulation Thickness"]]></Description>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="MEP_offset_y">
+			<Description><![CDATA["Offset Y"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Length Name="MEP_offset_z">
+			<Description><![CDATA["Offset Z"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="MEP_StatusLine">
+			<Description><![CDATA["Status Line"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="nonEditHtps">
+			<Description><![CDATA["Non Editable Hotspots"]]></Description>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="showHtps">
+			<Description><![CDATA["Show Hotspots"]]></Description>
+			<Value>1</Value>
+		</Boolean>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D Representation"]]></Description>
+		</Title>
+		<Boolean Name="MEP_cline_show">
+			<Description><![CDATA["Show Centerline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<LineType Name="MEP_cline_type">
+			<Description><![CDATA["Centerline Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</LineType>
+		<PenColor Name="MEP_cline_pen">
+			<Description><![CDATA["Centerline Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</PenColor>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Contour Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>91</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Fill Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>91</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>64</Value>
+		</FillPattern>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+		</Title>
+		<String Name="gs_detlevel_3D">
+			<Description><![CDATA["3D model"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Детальный"]]></Value>
+		</String>
+		<Boolean Name="pipe_show">
+			<Description><![CDATA["Show Pipe"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="MEP_cline_show_3D">
+			<Description><![CDATA["Show Centerline in 3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Material Name="gs_PipeMat">
+			<Description><![CDATA["Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>45</Value>
+		</Material>
+		<Material Name="gs_InsMat">
+			<Description><![CDATA["Insulation Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</Material>
+		<Boolean Name="editable">
+			<Description><![CDATA["Editable"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="MEP_Position">
+			<Description><![CDATA["Position"]]></Description>
+			<ArrayValues FirstDimension="3" SecondDimension="3">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="1" Row="2">1</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="1" Row="3">0</AVal>
+				<AVal Column="2" Row="3">1</AVal>
+				<AVal Column="3" Row="3">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="gs_Connections">
+			<Description><![CDATA[""]]></Description>
+			<ArrayValues FirstDimension="4" SecondDimension="25">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">0</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">0</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0</AVal>
+				<AVal Column="13" Row="1">0</AVal>
+				<AVal Column="14" Row="1">0</AVal>
+				<AVal Column="15" Row="1">0</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">0</AVal>
+				<AVal Column="20" Row="1">0</AVal>
+				<AVal Column="21" Row="1">0</AVal>
+				<AVal Column="22" Row="1">0</AVal>
+				<AVal Column="23" Row="1">0</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="1" Row="2">0</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="4" Row="2">0</AVal>
+				<AVal Column="5" Row="2">0</AVal>
+				<AVal Column="6" Row="2">0</AVal>
+				<AVal Column="7" Row="2">0</AVal>
+				<AVal Column="8" Row="2">0</AVal>
+				<AVal Column="9" Row="2">0</AVal>
+				<AVal Column="10" Row="2">0</AVal>
+				<AVal Column="11" Row="2">0</AVal>
+				<AVal Column="12" Row="2">0</AVal>
+				<AVal Column="13" Row="2">0</AVal>
+				<AVal Column="14" Row="2">0</AVal>
+				<AVal Column="15" Row="2">0</AVal>
+				<AVal Column="16" Row="2">0</AVal>
+				<AVal Column="17" Row="2">0</AVal>
+				<AVal Column="18" Row="2">0</AVal>
+				<AVal Column="19" Row="2">0</AVal>
+				<AVal Column="20" Row="2">0</AVal>
+				<AVal Column="21" Row="2">0</AVal>
+				<AVal Column="22" Row="2">0</AVal>
+				<AVal Column="23" Row="2">0</AVal>
+				<AVal Column="24" Row="2">0</AVal>
+				<AVal Column="25" Row="2">0</AVal>
+				<AVal Column="1" Row="3">0.5</AVal>
+				<AVal Column="2" Row="3">0</AVal>
+				<AVal Column="3" Row="3">0</AVal>
+				<AVal Column="4" Row="3">0</AVal>
+				<AVal Column="5" Row="3">-1</AVal>
+				<AVal Column="6" Row="3">0</AVal>
+				<AVal Column="7" Row="3">1</AVal>
+				<AVal Column="8" Row="3">0</AVal>
+				<AVal Column="9" Row="3">0</AVal>
+				<AVal Column="10" Row="3">0</AVal>
+				<AVal Column="11" Row="3">0</AVal>
+				<AVal Column="12" Row="3">0.15</AVal>
+				<AVal Column="13" Row="3">0</AVal>
+				<AVal Column="14" Row="3">0</AVal>
+				<AVal Column="15" Row="3">0</AVal>
+				<AVal Column="16" Row="3">0</AVal>
+				<AVal Column="17" Row="3">0</AVal>
+				<AVal Column="18" Row="3">0</AVal>
+				<AVal Column="19" Row="3">0</AVal>
+				<AVal Column="20" Row="3">0</AVal>
+				<AVal Column="21" Row="3">0</AVal>
+				<AVal Column="22" Row="3">0</AVal>
+				<AVal Column="23" Row="3">0</AVal>
+				<AVal Column="24" Row="3">0</AVal>
+				<AVal Column="25" Row="3">0</AVal>
+				<AVal Column="1" Row="4">1</AVal>
+				<AVal Column="2" Row="4">0</AVal>
+				<AVal Column="3" Row="4">0</AVal>
+				<AVal Column="4" Row="4">0</AVal>
+				<AVal Column="5" Row="4">-0.5</AVal>
+				<AVal Column="6" Row="4">0.866</AVal>
+				<AVal Column="7" Row="4">-1</AVal>
+				<AVal Column="8" Row="4">0</AVal>
+				<AVal Column="9" Row="4">0</AVal>
+				<AVal Column="10" Row="4">0</AVal>
+				<AVal Column="11" Row="4">0</AVal>
+				<AVal Column="12" Row="4">0.2</AVal>
+				<AVal Column="13" Row="4">0</AVal>
+				<AVal Column="14" Row="4">0</AVal>
+				<AVal Column="15" Row="4">0</AVal>
+				<AVal Column="16" Row="4">0</AVal>
+				<AVal Column="17" Row="4">0</AVal>
+				<AVal Column="18" Row="4">0</AVal>
+				<AVal Column="19" Row="4">0</AVal>
+				<AVal Column="20" Row="4">0</AVal>
+				<AVal Column="21" Row="4">0</AVal>
+				<AVal Column="22" Row="4">0</AVal>
+				<AVal Column="23" Row="4">0</AVal>
+				<AVal Column="24" Row="4">0</AVal>
+				<AVal Column="25" Row="4">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Integer Name="MEP_NumberConnections">
+			<Description><![CDATA["Number of Connections"]]></Description>
+			<Value>4</Value>
+		</Integer>
+		<Length Name="MEP_NumConnectionData">
+			<Description><![CDATA[""]]></Description>
+			<ArrayValues FirstDimension="4" SecondDimension="25">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">0</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">0</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0.3</AVal>
+				<AVal Column="13" Row="1">0</AVal>
+				<AVal Column="14" Row="1">0</AVal>
+				<AVal Column="15" Row="1">0.45</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0.15</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">0</AVal>
+				<AVal Column="20" Row="1">2</AVal>
+				<AVal Column="21" Row="1">0</AVal>
+				<AVal Column="22" Row="1">0</AVal>
+				<AVal Column="23" Row="1">0</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="1" Row="2">0</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="4" Row="2">0</AVal>
+				<AVal Column="5" Row="2">0</AVal>
+				<AVal Column="6" Row="2">0</AVal>
+				<AVal Column="7" Row="2">0</AVal>
+				<AVal Column="8" Row="2">0</AVal>
+				<AVal Column="9" Row="2">0</AVal>
+				<AVal Column="10" Row="2">0</AVal>
+				<AVal Column="11" Row="2">0</AVal>
+				<AVal Column="12" Row="2">0.3</AVal>
+				<AVal Column="13" Row="2">0</AVal>
+				<AVal Column="14" Row="2">0</AVal>
+				<AVal Column="15" Row="2">0.35</AVal>
+				<AVal Column="16" Row="2">0</AVal>
+				<AVal Column="17" Row="2">0.15</AVal>
+				<AVal Column="18" Row="2">0</AVal>
+				<AVal Column="19" Row="2">0</AVal>
+				<AVal Column="20" Row="2">2</AVal>
+				<AVal Column="21" Row="2">0</AVal>
+				<AVal Column="22" Row="2">0</AVal>
+				<AVal Column="23" Row="2">0</AVal>
+				<AVal Column="24" Row="2">0</AVal>
+				<AVal Column="25" Row="2">0</AVal>
+				<AVal Column="1" Row="3">0.5</AVal>
+				<AVal Column="2" Row="3">0</AVal>
+				<AVal Column="3" Row="3">0.15</AVal>
+				<AVal Column="4" Row="3">0</AVal>
+				<AVal Column="5" Row="3">0</AVal>
+				<AVal Column="6" Row="3">1</AVal>
+				<AVal Column="7" Row="3">1</AVal>
+				<AVal Column="8" Row="3">0</AVal>
+				<AVal Column="9" Row="3">0</AVal>
+				<AVal Column="10" Row="3">0</AVal>
+				<AVal Column="11" Row="3">0</AVal>
+				<AVal Column="12" Row="3">0.15</AVal>
+				<AVal Column="13" Row="3">0</AVal>
+				<AVal Column="14" Row="3">0</AVal>
+				<AVal Column="15" Row="3">0</AVal>
+				<AVal Column="16" Row="3">0</AVal>
+				<AVal Column="17" Row="3">0</AVal>
+				<AVal Column="18" Row="3">0</AVal>
+				<AVal Column="19" Row="3">0</AVal>
+				<AVal Column="20" Row="3">0</AVal>
+				<AVal Column="21" Row="3">0</AVal>
+				<AVal Column="22" Row="3">0</AVal>
+				<AVal Column="23" Row="3">0</AVal>
+				<AVal Column="24" Row="3">0</AVal>
+				<AVal Column="25" Row="3">0</AVal>
+				<AVal Column="1" Row="4">1</AVal>
+				<AVal Column="2" Row="4">0.15</AVal>
+				<AVal Column="3" Row="4">0</AVal>
+				<AVal Column="4" Row="4">0.5</AVal>
+				<AVal Column="5" Row="4">0.866</AVal>
+				<AVal Column="6" Row="4">0</AVal>
+				<AVal Column="7" Row="4">-0.866</AVal>
+				<AVal Column="8" Row="4">0.5</AVal>
+				<AVal Column="9" Row="4">0</AVal>
+				<AVal Column="10" Row="4">0</AVal>
+				<AVal Column="11" Row="4">0</AVal>
+				<AVal Column="12" Row="4">0.3</AVal>
+				<AVal Column="13" Row="4">0</AVal>
+				<AVal Column="14" Row="4">0</AVal>
+				<AVal Column="15" Row="4">0</AVal>
+				<AVal Column="16" Row="4">0</AVal>
+				<AVal Column="17" Row="4">0</AVal>
+				<AVal Column="18" Row="4">0</AVal>
+				<AVal Column="19" Row="4">0</AVal>
+				<AVal Column="20" Row="4">0</AVal>
+				<AVal Column="21" Row="4">0</AVal>
+				<AVal Column="22" Row="4">0</AVal>
+				<AVal Column="23" Row="4">0</AVal>
+				<AVal Column="24" Row="4">0</AVal>
+				<AVal Column="25" Row="4">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="gs_AddConnections">
+			<Description><![CDATA["Connection Styles"]]></Description>
+			<ArrayValues FirstDimension="2" SecondDimension="2">
+				<AVal Column="1" Row="1">2</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="1" Row="2">2</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Boolean Name="AC_AutoOnStoryVisibility">
+			<Description><![CDATA["Auto on Story Visibility"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+	</Parameters>
+</ParamSection>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+</CalledMacros>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

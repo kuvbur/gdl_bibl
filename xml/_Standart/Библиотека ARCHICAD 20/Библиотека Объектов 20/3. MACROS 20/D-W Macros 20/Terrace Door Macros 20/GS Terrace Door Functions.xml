@@ -1,0 +1,3553 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="2506E70A-FBBB-45DB-9C03-380BF4D1D4CE" MigrationValue="Normal" Owner="1196638531" Signature="1465080141" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>6ACDA889-69B2-4EC5-936C-CB1DA7032A92</MainGUID>
+	<MainGUID>F6AE9687-2BC7-4D47-88C9-8F793E1DE2D6</MainGUID>
+	<MainGUID>4ABD0A6E-634B-4931-B3AA-9BEE01F35CDF</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+end bShowAddHotspotsForIS
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! =============================================================================
+! 2D detail level settings
+! =============================================================================
+
+if iLoD2D = SYMBW_SCALESENS then							! Scale sensitive
+	iLoD2D = SYMBW_S_1LINE
+	if GLOB_SCALE <= 100 then	iLoD2D = SYMBW_M_2LINE_NOGLASS
+	if GLOB_SCALE <=  50 then	iLoD2D = SYMBW_D_SGLASS
+endif
+
+if GLOB_CONTEXT > 20 & GLOB_CONTEXT < 40 then bFeedBack = 1
+
+drawindex 20	! Draw Window Function at first
+
+gs_wallhole_fill	= gs_bFills * gs_wallhole_fill
+
+
+if AC_WallType = 2 then
+	id1 = AC_WindowInWallContour[1]
+	id2 = AC_WindowInWallContour[2]
+	id3 = AC_WindowInWallContour[3]
+	id4 = AC_WindowInWallContour[4]
+
+	if id1 > 0 & id2 > 0 & id3 > 0 & id4 > 0 & abs(id1 - id2) = 1 & abs(id3 - id4) = 1 then
+		if abs(AC_WallContourPolygon[id1][2] - AC_WallContourPolygon[id2][2]) < EPS & abs(AC_WallContourPolygon[id3][2] - AC_WallContourPolygon[id4][2]) < EPS then
+			AC_WallType = 1
+		endif
+	endif
+endif
+
+
+! =============================================================================
+! Request Globals for Opening Lines and Hotspots
+! =============================================================================
+
+gs_opLinePen			= 1
+gs_iSwingType			= 1
+gs_swingLineType		= 1
+
+call "OpeningOptions" parameters	gs_opening_dir_m 			= 2 - bOpeningDirection,
+									bWindow						= 1,
+									iLineShapeCategory			= iLineShapeCategory,
+									bOverride_MVO_2D			= bOverride_MVO_2D,
+									or_opLinePen				= or_opLinePen,
+									or_iSwingType				= or_iSwingType,
+									or_iSlidingType				= or_iSlidingType,
+									or_swingLineType			= or_swingLineType,
+									bEnableSecondaryOpLineTypes	= 0,
+						returned_parameters dummy,
+											gs_opLinePen,
+											gs_iSwingType,
+											gs_iSlidingType,
+											gs_swingLineType,
+											dummy
+
+
+! -----------------------------------------------------------------------------
+! Hotspot Display Control
+! -----------------------------------------------------------------------------
+if iLoD2D < SYMBW_D_SGLASS then
+	bShowUnitHotspots	= 0
+	bShowAddHotspots	= 0
+else
+	bShowUnitHotspots	= not(gs_lich)
+endif
+
+if bShowAddHotspotsForIS then
+	bShowUnitHotspots	= 1
+	bShowAddHotspots	= 1
+endif
+
+
+! =============================================================================
+! Draw the cavity closure and turned plasters
+! =============================================================================
+
+drawindex 40	! Draw Cavity Closure at the top
+
+leftWidth	= A / 2
+rightWidth	= A / 2
+gs_stack_left = 0
+gs_stack_right = 0
+gs_reveal_left	= 0
+gs_reveal_right	= 0
+
+if iRevealType = REVEAL_POSITIVE then
+	if SYMB_ROTANGLE > EPS exor SYMB_MIRRORED then
+		gs_reveal_left	= WIDO_RIGHT_JAMB
+		gs_reveal_right	= WIDO_LEFT_JAMB
+	else
+		gs_reveal_left	= WIDO_LEFT_JAMB
+		gs_reveal_right	= WIDO_RIGHT_JAMB
+	endif
+endif
+
+bCavityCloserLeft	= (not(gs_stack_left)  & (iCavityClosureSide = CAVITY_SIDE_BOTH | iCavityClosureSide = CAVITY_SIDE_LEFT))
+bCavityCloserRight	= (not(gs_stack_right) & (iCavityClosureSide = CAVITY_SIDE_BOTH | iCavityClosureSide = CAVITY_SIDE_RIGHT))
+
+bOutsideAtRefLine = (wallIsLeft exor (AC_Wall_Direction_Type <> 1 & AC_Wall_Direction_Type <> 3))
+
+if bOutsideAtRefLine then
+	if bInsideTrim then
+		gs_bAutoTurnOut	= 0
+		gs_bOverOut		= 0
+	endif
+	if bOutsideTrim then
+		gs_bAutoTurnIn	= 0
+		gs_bOverIn		= 0
+	endif
+else
+	if bOutsideTrim then
+		gs_bAutoTurnOut	= 0
+		gs_bOverOut		= 0
+	endif
+	if bInsideTrim then
+		gs_bAutoTurnIn	= 0
+		gs_bOverIn		= 0
+	endif
+endif
+
+bDrawObjContourIn	= (WALL_SKINS_NUMBER = 0)
+bDrawObjContourOut	= (WALL_SKINS_NUMBER = 0)
+
+bDrawFrameContourLeft	= 1
+bDrawFrameContourRight	= 1
+
+call "terrace_CavityClosure",
+	parameters all	refWidth				= A,
+					leftWidth				= leftWidth,
+					rightWidth				= rightWidth,
+					bWndCurved				= gs_IsCurved,
+					bCavityCloserLeft		= bCavityCloserLeft,
+					bCavityCloserRight		= bCavityCloserRight,
+					bDrawObjContourIn		= bDrawObjContourIn,
+					bDrawObjContourOut		= bDrawObjContourOut,
+					bDrawFrameContourLeft	= bDrawFrameContourLeft,
+					bDrawFrameContourRight	= bDrawFrameContourRight,
+					bCornerWindow			= 0,
+					fillWallHole			= gs_bFills * gs_wallhole_fill,
+					penWallHoleFg			= gs_wallhole_pen_fg,
+					penWallHoleBg			= gs_wallhole_pen_bg,
+					iWallContourLine		= iWallContourLine,
+					gs_wcont_line_in		= gs_wcont_line_in,
+					gs_wcont_line_out		= gs_wcont_line_out,
+					penWallContour			= gs_pen_2D,
+					iRevealType				= iRevealType,
+					gs_reveal_left			= gs_reveal_left,
+					gs_reveal_right			= gs_reveal_right,
+					gs_reveal_left_angle	= 0,
+					gs_reveal_right_angle	= 0,
+					gs_stack_left			= gs_stack_left,
+					gs_stack_right			= gs_stack_right,
+					gs_bAutoTurnIn			= gs_bAutoTurnIn,
+					gs_bOverIn				= gs_bOverIn,
+					gs_bAutoTurnOut			= gs_bAutoTurnOut,
+					gs_bOverOut				= gs_bOverOut
+
+
+! ===============================================================================
+!	New Wallhole Symbol (SWE symbol)
+! ===============================================================================
+
+openingWidth = A
+
+if gs_bShowNewOnCC & (iTypeDemolitionFill = RENOVATION_FILL_NEW | iTypeDemolitionFill = RENOVATION_FILL_NEW_FULL) then
+
+
+	fill gs_new_symb_fill
+
+	if abs(WIDO_ORIG_DIST) < EPS then					!!! Straight wall
+
+		if WIDO_REVEAL_SIDE then
+			mul2 1, -1
+			add2 0, WIDO_FRAME_THICKNESS
+		endif
+
+
+		if abs(WALL_INCL) < EPS then
+
+			WALLBLOCK2 4, 6+16+32, gs_new_symb_pen_Fg, gs_new_symb_pen_Bg,
+						0, 0, 0,
+						-openingWidth/2, WIDO_SILL, 32,
+						-openingWidth/2 - gs_new_symb_width_r, WIDO_SILL, 32,
+						-openingWidth/2 - gs_new_symb_width_r, WIDO_SILL-WALL_THICKNESS, 32,
+						-openingWidth/2, WIDO_SILL-WALL_THICKNESS, 32
+			WALLBLOCK2 4, 6+16+32, gs_new_symb_pen_Fg, gs_new_symb_pen_Bg,
+						0, 0, 0,
+						openingWidth/2, WIDO_SILL, 32,
+						openingWidth/2 + gs_new_symb_width_l, WIDO_SILL, 32,
+						openingWidth/2 + gs_new_symb_width_l, WIDO_SILL-WALL_THICKNESS, 32,
+						openingWidth/2, WIDO_SILL-WALL_THICKNESS, 32
+
+			if WALL_SKINS_NUMBER = 0 then
+				pen WALL_SECT_PEN
+				line_type 1
+			else
+				if abs(SYMB_ROTANGLE-180) < EPS then
+					pen WALL_SKINS_PARAMS[1][7]
+					line_type WALL_SKINS_PARAMS[1][8]
+				else
+					pen WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+					line_type WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+				endif
+			endif
+
+			line_property 2
+
+			WALLLINE2 openingWidth/2, WIDO_SILL, openingWidth/2 + gs_new_symb_width_l, WIDO_SILL
+			WALLLINE2 -openingWidth/2, WIDO_SILL, -openingWidth/2 - gs_new_symb_width_r, WIDO_SILL
+
+
+			if WALL_SKINS_NUMBER <> 0 then
+				if abs(SYMB_ROTANGLE-180) < EPS then
+					pen WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+					line_type WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+				else
+					pen WALL_SKINS_PARAMS[1][7]
+					line_type WALL_SKINS_PARAMS[1][8]
+				endif
+			endif
+
+			WALLLINE2 openingWidth/2, WIDO_SILL-WALL_THICKNESS, openingWidth/2 + gs_new_symb_width_l, WIDO_SILL-WALL_THICKNESS
+			WALLLINE2 -openingWidth/2, WIDO_SILL-WALL_THICKNESS, -openingWidth/2 - gs_new_symb_width_r, WIDO_SILL-WALL_THICKNESS
+
+		else								!!!inclined wall
+
+
+			if SYMB_MIRRORED exor abs(SYMB_ROTANGLE) < EPS then
+				incl_sign = -1
+			else
+				incl_sign = 1
+			endif
+
+			if WIDO_REVEAL_SIDE then
+				mul2 1,-1
+				add2 0, WALL_THICKNESS - 2*WIDO_SILL
+			endif
+
+			WALLBLOCK2 4, 6+16+32, gs_new_symb_pen_Fg, gs_new_symb_pen_Bg,
+						0, 0, 0,
+						-openingWidth/2, WIDO_SILL + WIDO_REVEAL_SIDE * incl_sign * tan(WALL_INCL) * openingWidth/2, 32,
+						-openingWidth/2 - gs_new_symb_width_r, WIDO_SILL + WIDO_REVEAL_SIDE * incl_sign * tan(WALL_INCL) * (openingWidth/2 + gs_new_symb_width_r), 32,
+						-openingWidth/2 - gs_new_symb_width_r, WIDO_SILL-WALL_THICKNESS - not(WIDO_REVEAL_SIDE) * incl_sign * tan(WALL_INCL) * (openingWidth/2 + gs_new_symb_width_r), 32,
+						-openingWidth/2, WIDO_SILL-WALL_THICKNESS - not(WIDO_REVEAL_SIDE) * incl_sign * tan(WALL_INCL) * openingWidth/2, 32
+
+			WALLBLOCK2 4, 6+16+32, gs_new_symb_pen_Fg, gs_new_symb_pen_Bg,
+						0, 0, 0,
+						openingWidth/2, WIDO_SILL - WIDO_REVEAL_SIDE * incl_sign * tan(WALL_INCL) * openingWidth/2, 32,
+						openingWidth/2 + gs_new_symb_width_l, WIDO_SILL - WIDO_REVEAL_SIDE * incl_sign * tan(WALL_INCL) * (openingWidth/2 + gs_new_symb_width_l), 32,
+						openingWidth/2 + gs_new_symb_width_l, WIDO_SILL-WALL_THICKNESS + not(WIDO_REVEAL_SIDE) * incl_sign * tan(WALL_INCL) * (openingWidth/2 + gs_new_symb_width_l), 32,
+						openingWidth/2, WIDO_SILL-WALL_THICKNESS + not(WIDO_REVEAL_SIDE) * incl_sign * tan(WALL_INCL) * openingWidth/2, 32
+
+			if WALL_SKINS_NUMBER = 0 then
+				pen WALL_SECT_PEN
+				line_type 1
+			else
+				if abs(SYMB_ROTANGLE-180) < EPS then
+					pen WALL_SKINS_PARAMS[1][7]
+					line_type WALL_SKINS_PARAMS[1][8]
+				else
+					pen WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+					line_type WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+				endif
+			endif
+
+			line_property 2
+
+
+			WALLLINE2	-openingWidth/2, WIDO_SILL + WIDO_REVEAL_SIDE * incl_sign * tan(WALL_INCL) * openingWidth/2,
+						-openingWidth/2 - gs_new_symb_width_r, WIDO_SILL + WIDO_REVEAL_SIDE * incl_sign * tan(WALL_INCL) * (openingWidth/2 + gs_new_symb_width_r)
+			WALLLINE2	openingWidth/2, WIDO_SILL - WIDO_REVEAL_SIDE * incl_sign * tan(WALL_INCL) * openingWidth/2,
+						openingWidth/2 + gs_new_symb_width_l, WIDO_SILL - WIDO_REVEAL_SIDE * incl_sign * tan(WALL_INCL) * (openingWidth/2 + gs_new_symb_width_l)
+
+			if WALL_SKINS_NUMBER <> 0 then
+				if abs(SYMB_ROTANGLE-180) < EPS then
+					pen WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+					line_type WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+				else
+					pen WALL_SKINS_PARAMS[1][7]
+					line_type WALL_SKINS_PARAMS[1][8]
+				endif
+			endif
+
+			WALLLINE2	-openingWidth/2 - gs_new_symb_width_r, WIDO_SILL-WALL_THICKNESS - not(WIDO_REVEAL_SIDE) * incl_sign * tan(WALL_INCL) * (openingWidth/2 + gs_new_symb_width_r),
+						-openingWidth/2, WIDO_SILL-WALL_THICKNESS - not(WIDO_REVEAL_SIDE) * incl_sign * tan(WALL_INCL) * openingWidth/2
+			WALLLINE2	openingWidth/2 + gs_new_symb_width_l, WIDO_SILL-WALL_THICKNESS + not(WIDO_REVEAL_SIDE) * incl_sign * tan(WALL_INCL) * (openingWidth/2 + gs_new_symb_width_l),
+						openingWidth/2, WIDO_SILL-WALL_THICKNESS + not(WIDO_REVEAL_SIDE) * incl_sign * tan(WALL_INCL) * openingWidth/2
+
+			if WIDO_REVEAL_SIDE then del 2
+
+		endif
+
+		if WIDO_REVEAL_SIDE then del 2
+	else									!!!Curved wall
+
+		if WIDO_REVEAL_SIDE exor abs(SYMB_ROTANGLE) < EPS then
+			shf_sign = -1
+		else
+			shf_sign = 1
+		endif
+
+
+		if abs(SYMB_ROTANGLE-180) < EPS then
+			shf_sign2 = 1
+			frame_shf2 = WIDO_FRAME_THICKNESS
+		else
+			shf_sign2 = -1
+			frame_shf2 = 0
+		endif
+
+		leftAlfa	= atn((openingWidth/2) / (WIDO_ORIG_DIST + frame_shf2))
+		rightAlfa	= atn((openingWidth/2) / (WIDO_ORIG_DIST + frame_shf2))
+
+		leftnewsymbAlfa	= atn((openingWidth/2 + gs_new_symb_width_r) / (WIDO_ORIG_DIST + frame_shf2))
+		rightnewsymbAlfa= atn((openingWidth/2 + gs_new_symb_width_l) / (WIDO_ORIG_DIST + frame_shf2))
+
+
+
+		if WIDO_REVEAL_SIDE then
+			frame_shf = WIDO_SILL + 2 * WIDO_FRAME_THICKNESS - WIDO_FRAME_THICKNESS / cos(leftAlfa)
+		else
+			frame_shf = WIDO_SILL
+		endif
+
+
+
+		radOppSide = sqr( ((openingWidth/2)^2) + (WIDO_ORIG_DIST^2) ) + shf_sign * frame_shf
+
+!		if not (WIDO_REVEAL_SIDE) then
+!			mul2 1,-1
+!		else
+!			add2 0,WIDO_FRAME_THICKNESS
+!		endif
+
+
+		add2 0, WIDO_ORIG_DIST
+
+		WALLBLOCK2 5, 6+16+32, gs_new_symb_pen_Fg, gs_new_symb_pen_Bg,
+					0, 0, 0,
+					0,0, 901,
+					sin(leftAlfa) * (radOppSide - shf_sign * WALL_THICKNESS), shf_sign2 * cos(leftAlfa) * (radOppSide - shf_sign * WALL_THICKNESS), 1,
+					sin(leftnewsymbAlfa) * (radOppSide - shf_sign * WALL_THICKNESS), shf_sign2 * cos(leftnewsymbAlfa) * (radOppSide - shf_sign * WALL_THICKNESS), 3001,
+					sin(leftnewsymbAlfa) * radOppSide, shf_sign2 * cos(leftnewsymbAlfa) * radOppSide, 1,
+					sin(leftAlfa) * radOppSide, shf_sign2 * cos(leftAlfa) * radOppSide, 3001
+
+		WALLBLOCK2 5, 6+16+32, gs_new_symb_pen_Fg, gs_new_symb_pen_Bg,
+					0, 0, 0,
+					0,0, 901,
+					-1 * sin(rightAlfa) * (radOppSide - shf_sign * WALL_THICKNESS), shf_sign2 * cos(rightAlfa) * (radOppSide - shf_sign * WALL_THICKNESS), 1,
+					-1 * sin(rightnewsymbAlfa) * (radOppSide - shf_sign * WALL_THICKNESS), shf_sign2 * cos(rightnewsymbAlfa) * (radOppSide - shf_sign * WALL_THICKNESS), 3001,
+					-1 * sin(rightnewsymbAlfa) * radOppSide, shf_sign2 * cos(rightnewsymbAlfa) * radOppSide, 1,
+					-1 * sin(rightAlfa) * radOppSide, shf_sign2 * cos(rightAlfa) * radOppSide, 3001
+
+
+			if WALL_SKINS_NUMBER = 0 then
+				pen WALL_SECT_PEN
+				line_type 1
+			else
+				if WIDO_REVEAL_SIDE exor abs(SYMB_ROTANGLE) < EPS then
+					pen WALL_SKINS_PARAMS[1][7]
+					line_type WALL_SKINS_PARAMS[1][8]
+				else
+					pen WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+					line_type WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+				endif
+			endif
+
+			line_property 2
+
+			if abs(SYMB_ROTANGLE-180) < EPS then
+				WALLARC2 0, 0, radOppSide - shf_sign * WALL_THICKNESS, shf_sign2 * 90+leftnewsymbAlfa, shf_sign2 * 90+leftAlfa
+				WALLARC2 0, 0, radOppSide - shf_sign * WALL_THICKNESS, shf_sign2 * 90-rightAlfa, shf_sign2 * 90-rightnewsymbAlfa
+			else
+				WALLARC2 0, 0, radOppSide - shf_sign * WALL_THICKNESS, shf_sign2 * 90+leftAlfa, shf_sign2 * 90+leftnewsymbAlfa
+				WALLARC2 0, 0, radOppSide - shf_sign * WALL_THICKNESS, shf_sign2 * 90-rightnewsymbAlfa, shf_sign2 * 90-rightAlfa
+			endif
+
+
+
+			if WALL_SKINS_NUMBER <> 0 then
+				if WIDO_REVEAL_SIDE exor abs(SYMB_ROTANGLE) < EPS then
+					pen WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+					line_type WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+				else
+					pen WALL_SKINS_PARAMS[1][7]
+					line_type WALL_SKINS_PARAMS[1][8]
+				endif
+			endif
+
+
+			if abs(SYMB_ROTANGLE-180) < EPS then
+				WALLARC2 0, 0, radOppSide, shf_sign2 * 90+leftnewsymbAlfa, shf_sign2 * 90+leftAlfa
+				WALLARC2 0, 0, radOppSide, shf_sign2 * 90-rightAlfa, shf_sign2 * 90-rightnewsymbAlfa
+			else
+				WALLARC2 0, 0, radOppSide, shf_sign2 * 90+leftAlfa, shf_sign2 * 90+leftnewsymbAlfa
+				WALLARC2 0, 0, radOppSide, shf_sign2 * 90-rightnewsymbAlfa, shf_sign2 * 90-rightAlfa
+			endif
+
+			del 1
+
+!			del 1
+
+	endif
+
+endif
+
+
+! =============================================================================
+! NED Fire Rating Symbol
+! =============================================================================
+
+if bEnableNEDFireRating then
+	_bSuccess = 0
+	_bShowSymbol = 0
+	_bSuccess = LIBRARYGLOBAL ("LibraryGlobals13", "bShowFireRating", _bShowSymbol)
+	if _bSuccess then
+		_bSuccess = LIBRARYGLOBAL ("LibraryGlobals13", "fireRatingSymbPen", _fireSymbPen)
+	endif
+
+	if _bSuccess and _bShowSymbol and iNEDFireRating > 0 and iNEDFireRating < 6 then
+
+		pen _fireSymbPen
+
+		_dx = 0.08
+		_dy1 = 0.5
+		_dy2 = 0.3
+		_dy3 = 0.16
+
+		hotspot2 0, -_dy1 - _dy3, 10501, NEDFireRatingPos, 1+128
+		hotspot2 NEDFireRatingPos, -_dy1 - _dy3, 10502, NEDFireRatingPos, 2
+		hotspot2 -1, -_dy1 - _dy3, 10503, NEDFireRatingPos, 3
+
+		hotspot2 0, _dy1 + _dy3, 10504, NEDFireRatingPos, 1+128
+		hotspot2 NEDFireRatingPos, _dy1 + _dy3, 10505, NEDFireRatingPos, 2
+		hotspot2 -1, _dy1 + _dy3, 10506, NEDFireRatingPos, 3
+
+		add2 NEDFireRatingPos, 0
+
+		if iNEDFireRating = 2 or iNEDFireRating = 3 then
+			line2 -_dx,	 _dy1,	 _dx,	 _dy1 + _dy3
+			line2 -_dx,	-_dy1,	 _dx,	-_dy1 - _dy3
+			line2  _dx,	 _dy1,	-_dx,	 _dy1 + _dy3
+			line2  _dx,	-_dy1,	-_dx,	-_dy1 - _dy3
+		endif
+
+		if iNEDFireRating = 3 then
+			line2 -_dx,	 _dy2,	 _dx,	 _dy2 + _dy3
+			line2 -_dx,	-_dy2,	 _dx,	-_dy2 - _dy3
+			line2  _dx,	 _dy2,	-_dx,	 _dy2 + _dy3
+			line2  _dx,	-_dy2,	-_dx,	-_dy2 - _dy3
+		endif
+
+		line2 0, -_dy1 - _dy3, 0, _dy1 + _dy3
+
+		del 1
+
+	endif
+endif
+
+
+drawindex 20	! Draw Window Function at first
+
+
+! =============================================================================
+! Draw Sill and Board
+! =============================================================================
+
+drawindex 30	! Draw Window Panel in the Middle
+
+
+100:
+! =============================================================================
+! Returned parameters
+! =============================================================================
+
+addPrmX = 0
+addPrmY = SymbolMid_shiftDy
+
+if bCompositeWall then
+	idx = 1: gosub 10	! Get proper index
+	penSkinContourIn	= WALL_SKINS_PARAMS[idx][SKIN_UPPER_LINE_PEN]
+	ltSkinContourIn		= WALL_SKINS_PARAMS[idx][SKIN_UPPER_LINE_TYPE]
+
+	idx = WALL_SKINS_NUMBER: gosub 10	! Get proper index
+	penSkinContourOut	= WALL_SKINS_PARAMS[idx][SKIN_LOWER_LINE_PEN]
+	ltSkinContourOut	= WALL_SKINS_PARAMS[idx][SKIN_LOWER_LINE_TYPE]
+else
+	penSkinContourIn	= WALL_SECT_PEN
+	ltSkinContourIn		= WALL_LINETYPE
+
+	penSkinContourOut	= WALL_SECT_PEN
+	ltSkinContourOut	= WALL_LINETYPE
+endif
+
+thkSkinTurnInLeft = 0
+thkSkinTurnInRight = 0
+thkSkinTurnOutLeft = 0
+thkSkinTurnOutRight = 0
+
+end thkSkinTurnInLeft,	! Thickness of turned plaster skins at the Inside Face
+	thkSkinTurnInRight,
+	thkSkinTurnOutLeft,	! Thickness of turned plaster skins at the Outside Face
+	thkSkinTurnOutRight,
+	penSkinContourIn,	! Skin Contour Pen Opp. Side
+	penSkinContourOut,	! Skin Contour Pen Ref. Side
+	ltSkinContourIn,	! Skin Contour Line Type Opp. Side
+	ltSkinContourOut,	! Skin Contour Line Type Ref. Side,
+
+	addPrmX, addPrmY,
+	iLoD2D,
+	gs_opLinePen,
+	gs_iSwingType,
+	gs_swingLineType,
+	bShowAddHotspots,
+	bShowUnitHotspots
+
+
+! ==============================================================================
+!		Calculate proper skin index from parameter 'idx'
+! ------------------------------------------------------------------------------
+! Input variables:
+!	idx:	index of current skin
+! Output variables:
+!	idx:	index of skin via 'Composite Structures' dialog
+! ==============================================================================
+
+10:
+	if reorder then
+		idx = WALL_SKINS_NUMBER + 1 - idx
+	endif
+return
+
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! const values for parameter: iDWDet2D
+DETLEVEL_DW2D_MVO     = 1
+DETLEVEL_DW2D_SCSENS  = 2
+DETLEVEL_DW2D_50      = 3
+DETLEVEL_DW2D_100     = 4
+DETLEVEL_DW2D_200     = 7
+DETLEVEL_DW2D_OFF     = 8
+DETLEVEL_DW2D_CHISMPL = 10
+DETLEVEL_DW2D_CHIDET  = 11
+
+! const values for parameter: iDWDet3D
+DETLEVEL_DW3D_SCALESENS    = 1
+DETLEVEL_DW3D_DETAILED     = 2
+DETLEVEL_DW3D_SIMPLE       = 3
+DETLEVEL_DW3D_OFF          = 4
+DETLEVEL_DW3D_CHI_SIMPLE   = 5
+DETLEVEL_DW3D_CHI_DETAILED = 6
+
+
+! const values for parameter: iTypeDemolitionFill
+RENOVATION_FILL_EXIST		= 1
+RENOVATION_FILL_DEMOLISHED	= 2
+RENOVATION_FILL_NEW			= 3
+RENOVATION_FILL_NEW_FULL	= 4
+
+
+! const values for parameter: iCustomCCEditWallSide
+EDITED_WALL_FACE_OUTSIDE = 1
+EDITED_WALL_FACE_INSIDE  = 2
+
+
+! const values for parameter: iCustomCCEditJambSide
+EDITED_JAMB_SIDE_BOTH  = 1
+EDITED_JAMB_SIDE_LEFT  = 2
+EDITED_JAMB_SIDE_RIGHT = 3
+
+
+! const values for parameter: iCustomCCThicknessType
+THICKNESS_TYPE_ORIGINAL = 1
+THICKNESS_TYPE_CUSTOM   = 2
+
+
+! const values for parameter: iCustomCCEditSkin
+EDITED_SKIN_1 = 1
+EDITED_SKIN_2 = 2
+EDITED_SKIN_3 = 3
+EDITED_SKIN_4 = 4
+
+
+! const values for parameter: iCustomCCOrientation
+ORIENTATION_ORIGINAL  = 1
+ORIENTATION_TURNED_IN = 2
+
+
+! const values for parameter: iDWDetSE
+DETLEV_SE_SCALESENSITIVE	= 1
+DETLEV_SE_DETAILED			= 2
+DETLEV_SE_MIDDLE			= 3
+DETLEV_SE_SIMPLE			= 4
+DETLEV_SE_OFF				= 0
+
+DETLEV_SE_OFF_MIG			= 4
+
+
+
+EPS = 0.0001
+
+! lod2d
+DET2D_FS_OFF				= 0
+DET2D_FS_SCALESENS			= -1
+DET2D_FS_SIMPLE_ONE			= 11
+DET2D_FS_SIMPLE_TWO			= 12
+DET2D_FS_MIDDLE				= 21
+DET2D_FS_MIDDLE_USA			= 22
+DET2D_FS_DETAILED			= 30
+DET2D_FS_DETAILED_FIX_GRID	= 31
+DET2D_FS_DETAILED_USA		= 32
+DET2D_FS_SIMPLE_CHI			= 51
+DET2D_FS_DETAILED_CHI		= 52
+
+! iLoD2D
+SYMBW_OFF					= 0
+SYMBW_SCALESENS				= 1
+SYMBW_S_1LINE				= 11
+SYMBW_S_2LINE				= 12
+SYMBW_S_CENTERLINE			= 13
+SYMBW_S_2LINE_ACC			= 14
+SYMBW_S_5					= 15
+SYMBW_S_6					= 16
+SYMBW_S_7					= 17
+SYMBW_S_8					= 18
+SYMBW_S_9					= 19
+SYMBW_M_2LINE_NOGLASS		= 21
+SYMBW_M_2LINE_GLASS			= 22
+SYMBW_M_FRAMESASH			= 23
+SYMBW_M_2LINE_FRAME			= 24
+SYMBW_M_5					= 25
+SYMBW_M_6					= 26
+SYMBW_M_7					= 27
+SYMBW_M_8					= 28
+SYMBW_M_9					= 29
+SYMBW_D_SGLASS				= 31
+SYMBW_D_2GLASS				= 32
+SYMBW_D_2LINE_HS			= 33
+SYMBW_D_NOGLASS				= 34
+SYMBW_D_REBATEONGLASS		= 35
+SYMBW_D_2GLASS_OVERLAP		= 36
+SYMBW_D_7					= 37
+SYMBW_D_8					= 38
+SYMBW_D_9					= 39
+
+! iRevealType:
+REVEAL_EDGE				= 0
+REVEAL_NO				= 1
+REVEAL_POSITIVE			= 2
+REVEAL_NEGATIVE			= 3
+REVEAL_SLANTED			= 4
+REVEAL_SPLAYED			= 5
+REVEAL_HISTORIC			= 6
+REVEAL_DOUBLE			= 7
+REVEAL_DOUBLE_SPLAYED	= 8
+REVEAL_OUTSIDE_SPLAYED	= 9
+
+
+gs_IsCurved = 1
+gs_sill_curved = 1
+gs_board_curved = 1
+
+bInsideTrim = 0
+bOutsideTrim = 0
+
+! Turn Skin on Side
+CAVITY_SIDE_BOTH	= 1
+CAVITY_SIDE_LEFT	= 2
+CAVITY_SIDE_RIGHT	= 3
+CAVITY_SIDE_NONE	= 4
+
+! Closure Method
+CLOSURE_METHOD_NONE				= 1
+CLOSURE_METHOD_TRADITIONAL		= 2
+CLOSURE_METHOD_PREFABRICATED	= 3
+
+! Wall Contour Line - iWallContourLine
+WALL_CONTOUR_OFF		= 1
+WALL_CONTOUR_INSIDE		= 2
+WALL_CONTOUR_OUTSIDE	= 3
+WALL_CONTOUR_BOTHSIDES	= 4
+
+! ==============================================================================
+! Localization
+! ==============================================================================
+
+dim stDemolitionOrNew[3]	! gs_DemolitionOrNew
+	stDemolitionOrNew[1] = `Нет`
+	stDemolitionOrNew[2] = `Демонтаж`
+	stDemolitionOrNew[3] = `Новая Конструкция`
+
+dim stDetail[6]
+	stDetail[1] = `Зависит от Масштаба`
+	stDetail[2] = `Детальный`
+	stDetail[3] = `Простой`
+	stDetail[4] = `Откл.`
+	stDetail[5] = `Китайский Простой`
+	stDetail[6] = `Китайский Детальный`
+
+dim	stDetail2D[8]
+	stDetail2D[1] = `по ПМВ`
+	stDetail2D[2] = `Зависит от Масштаба`
+	stDetail2D[3] = `Детальный`
+	stDetail2D[4] = `Середина`
+	stDetail2D[5] = `Простой`
+	stDetail2D[6] = `Откл.`
+	stDetail2D[7] = `Китайский Простой`
+	stDetail2D[8] = `Китайский Детальный`
+
+! ==============================================================================
+! Function Control
+! ==============================================================================
+
+iLineShapeCategory		= 1		! LINE_SHAPE_CATEGORY_SWING
+iLineShapeSwingEnable	= 2+4	! Curved, Straight
+gs_leaf_optype_m		= 1		! LEAF_1L_SIDE_HUNG
+
+
+! ===== Reveal Settings =====
+
+if WIDO_REVEAL_ON then
+	iRevealType = REVEAL_POSITIVE
+else
+	iRevealType = REVEAL_NO
+endif
+
+
+! ===== Detecting Wall Logic =====
+
+wallIsLeft	= (SYMB_ROTANGLE > EPS) exor WIDO_REVEAL_SIDE
+curvedWall = abs(WIDO_ORIG_DIST) > EPS
+
+
+! =============================================================================
+! Request globals for 2D (MVO Detail Level, MVO Reveal, Hotspots for IS)
+! =============================================================================
+
+iMVODetlevel2D			= 0
+bMVOCasing2D			= 0
+bShowAddHotspots		= 1
+bMVODetlevelReveal		= 0
+bShowAddHotspotsForIS	= 0
+
+if GLOB_SCRIPT_TYPE = 2 then
+	bGetMVOValueDlev2D = (iDWDet2D = DETLEVEL_DW2D_MVO)
+	bGetMVOValueCasing2D	= 0
+	bGetMVOValueDlevReveal	= 0
+	bGetHotspotsForIS		= (GLOB_CONTEXT = 6)
+
+	if bGetMVOValueDlev2D | bGetMVOValueDlevReveal | bGetHotspotsForIS then
+		call "GetDWSymbSettings" parameters	bWindow					= 1,
+											bGetMVOValueDlev2D		= bGetMVOValueDlev2D,
+											bGetMVOValueCasing2D	= bGetMVOValueCasing2D,
+											bGetMVOValueDlevReveal	= bGetMVOValueDlevReveal,
+											bGetHotspotsForIS		= bGetHotspotsForIS,
+						returned_parameters iMVODetlevel2D,
+											bMVOCasing2D,
+											bMVODetlevelReveal,
+											bShowAddHotspotsForIS
+	endif
+endif
+
+
+! =============================================================================
+! Request globals for 3D (MVO SE Detail Level, Hotspots for IS)
+! =============================================================================
+
+if GLOB_SCRIPT_TYPE = 3 then
+	bSectionElevationContext = (GLOB_CONTEXT = 4 | (GLOB_PREVIEW_MODE = 2) | GLOB_CONTEXT = 24)
+
+	iMVODetlevelSE			= 0
+	bGetMVOValueDlevSE		= 0					! not used in INT
+	bGetHotspotsForIS		= (GLOB_CONTEXT = 6)
+
+	if bGetMVOValueDlevSE | bGetHotspotsForIS then
+		call "GetDWSymbSettings" parameters	bWindow					= 1,
+											bGetMVOValueDlevSE		= bGetMVOValueDlevSE,
+											bGetHotspotsForIS		= bGetHotspotsForIS,
+						returned_parameters iMVODetlevelSE,
+											bShowAddHotspotsForIS
+	endif
+endif
+
+! =============================================================================
+! 2D detail level settings
+! =============================================================================
+
+if GLOB_SCRIPT_TYPE = 2 then
+	iLoD2D	= SYMBW_SCALESENS
+	if bGetMVOValueDlev2D then													! by MVO
+		iLoD2D	= iMVODetlevel2D
+		if	iLoD2D = SYMBW_M_FRAMESASH |\
+			iLoD2D = SYMBW_M_2LINE_FRAME |\
+			iLoD2D = SYMBW_D_2GLASS_OVERLAP then
+
+			iLoD2D = SYMBW_D_SGLASS
+			if iMVODetlevel2D < SYMBW_D_SGLASS then				iLoD2D	= SYMBW_M_2LINE_NOGLASS
+			if iMVODetlevel2D < SYMBW_M_2LINE_NOGLASS then		iLoD2D	= SYMBW_S_1LINE
+		endif
+
+		if GLOB_PREVIEW_MODE = 3 then				! in case of 2D-3D Favorite Preview
+			iLoD2D = SYMBW_D_SGLASS
+		endif
+	else
+		if iDWDet2D = DETLEVEL_DW2D_50 then			iLoD2D = SYMBW_D_SGLASS				! Detailed --> INT 50
+		if iDWDet2D = DETLEVEL_DW2D_100 then		iLoD2D = SYMBW_M_2LINE_NOGLASS		! Middle - with acc --> INT 100
+		if iDWDet2D = DETLEVEL_DW2D_200 then		iLoD2D = SYMBW_S_1LINE				! Simple - One Line --> INT 200
+		if iDWDet2D = DETLEVEL_DW2D_OFF then		iLoD2D = SYMBW_OFF					! Off
+		if iDWDet2D = DETLEVEL_DW2D_CHISMPL then	iLoD2D = SYMBW_S_2LINE				! Chinese Simple
+		if iDWDet2D = DETLEVEL_DW2D_CHIDET then		iLoD2D = SYMBW_D_2LINE_HS			! Chinese Detailed
+	endif
+endif
+
+
+! ==============================================================================
+! Symbol at Middle
+! ==============================================================================
+
+signRevealSide = not(WIDO_REVEAL_SIDE) - WIDO_REVEAL_SIDE
+if GLOB_SCRIPT_TYPE = 2 then
+	if GLOB_CONTEXT = 2 | GLOB_CONTEXT = 22 then
+		if	iLoD2D = SYMBW_S_2LINE | iLoD2D = SYMBW_D_2LINE_HS then bDWSymbolAtMiddle = 1
+		if	iLoD2D = SYMBW_S_CENTERLINE then bDWSymbolAtMiddle2 = 1
+	endif
+endif
+if GLOB_SCRIPT_TYPE = 3 then
+	if GLOB_CONTEXT = 4 | GLOB_CONTEXT = 24 | GLOB_CONTEXT = 6 then
+		if lod3D = 5 then bDWSymbolAtMiddle = 1
+	endif
+endif
+
+SymbMid_LeftDx		= 0
+SymbMid_RightDx		= 0
+SymbolMid_shiftDy	= 0
+
+if bDWSymbolAtMiddle then
+	SymbolMid_shiftDy = (WIDO_SILL - WALL_THICKNESS / 2 + WIDO_FRAME_THICKNESS / 2) * signRevealSide
+endif
+
+if bDWSymbolAtMiddle2 then
+	SymbolMid_shiftDy = (WIDO_SILL - WALL_THICKNESS / 2) * signRevealSide
+endif
+
+
+! ==============================================================================
+! Cavity Closure
+! ==============================================================================
+
+reorder = (AC_Wall_Direction_Type <> 1 & AC_Wall_Direction_Type <> 3)
+signReorder = not(reorder) - reorder
+
+SKIN_FILL				=  1
+SKIN_THICKNESS			=  2
+SKIN_CONT_PEN			=  3	! Obsolete (old contour pen)
+SKIN_FILL_PEN			=  4
+SKIN_FILL_BACK_PEN		=  5
+SKIN_CORE_STATUS		=  6
+SKIN_UPPER_LINE_PEN		=  7 + 2 * reorder
+SKIN_UPPER_LINE_TYPE	=  8 + 2 * reorder
+SKIN_LOWER_LINE_PEN		=  9 - 2 * reorder
+SKIN_LOWER_LINE_TYPE	= 10 - 2 * reorder
+SKIN_END_FACE_PEN		= 11
+SKIN_FILL_ORIENTATION	= 12	! 0 - global, 1 - local
+SKIN_TYPE				= 13	! 0 - cut, 1 - below cutplane, 2 - above cutplane (all skin types are 0 for simple walls)
+!	For D/W in complex walls on the floor plan this variable contains the data of all cut skins, for wall ends on the floor plan the data of all skins.
+!	For D/W and wall ends in the 3D window contains the data of the skins actually cut by the D/W or wall end
+
+
+bCompositeWall		= (WALL_SKINS_NUMBER > 0)
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+
+
+! =============================================================================
+! Tabpage Structure Definition
+! =============================================================================
+
+! call all available page fix IDs
+call "ui_tabIDListHierarchy_m" parameters iUITreeStandardType = 1,		!TERRACEDOOR_UI
+					returned_parameters iUiID_Root,
+										iUiID_General,		iParID_General,
+										iUiID_ShapeOpening,	iParID_ShapeOpening,
+										iUiID_OpLines,		iParID_OpLines,
+										iUiID_WindowFrame,	iParID_WindowFrame,
+										iUiID_SashLeaf,		iParID_SashLeaf,
+										iUiID_Grid,			iParID_Grid,
+										iUiID_SillBoard,	iParID_SillBoard,
+										iUiID_VenetianBlind, iParID_VenetianBlind,
+										iUiID_Shutter,		iParID_Shutter,
+										iUiID_Closure,		iParID_Closure,
+										iUiID_ModelAttrib,	iParID_ModelAttrib,
+										iUiID_FloorPlanSection, iParID_FloorPlanSection,
+										iUiID_Descriptions,	iParID_Descriptions
+
+
+file_dependence "uiTab_DoorGeneral_flat(1)"
+file_dependence "uiTab_OpeningClosure_flat(1)"
+file_dependence "uiTab_DoorOpeningLines_flat(1)"
+
+
+! =============================================================================
+! Tabpages
+! =============================================================================
+
+ui_current_page gs_ui_current_page
+
+ui_dialog `Параметры Балконной Двери`
+stSubTabpageToolTip 	= `Выбор Вкладки: Общие Параметры, Реквизиты`
+
+
+for iTabs = 1 to vardim1(uiUsedPageIDs)
+	if uiUsedPageIDs[iTabs][1] = iUiID_General then
+		ui_page	uiUsedPageIDs[iTabs][1], uiUsedPageIDs[iTabs][2], `Общие Параметры`, "uiTab_DoorGeneral_flat(1)"
+		if gs_ui_current_page = iUiID_General then
+			gosub "pageGeneralSettings"
+		endif
+	endif
+	if uiUsedPageIDs[iTabs][1] = iUiID_Closure then
+		ui_page	uiUsedPageIDs[iTabs][1], uiUsedPageIDs[iTabs][2], `Замыкание Слоев`, "uiTab_OpeningClosure_flat(1)"
+		if gs_ui_current_page = iUiID_Closure then
+			gosub "pageCallCavityClosure"
+		endif
+	endif
+	if uiUsedPageIDs[iTabs][1] = iUiID_OpLines then
+		ui_page	uiUsedPageIDs[iTabs][1], uiUsedPageIDs[iTabs][2], `Линии Открывания`, "uiTab_DoorOpeningLines_flat(1)"
+		if gs_ui_current_page = iUiID_OpLines then
+			gosub "pageCallOpeningLines"
+		endif
+	endif
+next iTabs
+
+end
+
+
+! =============================================================================
+! Cavity Closure Settings Tabpage
+! =============================================================================
+
+"pageCallCavityClosure":
+	call "terrace_CavityClosure" parameters gs_macro_version = 12,
+			gs_useWallFinishSkin		= gs_useWallFinishSkin,
+			iClosureMethod				= iClosureMethod,
+			gs_bJoint					= gs_bJoint,
+			gs_stCavityClosure			= gs_stCavityClosure
+return
+
+
+! =============================================================================
+! Opening Lines Settings Tabpage
+! =============================================================================
+
+"pageCallOpeningLines":
+	call "OpeningOptions" parameters	bWindow						= 1,
+										iLineShapeCategory			= iLineShapeCategory,
+										iLineShapeSwingEnable		= iLineShapeSwingEnable,
+										gs_leaf_optype_m			= gs_leaf_optype_m,
+										bOverride_MVO_2D			= bOverride_MVO_2D,
+										or_iSwingType				= or_iSwingType,
+										or_iSlidingType				= or_iSlidingType,
+										bOverride_MVO_3D			= bOverride_MVO_3D,
+										or_bOplines3d				= or_bOplines3d,
+										or_iOplineStyle				= or_iOplineStyle,
+										b2ColumnsOnOplineUI			= b2ColumnsOnOplineUI,
+										bHideOplineStyle			= bHideOplineStyle,
+										bLockOplineStyle			= bLockOplineStyle,
+										bDisable2DOverride			= bDisable2DOverride,
+										bDisable3DOverride			= bDisable3DOverride,
+										bDisableSwingType			= bDisableSwingType,
+										iOpeningParamType			= iOpeningParamType,
+										bEnableSecondaryOpLineTypes = 0,
+										pageStartY					= 3
+
+return
+
+
+! =============================================================================
+! Built-In General Settings Tabpage
+! =============================================================================
+"pageGeneralSettings":
+	!*** Separator positions
+
+	sep1x = 292
+	
+	dy = 21
+	
+		pageStartY = 8
+		sepy  = 95 + pageStartY
+
+		ui_separator sep1x,pageStartY - 7, sep1x,226 + pageStartY
+		ui_separator 0,sepy, sep1x-2,sepy
+
+		x1 = 2
+		y = pageStartY
+		cx1 = 70
+		cx = 55
+
+		ui_style 0,1
+
+		ui_outfield gs_stGeneralSettings[27], x1, y+3, x1+cx1, 20	! Width
+		ui_infield "A", x1+cx1+5, y, cx,dy
+
+		ui_style 0,0
+
+		ui_outfield gs_stGeneralSettings[33], x1+cx1+5+cx+15, y+3, x1+cx1, 20	! Unit Width
+		ui_infield "gs_frame_sizex", x1+cx1+5+cx+15+cx1+5, y, cx,dy
+		y = y + dy
+
+		ui_style 0,1
+
+		ui_outfield gs_stGeneralSettings[28], x1, y+3, x1+cx1, 20	! Height
+		ui_infield "B", x1+cx1+5, y, cx,dy
+
+		ui_style 0,0
+
+		ui_outfield gs_stGeneralSettings[34], x1+cx1+5+cx+15, y+3, x1+cx1, 20	! Unit Height
+		ui_infield "gs_frame_sizey", x1+cx1+5+cx+15+cx1+5, y, cx,dy
+		y = y + dy
+
+		ui_outfield gs_stGeneralSettings[32], x1, y+5, cx1, 20		! Tolerance
+		ui_infield "gs_tolerance", x1+cx1+5, y, cx,dy
+		y = y + dy + 5
+
+		ui_style 0,1
+
+		ui_infield{3} "gs_lich", x1, y, sep1x-x1-2, 19,
+			7, "",
+			0, 0,
+			0, 0, 0, 0,
+			"", gs_stGeneralSettings[35], 0,
+			"", gs_stGeneralSettings[35], 1		! Nominal Size = Jamb Inner Size
+
+		ui_style 0,0
+
+
+		!******************** symbol picture, sill/board
+
+		p_x = 5
+		t_x = 160
+		p_y = 135 + pageStartY
+
+		cx = 105
+
+		x1 = 0
+		x2 = x1 + 20
+		x3 = 150
+		x4 = x3 + 20
+
+		ui_style 0,1
+
+		ui_infield{3} "gs_feba_a", x1, p_y-27, x3-x1-1, 19,
+			7, "",
+			0, 0,
+			0, 0, 0, 0,
+			"", gs_stGeneralSettings[37], 0,
+			"", gs_stGeneralSettings[37], 1		! Window Sill
+
+		ui_infield{3} "feba_a2", x3, p_y-27, sep1x-x3-1, 19,
+			7, "",
+			0, 0,
+			0, 0, 0, 0,
+			"", gs_stGeneralSettings[38], 0,
+			"", gs_stGeneralSettings[38], 1		! Door Sill
+
+		ui_infield{3} "gs_fi", x1, p_y+50+10, x3-x1-1, 19,
+			7, "",
+			0, 0,
+			0, 0, 0, 0,
+			"", gs_stGeneralSettings[39], 0,
+			"", gs_stGeneralSettings[39], 1		! Window Board
+
+		ui_infield{3} "feba_i2", x3, p_y+50+10, sep1x-x3-2, 19,
+			7, "",
+			0, 0,
+			0, 0, 0, 0,
+			"", gs_stGeneralSettings[40], 0,
+			"", gs_stGeneralSettings[40], 1		! Door Board
+
+		if gs_feba_a+feba_a2+gs_fi+feba_i2=4 then
+			ui_pict 23, p_x, p_y, 268, 50, 1	! balc1_s11_b11.png
+		else
+			if gs_feba_a+feba_a2+gs_fi+feba_i2=0 then
+				ui_pict 8, p_x, p_y, 268, 50, 1		! balc1_s00_b00.png
+			else
+				if gs_feba_a+feba_a2=0 then
+					if gs_fi=1 and feba_i2=0 then ui_pict 10, p_x, p_y, 268, 50, 1	! balc1_s00_b10.png
+					if gs_fi=0 and feba_i2=1 then ui_pict  9, p_x, p_y, 268, 50, 1	! balc1_s00_b01.png
+					if gs_fi=1 and feba_i2=1 then ui_pict 11, p_x, p_y, 268, 50, 1	! balc1_s00_b11.png
+				endif
+				if gs_fi+feba_i2=0 then
+					if gs_feba_a=1 and feba_a2=0 then ui_pict 16, p_x, p_y, 268, 50, 1	! balc1_s10_b00.png
+					if gs_feba_a=0 and feba_a2=1 then ui_pict 12, p_x, p_y, 268, 50, 1	! balc1_s01_b00.png
+					if gs_feba_a=1 and feba_a2=1 then ui_pict 20, p_x, p_y, 268, 50, 1	! balc1_s11_b00.png
+				endif
+				if gs_feba_a+feba_a2=2 then
+					if gs_fi=1 and feba_i2=0 then ui_pict 22, p_x, p_y, 268, 50, 1	! balc1_s11_b10.png
+					if gs_fi=0 and feba_i2=1 then ui_pict 21, p_x, p_y, 268, 50, 1	! balc1_s11_b01.png
+				endif
+				if gs_fi+feba_i2=2 then
+					if gs_feba_a=1 and feba_a2=0 then ui_pict 19, p_x, p_y, 268, 50, 1	! balc1_s10_b11.png
+					if gs_feba_a=0 and feba_a2=1 then ui_pict 15, p_x, p_y, 268, 50, 1	! balc1_s01_b11.png
+				endif
+			if gs_feba_a=1 and feba_a2=0 and gs_fi=1 and feba_i2=0 then \
+				ui_pict 18, p_x, p_y, 268, 50, 1	! balc1_s10_b10.png
+			if gs_feba_a=1 and feba_a2=0 and gs_fi=0 and feba_i2=1 then \
+				ui_pict 17, p_x, p_y, 268, 50, 1	! balc1_s10_b01.png
+			if gs_feba_a=0 and feba_a2=1 and gs_fi=1 and feba_i2=0 then \
+				ui_pict 14, p_x, p_y, 268, 50, 1	! balc1_s01_b10
+			if gs_feba_a=0 and feba_a2=1 and gs_fi=0 and feba_i2=1 then \
+				ui_pict 13, p_x, p_y, 268, 50, 1	! balc1_s01_b01.png
+			endif
+		endif
+
+
+		!********************** cavity closure
+
+		y = pageStartY
+		px = 30
+		py = 20
+		cx = px + 10
+		cy = py + 4
+
+		ui_style 0,1
+
+		ui_outfield gs_stCavityClosure[10], sep1x+10, y, 140, 20	! Cavity Closure
+		y = y + dy + 10
+
+		ui_style 0, 0
+
+		ui_infield{3} "iClosureMethod", sep1x+15, y, cx, cy,
+			2, 50,	! ui_cavityclosure_type.png
+			3, 1,
+			cx, cy, px, py,
+			1,	gs_stCavityClosure[1],	CLOSURE_METHOD_NONE,
+			2,	gs_stCavityClosure[2],	CLOSURE_METHOD_TRADITIONAL,
+			3,	gs_stCavityClosure[3],	CLOSURE_METHOD_PREFABRICATED
+
+		!********************** detail level
+
+		cx = 120
+		ui_style 0, 1
+
+		y = sepy - 15
+
+		ui_outfield gs_stGeneralSettings[18], sep1x+10, y, cx, 15	! 2D Detail Level
+		y = y + dy
+		ui_style 0, 0
+		ui_infield{3} "iDWDet2D", sep1x+30, y, cx, 19,
+				8, "",
+				0, 0,
+				0, 0, 0, 0,	
+				"",	stDetail2D[1], DETLEVEL_DW2D_MVO,		
+				"",	stDetail2D[2], DETLEVEL_DW2D_SCSENS,
+				"",	stDetail2D[3], DETLEVEL_DW2D_50,
+				"",	stDetail2D[4], DETLEVEL_DW2D_100,
+				"",	stDetail2D[5], DETLEVEL_DW2D_200,
+				"",	stDetail2D[6], DETLEVEL_DW2D_OFF,
+				"",	stDetail2D[7], DETLEVEL_DW2D_CHISMPL,
+				"",	stDetail2D[8], DETLEVEL_DW2D_CHIDET
+
+		y = y + dy + 5
+
+		ui_style 0, 1
+		ui_outfield gs_stGeneralSettings[19], sep1x+10, y, cx, 15	! 3D Detail Level
+		y = y + dy
+		ui_style 0, 0
+		ui_infield{3} "iDWDet3D", sep1x+30, y, cx, 19,
+				8, "",
+				0, 0,
+				0, 0, 0, 0,	
+				"",	stDetail[1],	DETLEVEL_DW3D_SCALESENS,
+				"",	stDetail[2],	DETLEVEL_DW3D_DETAILED,
+				"",	stDetail[3],	DETLEVEL_DW3D_SIMPLE,
+				"",	stDetail[4],	DETLEVEL_DW3D_OFF,
+				"",	stDetail[5],	DETLEVEL_DW3D_CHI_SIMPLE,
+				"",	stDetail[6],	DETLEVEL_DW3D_CHI_DETAILED
+
+		y = y + dy + 5
+
+		ui_style 0, 1
+		ui_outfield gs_stGeneralSettings[36], sep1x+10, y, cx, 15	! Section Detail Level
+		y = y + dy
+		ui_style 0, 0
+		ui_infield{3} "iDWDetSE", sep1x+30, y, cx, 19,
+				8, "",
+				0, 0,
+				0, 0, 0, 0,	
+				"", `Зависит от Масштаба`, DETLEV_SE_SCALESENSITIVE,
+				"", `Детальный`, DETLEV_SE_DETAILED,
+				"", `Середина`, DETLEV_SE_MIDDLE,
+				"", `Простой`, DETLEV_SE_SIMPLE,
+				"", `Откл.`, DETLEV_SE_OFF
+		y = y + dy + 5
+
+		ui_style 0, 1
+	
+return
+
+
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! =============================================================================
+! Hide All parameters list
+! =============================================================================
+hideparameter all
+
+
+values "gs_ui_sub_tabpage2"	1, 2
+
+! =============================================================================
+! 3D Based 2D Symbol Support
+! =============================================================================
+
+if AC_Hole_Display_Option = 3 then
+	parameters AC_WallContours = 0
+else
+	parameters AC_WallContours = 1
+endif
+
+
+hideparameter "ac_details"
+
+
+! =============================================================================
+! Nominal Sizes
+! =============================================================================
+
+_revealDiffWidth	= WIDO_REVEAL_ON * (WIDO_SILL > EPS) * (WIDO_RIGHT_JAMB + WIDO_LEFT_JAMB)
+_revealDiffHeight	= WIDO_REVEAL_ON * (WIDO_SILL > EPS) * (WIDO_HEAD_DEPTH)
+
+ac_wallhole_width	= A + gs_lich * _revealDiffWidth
+ac_reveal_width		= ac_wallhole_width - _revealDiffWidth
+ac_unit_width		= ac_wallhole_width - 2 * gs_tolerance
+
+ac_wallhole_height	= B + gs_lich * _revealDiffHeight
+ac_reveal_height	= ac_wallhole_height - _revealDiffHeight
+ac_unit_height		= ac_wallhole_height - gs_tolerance
+
+parameters	ac_wallhole_width	= ac_wallhole_width,
+			ac_reveal_width		= ac_reveal_width,
+			ac_unit_width		= ac_unit_width,
+			ac_wallhole_height	= ac_wallhole_height,
+			ac_reveal_height	= ac_reveal_height,
+			ac_unit_height		= ac_unit_height
+
+
+! =============================================================================
+! Show / Hide 2D Fills
+! =============================================================================
+
+if not(gs_bFills) then	! Hide
+	hideparameter	"gs_wallhole_fill",
+					"gs_wallhole_pen_fg",
+					"gs_wallhole_pen_bg"
+
+	lock	"gs_wallhole_fill",
+			"gs_wallhole_pen_fg",
+			"gs_wallhole_pen_bg"
+endif
+
+
+values "gs_wcont_line_w"	gs_stWindowSillTrim[12], gs_stWindowSillTrim[13], gs_stWindowSillTrim[14], gs_stWindowSillTrim[15]
+values "gs_wcont_line_d"	gs_stWindowSillTrim[12], gs_stWindowSillTrim[13], gs_stWindowSillTrim[14], gs_stWindowSillTrim[15]
+
+
+! =============================================================================
+! Defining sill and board sizes
+! =============================================================================
+
+values "gs_fbl" range [AC_wido_sill, )
+
+if GLOB_MODPAR_NAME = "gs_fbl" then
+	gs_sill_nosing = gs_fbl - AC_wido_sill
+	parameters gs_sill_nosing = gs_sill_nosing
+else
+	gs_fbl = AC_wido_sill + gs_sill_nosing
+	parameters gs_fbl = gs_fbl
+endif
+
+values "gs_siv" range [WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL, )
+
+if GLOB_MODPAR_NAME = "gs_siv" then
+	gs_board_nosing = gs_siv + WIDO_FRAME_THICKNESS + WIDO_SILL - WALL_THICKNESS
+	parameters gs_board_nosing = gs_board_nosing
+else
+	gs_siv = gs_board_nosing + WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL
+	parameters gs_siv = gs_siv
+endif
+
+
+
+! =============================================================================
+! Do Cavity Closure Parameter Logic
+! =============================================================================
+
+call "terrace_CavityClosure" parameters gs_macro_version	= 12,
+		gs_useWallFinishSkin= gs_useWallFinishSkin,
+		gs_bAutoTurnIn		= gs_bAutoTurnIn,
+		gs_bAutoTurnOut		= gs_bAutoTurnOut,
+		gs_bOverIn			= gs_bOverIn,
+		gs_bOverOut			= gs_bOverOut,
+		gs_maxPlasterThk	= gs_maxPlasterThk,
+		gs_closureMethod	= gs_closureMethod,
+		iClosureMethod		= iClosureMethod,
+		gs_cavity_side		= gs_cavity_side,
+		iCavityClosureSide	= iCavityClosureSide,
+		gs_nTurnDir			= gs_nTurnDir,
+		iCavityClosureTurnDir = iCavityClosureTurnDir,
+		gs_nTurn			= gs_nTurn,
+		gs_bJoint			= gs_bJoint,
+	! --- String Resource ---
+		gs_stCavityClosure	= gs_stCavityClosure
+
+
+! =============================================================================
+! Do Wallhole Cut Parameter Logic
+! =============================================================================
+
+call "terrace_WallholeCut" parameters gs_macro_version = 12,
+	gs_parapet_wall_inset = 0
+
+
+
+! =============================================================================
+! Demolition / New construction
+! =============================================================================
+
+if gs_bFills = 0 then
+	lock "iTypeDemolitionFill"
+endif
+
+values{2} "iTypeDemolitionFill" 	RENOVATION_FILL_EXIST, `Нет`,
+									RENOVATION_FILL_DEMOLISHED, `Демонтаж`,
+									RENOVATION_FILL_NEW, `Новая Конструкция - Пустой Символ`,
+									RENOVATION_FILL_NEW_FULL, `Новая Конструкция - Полный Символ`
+
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then
+	lock "gs_wallhole_fill"
+	lock "gs_wallhole_pen_fg"
+	lock "gs_wallhole_pen_bg"
+endif
+
+if iTypeDemolitionFill = RENOVATION_FILL_NEW then
+	lock "gs_wallhole_fill"
+	lock "gs_wallhole_pen_fg"
+	lock "gs_wallhole_pen_bg"
+endif
+
+if not(gs_bShowDemolitionPar) then hideparameter	"iTypeDemolitionFill"
+
+if not(gs_bShowNewOnCC) then
+	hideparameter	"gs_new_symb_fill",
+					"gs_new_symb_pen_Fg",
+					"gs_new_symb_pen_bg",
+					"gs_new_symb_width_r",
+					"gs_new_symb_width_l"
+endif
+
+
+! =============================================================================
+! 2D Detail Level
+! =============================================================================
+
+if gs_2DDetEnable = 0 then
+	values{2} "iDWDet2D" 	DETLEVEL_DW2D_MVO,		stDetail2D[1],
+							DETLEVEL_DW2D_SCSENS,	stDetail2D[2],
+							DETLEVEL_DW2D_50,		stDetail2D[3],
+							DETLEVEL_DW2D_100,		stDetail2D[4],
+							DETLEVEL_DW2D_200,		stDetail2D[5],
+							DETLEVEL_DW2D_OFF,		stDetail2D[6]
+else
+	dim n2DScaleValueMask[]
+	dim in2DScaleValueMask[]
+
+	i=1
+	if bittest( gs_2DDetEnable, 7) then                                             ! by MVO, 128
+				n2DScaleValueMask[i]	= stDetail2D[1]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_MVO
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 0) then                                              ! Scale Sensitive in Value list, 1
+				n2DScaleValueMask[i]	= stDetail2D[2]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_SCSENS
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 1) then                                              ! Detailed in Value list, 2
+				n2DScaleValueMask[i]	= stDetail2D[3]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_50
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 2) then                                              ! Middle in Value list, 4
+				n2DScaleValueMask[i]	= stDetail2D[4]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_100
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 3) then                                              ! Simple in Value list, 8
+				n2DScaleValueMask[i]	= stDetail2D[5]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_200
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 4) then                                              ! Off in Value list, 16
+				n2DScaleValueMask[i]	= stDetail2D[6]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_OFF
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 5) then                                              ! Chinese Simple in Value list, 32
+				n2DScaleValueMask[i]	= stDetail2D[7]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_CHISMPL
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 6) then                                              ! Chinese Detailed in Value list, 64
+				n2DScaleValueMask[i]	= stDetail2D[8]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_CHIDET
+				i = i + 1
+	endif
+
+	values{2} "iDWDet2D" in2DScaleValueMask, n2DScaleValueMask
+endif
+
+! =============================================================================
+! Opline Parameters
+! =============================================================================
+
+call "OpeningOptions" parameters all	bWindow						= 1,
+										iLineShapeCategory			= iLineShapeCategory,
+										iLineShapeSwingEnable		= iLineShapeSwingEnable,
+										gs_leaf_optype_m			= gs_leaf_optype_m,
+										bEnableSecondaryOpLineTypes = 0
+
+
+! =============================================================================
+! NED Fire Rating
+! =============================================================================
+if bEnableNEDFireRating then
+	values "gs_list_firerating"			`Нет`, `30 минут`, `60 минут`, CUSTOM
+
+	if GLOB_MODPAR_NAME = "gs_list_firerating" then
+		iNEDFireRating = 0
+		if gs_list_firerating = `30 минут` then iNEDFireRating = 2
+		if gs_list_firerating = `60 минут` then iNEDFireRating = 3
+		parameters iNEDFireRating = iNEDFireRating
+	else
+		if iNEDFireRating = 2 then gs_list_firerating = `30 минут`
+		if iNEDFireRating = 3 then gs_list_firerating = `60 минут`
+		parameters gs_list_firerating = gs_list_firerating
+	endif
+
+	values "NEDFireRatingPos" range [-A/2, A/2]
+endif
+
+! =============================================================================
+
+
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<HoleBits>
+			<WDBit_3DFrame/>
+			<WDBit_ThickIsParam/>
+			<WDBit_LFramIsParam/>
+			<WDBit_RFramIsParam/>
+			<WDBit_TFramIsParam/>
+			<WDBit_BFramIsParam/>
+		</HoleBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>-1</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Dimension 1"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Dimension 2"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Height"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Integer Name="AC_WallContours">
+			<Description><![CDATA["Wall Contours (0-None,1-Full,2-Side,3-Length)"]]></Description>
+			<Fix/>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="AC_Hole_Hotspot_Control">
+			<Description><![CDATA["Hotspots 0-None,1-2D,2-3D,3-All"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Integer Name="AC_Hole_Display_Option">
+			<Description><![CDATA["Floor Plan Display Option"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Angle Name="AC_Hole_Position_Angle">
+			<Description><![CDATA["Hole Position Angle"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Boolean Name="AC_HoleSideMaterial">
+			<Description><![CDATA["Hole has Wall's Side Surface"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="AC_HoleMaterialCurved">
+			<Description><![CDATA["Hole Surface's Split is Curved in Curved Walls"]]></Description>
+			<Fix/>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Show 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="AC_Sill_To_Curr_Story">
+			<Description><![CDATA["Sill Height to Current Story"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="AC_WallType">
+			<Description><![CDATA["Wall Type"]]></Description>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="AC_WindowInWallContour">
+			<Description><![CDATA["Window in Wall Contour"]]></Description>
+			<ArrayValues FirstDimension="4" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+			</ArrayValues>
+		</Integer>
+		<Length Name="AC_WallContourPolygon">
+			<Description><![CDATA["Wall Contour Polygon"]]></Description>
+			<ArrayValues FirstDimension="1" SecondDimension="3">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Integer Name="AC_Wall_Direction_Type">
+			<Description><![CDATA["Wall Direction Type"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+
+		<!-- gs_macro_control_parameters: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_macro_control_parameters">
+			<Description><![CDATA["Macro Control Parameters"]]></Description>
+		</Title>
+		<Integer Name="gs_macro_version">
+			<Description><![CDATA["Macro Version"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>11</Value>
+		</Integer>
+		<Boolean Name="gs_IsCurved">
+			<Description><![CDATA["Curved Window"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bOpeningDirection">
+			<Description><![CDATA["Opening Direction"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="lod2D">
+			<Description><![CDATA["2D Detail Level"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="lod3D">
+			<Description><![CDATA["3D Detail Level"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="uiUsedPageIDs">
+			<Description><![CDATA["ID of Tabpages"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="2">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+			</ArrayValues>
+		</Integer>
+		<String Name="uiUsedPageNames">
+			<Description><![CDATA["Name and Icon of Tabpages"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="2">
+				<AVal Column="1" Row="1"><![CDATA[""]]></AVal>
+				<AVal Column="2" Row="1"><![CDATA[""]]></AVal>
+			</ArrayValues>
+		</String>
+		<Length Name="gs_tolerance">
+			<Description><![CDATA["Tolerance"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="gs_lich">
+			<Description><![CDATA["Nominal Size = Jamb Inner Size"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_window_sizes: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_sizes">
+			<Description><![CDATA["Window Sizes"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<Length Name="ac_wallhole_width">
+			<Description><![CDATA["Wallhole Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.9</Value>
+		</Length>
+		<Length Name="ac_wallhole_height">
+			<Description><![CDATA["Wallhole Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.9</Value>
+		</Length>
+		<Length Name="ac_reveal_width">
+			<Description><![CDATA["Reveal Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.9</Value>
+		</Length>
+		<Length Name="ac_reveal_height">
+			<Description><![CDATA["Reveal Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.9</Value>
+		</Length>
+		<Length Name="ac_unit_width">
+			<Description><![CDATA["Unit Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.9</Value>
+		</Length>
+		<Length Name="ac_unit_height">
+			<Description><![CDATA["Unit Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.9</Value>
+		</Length>
+
+		<!-- gs_options: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_options">
+			<Description><![CDATA["Options"]]></Description>
+		</Title>
+		<Integer Name="iDWDet2D">
+			<Description><![CDATA["2D Detail Level"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="gs_2DDetEnable">
+			<Description><![CDATA["2D Detail Level Enable"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="iDWDet3D">
+			<Description><![CDATA["3D Detail Level"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="iDWDetSE">
+			<Description><![CDATA["Section/Elevation Detail Level"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</Integer>
+
+		<!-- gs_window_frame: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_frame">
+			<Description><![CDATA["Window Frame"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<Length Name="gs_frame_thk">
+			<Description><![CDATA["Frame Thickness"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_frame_width">
+			<Description><![CDATA["Frame Width"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.07</Value>
+		</Length>
+
+		<!-- gs_window_sash: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_sash">
+			<Description><![CDATA["Sash Frame"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<Length Name="gs_sash_thk">
+			<Description><![CDATA["Sash Frame Thickness"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_sash_width">
+			<Description><![CDATA["Sash Frame Width"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_glass_thk">
+			<Description><![CDATA["Glass Thickness"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+
+		<!-- gs_reveal_type_new: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<String Name="gs_reveal_type_new">
+			<Description><![CDATA["Reveal Type"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="gs_reveal_type_int">
+			<Description><![CDATA["Reveal Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_BoldName/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="gs_reveal_type">
+			<Description><![CDATA["Outer Reveal Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Без Четверти"]]></Value>
+		</String>
+
+		<!-- gs_terrace_door_sill: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_terrace_door_sill">
+			<Description><![CDATA["Sill"]]></Description>
+		</Title>
+		<Boolean Name="gs_feba_a">
+			<Description><![CDATA["Window Sill"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="feba_a2">
+			<Description><![CDATA["Door Sill"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="gs_fbl">
+			<Description><![CDATA["Sill Length"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_terrace_door_board: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_terrace_door_board">
+			<Description><![CDATA["Board"]]></Description>
+		</Title>
+		<Boolean Name="gs_fi">
+			<Description><![CDATA["Window Board"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="feba_i2">
+			<Description><![CDATA["Door Board"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="gs_siv">
+			<Description><![CDATA["Board Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.25</Value>
+		</Length>
+
+		<!-- gs_turn_plaster: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_turn_plaster">
+			<Description><![CDATA["Turn Plaster"]]></Description>
+		</Title>
+		<Boolean Name="gs_useWallFinishSkin">
+			<Description><![CDATA["Use Wall Finish Component"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="gs_maxPlasterThk">
+			<Description><![CDATA["Plaster Thickness Limit"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.04</Value>
+		</Length>
+		<Boolean Name="gs_bAutoTurnOut">
+			<Description><![CDATA["Auto Turn Inside Face Plaster"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="gs_bOverOut">
+			<Description><![CDATA["Turn Inside Face Plaster"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Boolean Name="gs_bAutoTurnIn">
+			<Description><![CDATA["Auto Turn Outside Face Plaster"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="gs_bOverIn">
+			<Description><![CDATA["Turn Outside Face Plaster"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Boolean Name="gs_turn_plaster_show_3D">
+			<Description><![CDATA["Show in 3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_closure_type: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<String Name="gs_closure_type">
+			<Description><![CDATA["Closure Type"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="gs_closure_type_int">
+			<Description><![CDATA["Closure Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_BoldName/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+
+		<!-- gs_ClosureMethod: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<String Name="gs_ClosureMethod">
+			<Description><![CDATA["Closure Type"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value><![CDATA["Нет"]]></Value>
+		</String>
+		<Integer Name="iClosureMethod">
+			<Description><![CDATA["Closure Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="gs_cavity_side">
+			<Description><![CDATA["Turn Skin on Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Обе"]]></Value>
+		</String>
+		<Integer Name="iCavityClosureSide">
+			<Description><![CDATA["Turn Skin on Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="gs_nTurn">
+			<Description><![CDATA["Number of Skins to Turn"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="gs_nTurnDir">
+			<Description><![CDATA["Number from"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Снаружи"]]></Value>
+		</String>
+		<Integer Name="iCavityClosureTurnDir">
+			<Description><![CDATA["Number from"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_cc_dutch_ShowLeft">
+			<Description><![CDATA["Place Closer on Side 2"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="gs_cc_dutch_ShowRight">
+			<Description><![CDATA["Place Closer on Side 1"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="gs_cc_dutch_ShowTop">
+			<Description><![CDATA["Place Closer on Top"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_cc_dutch_ShowBottom">
+			<Description><![CDATA["Place Closer on Bottom"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="gs_cc_dutch_ClosureToSkin">
+			<Description><![CDATA["Place Closer to Skin"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="gs_cc_dutch_ClosureToSide_str">
+			<Description><![CDATA["Place Closer from Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="gs_cc_dutch_ClosureToSide">
+			<Description><![CDATA["Place Closer from Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_cc_dutch_GapAtOutsideSkin">
+			<Description><![CDATA["Gap at Outside Skin"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="gs_cc_dutch_TurnToClosure">
+			<Description><![CDATA["Turn Skin to Closer"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="gs_cc_dutch_TurnToClosureOffs">
+			<Description><![CDATA["Distance of Skin from Closer"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_cc_dutch_widthJoint">
+			<Description><![CDATA["Closer Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.038</Value>
+		</Length>
+		<Length Name="gs_cc_dutch_thkJoint">
+			<Description><![CDATA["Closer Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Boolean Name="gs_bJoint">
+			<Description><![CDATA["Insert Insulation Strip"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="gs_showJoint">
+			<Description><![CDATA["Show Insulation Strip"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="gs_thkJoint">
+			<Description><![CDATA["Strip Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.025</Value>
+		</Length>
+		<PenColor Name="gs_penJoint">
+			<Description><![CDATA["Contour Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>100</Value>
+		</PenColor>
+		<LineType Name="gs_ltJoint">
+			<Description><![CDATA["Contour Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<FillPattern Name="gs_fillJoint">
+			<Description><![CDATA["Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>17</Value>
+		</FillPattern>
+		<PenColor Name="gs_penJointFg">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_penJointBg">
+			<Description><![CDATA["Fill Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>93</Value>
+		</PenColor>
+		<Boolean Name="gs_cc_dutch_matJointCustom">
+			<Description><![CDATA["Custom Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Material Name="gs_cc_dutch_matJoint">
+			<Description><![CDATA["Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>15</Value>
+		</Material>
+		<Length Name="gs_widthPlug">
+			<Description><![CDATA["Profile Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.075</Value>
+		</Length>
+		<PenColor Name="gs_penPlug">
+			<Description><![CDATA["Contour Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>100</Value>
+		</PenColor>
+		<LineType Name="gs_ltPlug">
+			<Description><![CDATA["Contour Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<FillPattern Name="gs_fillPlug">
+			<Description><![CDATA["Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>17</Value>
+		</FillPattern>
+		<PenColor Name="gs_penPlugFg">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_penPlugBg">
+			<Description><![CDATA["Fill Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>93</Value>
+		</PenColor>
+		<Length Name="gs_custom_cc_array_left">
+			<Description><![CDATA["Left Side Skin Data"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="8" SecondDimension="4">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0.015</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">1</AVal>
+				<AVal Column="1" Row="2">0</AVal>
+				<AVal Column="2" Row="2">0.015</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="4" Row="2">1</AVal>
+				<AVal Column="1" Row="3">0</AVal>
+				<AVal Column="2" Row="3">0.015</AVal>
+				<AVal Column="3" Row="3">0</AVal>
+				<AVal Column="4" Row="3">1</AVal>
+				<AVal Column="1" Row="4">0</AVal>
+				<AVal Column="2" Row="4">0.015</AVal>
+				<AVal Column="3" Row="4">0</AVal>
+				<AVal Column="4" Row="4">1</AVal>
+				<AVal Column="1" Row="5">0</AVal>
+				<AVal Column="2" Row="5">0.015</AVal>
+				<AVal Column="3" Row="5">0</AVal>
+				<AVal Column="4" Row="5">1</AVal>
+				<AVal Column="1" Row="6">0</AVal>
+				<AVal Column="2" Row="6">0.015</AVal>
+				<AVal Column="3" Row="6">0</AVal>
+				<AVal Column="4" Row="6">1</AVal>
+				<AVal Column="1" Row="7">0</AVal>
+				<AVal Column="2" Row="7">0.015</AVal>
+				<AVal Column="3" Row="7">0</AVal>
+				<AVal Column="4" Row="7">1</AVal>
+				<AVal Column="1" Row="8">0</AVal>
+				<AVal Column="2" Row="8">0.015</AVal>
+				<AVal Column="3" Row="8">0</AVal>
+				<AVal Column="4" Row="8">1</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="gs_custom_cc_array_right">
+			<Description><![CDATA["Right Side Skin Data"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="8" SecondDimension="4">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0.015</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">1</AVal>
+				<AVal Column="1" Row="2">0</AVal>
+				<AVal Column="2" Row="2">0.015</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="4" Row="2">1</AVal>
+				<AVal Column="1" Row="3">0</AVal>
+				<AVal Column="2" Row="3">0.015</AVal>
+				<AVal Column="3" Row="3">0</AVal>
+				<AVal Column="4" Row="3">1</AVal>
+				<AVal Column="1" Row="4">0</AVal>
+				<AVal Column="2" Row="4">0.015</AVal>
+				<AVal Column="3" Row="4">0</AVal>
+				<AVal Column="4" Row="4">1</AVal>
+				<AVal Column="1" Row="5">0</AVal>
+				<AVal Column="2" Row="5">0.015</AVal>
+				<AVal Column="3" Row="5">0</AVal>
+				<AVal Column="4" Row="5">1</AVal>
+				<AVal Column="1" Row="6">0</AVal>
+				<AVal Column="2" Row="6">0.015</AVal>
+				<AVal Column="3" Row="6">0</AVal>
+				<AVal Column="4" Row="6">1</AVal>
+				<AVal Column="1" Row="7">0</AVal>
+				<AVal Column="2" Row="7">0.015</AVal>
+				<AVal Column="3" Row="7">0</AVal>
+				<AVal Column="4" Row="7">1</AVal>
+				<AVal Column="1" Row="8">0</AVal>
+				<AVal Column="2" Row="8">0.015</AVal>
+				<AVal Column="3" Row="8">0</AVal>
+				<AVal Column="4" Row="8">1</AVal>
+			</ArrayValues>
+		</Length>
+		<Integer Name="iCustomCCEditJambSide">
+			<Description><![CDATA["Edited Jamb Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="iCustomCCEditWallSide">
+			<Description><![CDATA["Edited Wall Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="iCustomCCEditSkin">
+			<Description><![CDATA["Edited Skin Number"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_custom_cc_turn_in">
+			<Description><![CDATA["Turn-in Skin"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_custom_cc_plaster">
+			<Description><![CDATA["Consider Skin as Plaster"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="iCustomCCThicknessType">
+			<Description><![CDATA["Turn-in Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="gs_custom_cc_thickness">
+			<Description><![CDATA["Custom Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.015</Value>
+		</Length>
+		<Integer Name="iCustomCCOrientation">
+			<Description><![CDATA["Hatch Orientation"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_custom_cc_separator">
+			<Description><![CDATA["Separating Line at Turn-in"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<PenColor Name="gs_custom_cc_separator_pen">
+			<Description><![CDATA["Separating Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<Length Name="gs_custom_cc_overhang">
+			<Description><![CDATA["Skin Overhang to Frame Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="gs_custom_cc_last_sel_side">
+			<Description><![CDATA["Last Selected Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_closure_auto_changed">
+			<Description><![CDATA["Closure Method Changed Automatically"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_openingParams: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_openingParams">
+			<Description><![CDATA["Opening"]]></Description>
+		</Title>
+		<Angle Name="gs_open_2d">
+			<Description><![CDATA["2D Opening Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Angle Name="gs_open_2d_s">
+			<Description><![CDATA["2D Opening Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Angle Name="gs_open_3d">
+			<Description><![CDATA["3D Opening Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Angle Name="gs_open_3d_s">
+			<Description><![CDATA["3D Opening Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Length Name="gs_open2d">
+			<Description><![CDATA["2D Opening Length"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_open3D">
+			<Description><![CDATA["3D Opening Length"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="bOverride_MVO_2D">
+			<Description><![CDATA["Override MVO for 2D Symbolic Display"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<LineType Name="or_swingLineType">
+			<Description><![CDATA["Opening Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<String Name="or_SwingType">
+			<Description><![CDATA["Opening Line Shape"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Изогнутая"]]></Value>
+		</String>
+		<Integer Name="or_iSwingType">
+			<Description><![CDATA["Opening Line Shape"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="or_SlidingType">
+			<Description><![CDATA["Opening Line Shape"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Нет"]]></Value>
+		</String>
+		<Integer Name="or_iSlidingType">
+			<Description><![CDATA["Opening Line Shape"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="or_opLinePen">
+			<Description><![CDATA["Opening Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</PenColor>
+		<Integer Name="or_iOpLinePen">
+			<Description><![CDATA["Opening Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Boolean Name="bOverride_MVO_3D">
+			<Description><![CDATA["Override MVO for 3D Projections"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="or_bOplines3d">
+			<Description><![CDATA["Show Opening Line"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="or_opLineType3dIn">
+			<Description><![CDATA["Line Type Opening Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Штриховая"]]></Value>
+		</String>
+		<Integer Name="or_iOpLineType3dIn">
+			<Description><![CDATA["Line Type Opening Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="or_opLineType3dOut">
+			<Description><![CDATA["Line Type Opposite Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Сплошная Линия"]]></Value>
+		</String>
+		<Integer Name="or_iOpLineType3dOut">
+			<Description><![CDATA["Line Type Opposite Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="or_oplineStyle">
+			<Description><![CDATA["Line Orientation"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Ручка"]]></Value>
+		</String>
+		<Integer Name="or_iOplineStyle">
+			<Description><![CDATA["Line Orientation"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="b2ColumnsOnOpLineUI">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bHideOplineStyle">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bLockOplineStyle">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bDisable2DOverride">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bDisable3DOverride">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bDisableSwingType">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="iOpeningParamType">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D and Section Representation"]]></Description>
+			<Fix/>
+		</Title>
+		<PenColor Name="gs_pen_2D">
+			<Description><![CDATA["Symbol Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</PenColor>
+		<String Name="gs_wcont_line">
+			<Description><![CDATA["Wall Contour Line"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["Откл."]]></Value>
+		</String>
+		<Integer Name="iWallContourLine">
+			<Description><![CDATA["Wall Contour Line"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="gs_wcont_line_w">
+			<Description><![CDATA["Contour Line Window"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Откл."]]></Value>
+		</String>
+		<String Name="gs_wcont_line_d">
+			<Description><![CDATA["Contour Line Door"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Откл."]]></Value>
+		</String>
+		<LineType Name="gs_wcont_line_in">
+			<Description><![CDATA["Wall Contour Line Type Inside"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<LineType Name="gs_wcont_line_out">
+			<Description><![CDATA["Wall Contour Line Type Outside"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="gs_wcont_line_pen">
+			<Description><![CDATA["Wall Contour Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</PenColor>
+		<LineType Name="gs_wcont_line_out_d">
+			<Description><![CDATA["Door Outside Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<LineType Name="gs_wcont_line_in_d">
+			<Description><![CDATA["Door Inside Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<Boolean Name="gs_bFills">
+			<Description><![CDATA["Use Fills"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<FillPattern Name="gs_wallhole_fill">
+			<Description><![CDATA["Plan Symbol Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_wallhole_pen_fg">
+			<Description><![CDATA["Plan Symbol Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>91</Value>
+		</PenColor>
+		<PenColor Name="gs_wallhole_pen_bg">
+			<Description><![CDATA["Plan Symbol Fill Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>91</Value>
+		</PenColor>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<PenColor Name="gs_frame_pen">
+			<Description><![CDATA["Frame Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<PenColor Name="gs_sash_pen">
+			<Description><![CDATA["Sash Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<PenColor Name="gs_glass_pen">
+			<Description><![CDATA["Glass Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+
+		<!-- gs_window_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_material">
+			<Description><![CDATA["Surfaces"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<Material Name="gs_frame_mat">
+			<Description><![CDATA["Frame Surface"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>14</Value>
+		</Material>
+		<Material Name="gs_sash_mat">
+			<Description><![CDATA["Sash Surface"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>15</Value>
+		</Material>
+		<Material Name="gs_glass_mat">
+			<Description><![CDATA["Glass Surface"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>24</Value>
+		</Material>
+
+		<!-- ac_details: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="ac_details">
+			<Description><![CDATA["Computed Oversize Values"]]></Description>
+			<Fix/>
+		</Title>
+		<Length Name="ac_left_oversize">
+			<Description><![CDATA["AC Left Opening Oversize"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_right_oversize">
+			<Description><![CDATA["AC Right Opening Oversize"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_upper_oversize">
+			<Description><![CDATA["AC Upper Opening Oversize"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_lower_oversize">
+			<Description><![CDATA["AC Lower Opening Oversize"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_head_symbol: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="gs_head_symbol">
+			<Description><![CDATA["Head Depth on Symbol"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<LineType Name="gs_head_symbol_line">
+			<Description><![CDATA["Head Depth Symbol Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>21</Value>
+		</LineType>
+		<PenColor Name="gs_head_symbol_pen">
+			<Description><![CDATA["Head Depth Symbol Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</PenColor>
+
+		<!-- iTypeDemolitionFill: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Integer Name="iTypeDemolitionFill">
+			<Description><![CDATA["Demolition / New construction"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<FillPattern Name="gs_new_symb_fill">
+			<Description><![CDATA["New Wall Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</FillPattern>
+		<PenColor Name="gs_new_symb_pen_Fg">
+			<Description><![CDATA["New Wall Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_new_symb_pen_bg">
+			<Description><![CDATA["New Wall Fill Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<Length Name="gs_new_symb_width_r">
+			<Description><![CDATA["New Wall Fill Width Right"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.15</Value>
+		</Length>
+		<Length Name="gs_new_symb_width_l">
+			<Description><![CDATA["New Wall Fill Width Left"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.15</Value>
+		</Length>
+		<Boolean Name="gs_bShowNewOnCC">
+			<Description><![CDATA["Show new construction on Wall"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<LineType Name="gs_Demolition_linetype">
+			<Description><![CDATA["Demolition line type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<Boolean Name="gs_bShowDemolitionPar">
+			<Description><![CDATA["Show Demolition/New parameter"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="ifc_optypestr">
+			<Description><![CDATA["IFC Operation"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["Не определена"]]></Value>
+		</String>
+		<Integer Name="ifc_optype">
+			<Description><![CDATA["IFC Operation"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="gs_stGeneralSettings">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="40" SecondDimension="0">
+				<AVal Row="1"><![CDATA["Назад"]]></AVal>
+				<AVal Row="2"><![CDATA[""]]></AVal>
+				<AVal Row="3"><![CDATA["Общие Параметры"]]></AVal>
+				<AVal Row="4"><![CDATA["Номинальная Ширина"]]></AVal>
+				<AVal Row="5"><![CDATA["Номинальная Высота"]]></AVal>
+				<AVal Row="6"><![CDATA["Ширина Проема в Стене"]]></AVal>
+				<AVal Row="7"><![CDATA["Высота Проема в Стене"]]></AVal>
+				<AVal Row="8"><![CDATA["Допуск Проема"]]></AVal>
+				<AVal Row="9"><![CDATA["Слева"]]></AVal>
+				<AVal Row="10"><![CDATA["Справа"]]></AVal>
+				<AVal Row="11"><![CDATA["Вверху"]]></AVal>
+				<AVal Row="12"><![CDATA["Внизу"]]></AVal>
+				<AVal Row="13"><![CDATA["Налич. Снаружи"]]></AVal>
+				<AVal Row="14"><![CDATA["Налич. Внутри"]]></AVal>
+				<AVal Row="15"><![CDATA["Отлив Снаружи"]]></AVal>
+				<AVal Row="16"><![CDATA["Отлив Внутри"]]></AVal>
+				<AVal Row="17"><![CDATA["Стыковка"]]></AVal>
+				<AVal Row="18"><![CDATA["2D-детализация"]]></AVal>
+				<AVal Row="19"><![CDATA["3D-детализация"]]></AVal>
+				<AVal Row="20"><![CDATA["Перо Символа"]]></AVal>
+				<AVal Row="21"><![CDATA["Использовать Штриховку"]]></AVal>
+				<AVal Row="22"><![CDATA["Номинальный Проем"]]></AVal>
+				<AVal Row="23"><![CDATA["Размеры Полотна"]]></AVal>
+				<AVal Row="24"><![CDATA["Ширина Полотна"]]></AVal>
+				<AVal Row="25"><![CDATA["Высота Полотна"]]></AVal>
+				<AVal Row="26"><![CDATA["Типичные Размеры"]]></AVal>
+				<AVal Row="27"><![CDATA["Ширина"]]></AVal>
+				<AVal Row="28"><![CDATA["Высота"]]></AVal>
+				<AVal Row="29"><![CDATA["Проем"]]></AVal>
+				<AVal Row="30"><![CDATA["Ширина"]]></AVal>
+				<AVal Row="31"><![CDATA["Высота"]]></AVal>
+				<AVal Row="32"><![CDATA["Допуск"]]></AVal>
+				<AVal Row="33"><![CDATA["Шир. Эл-та"]]></AVal>
+				<AVal Row="34"><![CDATA["Выс. Эл-та"]]></AVal>
+				<AVal Row="35"><![CDATA["Номинальные Размеры по Размерам Проема"]]></AVal>
+				<AVal Row="36"><![CDATA["Детали в Разрезе"]]></AVal>
+				<AVal Row="37"><![CDATA["Отлив Окна"]]></AVal>
+				<AVal Row="38"><![CDATA["Отлив Двери"]]></AVal>
+				<AVal Row="39"><![CDATA["Оконная Доска"]]></AVal>
+				<AVal Row="40"><![CDATA["Дверная Доска"]]></AVal>
+			</ArrayValues>
+		</String>
+		<String Name="gs_stWindowSillTrim">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="64" SecondDimension="0">
+				<AVal Row="1"><![CDATA["Откл."]]></AVal>
+				<AVal Row="2"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="3"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="4"><![CDATA["Обе стороны"]]></AVal>
+				<AVal Row="5"><![CDATA["Откл."]]></AVal>
+				<AVal Row="6"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="7"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="8"><![CDATA["Обе стороны"]]></AVal>
+				<AVal Row="9"><![CDATA[""]]></AVal>
+				<AVal Row="10"><![CDATA[""]]></AVal>
+				<AVal Row="11"><![CDATA[""]]></AVal>
+				<AVal Row="12"><![CDATA["Откл."]]></AVal>
+				<AVal Row="13"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="14"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="15"><![CDATA["Обе стороны"]]></AVal>
+				<AVal Row="16"><![CDATA["Параметры Наличника"]]></AVal>
+				<AVal Row="17"><![CDATA["Общая Геометрия"]]></AVal>
+				<AVal Row="18"><![CDATA["Расположение Наличника"]]></AVal>
+				<AVal Row="19"><![CDATA["Увеличение Проема за Счет Наличника"]]></AVal>
+				<AVal Row="20"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="21"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="22"><![CDATA["Внешний Вид"]]></AVal>
+				<AVal Row="23"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="24"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="25"><![CDATA["Параметры Отлива и Доски"]]></AVal>
+				<AVal Row="26"><![CDATA["Положение Отлива"]]></AVal>
+				<AVal Row="27"><![CDATA["Подставочный Профиль"]]></AVal>
+				<AVal Row="28"><![CDATA["Тип Отлива"]]></AVal>
+				<AVal Row="29"><![CDATA["Отлив"]]></AVal>
+				<AVal Row="30"><![CDATA["Доска"]]></AVal>
+				<AVal Row="31"><![CDATA["Отлив"]]></AVal>
+				<AVal Row="32"><![CDATA["Доска"]]></AVal>
+				<AVal Row="33"><![CDATA["Реквизиты - Отлив, Доска, Наличник, Стена"]]></AVal>
+				<AVal Row="34"><![CDATA["Выступ Слева"]]></AVal>
+				<AVal Row="35"><![CDATA["Выступ Справа"]]></AVal>
+				<AVal Row="36"><![CDATA["Смещение под Коробку"]]></AVal>
+				<AVal Row="37"><![CDATA["По Дуге Криволинейной Стены"]]></AVal>
+				<AVal Row="38"><![CDATA["Доска"]]></AVal>
+				<AVal Row="39"><![CDATA["Выступ Слева"]]></AVal>
+				<AVal Row="40"><![CDATA["Выступ Справа"]]></AVal>
+				<AVal Row="41"><![CDATA["Смещение под Коробку"]]></AVal>
+				<AVal Row="42"><![CDATA["По Дуге Криволинейной Стены"]]></AVal>
+				<AVal Row="43"><![CDATA["Штриховка"]]></AVal>
+				<AVal Row="44"><![CDATA["Тип"]]></AVal>
+				<AVal Row="45"><![CDATA["Перо"]]></AVal>
+				<AVal Row="46"><![CDATA["Перо Фона"]]></AVal>
+				<AVal Row="47"><![CDATA["Символ Плана"]]></AVal>
+				<AVal Row="48"><![CDATA["Отлив"]]></AVal>
+				<AVal Row="49"><![CDATA["Доска"]]></AVal>
+				<AVal Row="50"><![CDATA["Наличник"]]></AVal>
+				<AVal Row="51"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="52"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="53"><![CDATA["Перо Контура"]]></AVal>
+				<AVal Row="54"><![CDATA["Линии Контура Стены"]]></AVal>
+				<AVal Row="55"><![CDATA["Линия Контура"]]></AVal>
+				<AVal Row="56"><![CDATA["Тип Линии Внутри"]]></AVal>
+				<AVal Row="57"><![CDATA["Тип Линии Снаружи"]]></AVal>
+				<AVal Row="58"><![CDATA["Налич. Снаружи"]]></AVal>
+				<AVal Row="59"><![CDATA["Налич. Внутри"]]></AVal>
+				<AVal Row="60"><![CDATA["Отлив Снаружи"]]></AVal>
+				<AVal Row="61"><![CDATA["Отлив Внутри"]]></AVal>
+				<AVal Row="62"><![CDATA["Стыковка"]]></AVal>
+				<AVal Row="63"><![CDATA["Линия Контура Окна"]]></AVal>
+				<AVal Row="64"><![CDATA["Линия Контура Двери"]]></AVal>
+			</ArrayValues>
+		</String>
+		<String Name="gs_stCavityClosure">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="32" SecondDimension="0">
+				<AVal Row="1"><![CDATA["Нет"]]></AVal>
+				<AVal Row="2"><![CDATA["Традиционное"]]></AVal>
+				<AVal Row="3"><![CDATA["Заводское"]]></AVal>
+				<AVal Row="4"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="5"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="6"><![CDATA["Обе"]]></AVal>
+				<AVal Row="7"><![CDATA["Слева"]]></AVal>
+				<AVal Row="8"><![CDATA["Справа"]]></AVal>
+				<AVal Row="9"><![CDATA["Замыкание Слоев и Специальная Четверть"]]></AVal>
+				<AVal Row="10"><![CDATA["Замыкание Слоев"]]></AVal>
+				<AVal Row="11"><![CDATA["Способ Замыкания Изменен Автоматически"]]></AVal>
+				<AVal Row="12"><![CDATA["Сторона Проема"]]></AVal>
+				<AVal Row="13"><![CDATA["Наружных Слоев"]]></AVal>
+				<AVal Row="14"><![CDATA["Поворачивающих Слоев"]]></AVal>
+				<AVal Row="15"><![CDATA["Нумерация с"]]></AVal>
+				<AVal Row="16"><![CDATA["Поворот на Четверти"]]></AVal>
+				<AVal Row="17"><![CDATA["Термовкладыш"]]></AVal>
+				<AVal Row="18"><![CDATA["Толщина"]]></AVal>
+				<AVal Row="19"><![CDATA["Перо Контура"]]></AVal>
+				<AVal Row="20"><![CDATA["Тип Линии"]]></AVal>
+				<AVal Row="21"><![CDATA["Тип Штриховки"]]></AVal>
+				<AVal Row="22"><![CDATA["Перо Штриховки"]]></AVal>
+				<AVal Row="23"><![CDATA["Перо Фона Штр."]]></AVal>
+				<AVal Row="24"><![CDATA["Профиль"]]></AVal>
+				<AVal Row="25"><![CDATA["Ширина"]]></AVal>
+				<AVal Row="26"><![CDATA["Поворот Штукатурки"]]></AVal>
+				<AVal Row="27"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="28"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="29"><![CDATA["Автоматически"]]></AVal>
+				<AVal Row="30"><![CDATA["Поворачивающих Слоев"]]></AVal>
+				<AVal Row="31"><![CDATA["Предел Толщины Штукатурки"]]></AVal>
+				<AVal Row="32"><![CDATA["Использовать Отделку Стены"]]></AVal>
+			</ArrayValues>
+		</String>
+		<Integer Name="gs_ui_current_page">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="gs_ui_sub_tabpage_closure">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="ac_wido_hide_options">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Length Name="gs_frame_sizex">
+			<Description><![CDATA["Frame Size Width"]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_frame_sizey">
+			<Description><![CDATA["Frame Size Height"]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_wido_sill">
+			<Description><![CDATA["Reveal Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>-9999</Value>
+		</Length>
+		<Length Name="AC_wido_sill">
+			<Description><![CDATA["Reveal Depth"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_sill_nosing">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_board_nosing">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="bEnableNEDFireRating">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="gs_list_firerating">
+			<Description><![CDATA["Fire Rating"]]></Description>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="iNEDFireRating">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="NEDFireRatingPos">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="bDWSymbolAtMiddle">
+			<Description><![CDATA["Symbol at Middle (Middle Twoline)"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bDWSymbolAtMiddle2">
+			<Description><![CDATA["Symbol at Middle (Simple Centerline)"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+	</Parameters>
+	<WDFrameExpression>
+		<F><![CDATA["gs_frame_thk"]]></F>
+		<F><![CDATA["ac_left_oversize"]]></F>
+		<F><![CDATA["ac_right_oversize"]]></F>
+		<F><![CDATA["ac_upper_oversize"]]></F>
+		<F><![CDATA["ac_lower_oversize"]]></F>
+		<F><![CDATA[""]]></F>
+	</WDFrameExpression>
+</ParamSection>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["GetDWSymbSettings"]]></MName>
+		<MainGUID>7EB1AF80-DC0B-4BAF-96D2-822C4913C299</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["OpeningOptions"]]></MName>
+		<MainGUID>6ED91FFB-F336-4BD0-9772-DE49ACA9F6F3</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["terrace_CavityClosure"]]></MName>
+		<MainGUID>FABE39FA-D652-4925-A307-B86F0B7D3D00</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["LibraryGlobals13"]]></MName>
+		<MainGUID>9137124A-DDF2-4A06-A532-5FC0CE873258</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["ui_tabIDListHierarchy_m"]]></MName>
+		<MainGUID>8D3FA40B-0E02-4FD9-B890-741FFA7BCDC8</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["terrace_WallholeCut"]]></MName>
+		<MainGUID>6FC4A6F5-43F7-47E8-8EA4-1D89258062B4</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="8" length_in_bytes="287" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000CECECED6D6C6FF
+	FFFF63CC262E0000000174524E530040E6D866000000B449444154785EED9851
+	0AC2301005D31B743527F006522F50CCFDCFA4663FA42DD87D3560C099FF4786
+	6921A5A97300EC5BC616E7A6CB82F35DE6A0C66971EE4A23DF649A68F459C32A
+	5213F91DF1C1478D5C5E484D7271C21A3E086848350E6A5043D2984DA4A8A398
+	863F982940AE06253EF241030D34D0B0086B0D61B07FA7A83584D17BB07BD15F
+	558DF46450344217FDFC738D6D0D6A9848D53081AD069FC47F52831AD4A00635
+	A8410D6AF4F243B26F001E46C0BEC0042FD71D0000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="9" length_in_bytes="322" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000D74944415458C3ED9851
+	0AC23010447304AD5EC0ED098C57F0FE67F26391B501CDCC26858233DF7D6478
+	095DD85214E5D8398FE634E3DCF2DCE4B2D249D6B86ECE6D6A2C95CE1E350E62
+	C36F8A7242BF11FFFCF7A5989919E5C41133B88603400DCAC67E3564236ADCD8
+	1F98B11056C32FE60164B1F7F72014806AA8C6600DE8C9B73508A03F53581B04
+	144077D0DFD91A158702E80E7AFA6DAC3814806C7036D899525908B241268140
+	36C82410D9900DD9900DD9900DD9F82F1BC30BC9A48D6621399CA48DF4EEEEDB
+	D6A42633B7866C4C59BA7FD678019B8592518F309EB60000000049454E44AE42
+	6082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="10" length_in_bytes="301" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000C249444154785EED96C1
+	0DC23010044D079CA181980A485AA0FF9A00FB7579901BC78A22B1F35F793489
+	64A7932384EDE53AE2DCF472DC1E984E8DBB3B77A59167CC108D73D6B00A6A82
+	FF11ABFCD4C8E50B6A924B23ACD106010D54A353433590C664904247318DF661
+	9600B91A14370A0C066848431A1661AD0106DB770AADE146D1C1E645FFA41AE9
+	C38568842EFAE9100D5643350C5235E8C06BE849FC2F35544335544335544335
+	54C31CC7D530871B8016A00606B4003520AAE1B11E8668BC01C446EC8E203356
+	C90000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="11" length_in_bytes="325" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000DA4944415458C3ED98CB
+	0D833010445D427E0DB05410A785F45F5394EC61830FF6CC02115266CE3C317E
+	B6B0D85214E5D839AFCD698BF796E722D7994EB2C66DF1DEA6C6A5D2D9A3C641
+	6CF84E514EE833E28FF737C5DEA19C386206D77000A841D9D8AF866C448D89FD
+	80190B61357C631E403E0B9B0C8702500DD55859033AF26D0D0218DF29AC0D02
+	0A6078D1DFD91A158702185EF4F4D998712800D9E06CB0774A6521C806990402
+	D920934064433664433664433664E3BF6C34FF113FB3D10C24BF935A58D24667
+	76975A58D2466792291B9BCECFD3C3F617A6CBBF1BD9EC499C0000000049454E
+	44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="12" length_in_bytes="313" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000CECECED6D6C6FF
+	FFFF63CC262E0000000174524E530040E6D866000000CE49444154785EED96C1
+	0DC23010044D07397C15D0014A1A88E2FE6B026CF1B848E05BC71691D8F9AF32
+	9A3CCEA11B82328511E8023246236E201F3558438E32B5D51043B819E20633B5
+	D5B89AEFEE34748169AC6135CE594332DAF293151B7CD5D0F4026AA2A910B181
+	4303AAF1D6506C00D5608D5540123AF26994C6B303CD06C98C1C830E1AD4A086
+	78D86B0083FA4D416B989177503DF47754233CB994917F503DF4EB0F346A3558
+	4340B2063A18F208C4E9FF2486F9AF1AACC11AACC11AACC11AAC214769D41043
+	3837843C00D19E47C2E804CCBF0000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="13" length_in_bytes="327" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000DC49444154785EED9851
+	0AC23010057384ECC60B989CC07805EF7F26B145620ADA7D1B4305DFFC3F3A4C
+	0B29095F43506298815690391AA980BCD5600D1925FA6A4847B875A402137D35
+	4EDD73371A5A619C357A8DDFAC210BEA79C98A0D3E6A687E0035D1BC92B08141
+	03AAF1D4506C00D5608DB380647464D3581B5F0DE86290DBC83818D7A00635C4
+	C2560318EC9F29680D60D406BB07FD05D5A86D641B980E7AF8DB286D641F6035
+	5843402A3A32D4806993437F891D93FFAAC11AACC11AACC11AACC11A328AB386
+	744CB8963DE6B25AAB1340833540C4CBABC61D89BBF74EDC046DFD0000000049
+	454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="14" length_in_bytes="325" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000DA49444154785EED9841
+	0EC2300C04C30F6A970F347D01E10BFCFF4D40230EAE04F51AB74262E7BEEA68
+	7A48949286A00C650FB481ECA331CE206F355843BE6588D51043B919C6196688
+	D5389BEFAE34B4C1046B588DDFAC210B1AF9C98A0D3E6A687D0235D1DA19B181
+	4303AAF1D2506C00D5608D49402A3AF269F4C65707BA185433720C1234A8410D
+	F1B0D60006DB670A5AC38CBC83CD83FE826A9407A73EF20F360FFAE9100DAC06
+	6B08C8A2810EF22F8121F2AFC430FF558335588335588335588335C4705C0D31
+	A02FAC780D1C6D01B23558C322115234EEB27C519AD4AFFF370000000049454E
+	44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="15" length_in_bytes="329" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000DE49444154785EED98E1
+	09C23018053342BED4054C2730AEE0FE338911092968BF4B6D117CF7FFE8E35A
+	4849F81A4689610F5281EC33639A216F67A8866D258ED5B08E70EB98664C1CAB
+	71EA9EBB98910A66B0463FE3376B58258DBCE4C484CF2F253F404DAA52252438
+	66A01AAF198909A8866A9C0D92A9E49BF16C7C7590EA82DC24A7B07D86666886
+	7958CE00C2FA99426B00A909AB07FD85CE284DF209AE831E7F1B7393FC02ABA1
+	1A06295472D4C00065CF5FE201E5BF6AA8866AA8866AA8866AA886751C57C33A
+	E80D2BAFC12FAB410B50035E56AB468F1D4A0C8D3B95012427B6A7D38D000000
+	0049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="16" length_in_bytes="301" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000CECECED6D6C6FF
+	FFFF63CC262E0000000174524E530040E6D866000000C249444154785EED9841
+	0E82400C45C71B58E909BC81C10B10E7FE6752E9C6B290FEDA4C48FC6FFFC3CB
+	833084F6896438B76AF49EA05E637A24A8D7600D71E8B01AE26857C734ACC6C5
+	5D77A3515303D738668DC41302BFC66CF05543FB1BA8897623AC618380065423
+	A9C11A90C622201D1DC534ECC6CC017435E8F1910D0A34A8410D89B0D50006FB
+	670A5AC38DA283DD83FE866AB41727442374D02F4334B01AAC2120AB063AF01A
+	FC24FE971AACC11AACC11AACC11AAC21BF52F343F2D810F204A123FA14EB4274
+	760000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="17" length_in_bytes="322" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000D749444154785EED9841
+	0AC32010453D4267EC056A4E507B85DCFF4CA5B850B3A8F3479142FF5BE7C3E3
+	254430B488875B588D6607EB35E2E160BD066B48876EAB211DE1EC88DB6ADCCF
+	968B86AFC6BCC66FD6707C21F06FAC0CBE6A68FA0035D154306B94814103AAE1
+	D4600D48E32120091DD934CA8B7919D0549EAF23DB605E831AD4100B570D6030
+	3E53D01AC0A80E8607FD13D5C875641F0C0F7AF8DB38EAC83EC06AB086806474
+	64A801E398186AC03826FF5583355883355883355883356416670DE9D870A7BB
+	E7965BB31340833540C44BABF1067360BF6B186862F90000000049454E44AE42
+	6082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="18" length_in_bytes="305" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000C649444154785EED9951
+	0A83400C05B73768622FE0F604B657F0FE676AEBFE18A1352F8465A16FFE1F0C
+	A3B8A2658F44B8966CF411205F63BA07C8D7600D3168B71A6228AB61EA56E3B6
+	EE3968E4D4C035C6AC11B843E0C7581BFCD4D0FA016AA2B5E1D6680387065423
+	A8C11A90C62C20151DF934DA85793AD0CDA09A916390A0410D6A8887A3063038
+	3F53D01A66E41D9C1EF40BAA51DE5C100DD7413F77D1C06AB086806C1AE8C06A
+	F095F84F6AB0066BB0066BB0066BB0C6201F24F9B1FA1BAC31C86F9D179C2119
+	B7580BCBA80000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="19" length_in_bytes="340" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000E94944415458C3ED99D1
+	0DC320104319214DBA40C804A12B74FF99AA960F021F70361455AAFD1D0BF338
+	71E2E2DC4537468B1BAD35101A1F633B0889C6781A79BDADD368E4EBBA67A66D
+	1A8D7BB66E11631E8D6A8C1FA14154087C8DC5CFEB87E2DF8298448BF7E618D1
+	608801D1F85E0CD1483176B4C77AD4648B110FE661D06763BBB79B92413114A3
+	3386A9E4CB1880A1DD53501A8029199A8DFE446304BB29199A8D1EAE8DC36E4A
+	06D1C068A03D25A026130D50D4ABC2400314F5C6120DD1100DD1100DD1108D7F
+	A2D13D9024691403C9EEF12C49A332BBA33646D2A84C3245A3FBB70EAD6B8C17
+	7EA6EC350BC737500000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="20" length_in_bytes="325" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000CECECED6D6C6FF
+	FFFF63CC262E0000000174524E530040E6D866000000DA4944415458C3ED9651
+	0E83201044E90DB07282DEA0692F40CAFDCFD42031160DB2B32A3566E6DB098F
+	E7268B313FE934B1DAB23585B8B722565B2E62F41F45ACB64C1B451BF9D8B866
+	36F273CD234BDFCCC63D3B7786D1CEC62AC6496C2826041EABF4F9FA4F0931D0
+	C5520528A5820003B2316238AC401B900D8FAECA80966418C9F14B90E1623EC8
+	4B538118C4D888211AF9390650A8EF14D406509A0AD545FF4431E27EBD2118B1
+	505DF4FEFF18B4B1B081EE9401032D1CF5080473D493784F0CDAA00DDAA00DDA
+	A00DDAB8948D6E6B9418CBF718C39C385F2C108316B77002520000000049454E
+	44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="21" length_in_bytes="330" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000DF49444154785EED986D
+	0A8330104473846CEC05AA27687A85DEFF4CFDA2C615AC3B139042E7FD7F383C
+	0381A425C6905939A70D4A25C8ACBC39639808322B6FCE500D7394C36A9823DD
+	1CC361354EEEBBAB19C7D5F0337EB3067142DAB18284EF3F657C02357928B304
+	088119508DCF8C8209500DD5381BC8884AB119EFC6D700E5B5606C5250E89FA1
+	199A6111D6330061FF4E416B005213762FFA0B3AA3362926842E7AF86C4C4D8A
+	0B580DD530908A4A811A308412A8014328FF554335544335544335544335AC17
+	B286395237AE06FB3CDB4FA924C00CD5003196E58C3B619624770BD58FED0000
+	000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="22" length_in_bytes="326" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000DB49444154785EED9951
+	0AC2301005E30DB2A917683C817A05EF7F26B5FBE3166AF62D4B107CF33FF431
+	2DA4B4E5138950A3722D07B45B801A950F672C9700352A1FCE600D31B46935C4
+	501E86655A8DB3B9EE6EC6BC1A76C66FD6083C21F063A5C2F79BD2DF404D5451
+	09101C33A01AAAA80408500DD65805A4A3926F8636BE3B68DB82EE97544898C1
+	199C211EF63300617CA6A0358CE4158607FD159D515E9C54F20BC3837E9D3203
+	ABC11A02B2CD4085FC97C010F9AFC430FF558335588335588335588335C430AF
+	8618F23ECFE2247FAC4E8635327EEB24F0048A577EB42D6D94A3000000004945
+	4E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="23" length_in_bytes="330" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000010C0000
+	003204030000005BA5F8C90000000F504C5445EF1000000000FFFFFFD6D6C6CE
+	CECEAFDF87950000000174524E530040E6D866000000DF49444154785EED986D
+	0AC32010057304D7F4023527A8B942EE7FA67E51CD066CF66DC014FAE6FFC063
+	10148735E2211419161BC4EC2078E5E68C717210BC7273066B882276AB218A61
+	518CDD6A5C96359B19FD6AE819BF59C37142CAB1C284AF33627A023579284502
+	04C30CA8C66746C404A8066B5C0524A1926DC6BBF16C20BE16A42A1985E33338
+	8333C4C2760620ECDF29680D40AAC2EE457F4367E42AD904D3450F9F8DA94A76
+	01ABC11A029251C95003A628E73E891DCA7FD5600DD6600DD6600DD6600D51F4
+	AB218AE3DFB3453AF7B31A91F0CF6AD690AEAC67DC016CDC5141FE2B7F4F0000
+	000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="50" length_in_bytes="203" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000005A0000
+	001408030000003A24DA2C00000009504C5445FF0000000000FFFFFFCA92C399
+	0000000174524E530040E6D866000000664944415478DAD594310EC02010C348
+	FFFFE84A74381464A96A7A0386CD040203E354E4A4B6B86C28B5EC15D8CED65F
+	DFDA7A5196118AA717F0666BEC305BB335F852DA13D5BA2C6401D41026CB27A7
+	76229BA5FFB60BA1DD166814B1B5D96795D8CE4FF5746E4A590268FEE46EBB00
+	00000049454E44AE426082
+	]]>
+</GDLPict>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

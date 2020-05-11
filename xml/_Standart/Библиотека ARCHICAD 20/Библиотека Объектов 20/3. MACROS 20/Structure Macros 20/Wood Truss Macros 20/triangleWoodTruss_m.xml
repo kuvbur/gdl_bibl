@@ -1,0 +1,2339 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="EB4AFC1B-0295-4FAC-9A95-B2E520387525" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+if gs_detlevel_3D_m = DETLEVEL3D_OFF then end
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+!gs_2D_projection_type:
+!	0 - Normal 3D
+!	1 - View Edges
+!	2 - View Polygons
+!	3 - Overhead Edges
+!	4 - Cut Lines
+!	5 - Cut Polygons
+!	6 - Bottom Range Cut Lines
+!	7 - Top Range Cut Lines
+
+nProjectionCut = 0
+if gs_2D_projection then
+	if AC_symb_show_projection_to = PROJECTION_FLOOR_PLAN_RANGE | (AC_symb_show_projection_to = PROJECTION_DISPLAY_LIMIT & gs_bottom_range_height < gs_cutplane_height) then
+		addz gs_bottom_range_height
+		cutplane{2} 180, 2
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+	if gs_2D_projection_type <> 6 then
+		addz gs_cutplane_height
+		cutplane{2} 180 * (gs_2D_projection_type = 3), 1
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+	if AC_symb_show_projection_to <> 3 then
+		addz gs_top_range_height
+		cutplane{2} 0, 2
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+endif
+
+if gs_shadow = 0 then SHADOW OFF
+if gs_shadow = 1 then SHADOW ON
+
+
+! =============================================================================
+! Coordinate calculation
+! =============================================================================
+
+! Ending coordinates ----------------------------------------------------------
+
+end1x = -A/2
+end1y = -eaveHeight + yy
+end2x = -A/2 + xx
+end2y = -eaveHeight
+if iEndType = END_RECTANGULAR then
+	end3x = -A/2
+	end3y = -eaveHeight
+endif
+if iEndType = END_CUSTOM_CUT then
+	end3x = -A/2
+	end3y = -eaveHeight - yyMod
+
+	x11 = end1x
+	y11 = end1y
+	x12 = end1x + cos(topFlangeAngle)
+	y12 = end1y - sin(topFlangeAngle)
+
+	x21 = end2x
+	y21 = end2y
+	x22 = end3x
+	y22 = end3y
+
+	gosub "Line - Line intersection"
+
+	if state = 1 & cx < 0 then
+		end3x = cx
+		end3y = cy
+	else
+		end3x = 0
+		end3y = 0
+	endif
+
+endif
+
+
+! =============================================================================
+! 3D
+! =============================================================================
+
+unID = 1
+gosub "Hotspot Editing"
+
+
+pen gs_pen_3d
+
+add tieBeamLength/2, B, 0
+rotx 90
+
+
+! Truss elements 3D -----------------------------------------------------------
+
+material gs_truss_mat
+
+! Tie beam - common part
+prism_	4, B,
+		tieBeamBottomLx,	tieBeamBottomLy,	15,
+		tieBeamBottomRx,	tieBeamBottomRy,	15,
+		triangleInRx,		triangleInRy,		15,
+		triangleInLx,		triangleInLy,		15
+
+for i = 1 to 2
+	material gs_truss_mat
+
+	! Rafters - common part
+	if iEndType < 4 then
+		prism_	4, B,
+				end1x,			end1y,			15,
+				end2x,			end2y,			15,
+				triangleInTx,	triangleInTy,	15,
+				triangleOutTx,	triangleOutTy,	15
+	else
+		prism_	5, B,
+				end1x,			end1y,			15,
+				end3x,			end3y,			15,
+				end2x,			end2y,			15,
+				triangleInTx,	triangleInTy,	15,
+				triangleOutTx,	triangleOutTy,	15
+	endif
+
+	if (gs_detlevel_3D_m = DETLEVEL3D_DETAILED) then
+
+		! -----------------------------------------------------------------------------
+		if iTrussType = TRUSS_PITCHED_COMPLEX then
+		! -----------------------------------------------------------------------------
+
+			material gs_truss_mat
+
+			add -triangleOutRx, 0, 0
+
+			! First inclined web beam from outside
+			dx11 = triangleOutRx - delx
+			dx1 = dx/2 + dx11
+			dy1 = (dx1)*tan(ang) - rafterHeight/cos(ang)
+
+			dr1 = sqr((dx*dx/4) + (dy1 - tieBeamHeight)^2)
+			bet1 = asn(webBeamHeight/dr1)
+			bet2 = atn((dy1 - tieBeamHeight)/(dx/2))
+			bet = bet2 + bet1
+
+			if 90 - bet > ang then
+				bet3 = 90 - bet - ang
+			else
+				bet3 = ang - (90 - bet)
+			endif
+
+			dr12 = webBeamHeight / cos(bet3)
+			dx12 = dr12 * cos(ang)
+			dy12 = dr12 * sin(ang)
+
+			prism_ 4, B, 
+				dx1,									dy1,			15,
+				dx + dx11 - (webBeamHeight/sin(bet)),	tieBeamHeight,	15,
+				dx + dx11,								tieBeamHeight,	15,
+				dx1 + dx12,								dy1 + dy12,		15
+
+			! Second inclined web beam from outside
+			dx2 = dx * 1.5 + dx11
+			dy2 = dx2 * tan(ang) - rafterHeight/cos(ang)
+			dr2 = sqr((dx*dx/4) + (dy2 - tieBeamHeight)^2)
+			bet4 = asn(webBeamHeight/dr2)
+			bet5 = atn((dy2 - tieBeamHeight)/(dx/2))
+			gam = bet4 + bet5
+	
+			bet6 = gam - ang
+
+			dr22 = webBeamHeight / sin(bet6)
+			dx22 = dr22 * cos(ang)
+			dy22 = dr22 * sin(ang)
+
+			prism_ 4, B,
+				dx2,									dy2,			15,
+				dx + dx11 + (webBeamHeight/sin(gam)),	tieBeamHeight,	15,
+				dx + dx11,								tieBeamHeight,	15,
+				dx2 - dx22,								dy2 - dy22,		15
+
+			! Third inclined web beam from outside
+			dx3 = dx*2 + dx11
+			dy3 = dx3 * tan(ang) - rafterHeight/cos(ang)
+			dr3 = sqr((dx*dx/4) + (dy2 - tieBeamHeight)^2)
+			bet7 = asn(webBeamHeight/dr3)
+			bet8 = atn((dy2 - tieBeamHeight) / (dx/2))
+			delt = bet8 + bet7
+
+			if 90 - delt > ang then
+				bet9 = 90 - delt - ang
+			else
+				bet9 = ang - (90 - delt)
+			endif
+
+			dr33 = webBeamHeight / cos(bet9)
+			dx33 = dr33 * cos(ang)
+			dy33 = dr33 * sin(ang)
+
+			prism_ 4, B,
+				dx2,								dy2,			15,
+				dx3 - (webBeamHeight/sin(delt)),	tieBeamHeight,	15,
+				dx3,								tieBeamHeight,	15,
+				dx2 + dx33,							dy2 + dy33,		15
+
+			! Last inclined web beam from outside
+			dx4 = triangleOutRx
+			dy4 = trussHeight - rafterHeight/cos(ang)
+			dr4 = sqr((dx*dx) + (dy4 - tieBeamHeight)^2)
+			bet10 = asn(webBeamHeight/dr4)
+			bet11 = atn((dy4 - tieBeamHeight)/(dx))
+			ome = bet10 + bet11
+
+			bet12 = ome - ang
+
+			dr44 = webBeamHeight / sin(bet12)
+			dx44 = dr44 * cos(ang)
+			dy44 = dr44 * sin(ang)
+
+			prism_ 4, B,
+				dx4,								dy4,			15,
+				dx3 + (webBeamHeight / sin(ome)),	tieBeamHeight,	15,
+				dx3,								tieBeamHeight,	15,
+				dx4 - dx44,							dy4 - dy44,		15
+
+			! Horizontal web beam
+			prism_ 4, B,
+				dx2 + dx33,														dy2 + dy33,					15,
+				dx2 + dx33 + webBeamHeight/tan(ang),							dy2 + dy33 + webBeamHeight,	15,
+				dx3 + (dy2 + dy33 - tieBeamHeight + webBeamHeight) / tan(ome),	dy2 + dy33 + webBeamHeight,	15,
+				dx3 + (dy2 + dy33 - tieBeamHeight) / tan(ome),					dy2 + dy33,					15
+
+			! Upper inclined web beam
+			dy5 = dy2 + dy33
+			dx5 = dy5 / tan(ome)
+			dx6 = dx3 + (dy2 + dy33) / tan(ome) - (dx2 + dx33)
+			dr11 = dx6 * cos(90 - ang)
+			dy61 = (dr11 * sin(90 - ang)) + dy5
+			dx61 = dr11 * cos(90 - ang)
+
+			zeta = atn( abs(dy61 - (dy2 + dy33 + webBeamHeight))/abs((dy2 + dy33) / tan(ome) - dx61 - (dy2 + dy33 - tieBeamHeight + webBeamHeight) / tan(ome)) )
+			teta = 180 - zeta - ome
+			dr12 = webBeamHeight / sin(teta)
+			dx71 = dr12 * cos(ome)
+			dy71 = dr12 * sin(ome)
+
+			prism_ 4, B,
+				dx3 + (dy2 + dy33 - tieBeamHeight + webBeamHeight) / tan(ome),			dy2 + dy33 + webBeamHeight,			15,
+				dx3 + (dy2 + dy33) / tan(ome) - dx61,									dy61,								15,
+				dx3 + (dy2 + dy33) / tan(ome) - dx61 + webBeamHeight*cos(ang),			dy61 + webBeamHeight*sin(ang),		15,
+				dx3 + (dy2 + dy33 - tieBeamHeight + webBeamHeight) / tan(ome) + dx71,	dy2 + dy33 + webBeamHeight + dy71,	15
+
+			! Steel plates
+			if stp then
+				addz -0.005
+				material mat2
+				for u=1 to 2
+					if i = 1 then
+						prism_ 5, 0.005,
+							dx4 - dx44,							dy4 - dy44,								15,
+							dx4 + dx44,							dy4 - dy44,								15,
+							dx4 + dx44 + sin(ang)*rafterHeight,	dy4 - dy44 + cos(ang) * rafterHeight,	15,
+							triangleOutRx,						trussHeight,							15,
+							dx4-dx44-sin(ang)*rafterHeight,		dy4 - dy44 + cos(ang) * rafterHeight,	15
+					endif
+
+					! Steel plates in joint of rafter and tie beam
+					if (iEndType <> END_HORIZONTAL) then
+						addx triangleOutRx + end2x
+						roty 90
+						cutplane 180 - ang * (iEndType = END_PERPENDICULAR)
+						del 2
+					endif
+
+					prism_ 5, 0.005,
+						triangleOutRx + triangleInLx,							0,											15,
+						triangleOutRx + triangleInLx,							triangleInLy,								15,
+						triangleOutRx + triangleInLx - rafterHeight * sin(ang), triangleInLy + rafterHeight * cos(ang),		15,
+						triangleOutRx + (triangleInLx + triangleOutLx)/2,		(triangleInLy + rafterHeight / cos(ang))/2,	15,
+						triangleOutRx + (triangleInLx + triangleOutLx)/2,		0,											15
+
+					if (iEndType <> END_HORIZONTAL) then cutend
+
+					prism_ 4, 0.005,
+						dx + dx11 - (webBeamHeight/sin(bet)),	0,								15,
+						dx + dx11 - (webBeamHeight/sin(bet)),	tieBeamHeight + webBeamHeight,	15,
+						dx + dx11 + (webBeamHeight/sin(gam)),	tieBeamHeight + webBeamHeight,	15,
+						dx + dx11 + (webBeamHeight/sin(gam)),	0,								15
+
+					prism_ 4, 0.005,
+						dx3 + (webBeamHeight/sin(gam)),		0,								15,
+						dx3 + (webBeamHeight/sin(gam)),		tieBeamHeight + webBeamHeight,	15,
+						dx3 - (webBeamHeight/sin(delt)),	tieBeamHeight + webBeamHeight,	15,
+						dx3 - (webBeamHeight/sin(delt)),	0,								15
+
+					x101 = (rafterHeight/cos(ang))/(tan(ang)+tan(bet))
+
+					prism_ 4, 0.005,
+						dx1 + dx12 + rafterHeight*cos(bet),								dy1 + dy12 - rafterHeight*sin(bet),						15,
+						dx1 + dx12 + rafterHeight*cos(bet) - webBeamHeight*sin(bet),	dy1 + dy12 - rafterHeight*sin(bet) - webBeamHeight*cos(bet),	15,
+						dx1 - x101,														dy1 + x101*tan(bet),									15,
+						dx1 + dx12 - x101,												dy1 + dy12 + x101*tan(bet),								15
+
+					prism_ 5, 0.005,
+						dx2 - dx22,														dy2 - dy22 + rafterHeight/cos(ang),	15,
+						dx2 - dx22,														dy2 - dy22,							15,
+						dx2 + dx33 + webBeamHeight/tan(ang),							dy2 - dy22,							15,
+						dx2 + dx33 + webBeamHeight/tan(ang),							dy2 + dy33 + webBeamHeight,			15,
+						dx2 + dx33 + webBeamHeight/tan(ang) - rafterHeight/sin(ang),	dy2 + dy33 + webBeamHeight,			15
+
+					x101 = (rafterHeight/cos(ang))/(tan(ang)+tan(zeta))
+
+					prism_ 4, 0.005,
+						dx3 + (dy2 + dy33) / tan(ome) - dx61 - x101,												dy61 + x101*tan(zeta),										15,
+						dx3 + (dy2 + dy33) / tan(ome) - dx61 + webBeamHeight*cos(ang) - x101,						dy61 + webBeamHeight*sin(ang) + x101*tan(zeta),				15,
+						dx3 + (dy2 + dy33) / tan(ome) - dx61 + webBeamHeight*cos(zeta) + webBeamHeight*sin(zeta),	dy61 - webBeamHeight*sin(zeta) + webBeamHeight*cos(zeta),	15,
+						dx3 + (dy2 + dy33) / tan(ome) - dx61 + webBeamHeight*cos(zeta),								dy61 - webBeamHeight*sin(zeta),								15
+
+					prism_ 6, 0.005,
+						dx3 + (dy2 + dy33 - tieBeamHeight + webBeamHeight) / tan(ome) + dx71 + webBeamHeight*sin(ome),	dy2 + dy33 + webBeamHeight + dy71 - webBeamHeight*cos(ome),	15,
+						dx3 + (dy2 + dy33 - tieBeamHeight + webBeamHeight) / tan(ome) + dx71,							dy2 + dy33 + webBeamHeight + dy71,					15,
+						dx3 + (dy2 + dy33 - tieBeamHeight + webBeamHeight) / tan(ome) + dx71 - webBeamHeight*sin(zeta),	dy2 + dy33 + webBeamHeight + dy71 - webBeamHeight*cos(zeta),	15,
+						dx3 + (dy2 + dy33 - tieBeamHeight) / tan(ome),													dy2 + dy33 + webBeamHeight,						15,
+						dx3 + (dy2 + dy33 - tieBeamHeight) / tan(ome),													dy2 + dy33,									15,
+						dx3 + (dy2 + dy33 - tieBeamHeight) / tan(ome) + webBeamHeight*sin(ome),							dy2 + dy33 - webBeamHeight*cos(ome),				15
+
+				  addz 0.005 + B
+				next u
+				del 3
+			endif
+
+			del 1
+
+		endif
+
+
+		! -----------------------------------------------------------------------------
+		if	iTrussType = TRUSS_PITCHED_HOWE |\
+			iTrussType = TRUSS_PITCHED_PRATT then
+		! -----------------------------------------------------------------------------
+
+			if i = 1 then
+				! Middle web beam
+				prism_ 5, B,
+					triangleInTx,		triangleInTy,							15,
+					-webBeamHeight/2,	triangleInTy - webBeamHeight/2*tan(ang),15,
+					-webBeamHeight/2,	tieBeamHeight,							15,
+					webBeamHeight/2,	tieBeamHeight,							15,
+					webBeamHeight/2,	triangleInTy - webBeamHeight/2*tan(ang),15
+			endif
+
+			for j=1 to n-1
+
+				material gs_truss_mat
+
+				! Vertical web beams
+				prism_ 4,b,
+					-dx*j - webBeamHeight/2, tieBeamHeight, 15,
+					-dx*j + webBeamHeight/2, tieBeamHeight, 15,
+					-dx*j + webBeamHeight/2, triangleInTy - (dx*j - webBeamHeight/2)*tan(ang), 15,
+					-dx*j - webBeamHeight/2, triangleInTy - (dx*j + webBeamHeight/2)*tan(ang), 15
+
+
+				if iTrussType = TRUSS_PITCHED_HOWE then
+					! Corner point on top
+					dTx	= -dx*(j) + webBeamHeight/2
+					dTy	= triangleInTy - (dx*(j) - webBeamHeight/2)*tan(ang)
+
+					! Corner point on bottom
+					dBx = -dx*(j-1) - webBeamHeight/2
+					dBy = tieBeamHeight
+
+					! Web angle
+					webAngle = atn((dTy-dBy)/(dBx-dTx))
+
+					dIncl = (webBeamHeight/2)/sin(webAngle + ang)
+
+					! Inclined web beams
+					prism_ 6, B,
+						dTx + dIncl*cos(ang),					dTy + dIncl*sin(ang),					15,
+						dTx,									dTy,									15,
+						dTx,									dTy - (webBeamHeight/2)/cos(webAngle),	15,
+						dBx - (webBeamHeight/2)/sin(webAngle),	dBy,									15,
+						dBx,									dBy,									15,
+						dBx,									dBy + (webBeamHeight/2)/cos(webAngle),	15
+				endif
+
+
+				if iTrussType = TRUSS_PITCHED_PRATT then
+					! Corner point on top
+					dTx	= -dx*(j-1) - webBeamHeight/2
+					dTy	= triangleInTy - (dx*(j-1) + webBeamHeight/2)*tan(ang)
+
+					! Corner point on bottom
+					dBx = -dx*j + webBeamHeight/2
+					dBy = tieBeamHeight
+
+					! Web angle
+					webAngle = atn((dTy-dBy)/(dTx-dBx))
+
+					dIncl = (webBeamHeight/2)/sin(webAngle - ang)
+
+					! Inclined web beams
+					prism_ 6, B,
+						dTx - dIncl*cos(ang),					dTy - dIncl*sin(ang),					15,
+						dTx,									dTy,									15,
+						dTx,									dTy - (webBeamHeight/2)/cos(webAngle),	15,
+						dBx + (webBeamHeight/2)/sin(webAngle),	dBy,									15,
+						dBx,									dBy,									15,
+						dBx,									dBy + (webBeamHeight/2)/cos(webAngle),	15
+				endif
+
+				! Steel plates
+				if stp then
+					material mat2
+
+					addz -0.005
+					for t = 1 to 2
+
+						if iTrussType = TRUSS_PITCHED_HOWE then
+
+							! Corner point on top
+							dTx	= -dx*(j) + webBeamHeight/2
+							dTy	= triangleInTy - (dx*(j) - webBeamHeight/2)*tan(ang)
+
+							! Corner point on bottom
+							dBx = -dx*(j-1) - webBeamHeight/2
+							dBy = tieBeamHeight
+
+							! Web angle
+							webAngle = atn((dTy-dBy)/(dBx-dTx))
+
+							! Steel plates of middle web beam
+							if (j = 1) & (i = 1) then
+								prism_ 4, 0.005,
+									-webBeamHeight/2 - (webBeamHeight/2)/sin(webAngle),	tieBeamHeight + (webBeamHeight/2)/cos(webAngle),	15,
+									-webBeamHeight/2 - (webBeamHeight/2)/sin(webAngle),	0,													15,
+									webBeamHeight/2 + (webBeamHeight/2)/sin(webAngle),	0,													15,
+									webBeamHeight/2 + (webBeamHeight/2)/sin(webAngle),	tieBeamHeight + (webBeamHeight/2)/cos(webAngle),	15
+
+								prism_ 4, 0.005,
+									webBeamHeight/2,	triangleOutTy - (webBeamHeight/2)*tan(ang),					15,
+									webBeamHeight/2,	triangleInTy - (webBeamHeight/2)*tan(ang) - webBeamHeight,	15,
+									-webBeamHeight/2,	triangleInTy - (webBeamHeight/2)*tan(ang) - webBeamHeight,	15,
+									-webBeamHeight/2,	triangleOutTy - (webBeamHeight/2)*tan(ang),					15
+							endif
+
+							! Steel plates of top of (except the last) vertical web beams
+							prism_ 4, 0.005,
+								dTx - webBeamHeight,	dTy + (rafterHeight / sin(ang) - webBeamHeight)*tan(ang),					15,
+								dTx - webBeamHeight,	dTy - (webBeamHeight/2) / cos(webAngle),			15,
+								dTx + dIncl*cos(ang),	dTy - (webBeamHeight/2) / cos(webAngle),			15,
+								dTx + dIncl*cos(ang),	dTy + (rafterHeight / sin(ang) - webBeamHeight)*tan(ang),	15
+
+							! Steel plates in joint of tie beam and web beam (except the last)
+							if (j < (n - 1)) then
+								! Corner point on top
+								dTx	= -dx*(j+1) + webBeamHeight/2
+								dTy	= triangleInTy - (dx*(j+1) - webBeamHeight/2)*tan(ang)
+
+								! Corner point on bottom
+								dBx = -dx*j - webBeamHeight/2
+								dBy = tieBeamHeight
+
+								! Web angle
+								webAngle = atn((dTy-dBy)/(dBx-dTx))
+
+								prism_ 4, 0.005,
+									dBx + webBeamHeight,					0,										15,
+									dBx + webBeamHeight,					dBy + (webBeamHeight/2)/cos(webAngle),	15,
+									dBx - (webBeamHeight/2)/sin(webAngle),	dBy + (webBeamHeight/2)/cos(webAngle),	15,
+									dBx - (webBeamHeight/2)/sin(webAngle),	0, 										15
+							endif
+
+							if (j = (n - 1)) then
+								! Steel plates in joint of tie beam and last web beam
+								dBx = -dx*j - webBeamHeight/2
+								dBy = tieBeamHeight
+
+								prism_ 4, 0.005,
+									dBx + webBeamHeight,	0,						15,
+									dBx + webBeamHeight,	dBy + webBeamHeight,	15,
+									dBx,					dBy + webBeamHeight,	15,
+									dBx,					0, 						15
+
+								! Steel plates in joint of rafter and tie beam
+								if (iEndType <> END_HORIZONTAL) then
+									addx end2x
+									roty 90
+									cutplane 180 - ang * (iEndType = END_PERPENDICULAR)
+									del 2
+								endif
+
+								prism_ 5, 0.005,
+									triangleInLx,							0,											15,
+									triangleInLx,							triangleInLy,								15,
+									triangleInLx - rafterHeight * sin(ang), triangleInLy + rafterHeight * cos(ang),		15,
+									(triangleInLx + triangleOutLx)/2,		(triangleInLy + rafterHeight / cos(ang))/2,	15,
+									(triangleInLx + triangleOutLx)/2,		0,											15
+
+								if (iEndType <> END_HORIZONTAL) then cutend
+							endif
+						endif
+
+						if iTrussType = TRUSS_PITCHED_PRATT then
+
+							! Steel plates of middle web beam
+							if (j = 1) & (i = 1) then
+								prism_ 4, 0.005,
+									-webBeamHeight/2,	0,					15,
+									-webBeamHeight/2,	tieBeamHeight*2,	15,
+									webBeamHeight/2,	tieBeamHeight*2,	15,
+									webBeamHeight/2,	0,					15
+
+								dTx	= -dx*(j-1) - webBeamHeight/2
+								dTy	= triangleInTy - (dx*(j-1) + webBeamHeight/2)*tan(ang)
+
+								prism_ 6, 0.005,
+									dTx,					dTy + rafterHeight / cos(ang),					15,
+									dTx - dIncl*cos(ang),	dTy - dIncl*sin(ang) + rafterHeight / cos(ang),	15,
+									dTx - dIncl*cos(ang),	dTy - dIncl*sin(ang),							15,
+									-dTx + dIncl*cos(ang),	dTy - dIncl*sin(ang),							15,
+									-dTx + dIncl*cos(ang),	dTy - dIncl*sin(ang) + rafterHeight / cos(ang),	15,
+									-dTx,					dTy + rafterHeight / cos(ang),					15
+							endif
+
+							! Steel plates in joint of tie beam and web beam
+							prism_ 4, 0.005,
+								dBx - webBeamHeight,					0,										15,
+								dBx - webBeamHeight,					dBy + (webBeamHeight/2)/cos(webAngle),	15,
+								dBx + (webBeamHeight/2)/sin(webAngle),	dBy + (webBeamHeight/2)/cos(webAngle),	15,
+								dBx + (webBeamHeight/2)/sin(webAngle),	0, 										15
+
+							! Steel plates of top of (except the last) vertical web beams
+							if (j < (n - 1)) then
+								dTx = -dx*j - webBeamHeight/2
+								dTy	= triangleInTy - (dx*j + webBeamHeight/2)*tan(ang)
+								prism_ 5, 0.005,
+									dTx, dTy + rafterHeight / cos(ang),										15,
+									dTx + webBeamHeight,	dTy + rafterHeight / cos(ang),					15,
+									dTx + webBeamHeight,	dTy - dIncl*sin(ang),							15,
+									dTx - dIncl*cos(ang),	dTy - dIncl*sin(ang),							15,
+									dTx - dIncl*cos(ang),	dTy - dIncl*sin(ang) + rafterHeight / cos(ang),	15
+							endif
+
+							if (j = (n - 1)) then
+								dTx = -dx*j - webBeamHeight/2
+								dTy	= triangleInTy - (dx*j + webBeamHeight/2)*tan(ang)
+
+								! Steel plates of top of the last vertical web beam
+								prism_ 4, 0.005,
+									dTx,					dTy + rafterHeight / cos(ang),					15,
+									dTx,					dTy + rafterHeight / cos(ang) - 2*rafterHeight,	15,
+									dTx + webBeamHeight,	dTy + rafterHeight / cos(ang) - 2*rafterHeight,	15,
+									dTx + webBeamHeight,	dTy + rafterHeight / cos(ang),					15
+
+								! Steel plates in joint of rafter and tie beam
+								if (iEndType <> END_HORIZONTAL) then
+									addx end2x
+									roty 90
+									cutplane 180 - ang * (iEndType = END_PERPENDICULAR)
+									del 2
+								endif
+
+								prism_ 5, 0.005,
+									triangleInLx,							0,											15,
+									triangleInLx,							triangleInLy,								15,
+									triangleInLx - rafterHeight * sin(ang), triangleInLy + rafterHeight * cos(ang),		15,
+									(triangleInLx + triangleOutLx)/2,		(triangleInLy + rafterHeight / cos(ang))/2,	15,
+									(triangleInLx + triangleOutLx)/2,		0,											15
+
+								if (iEndType <> END_HORIZONTAL) then cutend
+							endif
+						endif
+
+						addz 0.005+b
+					next t
+					del 3
+				endif
+
+			next j
+
+		endif
+
+		! -----------------------------------------------------------------------------
+		if iTrussType = TRUSS_PITCHED_FINK then
+		! -----------------------------------------------------------------------------
+
+			prism_	5, B,
+					p1B1x,			p1B1y,			15,
+					p1B2x,			p1B2y,			15,
+					p1T2x,			p1T2y,			15,
+					triangleInTx,	triangleInTy,	15,
+					p1T1x,			p1T1y,			15
+
+			prism_	4, B,
+					p1B1x, p1B1y, 15,
+					p2B2x, p2B2y, 15,
+					p2T2x, p2T2y, 15,
+					p2T1x, p2T1y, 15
+
+			if (wn = 5) then
+				prism_	5, B,
+						p3B1x, p3B1y, 15,
+						p3B2x, p3B2y, 15,
+						p3T2x, p3T2y, 15,
+						p2T1x, p2T1y, 15,
+						p3T1x, p3T1y, 15
+
+				prism_	4, B,
+						p3B1x, p3B1y, 15,
+						p4B2x, p4B2y, 15,
+						p4T2x, p4T2y, 15,
+						p4T1x, p4T1y, 15
+			endif
+
+			! Steel plates
+			if stp then
+				material mat2
+
+				addz -0.005
+
+				for j = 1 to 2
+
+					prism_	 4, 0.005,
+							 p1T1x, p1T2y,								15,
+							-p1T1x, p1T2y,								15,
+							-p1T1x, p1T1y + rafterHeight / cos(ang),	15,
+							 p1T1x, p1T1y + rafterHeight / cos(ang),	15
+
+					prism_	4, 0.005,
+							p1B1x, 0,		15,
+							p1B2x, 0,		15,
+							p1B2x, p2B2y,	15,
+							p1B1x, p2B2y,	15
+
+					if (wn = 5) then
+						prism_	4, 0.005,
+								p3T1x, p3T2y,							15,
+								p2T2x, p3T2y,							15,
+								p2T2x, p2T2y + rafterHeight / cos(ang),	15,
+								p3T1x, p3T1y + rafterHeight / cos(ang),	15
+
+						prism_	4, 0.005,
+								p3B1x, 0,		15,
+								p3B2x, 0,		15,
+								p3B2x, p4B2y,	15,
+								p3B1x, p4B2y,	15
+
+						tt = min (max(0.07, rafterHeight/2), rafterHeight)
+						prism_	4, 0.005,
+								p4T2x + tt * cos(beta4) - webBeamHeight * sin(beta4),	p4T2y - tt * sin(beta4) - webBeamHeight * cos(beta4),		15,
+								p4T2x + tt * cos(beta4),								p4T2y - tt * sin(beta4),								15,
+								p4T1x - tt * cos(beta4) + webBeamHeight * sin(beta4),	p4T1y + tt * sin(beta4) + webBeamHeight * cos(beta4),		15,
+								p4T1x - tt * cos(beta4),								p4T1y + tt * sin(beta4),								15
+					else
+						tt = min (max(0.07, rafterHeight/2), rafterHeight)
+						prism_	4, 0.005,
+								p2T2x + tt * cos(beta2) - webBeamHeight * sin(beta2),	p2T2y - tt * sin(beta2) - webBeamHeight * cos(beta2),		15,
+								p2T2x + tt * cos(beta2),								p2T2y - tt * sin(beta2),								15,
+								p2T1x - tt * cos(beta2) + webBeamHeight * sin(beta2),	p2T1y + tt * sin(beta2) + webBeamHeight * cos(beta2),		15,
+								p2T1x - tt * cos(beta2),								p2T1y + tt * sin(beta2),								15
+					endif
+
+					! Steel plates in joint of rafter and tie beam
+					if (iEndType <> END_HORIZONTAL) then
+						addx end2x
+						roty 90
+						cutplane 180 - ang * (iEndType = END_PERPENDICULAR)
+						del 2
+					endif
+
+					prism_ 5, 0.005,
+						triangleInLx,							0,											15,
+						triangleInLx,							triangleInLy,								15,
+						triangleInLx - rafterHeight * sin(ang), triangleInLy + rafterHeight * cos(ang),		15,
+						(triangleInLx + triangleOutLx)/2,		(triangleInLy + rafterHeight / cos(ang))/2,	15,
+						(triangleInLx + triangleOutLx)/2,		0,											15
+
+					if (iEndType <> END_HORIZONTAL) then cutend
+
+					addz B + 0.005
+				next j
+
+				del 1 + 2
+			endif
+
+		endif
+	
+	endif
+
+	mul -1, 1, 1
+
+next i
+del 1
+
+del 3
+
+for i = 1 to nProjectionCut
+	cutend
+next i
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ==============================================================================
+
+
+! ==============================================================================
+"Hotspot Editing":
+! ==============================================================================
+
+	hotspot 0,				B/2,	0,	unID,	tieBeamLength,	1+256	: unID=unID+1
+	hotspot -1,				B/2,	0,	unID,	tieBeamLength,	3		: unID=unID+1
+	hotspot tieBeamLength,	B/2,	0,	unID,	tieBeamLength,	2		: unID=unID+1
+
+	hotspot 0,				0,	0,	unID,	tieBeamLength,	1+256	: unID=unID+1
+	hotspot -1,				0,	0,	unID,	tieBeamLength,	3		: unID=unID+1
+	hotspot tieBeamLength,	0,	0,	unID,	tieBeamLength,	2		: unID=unID+1
+
+	hotspot 0,				B,	0,	unID,	tieBeamLength,	1+256	: unID=unID+1
+	hotspot -1,				B,	0,	unID,	tieBeamLength,	3		: unID=unID+1
+	hotspot tieBeamLength,	B,	0,	unID,	tieBeamLength,	2		: unID=unID+1
+
+	hotspot 0,	0,	0,	unID,	B,	1+256	: unID=unID+1
+	hotspot 0,	-1,	0,	unID,	B,	3		: unID=unID+1
+	hotspot 0,	B,	0,	unID,	B,	2		: unID=unID+1
+
+	hotspot tieBeamLength,	0,	0,	unID,	B,	1+256	: unID=unID+1
+	hotspot tieBeamLength,	-1,	0,	unID,	B,	3		: unID=unID+1
+	hotspot tieBeamLength,	B,	0,	unID,	B,	2		: unID=unID+1
+
+	if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+		hotspot tieBeamLength/2, B/2, 0,			unID, trussHeight, 1+128	: unID=unID+1
+		hotspot tieBeamLength/2, B/2, -1,			unID, trussHeight, 3		: unID=unID+1
+		hotspot tieBeamLength/2, B/2, trussHeight,	unID, trussHeight, 2		: unID=unID+1
+	endif
+
+	if iDimensionSetMode = DIM_WIDTH_ANGLE then
+		hotspot tieBeamLength/2, B/2, trussHeight, unID : unID=unID+1
+
+		rafterLength = sqr((tieBeamLength/2)^2 + (trussHeight - rafterHeight/cos(ang))^2)
+
+		hotspot rafterLength/2,				0,	0,							unID, ang, 4+128	: unID=unID+1
+		hotspot 0,							0,	0,							unID, ang, 6 		: unID=unID+1
+		hotspot (rafterLength/2)*cos(ang),	0,	(rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		hotspot 0,							-1,	0,							unID, ang, 7		: unID=unID+1
+
+		hotspot rafterLength/2,				B,		0,							unID, ang, 4+128	: unID=unID+1
+		hotspot 0,							B,		0,							unID, ang, 6 		: unID=unID+1
+		hotspot (rafterLength/2)*cos(ang),	B,		(rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		hotspot 0,							B - 1,	0,							unID, ang, 7		: unID=unID+1
+
+		hotspot tieBeamLength - rafterLength/2,				0,	0,							unID, ang, 4+128	: unID=unID+1
+		hotspot tieBeamLength,								0,	0,							unID, ang, 6 		: unID=unID+1
+		hotspot tieBeamLength - (rafterLength/2)*cos(ang),	0,	(rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		hotspot tieBeamLength,								1,	0,							unID, ang, 7		: unID=unID+1
+
+		hotspot tieBeamLength - rafterLength/2,				B,		0,							unID, ang, 4+128	: unID=unID+1
+		hotspot tieBeamLength,								B,		0,							unID, ang, 6 		: unID=unID+1
+		hotspot tieBeamLength - (rafterLength/2)*cos(ang),	B,		(rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		hotspot tieBeamLength,								B + 1,	0,							unID, ang, 7		: unID=unID+1
+	endif
+
+	if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+		hotspot tieBeamLength/2, B/2, trussHeight, unID : unID=unID+1
+	endif
+
+	if bOverhang then
+		hotspot  0,				0, -eaveHeight + yy, unID, eaveOverhang, 1+128	: unID=unID+1
+		hotspot  1, 			0, -eaveHeight + yy, unID, eaveOverhang, 3		: unID=unID+1
+		hotspot -eaveOverhang,	0, -eaveHeight + yy, unID, eaveOverhang, 2		: unID=unID+1
+
+		hotspot  0,				B, -eaveHeight + yy, unID, eaveOverhang, 1+128	: unID=unID+1
+		hotspot  1, 			B, -eaveHeight + yy, unID, eaveOverhang, 3		: unID=unID+1
+		hotspot -eaveOverhang,	B, -eaveHeight + yy, unID, eaveOverhang, 2		: unID=unID+1
+
+		hotspot tieBeamLength,					0, -eaveHeight + yy, unID, eaveOverhang, 1+128	: unID=unID+1
+		hotspot tieBeamLength - 1, 				0, -eaveHeight + yy, unID, eaveOverhang, 3		: unID=unID+1
+		hotspot tieBeamLength + eaveOverhang,	0, -eaveHeight + yy, unID, eaveOverhang, 2		: unID=unID+1
+
+		hotspot tieBeamLength,					B, -eaveHeight + yy, unID, eaveOverhang, 1+128	: unID=unID+1
+		hotspot tieBeamLength - 1, 				B, -eaveHeight + yy, unID, eaveOverhang, 3		: unID=unID+1
+		hotspot tieBeamLength + eaveOverhang,	B, -eaveHeight + yy, unID, eaveOverhang, 2		: unID=unID+1
+	else
+		hotspot -eaveOverhang,	0, -eaveHeight + yy, unID	: unID=unID+1
+		hotspot -eaveOverhang,	B, -eaveHeight + yy, unID	: unID=unID+1
+
+		hotspot tieBeamLength + eaveOverhang,	0, -eaveHeight + yy, unID	: unID=unID+1
+		hotspot tieBeamLength + eaveOverhang,	B, -eaveHeight + yy, unID	: unID=unID+1
+	endif
+return
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! Floor Plan View
+! ==============================================================================
+! ----- Display with floorplan cutplane ------------------------------------
+gs_cutplane_height	= GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[1]
+gs_top_range_height	= GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[2]
+if AC_symb_show_projection_to = PROJECTION_FLOOR_PLAN_RANGE then
+	gs_bottom_range_height = GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[3]	! To Floor Plan Range
+else
+	gs_bottom_range_height = GLOB_CUTPLANES_INFO[4]	! Absolute Display Limit
+endif
+
+doCutplane = (ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_OVERHEAD_PROJ)
+
+
+! ==============================================================================
+! Hotspots
+! ==============================================================================
+hLineID = 1000
+unID = 1
+
+add2 -eaveOverhang, 0
+hotline2 0, 0, A, 0, hLineID : hLineID = hLineID + 1
+hotline2 A, 0, A, B, hLineID : hLineID = hLineID + 1
+hotline2 A, B, 0, B, hLineID : hLineID = hLineID + 1
+hotline2 0, B, 0, 0, hLineID : hLineID = hLineID + 1
+del 1
+
+hotspot2 0,				B/2, unID, tieBeamLength, 1+256	: unID=unID+1
+hotspot2 -1,			B/2, unID, tieBeamLength, 3		: unID=unID+1
+hotspot2 tieBeamLength,	B/2, unID, tieBeamLength, 2		: unID=unID+1
+
+hotspot2 A/2 - eaveOverhang, B/2, unID : unID=unID+1
+
+
+! -----------------------------------------------------------------------------
+if	iTrussType = TRUSS_PITCHED_COMPLEX |\
+	iTrussType = TRUSS_PITCHED_HOWE |\
+	iTrussType = TRUSS_PITCHED_PRATT then
+! -----------------------------------------------------------------------------
+
+	add2 tieBeamLength/2 - dx*(n), 0
+	for i=1 to 2*n-1
+		hotspot2 dx*i, B/2, unID : unID=unID+1
+	next i
+	del 1
+endif
+
+
+! -----------------------------------------------------------------------------
+if iTrussType = TRUSS_PITCHED_FINK then
+! -----------------------------------------------------------------------------
+
+	add2 tieBeamLength/2, 0
+	hotspot2 axle1x, B/2, unID : unID=unID+1
+	hotspot2 -axle1x, B/2, unID : unID=unID+1
+
+	if (wn = 5) then
+		hotspot2 axle2x, B/2, unID : unID=unID+1
+		hotspot2 -axle2x, B/2, unID : unID=unID+1
+	endif
+	del 1
+endif
+
+
+hID = 20000
+
+hotspot2 -eaveOverhang,	0,	hID, B, 1+256	: hID=hID+1
+hotspot2 -eaveOverhang,	-1,	hID, B, 3		: hID=hID+1
+hotspot2 -eaveOverhang,	B,	hID, B, 2		: hID=hID+1
+
+hotspot2 tieBeamLength + eaveOverhang,	0,	hID, B, 1+256	: hID=hID+1
+hotspot2 tieBeamLength + eaveOverhang,	-1,	hID, B, 3		: hID=hID+1
+hotspot2 tieBeamLength + eaveOverhang,	B,	hID, B, 2		: hID=hID+1
+
+hID = 10000
+if bOverhang then
+	hotspot2 0,				B/2,	hID, eaveOverhang, 1+128	: hID=hID+1
+	hotspot2 1,				B/2,	hID, eaveOverhang, 3		: hID=hID+1
+	hotspot2 -eaveOverhang,	B/2,	hID, eaveOverhang, 2		: hID=hID+1
+
+	hotspot2 tieBeamLength,					B/2,	hID, eaveOverhang, 1+128	: hID=hID+1
+	hotspot2 tieBeamLength - 1,				B/2,	hID, eaveOverhang, 3		: hID=hID+1
+	hotspot2 tieBeamLength + eaveOverhang,	B/2,	hID, eaveOverhang, 2		: hID=hID+1
+else
+	hotspot2 -eaveOverhang,					B/2,	hID		: hID=hID+1
+	hotspot2 tieBeamLength + eaveOverhang,	B/2,	hID		: hID=hID+1
+endif
+
+
+! ==============================================================================
+! Axis
+! ==============================================================================
+
+add2 -eaveOverhang, 0
+
+if ac_symb_display_option <> DISPLAY_OUTLINES & gs_axis = 1 then
+	line_type gs_axis_line
+	pen gs_axis_line_pen
+
+	line2 0, B/2, A, B/2
+	hotline2 0, B/2, A, B/2, hLineID : hLineID = hLineID + 1
+else
+	hLineID = hLineID + 1
+endif
+
+! ==============================================================================
+! Floor Plan View
+! ==============================================================================
+pen gs_cont_pen
+line_type gs_cont_line
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC then
+
+	rect2 0, 0, a, b
+
+	fill gs_fill_type
+	poly2_b 5, 2+64, gs_fill_pen, gs_back_pen,
+			0, 0, 0,
+			0, b, 1,
+			a, b, 1,
+			a, 0, 1,
+			0, 0, -1
+
+	del 1	! add2 -eaveOverhang, 0
+		
+	if std then
+		add2 0, B
+		project2{3} 4, 270, 2, 4+8, 0, 0, 0, 0, parameters gs_detlevel_3D_m = DETLEVEL3D_DETAILED
+		del 1
+
+		if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+			hotspot2 tieBeamLength/2,	B,					unID, trussHeight, 1+128	: unID=unID+1
+			hotspot2 tieBeamLength/2,	-1,					unID, trussHeight, 3		: unID=unID+1
+			hotspot2 tieBeamLength/2,	trussHeight + B,	unID, trussHeight, 2		: unID=unID+1
+		endif
+
+		if iDimensionSetMode = DIM_WIDTH_ANGLE then
+			rafterLength = sqr((tieBeamLength/2)^2 + (trussHeight - rafterHeight/cos(ang))^2)
+
+			hotspot2 rafterLength/2,			B,								unID, ang, 4+128	: unID=unID+1
+			hotspot2 0,							B,								unID, ang, 6		: unID=unID+1
+			hotspot2 (rafterLength/2)*cos(ang),	(rafterLength/2)*sin(ang) + B,	unID, ang, 5		: unID=unID+1
+
+			hotspot2 tieBeamLength - rafterLength/2,			B,								unID, ang, 4+128	: unID=unID+1
+			hotspot2 tieBeamLength,								B,								unID, ang, 6		: unID=unID+1
+			hotspot2 tieBeamLength - (rafterLength/2)*cos(ang),	(rafterLength/2)*sin(ang) + B,	unID, ang, 5		: unID=unID+1
+		endif
+
+		if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+			hotspot2 tieBeamLength/2, trussHeight + B, unID : unID=unID+1
+		endif
+
+		if bOverhang then
+			hotspot2  0,			B - eaveHeight + yy, unID, eaveOverhang, 1+128	: unID=unID+1
+			hotspot2  1, 			B - eaveHeight + yy, unID, eaveOverhang, 3		: unID=unID+1
+			hotspot2 -eaveOverhang,	B - eaveHeight + yy, unID, eaveOverhang, 2		: unID=unID+1
+
+			hotspot2 tieBeamLength,					B - eaveHeight + yy, unID, eaveOverhang, 1+128	: unID=unID+1
+			hotspot2 tieBeamLength - 1, 			B - eaveHeight + yy, unID, eaveOverhang, 3		: unID=unID+1
+			hotspot2 tieBeamLength + eaveOverhang,	B - eaveHeight + yy, unID, eaveOverhang, 2		: unID=unID+1
+		else
+			hotspot2 -eaveOverhang,					B - eaveHeight + yy, unID : unID=unID+1
+			hotspot2 tieBeamLength + eaveOverhang,	B - eaveHeight + yy, unID : unID=unID+1
+		endif
+	endif
+else
+	del 1	! add2 -eaveOverhang, 0
+
+	! ----- View Edges ---------------------------------------------------------
+	pen gs_cont_pen
+	line_type gs_cont_line
+
+	if ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+		pen gs_overhead_pen
+		line_type gs_overhead_linetype
+	endif
+
+	project2{3} 3,270,2 + 32 * (ac_symb_display_option = DISPLAY_OVERHEAD_ALL | not(gs_use_3D_view_attributes)), 8,
+		parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+					gs_2D_projection		= doCutplane,
+					gs_2D_projection_type	= 1,
+					gs_cutplane_height		= gs_cutplane_height,
+					gs_top_range_height		= gs_top_range_height,
+					gs_bottom_range_height	= gs_bottom_range_height
+
+
+	if ac_symb_display_option <> DISPLAY_OVERHEAD_ALL then
+		! ----- View Polygons --------------------------------------------------
+		pen gs_fill_pen
+		fill gs_fill_type
+
+		project2{3} 3,270,3+32+1024+2048, 4,
+						gs_back_pen,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= doCutplane,
+						gs_2D_projection_type	= 2,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+
+
+	if ac_symb_display_option = DISPLAY_OVERHEAD_PROJ then
+
+		! ----- Overhead View -----------------------------------------------------
+		pen gs_overhead_pen
+		line_type gs_overhead_linetype
+
+		project2{3} 3,270,2+32, 2+8,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= doCutplane,
+						gs_2D_projection_type	= 3,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+
+	if doCutplane then
+
+		! ----- Cut Lines ---------------------------------------------------------
+		pen gs_cut_pen
+		line_type gs_cut_linetype
+		line_property 2
+
+		project2{3} 3,270,2+16+32+256+4096, 2,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= 1,
+						gs_2D_projection_type	= 4,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+
+
+		! ----- Cut Polygons ------------------------------------------------------
+		pen gs_cut_fill_pen
+		fill gs_cut_fill_type
+
+		project2{3} 3,270,3+32+512, 1,
+						gs_cut_back_pen,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= 1,
+						gs_2D_projection_type	= 5,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+endif
+
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+EPS = 0.0001
+
+
+!iTrussType
+TRUSS_BOWSTRING 		= 1
+TRUSS_PITCHED_COMPLEX 	= 2
+TRUSS_FLAT_HOWE 		= 3
+TRUSS_FLAT_PRATT 		= 4
+TRUSS_PITCHED_HOWE 		= 5
+TRUSS_PITCHED_PRATT		= 6
+TRUSS_SAWTOOTH 			= 7
+TRUSS_SCISSORS 			= 8
+TRUSS_WARREN	 		= 9
+TRUSS_PITCHED_FINK		= 10
+
+! ==============================================================================
+! Definitions
+! ==============================================================================
+
+!ac_symb_display_option
+	DISPLAY_PROJECTED			= 1
+	DISPLAY_OVERHEAD_PROJ		= 2
+	DISPLAY_SYMBOLIC			= 3
+	DISPLAY_OUTLINES			= 4
+	DISPLAY_OVERHEAD_ALL		= 5
+
+!ac_symb_show_projection_to
+	PROJECTION_FLOOR_PLAN_RANGE	= 1
+	PROJECTION_DISPLAY_LIMIT	= 2
+	PROJECTION_ENTIRE_ELEMENT	= 3
+	
+! const values for parameter: iDimensionSetMode
+	DIM_WIDTH_HEIGHT     = 1
+	DIM_WIDTH_ANGLE      = 2
+	DIM_WIDTH_PROPORTION = 3
+
+! const values for parameter: iEndType
+	END_PERPENDICULAR	= 1
+	END_VERTICAL		= 2
+	END_HORIZONTAL		= 3
+	END_RECTANGULAR		= 4
+	END_CUSTOM_CUT		= 5
+
+! ==============================================================================
+! Localization
+! ==============================================================================
+dim stDisplayOptions[5]
+	stDisplayOptions[1]		= `Сечение и Низ`
+	stDisplayOptions[2]		= `Сечение и Верх`
+	stDisplayOptions[3]		= `Символический Вид`
+	stDisplayOptions[4]		= `Только Контуры`
+	stDisplayOptions[5]		= `Вся Проекция`
+
+dim stProjectionTypes[3]
+	stProjectionTypes[1]	= `Согласно Диапазону Плана Этажа`
+	stProjectionTypes[2]	= `Согласно Абсолютному Диапазону`
+	stProjectionTypes[3]	= `Весь Элемент`
+
+DETLEVEL3D_OFF = 0
+DETLEVEL3D_SIMPLE = 1
+DETLEVEL3D_DETAILED = 2
+
+dim st3dDetLevelValues[3]
+	st3dDetLevelValues[1] = `Детальный`
+	st3dDetLevelValues[2] = `Простой`
+	st3dDetLevelValues[3] = `Откл.`
+
+
+! ==============================================================================
+! Parameter linking
+! ==============================================================================
+
+!tan(ang) = trussHeight / (tieBeamLength/2 + rafterHeight/sin(ang))
+!
+!sin(ang)/cos(ang) = trussHeight / (tieBeamLength/2 + rafterHeight/sin(ang))
+!
+!(sin(ang)/cos(ang))*(tieBeamLength/2 + rafterHeight/sin(ang)) = trussHeight
+!
+!(tieBeamLength/2)*(sin(ang)/cos(ang)) + rafterHeight/cos(ang) = trussHeight
+!
+!(1/cos(ang)) * ((tieBeamLength/2)*sin(ang) + rafterHeight) = trussHeight		/*cos(ang)
+!
+!(tieBeamLength/2)*sin(ang) + rafterHeight = trussHeight * cos(ang)			! cos(ang) = sqr(1-(sin(ang))^2)
+!
+!(tieBeamLength/2)*sin(ang) + rafterHeight = trussHeight * sqr(1-(sin(ang))^2)		! /^2
+!
+!((tieBeamLength/2)^2)*(sin(ang))^2 + 2*(tieBeamLength/2)*sin(ang)*rafterHeight + rafterHeight^2 = trussHeight^2 - trussHeight^2 * (sin(ang))^2
+
+if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+	pA = (tieBeamLength/2)^2 + trussHeight^2
+	pB = tieBeamLength * rafterHeight
+	pC = rafterHeight^2 - trussHeight^2
+
+	ang	= max(asn( (-pB + sqr(pB^2 - (4 * pA * pC))) / (2*pA) ), asn( (-pB - sqr(pB^2 - (4 * pA * pC))) / (2*pA) ))
+	rp	= tan(ang) * 12'
+endif
+
+if iDimensionSetMode = DIM_WIDTH_ANGLE then
+	rp = tan(ang) * 12'
+	trussHeight	= tan(ang)*(tieBeamLength/2 + rafterHeight/sin(ang))
+endif
+
+if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+	ang = atn(rp/12')
+	trussHeight	= tan(ang)*(tieBeamLength/2 + rafterHeight/sin(ang))
+endif
+
+
+! ==============================================================================
+! Calculation
+! ==============================================================================
+
+! === Overhang =============================
+
+yyMod = 0
+if iEndType = END_PERPENDICULAR then
+	xx = rafterHeight * sin(ang)
+	yy = rafterHeight * cos(ang)
+endif
+if iEndType = END_VERTICAL then
+	xx = 0
+	yy = rafterHeight / cos(ang)
+endif
+if iEndType = END_HORIZONTAL then
+	xx = rafterHeight / sin(ang)
+	yy = 0
+endif
+if iEndType = END_RECTANGULAR then
+	xx = cutPartLength
+	yy = rafterHeight / cos(ang) - cutPartLength * tan(ang)
+endif
+if iEndType = END_CUSTOM_CUT then
+	xx = cutPartLength
+	yy = rafterHeight / cos(ang) - cutPartLength * tan(ang)
+	yyMod = cutPartLength * tan(bottomFlangeAngle)
+endif
+
+if bOverhang then
+	eaveHeight = (eaveOverhang - xx) * tan(ang)
+else
+	if iEndType = END_PERPENDICULAR then
+		eaveOverhang = rafterHeight * sin(ang)
+	endif
+	if iEndType = END_VERTICAL then
+		eaveOverhang = 0
+	endif
+	if iEndType = END_HORIZONTAL then
+		eaveOverhang = rafterHeight / sin(ang)
+	endif
+	if iEndType = END_RECTANGULAR then
+		eaveOverhang = cutPartLength
+	endif
+	if iEndType = END_CUSTOM_CUT then
+		eaveOverhang = cutPartLength
+	endif
+	eaveHeight = 0
+endif
+
+
+! === Triangle width, height ===============
+
+triangleWidth 	= tieBeamLength + 2 * (rafterHeight / sin(ang))
+triangleHeight	= trussHeight
+
+
+! === "A" ZZYZX Size =============================
+
+A = tieBeamLength + 2 * eaveOverhang
+
+if iEndType = END_CUSTOM_CUT then
+	end1x = -A/2
+	end1y = -eaveHeight + yy
+	end2x = -A/2 + xx
+	end2y = -eaveHeight
+
+	end3x = -A/2
+	end3y = -eaveHeight - yyMod
+
+	x11 = end1x
+	y11 = end1y
+	x12 = end1x + cos(topFlangeAngle)
+	y12 = end1y - sin(topFlangeAngle)
+
+	x21 = end2x
+	y21 = end2y
+	x22 = end3x
+	y22 = end3y
+
+	gosub "Line - Line intersection"
+
+	if state = 1 & cx < 0 then
+		end3x = cx
+		end3y = cy
+	else
+		end3x = 0
+		end3y = 0
+	endif
+
+	dZZYZX = -end3y
+else
+	dZZYZX = eaveHeight
+endif
+
+ZZYZX = trussHeight + dZZYZX
+
+
+! =============================================================================
+! Coordinate calculation
+! =============================================================================
+
+if GLOB_SCRIPT_TYPE = 2 | GLOB_SCRIPT_TYPE = 3 then
+
+	! Main coordinates ------------------------------------------------------------
+
+	triangleOutLx = -triangleWidth / 2
+	triangleOutLy =  0
+	triangleOutRx = -triangleOutLx
+	triangleOutRy =  0
+	triangleOutTx =  0
+	triangleOutTy =  triangleHeight
+
+	tieBeamBottomLx =  triangleOutLx + rafterHeight / sin(ang)
+	tieBeamBottomLy =  triangleOutLy
+	tieBeamBottomRx = -tieBeamBottomLx
+	tieBeamBottomRy =  tieBeamBottomLy
+
+	triangleInLx =  tieBeamBottomLx + tieBeamHeight / tan(ang)
+	triangleInLy =  tieBeamBottomLy + tieBeamHeight
+	triangleInRx = -triangleInLx
+	triangleInRy =  triangleInLy
+	triangleInTx =  triangleOutTx
+	triangleInTy =  triangleOutTy - rafterHeight / cos(ang)
+
+
+	! Web beam coordinates --------------------------------------------------------
+
+	if iTrussType = TRUSS_PITCHED_COMPLEX then
+		n = 3
+		delx = (triangleOutRx + triangleInRx)/2
+		dx = delx/n
+	endif
+
+	if	iTrussType = TRUSS_PITCHED_HOWE |\
+		iTrussType = TRUSS_PITCHED_PRATT then
+
+		delx = (triangleOutRx + triangleInRx)/2
+		n = wn/2
+		dx = delx/n
+	endif
+
+	if iTrussType = TRUSS_PITCHED_FINK then
+
+		! Coordinates of axle-points
+
+		axleLx = (triangleOutLx + tieBeamBottomLx) / 2 + (tieBeamHeight / 2) / tan(ang)
+		axleLy =  triangleOutLy + tieBeamHeight / 2
+		axle1x =  axleLx / (wn)
+		axle1y =  axleLy
+		axleTx =  triangleOutTx
+		axleTy = (triangleOutTy + triangleInTy) / 2
+
+		axleDiv1x = axleLx / (2 + (wn = 5))
+		axleDiv1y = axleTy - (axleTy - axleLy) / (2 + (wn = 5))
+
+		if (wn = 5) then
+			axle2x =  axleLx / 5 * 3
+			axle2y =  axleLy
+			axleDiv2x = axleLx / 3 * 2
+			axleDiv2y = axleTy - (axleTy - axleLy) / 3 * 2
+		endif
+
+
+		! Inner coordinates
+
+		beta1 = atn((triangleInTy - axle1y) / (-axle1x))
+
+		p1T1x = triangleInTx - cos(ang) * (webBeamHeight / 2) / sin (beta1 - ang)
+		p1T1y = triangleInTy - sin(ang) * (webBeamHeight / 2) / sin (beta1 - ang)
+		p1T2x = triangleOutTx
+		p1T2y = triangleInTy - (webBeamHeight / 2) / cos(beta1)
+		p1B1x = axle1x + (tieBeamHeight / 2) / tan(beta1) - (webBeamHeight / 2) / sin(beta1)
+		p1B1y = triangleInLy
+		p1B2x = axle1x + (tieBeamHeight / 2) / tan(beta1) + (webBeamHeight / 2) / sin(beta1)
+		p1B2y = triangleInLy
+
+		x11 = axleDiv1x
+		y11 = axleDiv1y
+		x12 = p1B1x
+		y12 = p1B1y
+
+		x21 = tieBeamBottomLx
+		y21 = tieBeamBottomLy
+		x22 = triangleInTx
+		y22 = triangleInTy
+
+		gosub "Line - Line intersection"
+
+		if state = 1 & cx < 0 then
+			p2T1x = cx
+			p2T1y = cy
+		else
+			p2T1x = 0
+			p2T1y = 0
+		endif
+
+		beta2 = atn((p2T1y - p1B1y) / (p1B1x - p2T1x))
+
+		p2B2x = p1B1x + (webBeamHeight / cos(beta1 + beta2 - 90)) * cos(beta1)
+		p2B2y = p1B1y + (webBeamHeight / cos(beta1 + beta2 - 90)) * sin(beta1)
+
+		x11 = p2T1x + (webBeamHeight / cos(beta1 + beta2 - 90)) * cos(beta1)
+		y11 = p2T1y + (webBeamHeight / cos(beta1 + beta2 - 90)) * sin(beta1)
+		x12 = p2B2x
+		y12 = p2B2y
+
+		gosub "Line - Line intersection"
+
+		if state = 1 & cx < 0 then
+			p2T2x = cx
+			p2T2y = cy
+		else
+			p2T2x = 0
+			p2T2y = 0
+		endif
+
+		if (wn = 5) then
+			beta3 = atn(((p2T1y + p2T2y) / 2 - axle2y) / ((p2T1x + p2T2x) / 2 - axle2x))
+
+			p3B1x = axle2x + (tieBeamHeight / 2) / tan(beta3) - (webBeamHeight / 2) / sin(beta3)
+			p3B1y = triangleInLy
+			p3B2x = axle2x + (tieBeamHeight / 2) / tan(beta3) + (webBeamHeight / 2) / sin(beta3)
+			p3B2y = triangleInLy
+
+			x11 = p3B1x
+			y11 = p3B1y
+			x12 = p3B1x + cos(beta3)
+			y12 = p3B1y + sin(beta3)
+
+			gosub "Line - Line intersection"
+
+			if state = 1 & cx < 0 then
+				p3T1x = cx
+				p3T1y = cy
+			else
+				p3T1x = 0
+				p3T1y = 0
+			endif
+
+			x11 = p3B2x
+			y11 = p3B2y
+			x12 = p3B2x + cos(beta3)
+			y12 = p3B2y + sin(beta3)
+
+			x21 = p1B1x
+			y21 = p1B1y
+			x22 = p2T1x
+			y22 = p2T1y
+
+			gosub "Line - Line intersection"
+
+			if state = 1 & cx < 0 then
+				p3T2x = cx
+				p3T2y = cy
+			else
+				p3T2x = 0
+				p3T2y = 0
+			endif
+
+			x11 = axleDiv2x
+			y11 = axleDiv2y
+			x12 = p3B1x
+			y12 = p3B1y
+
+			x21 = tieBeamBottomLx
+			y21 = tieBeamBottomLy
+			x22 = triangleInTx
+			y22 = triangleInTy
+
+			gosub "Line - Line intersection"
+
+			if state = 1 & cx < 0 then
+				p4T1x = cx
+				p4T1y = cy
+			else
+				p4T1x = 0
+				p4T1y = 0
+			endif
+
+			beta4 = atn((p4T1y - p3B1y) / (p3B1x - p4T1x))
+
+			p4B2x = p3B1x + (webBeamHeight / cos(beta3 + beta4 - 90)) * cos(beta3)
+			p4B2y = p3B1y + (webBeamHeight / cos(beta3 + beta4 - 90)) * sin(beta3)
+
+			x11 = p4T1x + (webBeamHeight / cos(beta3 + beta4 - 90)) * cos(beta3)
+			y11 = p4T1y + (webBeamHeight / cos(beta3 + beta4 - 90)) * sin(beta3)
+			x12 = p4B2x
+			y12 = p4B2y
+
+			gosub "Line - Line intersection"
+
+			if state = 1 & cx < 0 then
+				p4T2x = cx
+				p4T2y = cy
+			else
+				p4T2x = 0
+				p4T2y = 0
+			endif
+		endif
+
+	endif
+
+endif
+
+goto "MasterEnd"
+
+
+! ==============================================================================
+"Line - Line intersection":
+! ------------------------------------------------------------------------------
+! Input variables:
+!	EPS:				epsylon
+!	x11,y11, x12,y12	line #1
+!	x21,y21, x22,y22	line #2
+!
+! Returned variables:
+!	state:				0 = no intersection point
+!						1 = valid intersection point
+!	cx, cy:				intersection point
+! ==============================================================================
+
+	lliDiv = (x11-x12) * (y21-y22) - (y11-y12) * (x21-x22)
+
+	if abs(lliDiv) > EPS then
+		! Intersection
+
+		temp1 = x11 * y12 - y11 * x12
+		temp2 = x21 * y22 - y21 * x22
+
+		tempx = temp1 * (x21-x22) - (x11-x12) * temp2
+		tempy = temp1 * (y21-y22) - (y11-y12) * temp2
+
+		state = 1
+		cx = (tempx / lliDiv)
+		cy = (tempy / lliDiv)
+	else
+		! No Intersection
+		state = 0
+		cx = 0
+		cy = 0
+	endif
+return
+
+
+"MasterEnd":
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+hideparameter all "A", "B", "ZZYZX"
+
+call "FM_types" parameters all
+
+values{2} "gs_detlevel_3D_m" DETLEVEL3D_DETAILED, st3dDetLevelValues[1],
+							DETLEVEL3D_SIMPLE, st3dDetLevelValues[2],
+							DETLEVEL3D_OFF, st3dDetLevelValues[3]
+
+values{2} "iDimensionSetMode" 	DIM_WIDTH_HEIGHT, `Ширина + Высота`,
+								DIM_WIDTH_ANGLE, `Ширина + Угол`,
+								DIM_WIDTH_PROPORTION, `Ширина + Пропорция`
+
+values{2} "iEndType"	END_PERPENDICULAR, `Перпендикулярно`,
+						END_VERTICAL, `Вертикальный`,
+						END_HORIZONTAL, `Горизонтальный`,
+						END_RECTANGULAR, `Прямоугольный Срез`,
+						END_CUSTOM_CUT, `Специальное Сечение`
+
+
+lock "A", "ZZYZX"
+parameters	A 		= A,
+			ZZYZX	= ZZYZX
+
+_angLowerLimit = 10
+_angUpperLimit = 90
+
+if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+	lock "ang", "rp"
+	parameters	ang = ang,
+				rp	= rp
+
+	values "trussHeight" range[max(tieBeamHeight*2 + rafterHeight/cos(ang), (A/2)*tan(_angLowerLimit)), )
+endif
+if iDimensionSetMode = DIM_WIDTH_ANGLE then
+	lock "trussHeight", "rp"
+	parameters	trussHeight	= trussHeight,
+				rp			= rp
+
+	values "ang" range[_angLowerLimit, _angUpperLimit)
+endif
+if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+	lock "trussHeight", "ang"
+	parameters	trussHeight	= trussHeight,
+				ang			= ang
+
+	values "rp" range[tan(_angLowerLimit) * 12', tan(_angUpperLimit) * 12')
+endif
+
+parameters ac_bottomlevel = -dZZYZX,
+		   ac_toplevel	  = trussHeight
+
+values "rafterHeight" range (0,)
+values "tieBeamHeight" range (0,)
+values "webBeamHeight" range (0,)
+
+
+if	iTrussType = TRUSS_PITCHED_HOWE |\
+	iTrussType = TRUSS_PITCHED_PRATT then
+
+	values "wn" range [2, 20] step 4, 2
+endif
+
+if iTrussType = TRUSS_PITCHED_FINK then
+	values "wn" 3, 5
+endif
+
+if (bOverhang) then
+	values "eaveOverhang" range[xx, ]
+else
+	lock "eaveOverhang"
+endif
+
+lock "eaveHeight"
+parameters eaveHeight = dZZYZX
+
+if not((iEndType = END_CUSTOM_CUT) | (iEndType = END_RECTANGULAR)) then
+	lock "cutPartLength"
+else
+	values "cutPartLength" range[0, ]
+endif
+
+if not(iEndType = END_CUSTOM_CUT) then
+	lock "topFlangeAngle", "bottomFlangeAngle"
+endif
+
+if not(stp) then
+	lock "mat2"
+endif
+
+if not(gs_axis) then
+	lock "gs_axis_line", "gs_axis_line_pen"
+endif
+
+if gs_cont_pen= 0 then parameters gs_cont_pen=2
+IF gs_fill_pen=0 then parameters gs_fill_pen=91
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+values{2} "ac_symb_display_option" 	DISPLAY_PROJECTED,		stDisplayOptions[1],
+									DISPLAY_OVERHEAD_PROJ,	stDisplayOptions[2],
+									DISPLAY_SYMBOLIC,		stDisplayOptions[3],
+									DISPLAY_OUTLINES,		stDisplayOptions[4],
+									DISPLAY_OVERHEAD_ALL,	stDisplayOptions[5]
+									
+values{2} "ac_symb_show_projection_to"	PROJECTION_FLOOR_PLAN_RANGE,	stProjectionTypes[1],
+										PROJECTION_DISPLAY_LIMIT,		stProjectionTypes[2],
+										PROJECTION_ENTIRE_ELEMENT,		stProjectionTypes[3]
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"gs_use_3D_view_attributes"
+	lock			"gs_use_3D_view_attributes"
+endif
+
+if gs_use_3D_view_attributes then
+	hideparameter	"gs_cont_pen"
+	lock			"gs_cont_pen"
+endif
+
+if not(ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_OVERHEAD_PROJ) then
+	hideparameter	"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OUTLINES | ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"ac_symb_show_projection_to"
+	lock			"ac_symb_show_projection_to"
+
+	hideparameter	"gs_cut_linetype",
+					"gs_cut_pen",
+					"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+
+	lock			"gs_cut_linetype",
+					"gs_cut_pen",
+					"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OUTLINES then
+	hideparameter	"gs_overhead_linetype", "gs_overhead_pen"
+	lock			"gs_overhead_linetype", "gs_overhead_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"gs_fill_type", "gs_fill_pen", "gs_back_pen", "gs_cont_pen", "gs_cont_line"
+	lock			"gs_fill_type", "gs_fill_pen", "gs_back_pen", "gs_cont_pen", "gs_cont_line"
+endif
+
+if ac_symb_display_option # DISPLAY_SYMBOLIC then
+	hideparameter "std"
+	lock "std"
+endif
+
+if ac_symb_display_option = DISPLAY_OUTLINES then
+	hideparameter "gs_axis"
+	lock "gs_axis"
+endif
+
+! ==============================================================================
+! 3D Display Options
+! ==============================================================================
+
+if gs_detlevel_3D_m = DETLEVEL3D_OFF then
+	lock "gs_pen_3d", "gs_shadow"
+endif
+]]>
+</Script_VL>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_UIDefault/>
+			<STBit_FixSize/>
+			<STBit_UIUseHierarchicalPages/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Length"]]></Description>
+			<Fix/>
+			<Value>12.4</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Width"]]></Description>
+			<Fix/>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="zzyzx">
+			<Description><![CDATA["Total Height"]]></Description>
+			<Fix/>
+			<Value>3.58</Value>
+		</Length>
+		<Integer Name="gs_detlevel_3D_m">
+			<Description><![CDATA["3D Detail Level"]]></Description>
+			<Value>2</Value>
+		</Integer>
+		<Integer Name="iTrussType">
+			<Description><![CDATA[""]]></Description>
+			<Value>6</Value>
+		</Integer>
+		<Integer Name="gs_ui_current_page">
+			<Description><![CDATA[""]]></Description>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="tieBeamLength">
+			<Description><![CDATA["Tie Beam Length"]]></Description>
+			<Value>12</Value>
+		</Length>
+
+		<!-- gs_accessories: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_accessories">
+			<Description><![CDATA["Accessories"]]></Description>
+		</Title>
+		<Integer Name="wn">
+			<Description><![CDATA["No. of Divisions"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>8</Value>
+		</Integer>
+		<Boolean Name="stp">
+			<Description><![CDATA["Steel Plates"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="iEndType">
+			<Description><![CDATA["End Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Boolean Name="bOverhang">
+			<Description><![CDATA["Overhang"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="eaveOverhang">
+			<Description><![CDATA["Eave Overhang"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="eaveHeight">
+			<Description><![CDATA["Eave Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="cutPartLength">
+			<Description><![CDATA["Cut Part Length"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Angle Name="topFlangeAngle">
+			<Description><![CDATA["Top Flange Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>70</Value>
+		</Angle>
+		<Angle Name="bottomFlangeAngle">
+			<Description><![CDATA["Bottom Flange Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>15</Value>
+		</Angle>
+		<Length Name="rafterHeight">
+			<Description><![CDATA["Rafter Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="tieBeamHeight">
+			<Description><![CDATA["Tie Beam Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="webBeamHeight">
+			<Description><![CDATA["Web Member Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.07</Value>
+		</Length>
+
+		<!-- iDimensionSetMode: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Integer Name="iDimensionSetMode">
+			<Description><![CDATA["Dimension Set Mode"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="trussHeight">
+			<Description><![CDATA["Truss Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3.58</Value>
+		</Length>
+		<Angle Name="ang">
+			<Description><![CDATA["Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>30</Value>
+		</Angle>
+		<Length Name="rp">
+			<Description><![CDATA["Roof Pitch (x : 12')"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1.8288</Value>
+		</Length>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+		</Title>
+		<Boolean Name="gs_shadow">
+			<Description><![CDATA["Shadow"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<PenColor Name="gs_pen_3d">
+			<Description><![CDATA["3D Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</PenColor>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Show 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D Representation"]]></Description>
+			<Fix/>
+		</Title>
+		<Integer Name="ac_symb_display_option">
+			<Description><![CDATA["Floor Plan Display"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Integer Name="ac_symb_show_projection_to">
+			<Description><![CDATA["Show Projection"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Boolean Name="std">
+			<Description><![CDATA["Show Elevation in 2D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_axis">
+			<Description><![CDATA["Show Axis"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<LineType Name="gs_axis_line">
+			<Description><![CDATA["Axis Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</LineType>
+		<PenColor Name="gs_axis_line_pen">
+			<Description><![CDATA["Axis Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<LineType Name="gs_cont_line">
+			<Description><![CDATA["Uncut Lines / Contour"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Uncut Line / Contour Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Fill Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Fill Background Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<LineType Name="gs_cut_linetype">
+			<Description><![CDATA["Cut Lines"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="gs_cut_pen">
+			<Description><![CDATA["Cut Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>24</Value>
+		</PenColor>
+		<FillPattern Name="gs_cut_fill_type">
+			<Description><![CDATA["Cut Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_cut_fill_pen">
+			<Description><![CDATA["Cut Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="gs_cut_back_pen">
+			<Description><![CDATA["Cut Fill Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<LineType Name="gs_overhead_linetype">
+			<Description><![CDATA["Overhead Lines"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>21</Value>
+		</LineType>
+		<PenColor Name="gs_overhead_pen">
+			<Description><![CDATA["Overhead Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</PenColor>
+		<Boolean Name="gs_2D_projection">
+			<Description><![CDATA["2D Symbol"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_use_3D_view_attributes">
+			<Description><![CDATA["Use 3D View Attributes"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="gs_2D_projection_type">
+			<Description><![CDATA["2D Projection Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="gs_cutplane_height">
+			<Description><![CDATA["Height of the Cut Plane"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_top_range_height">
+			<Description><![CDATA["Height of the Top Cut Plane"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_bottom_range_height">
+			<Description><![CDATA["Height of the Bottom Cut Plane"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_material">
+			<Description><![CDATA["Surfaces"]]></Description>
+		</Title>
+		<Material Name="gs_truss_mat">
+			<Description><![CDATA["Truss"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>14</Value>
+		</Material>
+		<Material Name="mat2">
+			<Description><![CDATA["Steel Plates"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>13</Value>
+		</Material>
+
+		<!-- gs_list: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_list">
+			<Description><![CDATA["Parameters for Listing"]]></Description>
+			<Fix/>
+		</Title>
+		<RealNum Name="gs_list_cost">
+			<Description><![CDATA["Cost"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_manufacturer">
+			<Description><![CDATA["Manufacturer"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_note">
+			<Description><![CDATA["Note/Remarks"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_location">
+			<Description><![CDATA["Location"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_accessories">
+			<Description><![CDATA["Accessories"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_Type">
+			<Description><![CDATA["Group Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Другой"]]></Value>
+		</String>
+		<Integer Name="iFMType">
+			<Description><![CDATA["Group Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>25</Value>
+		</Integer>
+		<String Name="FM_InventoryNumber">
+			<Description><![CDATA["Inventory Number"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_SerialNumber">
+			<Description><![CDATA["Serial Number"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductionYear">
+			<Description><![CDATA["Production Year"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ObjectWeight">
+			<Description><![CDATA["Object Weight"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ObjectWeightUnit">
+			<Description><![CDATA["Object Weight Unit"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["кг"]]></Value>
+		</String>
+		<String Name="gs_list_custom1">
+			<Description><![CDATA["User Defined 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom2">
+			<Description><![CDATA["User Defined 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom3">
+			<Description><![CDATA["User Defined 3"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom4">
+			<Description><![CDATA["User Defined 4"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom5">
+			<Description><![CDATA["User Defined 5"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="LibraryLangCode">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["RUS"]]></Value>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>784EAEA1-5041-4AA6-B6F4-EF263A891EE7</MainGUID>
+	<MainGUID>37669729-B714-4F9B-B074-6C4DE055DAE0</MainGUID>
+	<MainGUID>1B26FA10-98B0-4711-96AC-1DD93324A33A</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+
+if iTrussType = TRUSS_PITCHED_COMPLEX then
+	ui_dialog `Параметры Сложной Скатной Фермы`
+endif
+
+if iTrussType = iTrussType = TRUSS_PITCHED_HOWE then
+	ui_dialog `Параметры Скатной Фермы Гау`
+endif
+
+if iTrussType = TRUSS_PITCHED_PRATT then
+	ui_dialog `Параметры Скатной Фермы Пратта`
+endif
+
+if iTrussType = TRUSS_PITCHED_FINK then
+	ui_dialog `Параметры Скатной Фермы Финка`
+endif
+
+call "ui_wood_truss" parameters all
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["ui_wood_truss"]]></MName>
+		<MainGUID>C4610C02-71A0-4E2A-A604-FD7C71DDEBDC</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["FM_types"]]></MName>
+		<MainGUID>2759D2DF-AA8E-44D1-AD1D-261581266B34</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+</Symbol>

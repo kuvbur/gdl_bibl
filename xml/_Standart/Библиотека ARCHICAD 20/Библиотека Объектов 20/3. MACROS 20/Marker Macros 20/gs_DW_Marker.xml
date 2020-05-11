@@ -1,0 +1,5512 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="true" IsPlaceable="false" MainGUID="0209F65F-7452-4FF2-88B0-38AD4854DD9E" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>B176ABF1-5813-478F-926B-28EE7C5DC1F7</MainGUID>
+	<MainGUID>4FD10D67-2F29-4844-A65A-6597589B0CB5</MainGUID>
+	<MainGUID>B3A106BF-6277-456E-8657-65B5C2D1C315</MainGUID>
+	<MainGUID>9C0F3C78-D2CB-4528-ADA2-703C8A09FC1A</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+if gs_hide_marker then end
+
+! ==============================================================================
+! Initializations
+! ==============================================================================
+
+PAPER_TO_MODEL = GLOB_SCALE / 1000	! Convert paper size to model size
+
+AC_MarkerSize		= AC_MarkerSize * PAPER_TO_MODEL
+
+headDistModel			= headDistM			* GLOB_SCALE
+footLengthModel			= footLengthM		* GLOB_SCALE
+markerOffsetModel		= markerOffsetM		* GLOB_SCALE
+whDistModel				= whDistM			* GLOB_SCALE
+sillDistModel			= sillDistM			* GLOB_SCALE
+sillOffsetModel			= sillOffsetM		* GLOB_SCALE
+fireDistModel			= fireDistM			* GLOB_SCALE
+fireOffsetModel			= fireOffsetM		* GLOB_SCALE
+acousticDistModel		= acousticDistM		* GLOB_SCALE
+acousticOffsetModel		= acousticOffsetM	* GLOB_SCALE
+uvalueDistModel			= uvalueDistM		* GLOB_SCALE
+uvalueOffsetModel		= uvalueOffsetM		* GLOB_SCALE
+
+unID = 1
+
+note1	= ""
+note2	= ""
+note3	= ""
+note4	= ""
+
+lengthOfNote1	= 0
+lengthOfNote2	= 0
+lengthOfNote3	= 0
+lengthOfNote4	= 0
+
+_iUnitTypeByContent	= 0
+
+if AC_WIDO_TYPE = 3 then
+	Skylight_B = 0
+	succ1 = REQUEST ("ASSOCLP_PARVALUE", "B", Dummy, Dummy, Dummy, Dummy, Dummy, temp_Skylight_B)
+	if succ1 then Skylight_B = temp_Skylight_B
+
+	Skylight_roofang = 0
+	succ2 = REQUEST ("ASSOCLP_PARVALUE", "ac_roofang", Dummy, Dummy, Dummy, Dummy, Dummy, temp_Skylight_roofang)
+	if succ2 then Skylight_roofang = temp_Skylight_roofang
+
+	gs_marker_text_dist = 0
+	succ3 = REQUEST ("ASSOCLP_PARVALUE", "gs_marker_text_dist", Dummy, Dummy, Dummy, Dummy, Dummy, temp_gs_marker_text_dist)
+	if succ3 then gs_marker_text_dist = temp_gs_marker_text_dist
+
+	if (succ1 & succ2) | succ3 then
+		if succ3 then
+			upbott_text_dist = gs_marker_text_dist
+		else
+			upbott_text_dist = Skylight_B * abs(cos(Skylight_roofang))
+		endif
+	else
+		upbott_text_dist = AC_WALL_THICKNESS
+	endif
+else
+	upbott_text_dist = AC_WALL_THICKNESS
+endif
+
+! --- Oriented View ------------------------------------------------------------
+
+angleViewRot = 0
+if AC_Readable then
+	rrr = REQUEST ("View_Rotangle", "", angleViewRot)
+endif
+totalRotate = (SYMB_ROTANGLE + angleViewRot) MOD 360
+
+textAngle = totalRotate
+
+! ==============================================================================
+! 2D Degradation
+! ==============================================================================
+
+if GLOB_CONTEXT < 20 then
+	bShowSillHeight		= 1
+	bShowWidthHeight	= 1
+	bShowID				= 1
+	bShowDrawing		= 1
+	bShowFire			= 1
+	bShowAcoustic		= 1
+	bShowUvalue			= 1
+else
+	! feedback mode
+	bShowSillHeight		= (gs_GLOB_MODPAR_NAME = "sillDistM" | gs_GLOB_MODPAR_NAME = "sillOffsetM")
+	bShowWidthHeight	= (gs_GLOB_MODPAR_NAME = "whDistM")
+	bShowID				= 0
+	bShowDrawing		= (gs_GLOB_MODPAR_NAME = "headDistM" | \
+							gs_GLOB_MODPAR_NAME = "footLengthM" | \
+							gs_GLOB_MODPAR_NAME = "markerOffsetM")
+	bShowFire			= (gs_GLOB_MODPAR_NAME = "fireDistM" | gs_GLOB_MODPAR_NAME = "fireOffsetM")
+	bShowAcoustic		= (gs_GLOB_MODPAR_NAME = "acousticDistM" | gs_GLOB_MODPAR_NAME = "acousticOffsetM")
+	bShowUvalue			= (gs_GLOB_MODPAR_NAME = "uvalueDistM" | gs_GLOB_MODPAR_NAME = "uvalueOffsetM")
+endif
+
+
+! ==============================================================================
+! Positioning on left or right side
+! ==============================================================================
+
+bDefaultElem = (GLOB_INTGUID = "" | GLOB_INTGUID = "{00000000-0000-0000-0000-000000000000}")
+
+if AC_WIDO_TYPE = 3 then
+	if ( not( abs(AC_SKYL_ROTANGLE)>EPS exor AC_SameSide)) & not(bDefaultElem & GLOB_CONTEXT = 5) then
+		rot2 180
+		textAngle = textAngle + 180
+		if textAngle >= 360 then
+			textAngle = textAngle - 360
+		endif
+	endif
+	if Skylight_roofang > 90 + EPS then add2 0, upbott_text_dist
+	if AC_SameSide then
+		if Skylight_roofang > 90 then
+			add2 0, -upbott_text_dist
+		else
+			add2 0, upbott_text_dist
+		endif
+	endif
+else
+	if AC_WIDO_REVEAL_SIDE = AC_SameSide & not(bDefaultElem & GLOB_CONTEXT = 5) then
+		rot2 180
+		add2 0, upbott_text_dist
+		textAngle = textAngle + 180
+		if textAngle >= 360 then
+			textAngle = textAngle - 360
+		endif
+	endif
+endif
+
+
+! ==============================================================================
+! Drawing Lines
+! ==============================================================================
+
+pen SYMB_VIEW_PEN
+
+if AC_ID_On | AC_WidHei_On | GS_Center_Line then
+	if iMarkerSizeUnit = 1 then
+		hotspot2  0,					headDistModel,unID,		markerOffsetM,	1+1024+128,	markerOffsetMm
+		hotspot2 -1,					headDistModel,unID+1,	markerOffsetM,	3+1024,		markerOffsetMm
+		hotspot2  markerOffsetModel,	headDistModel,unID+2,	markerOffsetM,	2+1024,		markerOffsetMm
+		unID = unID + 3
+
+	hotspot2  0,				-upbott_text_dist - footLengthModel,unID,		markerOffsetM,1+1024+128,	markerOffsetMm
+		hotspot2 -0.1,				-upbott_text_dist - footLengthModel,unID+1,	markerOffsetM,3+1024,		markerOffsetMm
+		hotspot2 markerOffsetModel,	-upbott_text_dist - footLengthModel,unID+2,	markerOffsetM,2+1024,		markerOffsetMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2  0,					headDistModel,unID,		markerOffsetM,	1+1024+128,	markerOffsetCm
+		hotspot2 -1,					headDistModel,unID+1,	markerOffsetM,	3+1024,		markerOffsetCm
+		hotspot2  markerOffsetModel,	headDistModel,unID+2,	markerOffsetM,	2+1024,		markerOffsetCm
+		unID = unID + 3
+
+		hotspot2  0,				-upbott_text_dist - footLengthModel,unID,	markerOffsetM,1+1024+128,	markerOffsetCm
+		hotspot2 -0.1,				-upbott_text_dist - footLengthModel,unID+1,	markerOffsetM,3+1024,		markerOffsetCm
+		hotspot2 markerOffsetModel,	-upbott_text_dist - footLengthModel,unID+2,	markerOffsetM,2+1024,		markerOffsetCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2  0,					headDistModel,unID,		markerOffsetM,	1+1024+128,	markerOffsetPoint
+		hotspot2 -1,					headDistModel,unID+1,	markerOffsetM,	3+1024,		markerOffsetPoint
+		hotspot2  markerOffsetModel,	headDistModel,unID+2,	markerOffsetM,	2+1024,		markerOffsetPoint
+		unID = unID + 3
+
+		hotspot2  0,				-upbott_text_dist - footLengthModel,unID,	markerOffsetM,1+1024+128,	markerOffsetPoint
+		hotspot2 -0.1,				-upbott_text_dist - footLengthModel,unID+1,	markerOffsetM,3+1024,		markerOffsetPoint
+		hotspot2 markerOffsetModel,	-upbott_text_dist - footLengthModel,unID+2,	markerOffsetM,2+1024,		markerOffsetPoint
+		unID = unID + 3
+	endif
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2 markerOffsetModel,  0,				unID,	headDistM, 1+1024+128,	headDistMm
+		hotspot2 markerOffsetModel, -0.1,			unID+1,	headDistM, 3+1024,		headDistMm
+		hotspot2 markerOffsetModel,  headDistModel,	unID+2,	headDistM, 2+1024,		headDistMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2 markerOffsetModel,  0,				unID,	headDistM, 1+1024+128,	headDistCm
+		hotspot2 markerOffsetModel, -0.1,			unID+1,	headDistM, 3+1024,		headDistCm
+		hotspot2 markerOffsetModel,  headDistModel,	unID+2,	headDistM, 2+1024,		headDistCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2 markerOffsetModel,  0,				unID,	headDistM, 1+1024+128,	headDistPoint
+		hotspot2 markerOffsetModel, -0.1,			unID+1,	headDistM, 3+1024,		headDistPoint
+		hotspot2 markerOffsetModel,  headDistModel,	unID+2,	headDistM, 2+1024,		headDistPoint
+		unID = unID + 3
+	endif
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2 markerOffsetModel, -upbott_text_dist,						unID,	footLengthM, 1+1024+128,	footLengthMm
+		hotspot2 markerOffsetModel, -upbott_text_dist + 0.1,				unID+1,	footLengthM, 3+1024,		footLengthMm
+		hotspot2 markerOffsetModel, -upbott_text_dist - footLengthModel,	unID+2,	footLengthM, 2+1024,		footLengthMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2 markerOffsetModel, -upbott_text_dist,						unID,	footLengthM, 1+1024+128,	footLengthCm
+		hotspot2 markerOffsetModel, -upbott_text_dist + 0.1,				unID+1,	footLengthM, 3+1024,		footLengthCm
+		hotspot2 markerOffsetModel, -upbott_text_dist - footLengthModel,	unID+2,	footLengthM, 2+1024,		footLengthCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2 markerOffsetModel, -upbott_text_dist,						unID,	footLengthM, 1+1024+128,	footLengthPoint
+		hotspot2 markerOffsetModel, -upbott_text_dist + 0.1,				unID+1,	footLengthM, 3+1024,		footLengthPoint
+		hotspot2 markerOffsetModel, -upbott_text_dist - footLengthModel,	unID+2,	footLengthM, 2+1024,		footLengthPoint
+		unID = unID + 3
+	endif
+endIf
+
+define style  "mtext1style"  AC_TextFont_1, AC_TextSize_1, 7, AC_TextStyle_1
+define style  "mtext2style"  AC_TextFont_2, AC_TextSize_2, 7, AC_TextStyle_2
+define style  "mtext3style"  AC_TextFont_3, AC_TextSize_3, 7, AC_TextStyle_3
+define style  "mtext4style"  AC_TextFont_4, AC_TextSize_4, 7, AC_TextStyle_4
+define style  "mtext5style"  AC_TextFont_5, AC_TextSize_5, 7, AC_TextStyle_5
+define style  "mtext6style"  AC_TextFont_6, AC_TextSize_6, 7, AC_TextStyle_6
+define style  "mtext7style"  AC_TextFont_7, AC_TextSize_7, 7, AC_TextStyle_7
+
+! ==============================================================================
+! Show ID
+! ==============================================================================
+
+pen AC_TextPen_1
+
+style  "mtext1style"
+frame_width = stw("  " + AC_MarkerText_1 + "  ") * PAPER_TO_MODEL
+
+if bShowDrawing & iMarkerShape <> SHAPE_NONE then
+	drawindex 20
+	mask = 7
+	pen gs_cont_pen
+
+	if GS_MarkerFill then fill AC_MarkerFill
+
+! Circle - Marker Shape
+! ----------------------------------------------------------------------
+	if iMarkerShape = SHAPE_CIRCLE then
+
+		if gs_markertext_fit = 0 then
+			dx1 = AC_MarkerSize/2
+		else
+			dx1 = frame_width/2
+		endif
+
+		poly2_b	2, mask, gs_fill_pen, gs_back_pen,
+				markerOffsetModel, headDistModel,901,
+				dx1,360,4001
+
+		if GS_Center_Line then
+			pen SYMB_VIEW_PEN
+			line2 markerOffsetModel, headDistModel-dx1, markerOffsetModel, -upbott_text_dist - footLengthModel
+		endif
+
+	else
+
+! Oval - Marker Shape
+! ----------------------------------------------------------------------
+
+		if iMarkerShape = SHAPE_OVAL then
+
+			dx1 = frame_width/2
+
+			poly2_b	7, mask, gs_fill_pen, gs_back_pen,
+				markerOffsetModel-dx1+AC_MarkerSize/2, headDistModel+AC_MarkerSize/2, 1,
+				markerOffsetModel+dx1-AC_MarkerSize/2, headDistModel+AC_MarkerSize/2, 1,
+				markerOffsetModel+dx1-AC_MarkerSize/2, headDistModel, 901,
+				markerOffsetModel+dx1-AC_MarkerSize/2, headDistModel-AC_MarkerSize/2, 3001,
+				markerOffsetModel-dx1+AC_MarkerSize/2, headDistModel-AC_MarkerSize/2, 1,
+				markerOffsetModel-1000, headDistModel-AC_MarkerSize/2, 801,
+				markerOffsetModel-dx1+AC_MarkerSize/2, headDistModel+AC_MarkerSize/2, 1001
+
+			if GS_Center_Line then
+				pen SYMB_VIEW_PEN
+				line2 markerOffsetModel, headDistModel-AC_MarkerSize/2, markerOffsetModel, -upbott_text_dist - footLengthModel
+			endif
+
+			goto 100
+
+		endif
+
+! Fragment - Marker Shape
+! ----------------------------------------------------------------------
+
+		if iMarkerShape = SHAPE_FRAGMENT then
+
+			poly2_b 4, mask, gs_fill_pen, gs_back_pen,
+				markerOffsetModel-frame_width/2, headDistModel-AC_MarkerSize/2, 1,
+				markerOffsetModel-frame_width/2, headDistModel+AC_MarkerSize/2, 1,
+				markerOffsetModel+frame_width/2, headDistModel+AC_MarkerSize/2, 1,
+				markerOffsetModel+frame_width/2, headDistModel-AC_MarkerSize/2, 1
+
+			if GS_Center_Line then
+				pen SYMB_VIEW_PEN
+				line2 markerOffsetModel, headDistModel-AC_MarkerSize/2, markerOffsetModel, -upbott_text_dist - footLengthModel
+			endif
+
+		else
+
+! Triangle - Marker Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_TRIANGLE then
+				num = 3
+				if not(gs_marker_rotation) then
+					alfa		= 30
+					text_offset	= 0
+				else
+					alfa		= 90
+					text_offset	= 1
+				endif
+			endif
+
+! Rectangle - Marker Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_RECT then
+				num = 4
+				if not(gs_marker_rotation) then
+					alfa		= 0
+					text_offset	= 0
+				else
+					alfa		= 45
+					text_offset	= 1
+				endif
+			endif
+
+! Pentagon - Marker Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_PENTAGON then
+				num = 5
+				if not(gs_marker_rotation) then
+					alfa		= 54
+					text_offset	= 0
+				else
+					alfa		= 90
+					text_offset	= 1
+				endif
+			endif
+
+! Hexagon - Marker Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_HEXAGON then
+				num = 6
+				if not(gs_marker_rotation) then
+					alfa		= 90
+					text_offset	= 0
+				else
+					alfa		= 60
+					text_offset	= 1
+				endif
+			endif
+
+! Octagon - Marker Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_OCTAGON then
+				num = 8
+				if not(gs_marker_rotation) then
+					alfa		= 0
+					text_offset	= 0
+				else
+					alfa		= 67.5
+					text_offset	= 1
+				endif
+			endif
+
+			if GS_Center_Line then
+				pen SYMB_VIEW_PEN
+				if not(gs_marker_rotation) then
+					line2 markerOffsetModel, headDistModel-AC_MarkerSize/2, markerOffsetModel, -upbott_text_dist - footLengthModel
+				else
+					line2 markerOffsetModel, headDistModel-AC_MarkerSize/2*sin(90-360/(2*num)), markerOffsetModel, -upbott_text_dist - footLengthModel
+				endif
+			endif
+
+			for i=1 to num
+				put markerOffsetModel+AC_MarkerSize/2*cos(alfa), headDistModel+AC_MarkerSize/2*sin(alfa), 1
+				alfa = alfa + 360 / num
+			next i
+
+			pen gs_cont_pen
+			poly2_b	num, mask, gs_fill_pen, gs_back_pen,
+					get(nsp)
+		endif
+	endif
+else
+	if bShowDrawing & GS_Center_Line then
+		drawindex 10
+		pen SYMB_VIEW_PEN
+
+		rrr= REQUEST("Height_of_style",mtext1style,style_hght)
+
+		if iMarkerDir = 2 then
+			line2	markerOffsetModel,  headDistModel - AC_ID_On * frame_width/2,
+					markerOffsetModel, -upbott_text_dist - footLengthModel
+		else
+			line2	markerOffsetModel,  headDistModel - AC_ID_On * (style_hght * PAPER_TO_MODEL)/2,
+					markerOffsetModel, -upbott_text_dist - footLengthModel
+		endif
+	endif
+endif
+
+100:
+
+
+! ==============================================================================
+! Show ID
+! ==============================================================================
+
+
+if bShowID & AC_ID_On then
+	add2 markerOffsetModel,0
+	pen AC_TextPen_1
+
+	posX	 = 0
+	posY	 = headDistModel / PAPER_TO_MODEL - AC_TextSize_1 / 2
+	_horAlign= 2
+	note1	 = AC_MarkerText_1
+	note2	 = ""
+	note3	 = ""
+	note4	 = ""
+	style1	 = "mtext1style"
+	style2	 = ""
+	style3	 = ""
+	style4	 = ""
+	notesize = AC_TextSize_1
+	angle	 = textAngle
+	enabled	 = AC_Readable
+
+	gosub "Print_text_considering_readability"
+
+	del 1
+endif
+
+
+! ==============================================================================
+! Show Parapet
+! ==============================================================================
+
+define style  "extraStyle4" AC_TextFont_4, 2/3*AC_TextSize_4, 7, AC_TextStyle_4
+
+if AC_Sill_On then
+	add2 markerOffsetModel,0
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2 sillOffsetModel, -upbott_text_dist,					unID,	sillDistM, 1+1024+128,	sillDistMm
+		hotspot2 sillOffsetModel, -upbott_text_dist + 1,				unID+1,	sillDistM, 3+1024,		sillDistMm
+		hotspot2 sillOffsetModel, -upbott_text_dist - sillDistModel,	unID+2,	sillDistM, 2+1024,		sillDistMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2 sillOffsetModel, -upbott_text_dist,					unID,	sillDistM, 1+1024+128,	sillDistCm
+		hotspot2 sillOffsetModel, -upbott_text_dist + 1,				unID+1,	sillDistM, 3+1024,		sillDistCm
+		hotspot2 sillOffsetModel, -upbott_text_dist - sillDistModel,	unID+2,	sillDistM, 2+1024,		sillDistCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2 sillOffsetModel, -upbott_text_dist,					unID,	sillDistM, 1+1024+128,	sillDistPoint
+		hotspot2 sillOffsetModel, -upbott_text_dist + 1,				unID+1,	sillDistM, 3+1024,		sillDistPoint
+		hotspot2 sillOffsetModel, -upbott_text_dist - sillDistModel,	unID+2,	sillDistM, 2+1024,		sillDistPoint
+		unID = unID + 3
+	endif
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2  0,				-upbott_text_dist - sillDistModel, unID,  sillOffsetM, 1+1024+128,	sillOffsetMm
+		hotspot2 -1,				-upbott_text_dist - sillDistModel, unID+1,sillOffsetM, 3+1024,		sillOffsetMm
+		hotspot2  sillOffsetModel,	-upbott_text_dist - sillDistModel, unID+2,sillOffsetM, 2+1024,		sillOffsetMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2  0,				-upbott_text_dist - sillDistModel, unID,  sillOffsetM, 1+1024+128,	sillOffsetCm
+		hotspot2 -1,				-upbott_text_dist - sillDistModel, unID+1,sillOffsetM, 3+1024,		sillOffsetCm
+		hotspot2  sillOffsetModel,	-upbott_text_dist - sillDistModel, unID+2,sillOffsetM, 2+1024,		sillOffsetCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2  0,				-upbott_text_dist - sillDistModel, unID,  sillOffsetM, 1+1024+128,	sillOffsetPoint
+		hotspot2 -1,				-upbott_text_dist - sillDistModel, unID+1,sillOffsetM, 3+1024,		sillOffsetPoint
+		hotspot2  sillOffsetModel,	-upbott_text_dist - sillDistModel, unID+2,sillOffsetM, 2+1024,		sillOffsetPoint
+		unID = unID + 3
+	endif
+
+
+	add2 sillOffsetModel, 0
+
+	if bShowSillHeight then
+		pen AC_TextPen_4
+
+		_iUnitTypeByContent	= 8		! "Sill_height_dimension"
+
+		if GS_iCustomText_4 = CTXT_CUSTOMTEXT then
+			_horAlign	= 2
+			note1		= AC_MarkerText_4
+			note2		= ""
+			note3		= ""
+			note4		= ""
+		else
+			_lengthValue	= _lengthSillValue
+			_horAlign		= 2
+			_TextFont		= AC_TextFont_4
+			_TextSize		= AC_TextSize_4
+			_TextStyle		= AC_TextStyle_4
+			_szPrefix		= AC_SillPrefix + " "
+
+			gosub "call_quantity_formatter"
+		endif
+
+		posX	 = 0
+		posY	 = (-sillDistModel - upbott_text_dist) / PAPER_TO_MODEL
+		style1	 = "mtext4style"
+		style2	 = "extraStyle4"
+		style3	 = ""
+		style4	 = ""
+		notesize = AC_TextSize_4
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		iMarkerDir = 1
+
+		gosub "Print_text_considering_readability"
+	endif
+
+	del 2
+endif
+
+
+! ==============================================================================
+! Show Fire Rating
+! ==============================================================================
+
+if AC_show_firerating then
+	add2 markerOffsetModel, 0
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2 fireOffsetModel,	 0,				unID,	fireDistM, 1+1024+128,	fireDistMm
+		hotspot2 fireOffsetModel,	-1,				unID+1,	fireDistM, 3+1024,		fireDistMm
+		hotspot2 fireOffsetModel,	 fireDistModel,	unID+2,	fireDistM, 2+1024,		fireDistMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2 fireOffsetModel,	 0,				unID,	fireDistM, 1+1024+128,	fireDistCm
+		hotspot2 fireOffsetModel,	-1,				unID+1,	fireDistM, 3+1024,		fireDistCm
+		hotspot2 fireOffsetModel,	 fireDistModel,	unID+2,	fireDistM, 2+1024,		fireDistCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2 fireOffsetModel,	 0,				unID,	fireDistM, 1+1024+128,	fireDistPoint
+		hotspot2 fireOffsetModel,	-1,				unID+1,	fireDistM, 3+1024,		fireDistPoint
+		hotspot2 fireOffsetModel,	 fireDistModel,	unID+2,	fireDistM, 2+1024,		fireDistPoint
+		unID = unID + 3
+	endif
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2  0,				fireDistModel,	unID,	fireOffsetM, 1+1024+128,	fireOffsetMm
+		hotspot2 -1,				fireDistModel,	unID+1,	fireOffsetM, 3+1024,		fireOffsetMm
+		hotspot2  fireOffsetModel,	fireDistModel,	unID+2,	fireOffsetM, 2+1024,		fireOffsetMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2  0,				fireDistModel,	unID,	fireOffsetM, 1+1024+128,	fireOffsetCm
+		hotspot2 -1,				fireDistModel,	unID+1,	fireOffsetM, 3+1024,		fireOffsetCm
+		hotspot2  fireOffsetModel,	fireDistModel,	unID+2,	fireOffsetM, 2+1024,		fireOffsetCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2  0,				fireDistModel,	unID,	fireOffsetM, 1+1024+128,	fireOffsetPoint
+		hotspot2 -1,				fireDistModel,	unID+1,	fireOffsetM, 3+1024,		fireOffsetPoint
+		hotspot2  fireOffsetModel,	fireDistModel,	unID+2,	fireOffsetM, 2+1024,		fireOffsetPoint
+		unID = unID + 3
+	endif
+
+
+	add2 fireOffsetModel, 0
+
+	pen AC_TextPen_5
+	define style  "lowerIndex"  AC_TextFont_5, AC_TextSize_5 * 2/3, 7, AC_TextStyle_5
+
+	if bShowFire then
+		firerating_textMain = ""
+		firerating_textLowerIndex = ""
+		firerating_textMain2 = ""
+
+		if (LibraryLangCode = "AUT" or LibraryLangCode = "CHE" or LibraryLangCode = "GER") and\
+		gs_dw_marker_type <> 3 and\
+		GS_iCustomText_5 = CTXT_MEASUREDVALUE then	
+	
+			if gs_dw_marker_type = 2 then																! D Marker
+				if _contbInsulation and _contindexInsul <> "" then	! For the index style as fraction
+					posIndex = strstr(_contExpressionFR, _contindexInsul)
+					posList = posIndex + strlen( _contindexInsul)
+					posEnd = strlen( _contExpressionFR)
+					firerating_textMain = AC_FirePrefix + strsub(_contExpressionFR, 0, posIndex-1)
+					firerating_textLowerIndex = _contindexInsul
+					firerating_textMain2 = strsub(_contExpressionFR, posList, posEnd)
+				else
+					firerating_textMain = AC_FirePrefix + _contExpressionFR
+				endif
+			else																						! W Marker
+				if _contbSelfC and _contindexSelfC <> "" then	! For the index style as fraction
+					posIndex = strstr(_contExpressionFR, _contindexSelfC)
+					posList = posIndex + strlen( _contindexSelfC)
+					posEnd = strlen( _contExpressionFR)
+					firerating_textMain = AC_FirePrefix + strsub(_contExpressionFR, 0, posIndex-1)
+					firerating_textLowerIndex = _contindexSelfC
+					firerating_textMain2 = strsub(_contExpressionFR, posList, posEnd)
+				else
+					firerating_textMain = AC_FirePrefix + _contExpressionFR
+				endif
+			endif
+		else
+			firerating_textMain = AC_MarkerText_5
+		endif
+
+		posX	 = 0
+		posY	 = fireDistModel / PAPER_TO_MODEL
+		_horAlign= 1
+		note1	 = firerating_textMain
+		note2	 = ""
+		note3	 = firerating_textLowerIndex
+		note4	 = firerating_textMain2
+		style1	 = "mtext5style"
+		style2	 = ""
+		style3	 = "lowerIndex"
+		style4	 = "mtext5style"
+		notesize = AC_TextSize_5
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		iMarkerDir = 1
+
+		gosub "Print_text_considering_readability"
+
+	endif
+	del 2
+
+
+	! --------------------------------------------------------------------------
+	! Show Fire Rating LINEs for NED openings
+	! --------------------------------------------------------------------------
+
+	PEN AC_Pen_FireRate
+	RadFPLine = 0.072
+	Dx  = 0.08
+	Dy1 = 0.5
+	Dy2 = 0.3
+	Dy3 = 0.16
+
+	! BRAND parameter check - It is for NED Doors/Windows
+	rrBrand = request ("ASSOCLP_PARVALUE", "iNedFireRating",
+		index_firerating2, type_firerating2, flags_firerating2,
+		dim1_firerating2, dim2_firerating2, firerating2)
+
+	IF rrBrand > EPS THEN
+		ADD2 AC_MarkerOffset,0
+		IF firerating2=1 or firerating2=4 or firerating2=5 THEN      ! "zelfsluitend" - Smoke Protection
+			POLY2_ 9,1,
+				0,4*RadFPLine,1,
+				0,3*RadFPLine,901,
+				RadFPLine,-180,4001,
+				0,1*RadFPLine,901,
+				RadFPLine,180,4001,
+				0,-RadFPLine,901,
+				RadFPLine,-180,4001,
+				0,-3*RadFPLine,901,
+				RadFPLine,180,4001
+		ENDIF
+
+		IF firerating2 = 2 or  firerating2 = 4 THEN      ! "30 min. brandwerend" - 30 Min. Fire Protection
+			LINE2 -Dx,Dy1,Dx,Dy1+Dy3
+			LINE2 -Dx,-Dy1,Dx,-Dy1-Dy3
+			LINE2 Dx,Dy1,-Dx,Dy1+Dy3
+			LINE2 Dx,-Dy1,-Dx,-Dy1-Dy3
+		ENDIF
+
+		IF firerating2 = 3 or firerating2 = 5 THEN      ! "60 min. brandwerend" - 60 Min. Fire Protection
+			LINE2 -Dx,Dy2,Dx,Dy2+Dy3
+			LINE2 -Dx,-Dy2,Dx,-Dy2-Dy3
+			LINE2 Dx,Dy2,-Dx,Dy2+Dy3
+			LINE2 Dx,-Dy2,-Dx,-Dy2-Dy3
+
+			LINE2 -Dx,Dy1,Dx,Dy1+Dy3
+			LINE2 -Dx,-Dy1,Dx,-Dy1-Dy3
+			LINE2 Dx,Dy1,-Dx,Dy1+Dy3
+			LINE2 Dx,-Dy1,-Dx,-Dy1-Dy3
+		ENDIF
+		DEL 1
+	ENDIF
+ENDIF
+
+! ==============================================================================
+! Show Acoustic Rating
+! ==============================================================================
+
+if AC_show_acousticrating then
+	add2 markerOffsetModel, 0
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2 acousticOffsetModel,	 0,					unID,	acousticDistM, 1+1024+128,	acousticDistMm
+		hotspot2 acousticOffsetModel,	-1,					unID+1,	acousticDistM, 3+1024,		acousticDistMm
+		hotspot2 acousticOffsetModel,	 acousticDistModel,	unID+2,	acousticDistM, 2+1024,		acousticDistMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2 acousticOffsetModel,	 0,					unID,	acousticDistM, 1+1024+128,	acousticDistCm
+		hotspot2 acousticOffsetModel,	-1,					unID+1,	acousticDistM, 3+1024,		acousticDistCm
+		hotspot2 acousticOffsetModel,	 acousticDistModel,	unID+2,	acousticDistM, 2+1024,		acousticDistCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2 acousticOffsetModel,	 0,					unID,	acousticDistM, 1+1024+128,	acousticDistPoint
+		hotspot2 acousticOffsetModel,	-1,					unID+1,	acousticDistM, 3+1024,		acousticDistPoint
+		hotspot2 acousticOffsetModel,	 acousticDistModel,	unID+2,	acousticDistM, 2+1024,		acousticDistPoint
+		unID = unID + 3
+	endif
+
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2  0,					acousticDistModel,	unID,	acousticOffsetM, 1+1024+128,	acousticOffsetMm
+		hotspot2 -1,					acousticDistModel,	unID+1,	acousticOffsetM, 3+1024,		acousticOffsetMm
+		hotspot2  acousticOffsetModel,	acousticDistModel,	unID+2,	acousticOffsetM, 2+1024,		acousticOffsetMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2  0,					acousticDistModel,	unID,	acousticOffsetM, 1+1024+128,	acousticOffsetCm
+		hotspot2 -1,					acousticDistModel,	unID+1,	acousticOffsetM, 3+1024,		acousticOffsetCm
+		hotspot2  acousticOffsetModel,	acousticDistModel,	unID+2,	acousticOffsetM, 2+1024,		acousticOffsetCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2  0,					acousticDistModel,	unID,	acousticOffsetM, 1+1024+128,	acousticOffsetPoint
+		hotspot2 -1,					acousticDistModel,	unID+1,	acousticOffsetM, 3+1024,		acousticOffsetPoint
+		hotspot2  acousticOffsetModel,	acousticDistModel,	unID+2,	acousticOffsetM, 2+1024,		acousticOffsetPoint
+		unID = unID + 3
+	endif
+
+
+	add2 acousticOffsetModel, 0
+
+	if bShowAcoustic then
+		pen AC_TextPen_6
+
+		posX	 = 0
+		posY	 = acousticDistModel / PAPER_TO_MODEL
+		_horAlign= 1
+		note1	 = AC_MarkerText_6
+		note2	 = ""
+		note3	 = ""
+		note4	 = ""
+		style1	 = "mtext6style"
+		style2	 = ""
+		style3	 = ""
+		style4	 = ""
+		notesize = AC_TextSize_6
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		iMarkerDir = 1
+
+		gosub "Print_text_considering_readability"
+	endif
+
+	del 2
+endif
+
+
+! ==============================================================================
+! Show U-value
+! ==============================================================================
+
+if AC_show_Uvalue then
+	add2 markerOffsetModel, 0
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2 uvalueOffsetModel,	 0,					unID,	uvalueDistM, 1+1024+128,	uvalueDistMm
+		hotspot2 uvalueOffsetModel,	-1,					unID+1,	uvalueDistM, 3+1024,		uvalueDistMm
+		hotspot2 uvalueOffsetModel,	 uvalueDistModel,	unID+2,	uvalueDistM, 2+1024,		uvalueDistMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2 uvalueOffsetModel,	 0,					unID,	uvalueDistM, 1+1024+128,	uvalueDistCm
+		hotspot2 uvalueOffsetModel,	-1,					unID+1,	uvalueDistM, 3+1024,		uvalueDistCm
+		hotspot2 uvalueOffsetModel,	 uvalueDistModel,	unID+2,	uvalueDistM, 2+1024,		uvalueDistCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2 uvalueOffsetModel,	 0,					unID,	uvalueDistM, 1+1024+128,	uvalueDistPoint
+		hotspot2 uvalueOffsetModel,	-1,					unID+1,	uvalueDistM, 3+1024,		uvalueDistPoint
+		hotspot2 uvalueOffsetModel,	 uvalueDistModel,	unID+2,	uvalueDistM, 2+1024,		uvalueDistPoint
+		unID = unID + 3
+	endif
+
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2  0,					uvalueDistModel,	unID,	uvalueOffsetM, 1+1024+128,	uvalueOffsetMm
+		hotspot2 -1,					uvalueDistModel,	unID+1,	uvalueOffsetM, 3+1024,		uvalueOffsetMm
+		hotspot2  uvalueOffsetModel,	uvalueDistModel,	unID+2,	uvalueOffsetM, 2+1024,		uvalueOffsetMm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2  0,					uvalueDistModel,	unID,	uvalueOffsetM, 1+1024+128,	uvalueOffsetCm
+		hotspot2 -1,					uvalueDistModel,	unID+1,	uvalueOffsetM, 3+1024,		uvalueOffsetCm
+		hotspot2  uvalueOffsetModel,	uvalueDistModel,	unID+2,	uvalueOffsetM, 2+1024,		uvalueOffsetCm
+		unID = unID + 3
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2  0,					uvalueDistModel,	unID,	uvalueOffsetM, 1+1024+128,	uvalueOffsetPoint
+		hotspot2 -1,					uvalueDistModel,	unID+1,	uvalueOffsetM, 3+1024,		uvalueOffsetPoint
+		hotspot2  uvalueOffsetModel,	uvalueDistModel,	unID+2,	uvalueOffsetM, 2+1024,		uvalueOffsetPoint
+		unID = unID + 3
+	endif
+
+
+	add2 uvalueOffsetModel, 0
+
+	if bShowUvalue then
+		pen AC_TextPen_7
+
+		posX	 = 0
+		posY	 = uvalueDistModel / PAPER_TO_MODEL
+		_horAlign= 1
+		note1	 = AC_MarkerText_7
+		note2	 = ""
+		note3	 = ""
+		note4	 = ""
+		style1	 = "mtext7style"
+		style2	 = ""
+		style3	 = ""
+		style4	 = ""
+		notesize = AC_TextSize_7
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		GS_MarkerDir=`Стандарт`
+
+		gosub "Print_text_considering_readability"
+	endif
+
+	del 2
+endif
+
+
+! ==============================================================================
+! Show Width/Height
+! ==============================================================================
+
+if not(RotWidthText) then
+	rot2 90
+
+	textAngle = textAngle + 90
+	if textAngle >= 360 then
+		textAngle = textAngle - 360
+	endif
+endif
+
+
+if AC_WidHei_On then
+
+	IF not(RotWidthText) THEN
+		add2 0,-markerOffsetModel
+
+		if iMarkerSizeUnit = 1 then
+			hotspot2  0,			0, unID,	whDistM, 1+1024+128,	whDistMm
+			hotspot2 -1,			0, unID+1,	whDistM, 3+1024,		whDistMm
+			hotspot2  whDistModel,0, unID+2,	whDistM, 2+1024,		whDistMm
+			unID = unID + 3
+		endif
+		if iMarkerSizeUnit = 2 then
+			hotspot2  0,			0, unID,	whDistM, 1+1024+128,	whDistCm
+			hotspot2 -1,			0, unID+1,	whDistM, 3+1024,		whDistCm
+			hotspot2  whDistModel,0, unID+2,	whDistM, 2+1024,		whDistCm
+			unID = unID + 3
+		endif
+		if iMarkerSizeUnit = 3 then
+			hotspot2  0,			0, unID,	whDistM, 1+1024+128,	whDistPoint
+			hotspot2 -1,			0, unID+1,	whDistM, 3+1024,		whDistPoint
+			hotspot2  whDistModel,0, unID+2,	whDistM, 2+1024,		whDistPoint
+			unID = unID + 3
+		endif
+
+
+		if bShowWidthHeight then
+			if textAngle > (gs_readable_angle + eps) & textAngle < (gs_readable_angle + 180 + eps) & AC_Readable then
+				bSwitchTexts = 1
+			else
+				bSwitchTexts = 0
+			endif
+
+			define style  "extraStyle2" AC_TextFont_2, 2/3*AC_TextSize_2, 7, AC_TextStyle_2
+			define style  "extraStyle3" AC_TextFont_3, 2/3*AC_TextSize_3, 7, AC_TextStyle_3
+
+			pen AC_TextPen_3
+
+			_iUnitTypeByContent	= 7		! "Windor_Door_Dimension"
+
+			if GS_iCustomText_3 = CTXT_CUSTOMTEXT then
+				_horAlign	= 3
+				note1		= AC_MarkerText_3
+				note2		= ""
+				note3		= ""
+				note4		= ""
+			else
+				_lengthValue	= _lengthHeightValue
+				_horAlign		= 3
+				_TextFont		= AC_TextFont_3
+				_TextSize		= AC_TextSize_3
+				_TextStyle		= AC_TextStyle_3
+				_szPrefix		= ""
+
+				gosub "call_quantity_formatter"
+			endif
+
+			_tmpNote1 = note1
+
+			posX	 = whDistModel / PAPER_TO_MODEL
+			if bSwitchTexts then
+				posY	 = AC_TextSize_1 / 2
+			else
+				posY	 = -1.5 * AC_TextSize_1
+			endif
+			style1   = "mtext3style"
+			style2   = "extraStyle2"
+			style3   = ""
+			style4   = ""
+			notesize = AC_TextSize_3
+			angle	 = textAngle
+			enabled	 = AC_Readable
+			iMarkerDir = 1
+
+			if not(bIsDutchDimType) then
+				gosub "Print_text_considering_readability"
+			endif
+
+			pen AC_TextPen_2
+
+			if GS_iCustomText_2 = CTXT_CUSTOMTEXT then
+				_horAlign	= 3
+				note1		= AC_MarkerText_2
+				note2		= ""
+				note3		= ""
+				note4		= ""
+			else
+				_lengthValue	= _lengthWidthValue
+				_horAlign		= 3
+				_TextFont		= AC_TextFont_2
+				_TextSize		= AC_TextSize_2
+				_TextStyle		= AC_TextStyle_2
+				_szPrefix		= ""
+
+				gosub "call_quantity_formatter"
+			endif
+
+			if bIsDutchDimType then
+				note1		= NedSizePref + note1 + NedSizeSep + _tmpNote1
+				note2		= ""
+				note3		= ""
+				note4		= ""
+			endif
+
+			posX	 = whDistModel / PAPER_TO_MODEL
+			if bSwitchTexts then
+				posY	 = -1.5 * AC_TextSize_1
+			else
+				posY	 = AC_TextSize_1 / 2
+			endif
+			style1   = "mtext2style"
+			style2   = "extraStyle3"
+			style3   = ""
+			style4   = ""
+			notesize = AC_TextSize_2
+			angle	 = textAngle
+			enabled	 = AC_Readable
+			iMarkerDir = 1
+
+			gosub "Print_text_considering_readability"
+		endif
+
+		del 1
+
+	else
+
+		! --- NED MARKER - when the size is under the Sill text ---
+
+		add2 AC_MarkerOffset,0
+
+		hotspot2 0, -upbott_text_dist,					unID,	AC_WidHeiDist, 1+128,	GS_WidHeiDist_edit
+		hotspot2 0, -upbott_text_dist + 1,				unID+1,	AC_WidHeiDist, 3,		GS_WidHeiDist_edit
+		hotspot2 0, -upbott_text_dist - AC_WidHeiDist,	unID+2,	AC_WidHeiDist, 2,		GS_WidHeiDist_edit
+		unID = unID + 3
+
+		if AC_WidHei_On then
+			posX	 = 0
+			posY	 = (-AC_WidHeiDist - upbott_text_dist) / PAPER_TO_MODEL
+			_horAlign= 2
+			note1	 = AC_MarkerText_2
+			note2	 = extra
+			note3	 = ""
+			note4	 = ""
+			style1	 = "mtext4style"
+			style2	 = "extraStyle4"
+			style3   = ""
+			style4   = ""
+			notesize = AC_TextSize_4
+			angle	 = textAngle
+			enabled	 = AC_Readable
+
+			gosub "Print_text_considering_readability"
+		endif
+
+		del 1
+	ENDIF
+endif
+
+
+end
+
+
+! ==============================================================================
+"call_quantity_formatter":
+! ------------------------------------------------------------------------------
+
+	if _iUnitTypeByContent = 8 then				! "Sill_height_dimension"
+		_iWorkUnit			= iWorkUnitSillHgt
+		_iWorkUnitDecimal	= iWorkUnitSillHgtDecimal
+	else
+		_iWorkUnit			= iWorkUnitLinear
+		_iWorkUnitDecimal	= iWorkUnitLinearDecimal
+	endif
+
+	_custom_form = ""
+
+	if _iWorkUnit = DIMUNIT_MM 	then _custom_form = "%~0." + str(_iWorkUnitDecimal,1,0) + "mm"		!mm
+	if _iWorkUnit = DIMUNIT_CM 	then _custom_form = "%~0." + str(_iWorkUnitDecimal,1,0) + "cm"		!cm
+	if _iWorkUnit = DIMUNIT_DM	then
+		_custom_form = "%~0." + str(_iWorkUnitDecimal,1,0) + "m"		!dm
+		_lengthValue = _lengthValue * 10
+	endif
+	if _iWorkUnit = DIMUNIT_METER	then _custom_form = "%~0." + str(_iWorkUnitDecimal,1,0) + "m"		!m
+	if _iWorkUnit = DIMUNIT_INCH	then _custom_form = "%0.64fi"
+
+	if _iWorkUnit = DIMUNIT_PROJECT then
+		_iUnitType  	= _iUnitTypeByContent
+	else
+		_iUnitType  	= 0		! Custom
+	endif
+
+	call "quantity_text_formatter" parameters 	lengthValue				= _lengthValue,
+												custom_form				= _custom_form,
+												iUnitType				= _iUnitType,
+												horizontalAlignment 	= _horAlign,
+												verticalAlignment		= 1,
+												AC_TextFont				= _TextFont,
+												AC_TextSize				= _TextSize,
+												AC_TextStyle			= _TextStyle,
+												szPrefix				= _szPrefix,
+												bShowText				= 0,
+												bShowUnit				= 0,
+												bShowSuperScript		= 1,
+							returned_parameters lengthOfNote1,
+												lengthOfNote2,
+												lengthOfNote3,
+												lengthOfNote4,
+												dummy_totalLength,
+												dummy_totalHeight,
+												dummy_lengthOfUnit,
+												dummy_lengthOfIntegerPart,
+												note1,				!szPrefix + main
+												note2,				!frac,
+												note3,				!szUnit,
+												note4,				!szUnitIndex,
+												dummy_szExtraPrecision,
+												dummy_iAnchorString
+return
+
+
+! ==============================================================================
+! Print text considering readability
+! ==============================================================================
+! works for anchor point 1 only! (top left corner)
+! optional extra text in 2/3 size, elevated to 1/3 hight
+!
+! posX:		text position X
+! posY:		text position Y
+! note1:	text
+! note2:	extra text
+! style1:	style of text
+! style2:	style of extra
+! _horAlign:1-left, 2-center, 3-right
+! angle:	text angle
+! enabled:	may rotate
+! ==============================================================================
+
+"Print_text_considering_readability":
+
+	mul2 PAPER_TO_MODEL, PAPER_TO_MODEL
+	numTrans = 1
+
+	add2 0, posY + notesize / 2
+	numTrans  = numTrans + 1
+
+	rotdir_angle = 0 	! iMarkerDir = 1
+	if iMarkerDir = 2 then	rotdir_angle = 90
+	if iMarkerDir = 3 then	rotdir_angle = -textAngle
+	if iMarkerDir = 4 then rotdir_angle = -textAngle + 90
+
+	rot2 rotdir_angle
+	numTrans  = numTrans + 1
+
+	style style1
+	if	abs(lengthOfNote1 < EPS)	| \
+		abs(lengthOfNote2 < EPS)	| \
+		abs(lengthOfNote3 < EPS)	| \
+		abs(lengthOfNote4 < EPS)	then
+
+		gosub "compute_note_lengths"
+	endif
+
+	if _horAlign = 2 then
+		add2 -(lengthOfNote1+lengthOfNote2+lengthOfNote3+lengthOfNote4)/2, 0
+		numTrans  = numTrans + 1
+	endif
+	if _horAlign = 3 then
+		add2 -(lengthOfNote1+lengthOfNote2+lengthOfNote3+lengthOfNote4), 0
+		numTrans  = numTrans + 1
+	endif
+
+	if (angle > (gs_readable_angle + eps) & angle < (gs_readable_angle + 180 + eps) & enabled & iMarkerDir = 1)  | \
+		(angle > (gs_readable_angle - 90 + eps) & angle < (gs_readable_angle + 180 - 90 + eps) & enabled & iMarkerDir = 2) then
+
+		add2 posX + lengthOfNote1 + lengthOfNote2 + lengthOfNote3 + lengthOfNote4, notesize/2			! top right corner
+		rot2 180
+		numTrans = numTrans + 2
+	else
+		add2 posX, - notesize/2							! bottom left corner
+		numTrans  = numTrans + 1
+	endif
+
+
+	rrr = request("Height_of_style", style1, sy, descent, leading)
+	dl	= (descent + leading)
+
+	if GLOB_CONTEXT < 20 then
+		text2 0, -dl, note1
+
+		if note2 <> "" then
+			style style2
+			text2 lengthOfNote1, notesize/3 - dl*2/3, note2
+		endif
+
+		if note3 <> "" then
+			style style3
+			text2 lengthOfNote1 + lengthOfNote2, - dl, note3
+		endif
+
+		if note4 <> "" then
+			style style4
+			text2 lengthOfNote1 + lengthOfNote2 + lengthOfNote3, -dl, note4
+		endif
+	else
+		rect2 0,-dl, lengthOfNote1 + lengthOfNote2 + lengthOfNote3 + lengthOfNote4, notesize
+	endif
+
+	del numTrans
+return
+
+! ==============================================================================
+! Compute note lengths if necessary
+! ==============================================================================
+! The matching style has to be active.
+!
+! Input:
+!  note1:
+!  note2:
+! Output:
+!  lengthOfNote1:
+!  lengthOfNote2:
+! ==============================================================================
+"compute_note_lengths":
+! ------------------------------------------------------------------------------
+	lengthOfNote1	= stw (note1)
+	lengthOfNote2	= stw (note2) * 2/3
+	lengthOfNote3	= stw (note3) * 2/3
+	lengthOfNote4	= stw (note4)
+
+return
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+parameters gs_GLOB_MODPAR_NAME = GLOB_MODPAR_NAME
+
+values "gs_ui_current_page" 1,2,3,4,5
+
+if iMarkerShape = SHAPE_CIRCLE or iMarkerShape = SHAPE_FRAGMENT \
+	or iMarkerShape = SHAPE_OVAL then
+	lock "gs_marker_rotation"
+endif
+
+values "stShowSillTo" stShowSillToValues
+values "iShowSillTo" 1, 2, 3
+
+if GLOB_MODPAR_NAME = "stShowSillTo" then
+	iShowSillTo = 1
+	if stShowSillTo = stShowSillToValues[2] then iShowSillTo = 2
+	if stShowSillTo = stShowSillToValues[3] then iShowSillTo = 3
+	parameters iShowSillTo = iShowSillTo
+else
+	stShowSillTo = stShowSillToValues[1]
+	if iShowSillTo = 2 then stShowSillTo = stShowSillToValues[2]
+	if iShowSillTo = 3 then stShowSillTo = stShowSillToValues[3]
+	parameters stShowSillTo = stShowSillTo
+endif
+
+values "markerSizeUnit" `мм`, `см`, `точки`
+values "iMarkerSizeUnit" 1, 2, 3
+if GLOB_MODPAR_NAME = "markerSizeUnit" then
+	if markerSizeUnit = `мм` 	then iMarkerSizeUnit = 1
+	if markerSizeUnit = `см` 	then iMarkerSizeUnit = 2
+	if markerSizeUnit = `точки` then iMarkerSizeUnit = 3
+	parameters iMarkerSizeUnit = iMarkerSizeUnit
+else
+	if iMarkerSizeUnit = 1 then markerSizeUnit = `мм`
+	if iMarkerSizeUnit = 2 then markerSizeUnit = `см`
+	if iMarkerSizeUnit = 3 then markerSizeUnit = `точки`
+	parameters markerSizeUnit = markerSizeUnit
+endif
+
+values "stMarkerDir" stMarkerDirValues
+values "iMarkerDir" 1, 2, 3, 4
+
+if GLOB_MODPAR_NAME = "stMarkerDir" then
+	iMarkerDir = 1
+	if stMarkerDir = stMarkerDirValues[2] then iMarkerDir = 2
+	if stMarkerDir = stMarkerDirValues[3] then iMarkerDir = 3
+	if stMarkerDir = stMarkerDirValues[4] then iMarkerDir = 4
+	parameters iMarkerDir = iMarkerDir
+else
+	stMarkerDir = stMarkerDirValues[1]
+	if iMarkerDir = 2 then stMarkerDir = stMarkerDirValues[2]
+	if iMarkerDir = 3 then stMarkerDir = stMarkerDirValues[3]
+	if iMarkerDir = 4 then stMarkerDir = stMarkerDirValues[4]
+	parameters stMarkerDir = stMarkerDir
+endif
+
+if GLOB_MODPAR_NAME = "GS_CustomText_1" then
+	GS_iCustomText_1 = CTXT_IDNUMBER
+	if GS_CustomText_1 = stCustomText[4] then GS_iCustomText_1 = CTXT_FULLIDNUM		! Full Element ID
+	if GS_CustomText_1 = stCustomText[3] then GS_iCustomText_1 = CTXT_CUSTOMTEXT	! Custom Text
+	parameters GS_iCustomText_1 = GS_iCustomText_1
+else
+	GS_CustomText_1 = stCustomText[1]	! ID Number
+	if GS_iCustomText_1 = CTXT_FULLIDNUM  then GS_CustomText_1 = stCustomText[4]	! Full Element ID
+	if GS_iCustomText_1 = CTXT_CUSTOMTEXT then GS_CustomText_1 = stCustomText[3]	! Custom Text
+	parameters GS_CustomText_1 = GS_CustomText_1
+endif
+
+values "GS_CustomText_1" stCustomText[1], stCustomText[4], stCustomText[3]	! Compact Element ID, Full Element ID, Custom Text
+values "GS_iCustomText_1" CTXT_IDNUMBER, CTXT_FULLIDNUM, CTXT_CUSTOMTEXT
+
+if GLOB_MODPAR_NAME = "GS_CustomText_2" then
+	GS_iCustomText_2 = CTXT_MEASUREDVALUE
+	if GS_CustomText_2 = stCustomText[3] then GS_iCustomText_2 = CTXT_CUSTOMTEXT	! Custom Text
+	parameters GS_iCustomText_2 = GS_iCustomText_2
+else
+	GS_CustomText_2 = stCustomText[2]	! Measured Value
+	if GS_iCustomText_2 = CTXT_CUSTOMTEXT then GS_CustomText_2 = stCustomText[3]	! Custom Text
+	parameters GS_CustomText_2 = GS_CustomText_2
+endif
+
+values "GS_CustomText_2" stCustomText[2], stCustomText[3]	! Measured Value, Custom Text
+values "GS_iCustomText_2" CTXT_MEASUREDVALUE, CTXT_CUSTOMTEXT
+
+if GLOB_MODPAR_NAME = "GS_CustomText_3" then
+	GS_iCustomText_3 = CTXT_MEASUREDVALUE
+	if GS_CustomText_3 = stCustomText[3] then GS_iCustomText_3 = CTXT_CUSTOMTEXT	! Custom Text
+	parameters GS_iCustomText_3 = GS_iCustomText_3
+else
+	GS_CustomText_3 = stCustomText[2]	! Measured Value
+	if GS_iCustomText_3 = CTXT_CUSTOMTEXT then GS_CustomText_3 = stCustomText[3]	! Custom Text
+	parameters GS_CustomText_3 = GS_CustomText_3
+endif
+
+values "GS_CustomText_3" stCustomText[2], stCustomText[3]	! Measured Value, Custom Text
+values "GS_iCustomText_3" CTXT_MEASUREDVALUE, CTXT_CUSTOMTEXT
+
+if GLOB_MODPAR_NAME = "GS_CustomText_4" then
+	GS_iCustomText_4 = CTXT_MEASUREDVALUE
+	if GS_CustomText_4 = stCustomText[3] then GS_iCustomText_4 = CTXT_CUSTOMTEXT	! Custom Text
+	parameters GS_iCustomText_4 = GS_iCustomText_4
+else
+	GS_CustomText_4 = stCustomText[2]	! Measured Value
+	if GS_iCustomText_4 = CTXT_CUSTOMTEXT then GS_CustomText_4 = stCustomText[3]	! Custom Text
+	parameters GS_CustomText_4 = GS_CustomText_4
+endif
+
+values "GS_CustomText_4" stCustomText[2], stCustomText[3]	! Measured Value, Custom Text
+values "GS_iCustomText_4" CTXT_MEASUREDVALUE, CTXT_CUSTOMTEXT
+
+if GLOB_MODPAR_NAME = "GS_CustomText_5" then
+	GS_iCustomText_5 = CTXT_MEASUREDVALUE
+	if GS_CustomText_5 = stCustomText[3] then GS_iCustomText_5 = CTXT_CUSTOMTEXT	! Custom Text
+	parameters GS_iCustomText_5 = GS_iCustomText_5
+else
+	GS_CustomText_5 = stCustomText[2]	! Measured Value
+	if GS_iCustomText_5 = CTXT_CUSTOMTEXT then GS_CustomText_5 = stCustomText[3]	! Custom Text
+	parameters GS_CustomText_5 = GS_CustomText_5
+endif
+
+values "GS_CustomText_5" stCustomText[2], stCustomText[3]	! Measured Value, Custom Text
+values "GS_iCustomText_5" CTXT_MEASUREDVALUE, CTXT_CUSTOMTEXT
+
+if GLOB_MODPAR_NAME = "GS_CustomText_6" then
+	GS_iCustomText_6 = CTXT_MEASUREDVALUE
+	if GS_CustomText_6 = stCustomText[3] then GS_iCustomText_6 = CTXT_CUSTOMTEXT	! Custom Text
+	parameters GS_iCustomText_6 = GS_iCustomText_6
+else
+	GS_CustomText_6 = stCustomText[2]	! Measured Value
+	if GS_iCustomText_6 = CTXT_CUSTOMTEXT then GS_CustomText_6 = stCustomText[3]	! Custom Text
+	parameters GS_CustomText_6 = GS_CustomText_6
+endif
+
+values "GS_CustomText_6" stCustomText[2], stCustomText[3]	! Measured Value, Custom Text
+values "GS_iCustomText_6" CTXT_MEASUREDVALUE, CTXT_CUSTOMTEXT
+
+if GLOB_MODPAR_NAME = "GS_CustomText_7" then
+	GS_iCustomText_7 = CTXT_MEASUREDVALUE
+	if GS_CustomText_7 = stCustomText[3] then GS_iCustomText_7 = CTXT_CUSTOMTEXT	! Custom Text
+	parameters GS_iCustomText_7 = GS_iCustomText_7
+else
+	GS_CustomText_7 = stCustomText[2]	! Measured Value
+	if GS_iCustomText_7 = CTXT_CUSTOMTEXT then GS_CustomText_7 = stCustomText[3]	! Custom Text
+	parameters GS_CustomText_7 = GS_CustomText_7
+endif
+
+values "GS_CustomText_7" stCustomText[2], stCustomText[3]	! Measured Value, Custom Text
+values "GS_iCustomText_7" CTXT_MEASUREDVALUE, CTXT_CUSTOMTEXT
+
+! ==============================================================================
+! Changing marker size unit
+! ==============================================================================
+
+dot_in_mm = 25.4 / 72
+
+if GLOB_MODPAR_NAME <> "" then
+	if GLOB_MODPAR_NAME = "headDistPoint" then
+		headDistCm = headDistPoint * dot_in_mm / 10
+		headDistMm = headDistPoint * dot_in_mm
+		headDistM = headDistPoint * dot_in_mm / 1000
+		parameters	headDistCm = headDistCm,
+					headDistMm = headDistMm,
+					headDistM = headDistM
+	else
+		if GLOB_MODPAR_NAME = "headDistMm" then
+			headDistCm = headDistMm / 10
+			headDistPoint = headDistMm / dot_in_mm
+			headDistM = headDistMm / 1000
+			parameters	headDistCm = headDistCm,
+						headDistPoint = headDistPoint,
+						headDistM = headDistM
+		else
+			if GLOB_MODPAR_NAME = "headDistCm" then
+				headDistMm = headDistCm * 10
+				headDistPoint = headDistCm * 10 / dot_in_mm
+				headDistM = headDistCm / 100
+				parameters	headDistMm = headDistMm,
+							headDistPoint = headDistPoint,
+							headDistM = headDistM
+			else
+				headDistMm = headDistM * 1000
+				headDistCm = headDistM * 100
+				headDistPoint = headDistM * 1000 / dot_in_mm
+				parameters	headDistMm = headDistMm,
+							headDistCm = headDistCm,
+							headDistPoint = headDistPoint
+			endif
+		endif
+	endif
+
+	if GLOB_MODPAR_NAME = "markerOffsetPoint" then
+		markerOffsetCm = markerOffsetPoint * dot_in_mm / 10
+		markerOffsetMm = markerOffsetPoint * dot_in_mm
+		markerOffsetM = markerOffsetPoint * dot_in_mm / 1000
+		parameters	markerOffsetCm = markerOffsetCm,
+					markerOffsetMm = markerOffsetMm,
+					markerOffsetM = markerOffsetM
+	else
+		if GLOB_MODPAR_NAME = "markerOffsetMm" then
+			markerOffsetCm = markerOffsetMm / 10
+			markerOffsetPoint = markerOffsetMm / dot_in_mm
+			markerOffsetM = markerOffsetMm / 1000
+			parameters	markerOffsetCm = markerOffsetCm,
+						markerOffsetPoint = markerOffsetPoint,
+						markerOffsetM = markerOffsetM
+		else
+			if GLOB_MODPAR_NAME = "markerOffsetCm" then
+				markerOffsetMm = markerOffsetCm * 10
+				markerOffsetPoint = markerOffsetCm * 10 / dot_in_mm
+				markerOffsetM = markerOffsetCm / 100
+				parameters	markerOffsetMm = markerOffsetMm,
+							markerOffsetPoint = markerOffsetPoint,
+							markerOffsetM = markerOffsetM
+			else
+				markerOffsetMm = markerOffsetM * 1000
+				markerOffsetCm = markerOffsetM * 100
+				markerOffsetPoint = markerOffsetM * 1000 / dot_in_mm
+				parameters markerOffsetMm = markerOffsetMm,
+							markerOffsetCm = markerOffsetCm,
+							markerOffsetPoint = markerOffsetPoint
+			endif
+		endif
+	endif
+
+	if GLOB_MODPAR_NAME = "footLengthPoint" then
+		footLengthCm = footLengthPoint * dot_in_mm / 10
+		footLengthMm = footLengthPoint * dot_in_mm
+		footLengthM = footLengthPoint * dot_in_mm / 1000
+		parameters	footLengthCm = footLengthCm,
+					footLengthMm = footLengthMm,
+					footLengthM = footLengthM
+	else
+		if GLOB_MODPAR_NAME = "footLengthMm" then
+			footLengthCm = footLengthMm / 10
+			footLengthPoint = footLengthMm / dot_in_mm
+			footLengthM = footLengthMm / 1000
+			parameters	footLengthCm = footLengthCm,
+						footLengthPoint = footLengthPoint,
+						footLengthM = footLengthM
+		else
+			if GLOB_MODPAR_NAME = "footLengthCm" then
+				footLengthMm = footLengthCm * 10
+				footLengthPoint = footLengthCm * 10 / dot_in_mm
+				footLengthM = footLengthCm / 100
+				parameters	footLengthMm = footLengthMm,
+							footLengthPoint = footLengthPoint,
+							footLengthM = footLengthM
+			else
+				footLengthMm = footLengthM * 1000
+				footLengthCm = footLengthM * 1000 / 10
+				footLengthPoint = footLengthM * 1000 / dot_in_mm
+				parameters footLengthMm = footLengthMm,
+							footLengthCm = footLengthCm ,
+							footLengthPoint = footLengthPoint
+			endif
+		endif
+	endif
+
+	if GLOB_MODPAR_NAME = "whDistPoint" then
+		whDistCm = whDistPoint * dot_in_mm / 10
+		whDistMm = whDistPoint * dot_in_mm
+		whDistM = whDistPoint * dot_in_mm / 1000
+		parameters	whDistCm = whDistCm,
+					whDistMm = whDistMm,
+					whDistM = whDistM
+	else
+		if GLOB_MODPAR_NAME = "whDistMm" then
+			whDistCm = whDistMm / 10
+			whDistPoint = whDistMm / dot_in_mm
+			whDistM = whDistMm / 1000
+			parameters	whDistCm = whDistCm,
+						whDistPoint = whDistPoint,
+						whDistM = whDistM
+		else
+			if GLOB_MODPAR_NAME = "whDistCm" then
+				whDistMm = whDistCm * 10
+				whDistPoint = whDistCm * 10 / dot_in_mm
+				whDistM = whDistCm / 100
+				parameters	whDistMm = whDistMm,
+							whDistPoint = whDistPoint,
+							whDistM = whDistM
+			else
+					whDistMm = whDistM * 1000
+					whDistCm = whDistM * 1000 / 10
+					whDistPoint = whDistM * 1000 / dot_in_mm
+					parameters	whDistMm = whDistMm,
+								whDistCm = whDistCm ,
+								whDistPoint = whDistPoint
+			endif
+		endif
+	endif
+
+	if GLOB_MODPAR_NAME = "sillOffsetPoint" then
+		sillOffsetCm = sillOffsetPoint * dot_in_mm / 10
+		sillOffsetMm = sillOffsetPoint * dot_in_mm
+		sillOffsetM = sillOffsetPoint * dot_in_mm / 1000
+		parameters	sillOffsetCm = sillOffsetCm,
+					sillOffsetMm = sillOffsetMm,
+					sillOffsetM = sillOffsetM
+	else
+		if GLOB_MODPAR_NAME = "sillOffsetMm" then
+			sillOffsetCm = sillOffsetMm / 10
+			sillOffsetPoint = sillOffsetMm / dot_in_mm
+			sillOffsetM = sillOffsetMm / 1000
+			parameters	sillOffsetCm = sillOffsetCm,
+						sillOffsetPoint = sillOffsetPoint,
+						sillOffsetM = sillOffsetM
+		else
+			if GLOB_MODPAR_NAME = "sillOffsetCm" then
+				sillOffsetMm = sillOffsetCm * 10
+				sillOffsetPoint = sillOffsetCm * 10 / dot_in_mm
+				sillOffsetM = sillOffsetCm / 100
+				parameters	sillOffsetMm = sillOffsetMm,
+							sillOffsetPoint = sillOffsetPoint,
+							sillOffsetM = sillOffsetM
+			else
+				sillOffsetMm = sillOffsetM * 1000
+				sillOffsetCm = sillOffsetM * 100
+				sillOffsetPoint = sillOffsetM * 1000 / dot_in_mm
+				parameters	sillOffsetMm = sillOffsetMm,
+							sillOffsetCm = sillOffsetCm,
+							sillOffsetPoint = sillOffsetPoint
+			endif
+		endif
+	endif
+
+
+	if GLOB_MODPAR_NAME = "sillDistPoint" then
+		sillDistCm = sillDistPoint * dot_in_mm / 10
+		sillDistMm = sillDistPoint * dot_in_mm
+		sillDistM = sillDistPoint * dot_in_mm / 1000
+		parameters	sillDistCm = sillDistCm,
+					sillDistMm = sillDistMm,
+					sillDistM = sillDistM
+	else
+		if GLOB_MODPAR_NAME = "sillDistMm" then
+			sillDistCm = sillDistMm / 10
+			sillDistPoint = sillDistMm / dot_in_mm
+			sillDistM = sillDistMm / 1000
+			parameters	sillDistCm = sillDistCm,
+						sillDistPoint = sillDistPoint,
+						sillDistM = sillDistM
+		else
+			if GLOB_MODPAR_NAME = "sillDistCm" then
+				sillDistMm = sillDistCm * 10
+				sillDistPoint = sillDistCm * 10 / dot_in_mm
+				sillDistM = sillDistCm / 100
+				parameters	sillDistMm = sillDistMm,
+							sillDistPoint = sillDistPoint,
+							sillDistM = sillDistM
+			else
+				sillDistMm = sillDistM * 1000
+				sillDistCm = sillDistM * 100
+				sillDistPoint = sillDistM * 1000 / dot_in_mm
+				parameters	sillDistMm = sillDistMm,
+							sillDistCm = sillDistCm,
+							sillDistPoint = sillDistPoint
+			endif
+		endif
+	endif
+
+	if GLOB_MODPAR_NAME = "fireOffsetPoint" then
+		fireOffsetCm = fireOffsetPoint * dot_in_mm / 10
+		fireOffsetMm = fireOffsetPoint * dot_in_mm
+		fireOffsetM = fireOffsetPoint * dot_in_mm / 1000
+		parameters	fireOffsetCm = fireOffsetCm,
+					fireOffsetMm = fireOffsetMm,
+					fireOffsetM = fireOffsetM
+	else
+		if GLOB_MODPAR_NAME = "fireOffsetMm" then
+			fireOffsetCm = fireOffsetMm / 10
+			fireOffsetPoint = fireOffsetMm / dot_in_mm
+			fireOffsetM = fireOffsetMm / 1000
+			parameters	fireOffsetCm = fireOffsetCm,
+						fireOffsetPoint = fireOffsetPoint,
+						fireOffsetM = fireOffsetM
+		else
+			if GLOB_MODPAR_NAME = "fireOffsetCm" then
+				fireOffsetMm = fireOffsetCm * 10
+				fireOffsetPoint = fireOffsetCm * 10 / dot_in_mm
+				fireOffsetM =  fireOffsetCm / 100
+				parameters	fireOffsetMm = fireOffsetMm,
+							fireOffsetPoint = fireOffsetPoint,
+							fireOffsetM = fireOffsetM
+			else
+				fireOffsetMm = fireOffsetM * 1000
+				fireOffsetCm = fireOffsetM * 100
+				fireOffsetPoint = fireOffsetM * 1000 / dot_in_mm
+				parameters	fireOffsetMm = fireOffsetMm,
+							fireOffsetCm = fireOffsetCm,
+							fireOffsetPoint = fireOffsetPoint
+			endif
+		endif
+	endif
+
+	if GLOB_MODPAR_NAME = "fireDistPoint" then
+		fireDistCm = fireDistPoint * dot_in_mm / 10
+		fireDistMm = fireDistPoint * dot_in_mm
+		fireDistM = fireDistPoint * dot_in_mm / 1000
+		parameters	fireDistCm = fireDistCm,
+					fireDistMm = fireDistMm,
+					fireDistM = fireDistM
+	else
+		if GLOB_MODPAR_NAME = "fireDistMm" then
+			fireDistCm = fireDistMm / 10
+			fireDistPoint = fireDistMm / dot_in_mm
+			fireDistM = fireDistMm / 1000
+			parameters	fireDistCm = fireDistCm,
+						fireDistPoint = fireDistPoint,
+						fireDistM = fireDistM
+		else
+			if GLOB_MODPAR_NAME = "fireDistCm" then
+				fireDistMm = fireDistCm * 10
+				fireDistPoint = fireDistCm * 10 / dot_in_mm
+				fireDistM = fireDistCm / 100
+				parameters	fireDistMm = fireDistMm,
+							fireDistPoint = fireDistPoint,
+							fireDistM = fireDistM
+			else
+				fireDistMm = fireDistM * 1000
+				fireDistCm = fireDistM * 100
+				fireDistPoint = fireDistM * 1000 / dot_in_mm
+				parameters	fireDistMm = fireDistMm,
+							fireDistCm = fireDistCm,
+							fireDistPoint = fireDistPoint
+			endif
+		endif
+	endif
+
+
+	if GLOB_MODPAR_NAME = "acousticOffsetPoint" then
+		acousticOffsetCm = acousticOffsetPoint * dot_in_mm / 10
+		acousticOffsetMm = acousticOffsetPoint * dot_in_mm
+		acousticOffsetM = acousticOffsetPoint * dot_in_mm / 1000
+		parameters	acousticOffsetCm = acousticOffsetCm,
+					acousticOffsetMm = acousticOffsetMm,
+					acousticOffsetM = acousticOffsetM
+	else
+		if GLOB_MODPAR_NAME = "acousticOffsetMm" then
+			acousticOffsetCm = acousticOffsetMm / 10
+			acousticOffsetPoint = acousticOffsetMm / dot_in_mm
+			acousticOffsetM = acousticOffsetMm / 1000
+			parameters	acousticOffsetCm = acousticOffsetCm,
+						acousticOffsetPoint = acousticOffsetPoint,
+						acousticOffsetM = acousticOffsetM
+		else
+			if GLOB_MODPAR_NAME = "acousticOffsetCm" then
+				acousticOffsetMm = acousticOffsetCm * 10
+				acousticOffsetPoint = acousticOffsetCm * 10 / dot_in_mm
+				acousticOffsetM = acousticOffsetCm / 100
+				parameters	acousticOffsetMm = acousticOffsetMm,
+							acousticOffsetPoint = acousticOffsetPoint,
+							acousticOffsetM = acousticOffsetM
+			else
+				acousticOffsetMm = acousticOffsetM * 1000
+				acousticOffsetCm = acousticOffsetM * 100
+				acousticOffsetPoint = acousticOffsetM * 1000 / dot_in_mm
+				parameters	acousticOffsetMm = acousticOffsetMm,
+							acousticOffsetCm = acousticOffsetCm,
+							acousticOffsetPoint = acousticOffsetPoint
+			endif
+		endif
+	endif
+
+
+	if GLOB_MODPAR_NAME = "acousticDistPoint" then
+		acousticDistCm = acousticDistPoint * dot_in_mm / 10
+		acousticDistMm = acousticDistPoint * dot_in_mm
+		acousticDistM = acousticDistPoint * dot_in_mm / 1000
+		parameters	acousticDistCm = acousticDistCm,
+					acousticDistMm = acousticDistMm,
+					acousticDistM = acousticDistM
+	else
+		if GLOB_MODPAR_NAME = "acousticDistMm" then
+			acousticDistCm = acousticDistMm / 10
+			acousticDistPoint = acousticDistMm / dot_in_mm
+			acousticDistM = acousticDistMm / 1000
+			parameters	acousticDistCm = acousticDistCm,
+						acousticDistPoint = acousticDistPoint,
+						acousticDistM = acousticDistM
+		else
+			if GLOB_MODPAR_NAME = "acousticDistCm" then
+				acousticDistMm = acousticDistCm * 10
+				acousticDistPoint = acousticDistCm * 10 / dot_in_mm
+				acousticDistM = acousticDistCm / 100
+				parameters	acousticDistMm = acousticDistMm,
+							acousticDistPoint = acousticDistPoint,
+							acousticDistM = acousticDistM
+			else
+				acousticDistMm = acousticDistM * 1000
+				acousticDistCm = acousticDistM * 100
+				acousticDistPoint = acousticDistM *1000 / dot_in_mm
+				parameters	acousticDistMm = acousticDistMm,
+							acousticDistCm = acousticDistCm,
+							acousticDistPoint = acousticDistPoint
+			endif
+		endif
+	endif
+
+	if GLOB_MODPAR_NAME = "uvalueOffsetPoint" then
+		uvalueOffsetCm		= uvalueOffsetPoint * dot_in_mm / 10
+		uvalueOffsetMm		= uvalueOffsetPoint * dot_in_mm
+		uvalueOffsetM		= uvalueOffsetPoint * dot_in_mm / 1000
+		parameters	uvalueOffsetCm		= uvalueOffsetCm,
+					uvalueOffsetMm		= uvalueOffsetMm,
+					uvalueOffsetM		= uvalueOffsetM
+	else
+		if GLOB_MODPAR_NAME = "uvalueOffsetMm" then
+			uvalueOffsetCm		= uvalueOffsetMm / 10
+			uvalueOffsetPoint	= uvalueOffsetMm / dot_in_mm
+			uvalueOffsetM		= uvalueOffsetMm / 1000
+			parameters	uvalueOffsetCm		= uvalueOffsetCm,
+						uvalueOffsetPoint	= uvalueOffsetPoint,
+						uvalueOffsetM		= uvalueOffsetM
+		else
+			if GLOB_MODPAR_NAME = "uvalueOffsetCm" then
+				uvalueOffsetMm		= uvalueOffsetCm * 10
+				uvalueOffsetPoint	= uvalueOffsetCm * 10 / dot_in_mm
+				uvalueOffsetM		= uvalueOffsetCm / 100
+				parameters	uvalueOffsetMm		= uvalueOffsetMm,
+							uvalueOffsetPoint	= uvalueOffsetPoint,
+							uvalueOffsetM		= uvalueOffsetM
+			else
+				uvalueOffsetMm		= uvalueOffsetM * 1000
+				uvalueOffsetCm		= uvalueOffsetM * 100
+				uvalueOffsetPoint	= uvalueOffsetM * 1000 / dot_in_mm
+				parameters	uvalueOffsetMm		= uvalueOffsetMm,
+							uvalueOffsetCm		= uvalueOffsetCm,
+							uvalueOffsetPoint	= uvalueOffsetPoint
+			endif
+		endif
+	endif
+
+
+	if GLOB_MODPAR_NAME = "uvalueDistPoint" then
+		uvalueDistCm	= uvalueDistPoint * dot_in_mm / 10
+		uvalueDistMm	= uvalueDistPoint * dot_in_mm
+		uvalueDistM		= uvalueDistPoint * dot_in_mm / 1000
+		parameters	uvalueDistCm	= uvalueDistCm,
+					uvalueDistMm	= uvalueDistMm,
+					uvalueDistM		= uvalueDistM
+	else
+		if GLOB_MODPAR_NAME = "uvalueDistMm" then
+			uvalueDistCm	= uvalueDistMm / 10
+			uvalueDistPoint = uvalueDistMm / dot_in_mm
+			uvalueDistM		= uvalueDistMm / 1000
+			parameters	uvalueDistCm	= uvalueDistCm,
+						uvalueDistPoint	= uvalueDistPoint,
+						uvalueDistM		= uvalueDistM
+		else
+			if GLOB_MODPAR_NAME = "uvalueDistCm" then
+				uvalueDistMm	= uvalueDistCm * 10
+				uvalueDistPoint	= uvalueDistCm * 10 / dot_in_mm
+				uvalueDistM		= uvalueDistCm / 100
+				parameters	uvalueDistMm	= uvalueDistMm,
+							uvalueDistPoint = uvalueDistPoint,
+							uvalueDistM	 = uvalueDistM
+			else
+				uvalueDistMm	= uvalueDistM * 1000
+				uvalueDistCm	= uvalueDistM * 100
+				uvalueDistPoint = uvalueDistM * 1000 / dot_in_mm
+				parameters	uvalueDistMm	= uvalueDistMm,
+							uvalueDistCm	= uvalueDistCm,
+							uvalueDistPoint = uvalueDistPoint
+			endif
+		endif
+	endif
+endif
+
+
+! ==============================================================================
+! Working Units
+! ==============================================================================
+
+values{2} "iWorkUnitLinear"	DIMUNIT_MM,			stUnitFormats[1],
+							DIMUNIT_CM,			stUnitFormats[2],
+							DIMUNIT_DM,			stUnitFormats[3],
+							DIMUNIT_METER,		stUnitFormats[4],
+							DIMUNIT_INCH,		stUnitFormats[5],
+							DIMUNIT_PROJECT,	stUnitFormats[6]
+
+put 0, 1
+if iWorkUnitLinear = DIMUNIT_CM		then put 2
+if iWorkUnitLinear = DIMUNIT_DM		then put 2, 3
+if iWorkUnitLinear = DIMUNIT_METER	then put 2, 3, 4
+
+values "iWorkUnitLinearDecimal" get(NSP)
+
+values{2} "iWorkUnitSillHgt"	DIMUNIT_MM,			stUnitFormats[1],
+								DIMUNIT_CM,			stUnitFormats[2],
+								DIMUNIT_DM,			stUnitFormats[3],
+								DIMUNIT_METER,		stUnitFormats[4],
+								DIMUNIT_INCH,		stUnitFormats[5],
+								DIMUNIT_PROJECT,	stUnitFormats[6]
+
+put 0, 1
+if iWorkUnitSillHgt = DIMUNIT_CM	then put 2
+if iWorkUnitSillHgt = DIMUNIT_DM	then put 2, 3
+if iWorkUnitSillHgt = DIMUNIT_METER	then put 2, 3, 4
+
+values "iWorkUnitSillHgtDecimal" get(NSP)
+
+if not(AC_WidHei_On) then
+	lock "iWorkUnitLinear"
+	hideparameter	"iWorkUnitLinear",
+					"iWorkUnitLinearDecimal"
+endif
+
+if _bLockLinearUnitDecimal then
+	lock "iWorkUnitLinearDecimal"
+	hideparameter "iWorkUnitLinearDecimal"
+endif
+
+if not(AC_Sill_On) then
+	lock "iWorkUnitSillHgt"
+	hideparameter	"iWorkUnitSillHgt",
+					"iWorkUnitSillHgtDecimal"
+endif
+
+if _bLockSillHgtUnitDecimal then
+	lock "iWorkUnitSillHgtDecimal"
+	hideparameter "iWorkUnitSillHgtDecimal"
+endif
+
+
+! ==============================================================================
+! Parameter lock
+! ==============================================================================
+
+if iMarkerSizeUnit = 1 then ! mm
+	hideparameter	"headDistCm", "headDistPoint",
+					"markerOffsetCm", "markerOffsetPoint",
+					"footLengthCm", "footLengthPoint",
+					"whDistCm", "whDistPoint",
+					"sillOffsetCm", "sillOffsetPoint",
+					"sillDistCm", "sillDistPoint",
+					"fireOffsetCm", "fireOffsetPoint",
+					"fireDistCm", "fireDistPoint",
+					"acousticOffsetCm", "acousticOffsetPoint",
+					"acousticDistCm", "acousticDistPoint",
+					"uvalueOffsetCm", "uvalueOffsetPoint",
+					"uvalueDistCm", "uvalueDistPoint"
+
+	lock			"headDistCm", "headDistPoint",
+					"markerOffsetCm", "markerOffsetPoint",
+					"footLengthCm", "footLengthPoint",
+					"whDistCm", "whDistPoint",
+					"sillOffsetCm", "sillOffsetPoint",
+					"sillDistCm", "sillDistPoint",
+					"fireOffsetCm", "fireOffsetPoint",
+					"fireDistCm", "fireDistPoint",
+					"acousticOffsetCm", "acousticOffsetPoint",
+					"acousticDistCm", "acousticDistPoint",
+					"uvalueOffsetCm", "uvalueOffsetPoint",
+					"uvalueDistCm", "uvalueDistPoint"
+endif
+if iMarkerSizeUnit = 2 then ! cm
+	hideparameter	"headDistMm", "headDistPoint",
+					"markerOffsetMm", "markerOffsetPoint",
+					"footLengthMm", "footLengthPoint",
+					"whDistMm", "whDistPoint",
+					"sillOffsetMm", "sillOffsetPoint",
+					"sillDistMm", "sillDistPoint",
+					"fireOffsetMm", "fireOffsetPoint",
+					"fireDistMm", "fireDistPoint",
+					"acousticOffsetMm", "acousticOffsetPoint",
+					"acousticDistMm", "acousticDistPoint",
+					"uvalueOffsetMm", "uvalueOffsetPoint",
+					"uvalueDistMm", "uvalueDistPoint"
+
+	lock			"headDistMm", "headDistPoint",
+					"markerOffsetMm", "markerOffsetPoint",
+					"footLengthMm", "footLengthPoint",
+					"whDistMm", "whDistPoint",
+					"sillOffsetMm", "sillOffsetPoint",
+					"sillDistMm", "sillDistPoint",
+					"fireOffsetMm", "fireOffsetPoint",
+					"fireDistMm", "fireDistPoint",
+					"acousticOffsetMm", "acousticOffsetPoint",
+					"acousticDistMm", "acousticDistPoint",
+					"uvalueOffsetMm", "uvalueOffsetPoint",
+					"uvalueDistMm", "uvalueDistPoint"
+endif
+if iMarkerSizeUnit = 3 then ! point
+	hideparameter	"headDistCm", "headDistMm",
+					"markerOffsetCm", "markerOffsetMm",
+					"footLengthCm", "footLengthMm",
+					"whDistCm", "whDistMm",
+					"sillOffsetCm", "sillOffsetMm",
+					"sillDistCm", "sillDistMm",
+					"fireOffsetCm", "fireOffsetMm",
+					"fireDistCm", "fireDistMm",
+					"acousticOffsetCm", "acousticOffsetMm",
+					"acousticDistCm", "acousticDistMm",
+					"uvalueOffsetCm", "uvalueOffsetMm",
+					"uvalueDistCm", "uvalueDistMm"
+
+	lock			"headDistCm", "headDistMm",
+					"markerOffsetCm", "markerOffsetMm",
+					"footLengthCm", "footLengthMm",
+					"whDistCm", "whDistMm",
+					"sillOffsetCm", "sillOffsetMm",
+					"sillDistCm", "sillDistMm",
+					"fireOffsetCm", "fireOffsetMm",
+					"fireDistCm", "fireDistMm",
+					"acousticOffsetCm", "acousticOffsetMm",
+					"acousticDistCm", "acousticDistMm",
+					"uvalueOffsetCm", "uvalueOffsetMm",
+					"uvalueDistCm", "uvalueDistMm"
+endif
+
+if not(GS_Center_Line) then
+	lock "footLengthMm"
+	hideparameter "footLengthMm"
+endif
+
+if not(AC_ID_On) then
+	lock "GS_CustomText_1", "AC_MarkerText_1"
+	hideparameter "GS_CustomText_1", "AC_MarkerText_1"
+endif
+
+if not(AC_Sill_On) then
+	lock	"gs_marker_text_4_title", "GS_CustomText_4", "AC_MarkerText_4",
+			"AC_SillNominal", "AC_SillPrefix", "stShowSillTo", "iShowSillTo"
+	hideparameter	"gs_marker_text_4_title", "GS_CustomText_4", "AC_MarkerText_4",
+					"AC_SillNominal", "AC_SillPrefix", "stShowSillTo", "iShowSillTo"
+endif
+if gs_dw_marker_type = 3 then
+	lock "AC_SillNominal"
+	hideparameter "AC_SillNominal"
+endif
+
+if not(AC_WidHei_On) then
+	! INT version Marker UI page parameter lock
+	if not(gsIsNedMarker) then
+		lock	"gs_marker_text_2_title", "gs_marker_text_3_title",
+				"GS_CustomText_2", "AC_MarkerText_2", "GS_CustomText_3",
+				"AC_MarkerText_3", "gs_dimension_select", "whDistMm", "whDistCm", "whDistPoint"
+		hideparameter	"gs_marker_text_2_title", "gs_marker_text_3_title",
+						"GS_CustomText_2", "AC_MarkerText_2", "GS_CustomText_3",
+						"AC_MarkerText_3", "gs_dimension_select", "whDistMm", "whDistCm", "whDistPoint"
+		! NED version Marker UI page parameter lock
+	else
+		lock	"gs_marker_text_2_title", "gs_marker_text_3_title",
+				"GS_CustomText_2", "AC_MarkerText_2", "GS_CustomText_3",
+				"AC_MarkerText_3", "gs_dimension_select", "whDistMm", "whDistCm", "whDistPoint",
+				"NedSizePref", "NedSizeSep"
+		hideparameter	"gs_marker_text_2_title", "gs_marker_text_3_title",
+						"GS_CustomText_2", "AC_MarkerText_2", "GS_CustomText_3",
+						"AC_MarkerText_3", "gs_dimension_select", "whDistMm", "whDistCm", "whDistPoint",
+						"NedSizePref", "NedSizeSep"
+	endif
+endif
+
+if not(AC_show_firerating) then
+	lock	"gs_marker_text_5_title", "GS_CustomText_5", "AC_MarkerText_5",
+			"fireOffsetMm", "fireDistMm","AC_Pen_FireRate"
+	hideparameter	"gs_marker_text_5_title", "GS_CustomText_5", "AC_MarkerText_5",
+					"fireOffsetMm", "fireDistMm", "fireOffsetCm", "fireDistCm",
+					"fireOffsetPoint", "fireDistPoint","AC_Pen_FireRate"
+endif
+
+if not(AC_show_acousticrating) then
+	lock	"gs_marker_text_6_title", "GS_CustomText_6", "AC_MarkerText_6",
+			"acousticOffsetMm", "acousticDistMm"
+	hideparameter	"gs_marker_text_6_title", "GS_CustomText_6", "AC_MarkerText_6",
+					"acousticOffsetMm", "acousticDistMm", "acousticOffsetCm", "acousticDistCm",
+					"acousticOffsetPoint", "acousticDistPoint"
+endif
+
+if not(AC_show_Uvalue) then
+	lock	"gs_marker_text_7_title", "GS_CustomText_7", "AC_MarkerText_7",
+			"uvalueOffsetMm", "uvalueDistMm"
+	hideparameter	"gs_marker_text_7_title", "GS_CustomText_7", "AC_MarkerText_7",
+					"uvalueOffsetMm", "uvalueDistMm", "uvalueOffsetCm", "uvalueDistCm",
+					"uvalueOffsetPoint", "uvalueDistPoint"
+endif
+
+values "gs_marker_shape" stShapes
+values "iMarkerShape" SHAPE_CIRCLE, SHAPE_RECT, SHAPE_FRAGMENT, SHAPE_OVAL, SHAPE_TRIANGLE, SHAPE_PENTAGON, SHAPE_HEXAGON, SHAPE_OCTAGON, SHAPE_NONE
+
+if GLOB_MODPAR_NAME = "gs_marker_shape" then
+	iMarkerShape = SHAPE_CIRCLE
+	for i = 2 to vardim1(stShapes) - 1
+		if gs_marker_shape = stShapes[i] then iMarkerShape = i
+	next i
+	if gs_marker_shape = stShapes[vardim1(stShapes)] then iMarkerShape = SHAPE_NONE
+
+	parameters iMarkerShape = iMarkerShape
+else
+	if iMarkerShape = SHAPE_NONE then
+		gs_marker_shape = stShapes[vardim1(stShapes)]
+	else
+		gs_marker_shape = stShapes[max(1, min(iMarkerShape, vardim1(stShapes) - 1))]
+	endif
+
+	parameters 	gs_marker_shape = gs_marker_shape
+endif
+
+if GLOB_MODPAR_NAME = "AC_WIDO_TYPE" & AC_WIDO_TYPE = 2 then
+	parameters gs_marker_shape = `Окружность`, iMarkerShape = SHAPE_CIRCLE
+endif
+if GLOB_MODPAR_NAME = "AC_WIDO_TYPE" & AC_WIDO_TYPE = 1 then
+	parameters gs_marker_shape = `Шестиугольник`, iMarkerShape = SHAPE_HEXAGON
+endif
+
+if iMarkerShape <> SHAPE_CIRCLE then
+	lock "gs_markertext_fit"
+	hideparameter "gs_markertext_fit"
+else
+	if gs_markertext_fit = 1 then
+		lock "AC_MarkerSize"
+		hideparameter "AC_MarkerSize"
+	endif
+endif
+
+if not(gs_MarkerFill) then
+	lock "AC_MarkerFill","gs_fill_pen","gs_back_pen"
+	hideparameter "AC_MarkerFill","gs_fill_pen","gs_back_pen"
+endif
+
+if not(AC_Sill_On) then
+	lock "stShowSillTo", "iShowSillTo", "sillOffsetMm", "sillDistMm"
+	hideparameter "stShowSillTo", "iShowSillTo", "sillOffsetMm", "sillDistMm"
+endif
+
+
+! ==============================================================================
+! Marker Text
+! ==============================================================================
+
+if	GS_iCustomText_1 = CTXT_IDNUMBER |\
+	GS_iCustomText_1 = CTXT_FULLIDNUM then
+	parameters AC_MarkerText_1 = AC_MarkerText_1
+endif
+if GS_iCustomText_2 = CTXT_MEASUREDVALUE then
+	parameters AC_MarkerText_2 = AC_MarkerText_2	! Opening Width Value
+endif
+if GS_iCustomText_3 = CTXT_MEASUREDVALUE then
+	parameters AC_MarkerText_3 = AC_MarkerText_3	! Opening Height Value
+endif
+if GS_iCustomText_4 = CTXT_MEASUREDVALUE then
+	parameters AC_MarkerText_4 = AC_MarkerText_4	! Sill Value
+endif
+
+if GS_iCustomText_1 <> CTXT_CUSTOMTEXT then
+	lock "AC_MarkerText_1"
+	hideparameter "AC_MarkerText_1"
+endif
+if GS_iCustomText_2 <> CTXT_CUSTOMTEXT then
+	lock "AC_MarkerText_2"
+	hideparameter "AC_MarkerText_2"
+endif
+if GS_iCustomText_3 <> CTXT_CUSTOMTEXT then
+	lock "AC_MarkerText_3"
+	hideparameter "AC_MarkerText_3"
+endif
+if GS_iCustomText_4 = CTXT_MEASUREDVALUE then
+	hideparameter "AC_MarkerText_4"
+	lock "AC_MarkerText_4"
+else
+	hideparameter "AC_SillPrefix", "AC_SillNominal"
+	lock "AC_SillNominal", "AC_SillPrefix"
+endif
+if GS_iCustomText_5 = CTXT_MEASUREDVALUE or not(AC_show_firerating) then
+	lock "AC_MarkerText_5"
+else
+	hideparameter "AC_FirePrefix"
+	lock "AC_FirePrefix"
+endif
+if GS_iCustomText_6 = CTXT_MEASUREDVALUE or not(AC_show_acousticrating) then
+	lock "AC_MarkerText_6"
+else
+	hideparameter "AC_AcousticPrefix"
+	lock "AC_AcousticPrefix"
+endif
+
+if GS_iCustomText_7 = CTXT_MEASUREDVALUE or not(AC_show_Uvalue) then
+	lock "AC_MarkerText_7"
+else
+	hideparameter "AC_UvaluePrefix"
+	lock "AC_UvaluePrefix"
+endif
+
+if AC_TextSize_1 < 0 then parameters AC_TextSize_1 = abs(AC_TextSize_1)
+if GS_TextSize_2_e < 0 then parameters GS_TextSize_2_e = abs(GS_TextSize_2_e)
+if GS_TextSize_3_e < 0 then parameters GS_TextSize_3_e = abs(GS_TextSize_3_e)
+if GS_TextSize_4_e < 0 then parameters GS_TextSize_4_e = abs(GS_TextSize_4_e)
+if GS_TextSize_5_e < 0 then parameters GS_TextSize_5_e = abs(GS_TextSize_5_e)
+if GS_TextSize_6_e < 0 then parameters GS_TextSize_6_e = abs(GS_TextSize_6_e)
+if GS_TextSize_7_e < 0 then parameters GS_TextSize_7_e = abs(GS_TextSize_7_e)
+
+if GS_UniTextFormat then
+	hideparameter "gs_marker_text_2_title", "gs_marker_text_3_title", "gs_marker_text_4_title",
+		"gs_marker_text_5_title", "gs_marker_text_6_title", "gs_marker_text_7_title"
+	hideparameter "AC_TextFont_2", "AC_TextFont_3", "AC_TextFont_4",
+		"AC_TextFont_5", "AC_TextFont_6", "AC_TextFont_7"
+	hideparameter "GS_TextSize_2_e", "GS_TextSize_3_e", "GS_TextSize_4_e",
+		"GS_TextSize_5_e", "GS_TextSize_6_e", "GS_TextSize_7_e"
+	hideparameter "AC_TextStyle_2", "AC_TextStyle_3", "AC_TextStyle_4",
+		"AC_TextStyle_5", "AC_TextStyle_6", "AC_TextStyle_7"
+	hideparameter "AC_TextPen_2", "AC_TextPen_3", "AC_TextPen_4",
+		"AC_TextPen_5", "AC_TextPen_6", "AC_TextPen_7"
+	hideparameter "AC_TextSize_2", "AC_TextSize_3", "AC_TextSize_4",
+		"AC_TextSize_5", "AC_TextSize_6", "AC_TextSize_7"
+	hideparameter	"gs_Text_Style_1B", "gs_Text_Style_2B", "gs_Text_Style_3B",
+					"gs_Text_Style_4B", "gs_Text_Style_5B", "gs_Text_Style_6B", "gs_Text_Style_7B"
+	hideparameter	"gs_Text_Style_1I", "gs_Text_Style_2I", "gs_Text_Style_3I",
+					"gs_Text_Style_4I", "gs_Text_Style_5I", "gs_Text_Style_6I", "gs_Text_Style_7I"
+	hideparameter	"gs_Text_Style_1U", "gs_Text_Style_2U", "gs_Text_Style_3U",
+					"gs_Text_Style_4U", "gs_Text_Style_5U", "gs_Text_Style_6U", "gs_Text_Style_7U"
+
+	lock "gs_marker_text_2_title", "gs_marker_text_3_title", "gs_marker_text_4_title",
+		"gs_marker_text_5_title", "gs_marker_text_6_title", "gs_marker_text_7_title"
+	lock "AC_TextFont_2", "AC_TextFont_3", "AC_TextFont_4",
+		"AC_TextFont_5", "AC_TextFont_6", "AC_TextFont_7"
+	lock "GS_TextSize_2_e", "GS_TextSize_3_e", "GS_TextSize_4_e",
+		"GS_TextSize_5_e", "GS_TextSize_6_e", "GS_TextSize_7_e"
+	lock "AC_TextStyle_2", "AC_TextStyle_3", "AC_TextStyle_4",
+		"AC_TextStyle_5", "AC_TextStyle_6", "AC_TextStyle_7"
+	lock "AC_TextPen_2", "AC_TextPen_3", "AC_TextPen_4",
+		"AC_TextPen_5", "AC_TextPen_6", "AC_TextPen_7"
+	lock "AC_TextSize_2", "AC_TextSize_3", "AC_TextSize_4",
+		"AC_TextSize_5", "AC_TextSize_6", "AC_TextSize_7"
+	lock	"gs_Text_Style_1B", "gs_Text_Style_2B", "gs_Text_Style_3B",
+			"gs_Text_Style_4B", "gs_Text_Style_5B", "gs_Text_Style_6B", "gs_Text_Style_7B"
+	lock	"gs_Text_Style_1I", "gs_Text_Style_2I", "gs_Text_Style_3I",
+			"gs_Text_Style_4I", "gs_Text_Style_5I", "gs_Text_Style_6I", "gs_Text_Style_7I"
+	lock	"gs_Text_Style_1U", "gs_Text_Style_2U", "gs_Text_Style_3U",
+			"gs_Text_Style_4U", "gs_Text_Style_5U", "gs_Text_Style_6U", "gs_Text_Style_7U"
+else
+	parameters AC_TextStyle_2 = bittest (AC_TextStyle_2, 0) + 2 * bittest (AC_TextStyle_2, 1) + 4 * bittest (AC_TextStyle_2, 2) + 8 * bittest (AC_TextStyle_2, 3) + 16 * bittest (AC_TextStyle_2, 4)
+	values "AC_TextStyle_2" range[0,31]
+
+	parameters AC_TextStyle_3 = bittest (AC_TextStyle_3, 0) + 2 * bittest (AC_TextStyle_3, 1) + 4 * bittest (AC_TextStyle_3, 2) + 8 * bittest (AC_TextStyle_3, 3) + 16 * bittest (AC_TextStyle_3, 4)
+	values "AC_TextStyle_3" range[0,31]
+
+	parameters AC_TextStyle_4 = bittest (AC_TextStyle_4, 0) + 2 * bittest (AC_TextStyle_4, 1) + 4 * bittest (AC_TextStyle_4, 2) + 8 * bittest (AC_TextStyle_4, 3) + 16 * bittest (AC_TextStyle_4, 4)
+	values "AC_TextStyle_4" range[0,31]
+
+	parameters AC_TextStyle_5 = bittest (AC_TextStyle_5, 0) + 2 * bittest (AC_TextStyle_5, 1) + 4 * bittest (AC_TextStyle_5, 2) + 8 * bittest (AC_TextStyle_5, 3) + 16 * bittest (AC_TextStyle_5, 4)
+	values "AC_TextStyle_5" range[0,31]
+
+	parameters AC_TextStyle_6 = bittest (AC_TextStyle_6, 0) + 2 * bittest (AC_TextStyle_6, 1) + 4 * bittest (AC_TextStyle_6, 2) + 8 * bittest (AC_TextStyle_6, 3) + 16 * bittest (AC_TextStyle_6, 4)
+	values "AC_TextStyle_6" range[0,31]
+
+	parameters AC_TextStyle_7 = bittest (AC_TextStyle_7, 0) + 2 * bittest (AC_TextStyle_7, 1) + 4 * bittest (AC_TextStyle_7, 2) + 8 * bittest (AC_TextStyle_7, 3) + 16 * bittest (AC_TextStyle_7, 4)
+	values "AC_TextStyle_7" range[0,31]
+endif
+
+
+! ==============================================================================
+! Select Size to Show
+! ==============================================================================
+
+if gs_dw_marker_type = 2 then
+
+	! Door size types
+	if gsIsNedMarker then
+		!! NED parameter values-----------------------------------------------------
+		values "gs_dimension_select" stDimensionTypes[1], stDimensionTypes[3], stDimensionTypes[4],
+								stDimensionTypes[6], stDimensionTypes[7], stDimensionTypes[8]
+		values "gs_dimension_select_int"  1, 4, 3, 6, 7, 8
+	else
+		!! INT parameter values-----------------------------------------------------
+		values "gs_dimension_select" stDimensionTypes[1], stDimensionTypes[2],
+				stDimensionTypes[3], stDimensionTypes[4]
+		values "gs_dimension_select_int" 1, 2, 3, 4
+	endif
+else
+	if gs_dw_marker_type = 3 then
+		! Skylight size types
+		gs_dimension_select = stDimensionTypes[1]
+		parameters gs_dimension_select = gs_dimension_select
+
+		lock	"gs_dimension_select"
+		hideparameter	"gs_dimension_select"
+	else
+		! Window size types
+		values "gs_dimension_select" stDimensionTypes[1], stDimensionTypes[2], stDimensionTypes[5]
+		values "gs_dimension_select_int" 1, 2, 5
+	endif
+endif
+
+
+
+! ==============================================================================
+! Font Size
+! ==============================================================================
+
+w_units_form = ""
+rrr = request("Linear_dimension", "", w_units_form)
+bLinearDimIsMetric = (strstr(w_units_form, "m") > 0)
+
+if not(bLinearDimIsMetric) then	! Conversion
+	ratio = 25.4/72
+else
+	ratio = 1
+endif
+
+if GLOB_MODPAR_NAME = "GS_TextSize_2_e" then parameters AC_TextSize_2 = GS_TextSize_2_e * ratio
+if GLOB_MODPAR_NAME = "GS_TextSize_3_e" then parameters AC_TextSize_3 = GS_TextSize_3_e * ratio
+if GLOB_MODPAR_NAME = "GS_TextSize_4_e" then parameters AC_TextSize_4 = GS_TextSize_4_e * ratio
+if GLOB_MODPAR_NAME = "GS_TextSize_5_e" then parameters AC_TextSize_5 = GS_TextSize_5_e * ratio
+if GLOB_MODPAR_NAME = "GS_TextSize_6_e" then parameters AC_TextSize_6 = GS_TextSize_6_e * ratio
+if GLOB_MODPAR_NAME = "GS_TextSize_7_e" then parameters AC_TextSize_7 = GS_TextSize_7_e * ratio
+
+if GS_LastUnit = 0 & bLinearDimIsMetric then			! Conversion
+	parameters GS_TextSize_2_e	= AC_TextSize_2
+	parameters GS_TextSize_3_e	= AC_TextSize_3
+	parameters GS_TextSize_4_e	= AC_TextSize_4
+	parameters GS_TextSize_5_e	= AC_TextSize_5
+	parameters GS_TextSize_6_e	= AC_TextSize_6
+	parameters GS_TextSize_7_e	= AC_TextSize_7
+endif
+
+ratio = 25.4/72
+if GS_LastUnit = 1 & not(bLinearDimIsMetric)  then			! Conversion
+	parameters GS_TextSize_2_e	= AC_TextSize_2 / ratio
+	parameters GS_TextSize_3_e	= AC_TextSize_3 / ratio
+	parameters GS_TextSize_4_e	= AC_TextSize_4 / ratio
+	parameters GS_TextSize_5_e	= AC_TextSize_5 / ratio
+	parameters GS_TextSize_6_e	= AC_TextSize_6 / ratio
+	parameters GS_TextSize_7_e	= AC_TextSize_7 / ratio
+endif
+
+if not(bLinearDimIsMetric) then
+	parameters GS_LastUnit = 0
+else
+	parameters GS_LastUnit = 1
+endif
+
+! ==============================================================================
+! DWG-Export Type for GER
+! ==============================================================================
+
+if	LibraryLangCode <> "GER" then
+	lock	"ac_dwg_block_name"
+	hideparameter	"ac_dwg_block_name"
+
+	! if the folder is empty
+	lock	"gs_dwg_export_title"
+	hideparameter	"gs_dwg_export_title"
+endif
+
+
+]]>
+</Script_VL>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_UIDefault/>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Dimension 1"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Dimension 2"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Integer Name="gs_dw_marker_type">
+			<Description><![CDATA["Marker Type (1-Win, 2-Door))"]]></Description>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_hide_marker">
+			<Description><![CDATA["Hide Marker on Plan"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_marker_options: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_options">
+			<Description><![CDATA["Marker Options"]]></Description>
+		</Title>
+		<Boolean Name="AC_ID_On">
+			<Description><![CDATA["Show ID"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="AC_WidHei_On">
+			<Description><![CDATA["Show Sizes"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="gs_dimension_select">
+			<Description><![CDATA["Size to Show"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Размеры Проема"]]></Value>
+		</String>
+		<Integer Name="gs_dimension_select_int">
+			<Description><![CDATA["Size to Show"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="iWorkUnitLinear">
+			<Description><![CDATA["Unit of Size Values"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</Integer>
+		<Integer Name="iWorkUnitLinearDecimal">
+			<Description><![CDATA["Decimal Options"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="NedSizePref">
+			<Description><![CDATA["Prefix for Sizes"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="NedSizeSep">
+			<Description><![CDATA["Separator for Sizes"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["x"]]></Value>
+		</String>
+		<Boolean Name="GS_Center_Line">
+			<Description><![CDATA["Show Center Line"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="AC_SameSide">
+			<Description><![CDATA["Flip Marker"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="AC_Sill_On">
+			<Description><![CDATA["Show Sill Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="stShowSillTo">
+			<Description><![CDATA["Show Sill Height to"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Привязка"]]></Value>
+		</String>
+		<Integer Name="iShowSillTo">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Integer Name="iWorkUnitSillHgt">
+			<Description><![CDATA["Unit of Sill Height Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</Integer>
+		<Integer Name="iWorkUnitSillHgtDecimal">
+			<Description><![CDATA["Decimal Options"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="AC_show_firerating">
+			<Description><![CDATA["Show Fire Rating Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="AC_show_acousticrating">
+			<Description><![CDATA["Show Acoustic Rating Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="AC_show_Uvalue">
+			<Description><![CDATA["Show U-value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_marker_geometry: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_geometry">
+			<Description><![CDATA["Geometry"]]></Description>
+		</Title>
+		<String Name="gs_marker_shape">
+			<Description><![CDATA["Marker Polygon Shape"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Окружность"]]></Value>
+		</String>
+		<Integer Name="iMarkerShape">
+			<Description><![CDATA["Marker Polygon Shape"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="stMarkerDir">
+			<Description><![CDATA["ID Text Orientation"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Стандарт"]]></Value>
+		</String>
+		<Integer Name="iMarkerDir">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_marker_rotation">
+			<Description><![CDATA["Rotate Marker Polygon"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_markertext_fit">
+			<Description><![CDATA["Fit Marker Shape to Font Size"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="markerSizeUnit">
+			<Description><![CDATA["Marker Size Unit"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["мм"]]></Value>
+		</String>
+		<Integer Name="iMarkerSizeUnit">
+			<Description><![CDATA["Marker Size Unit"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<RealNum Name="headDistMm">
+			<Description><![CDATA["Marker Position (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>20</Value>
+		</RealNum>
+		<RealNum Name="headDistCm">
+			<Description><![CDATA["Marker Position (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<RealNum Name="headDistPoint">
+			<Description><![CDATA["Marker Position (Paper Size - point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</RealNum>
+		<RealNum Name="headDistM">
+			<Description><![CDATA["Marker Position (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.02</Value>
+		</RealNum>
+		<RealNum Name="markerOffsetMm">
+			<Description><![CDATA["Marker Offset (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="markerOffsetCm">
+			<Description><![CDATA["Marker Offset (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="markerOffsetPoint">
+			<Description><![CDATA["Marker Offset (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="markerOffsetM">
+			<Description><![CDATA["Marker Offset (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="footLengthMm">
+			<Description><![CDATA["Centerline Length (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</RealNum>
+		<RealNum Name="footLengthCm">
+			<Description><![CDATA["Centerline Length (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.6</Value>
+		</RealNum>
+		<RealNum Name="footLengthPoint">
+			<Description><![CDATA["Centerline Length (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</RealNum>
+		<RealNum Name="footLengthM">
+			<Description><![CDATA["Centerline Length (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.006</Value>
+		</RealNum>
+		<RealNum Name="whDistMm">
+			<Description><![CDATA["Dimension Text Position (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>12</Value>
+		</RealNum>
+		<RealNum Name="whDistCm">
+			<Description><![CDATA["Dimension Text Position (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1.2</Value>
+		</RealNum>
+		<RealNum Name="whDistPoint">
+			<Description><![CDATA["Dimension Text Position (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>36</Value>
+		</RealNum>
+		<RealNum Name="whDistM">
+			<Description><![CDATA["Dimension Text Position (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.012</Value>
+		</RealNum>
+		<RealNum Name="sillOffsetMm">
+			<Description><![CDATA["Sill Text Position X (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="sillOffsetCm">
+			<Description><![CDATA["Sill Text Position X (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="sillOffsetPoint">
+			<Description><![CDATA["Sill Text Position X (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="sillOffsetM">
+			<Description><![CDATA["Sill Text Position X (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="sillDistMm">
+			<Description><![CDATA["Sill Text Position Y (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</RealNum>
+		<RealNum Name="sillDistCm">
+			<Description><![CDATA["Sill Text Position Y (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.4</Value>
+		</RealNum>
+		<RealNum Name="sillDistPoint">
+			<Description><![CDATA["Sill Text Position Y (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>12</Value>
+		</RealNum>
+		<RealNum Name="sillDistM">
+			<Description><![CDATA["Sill Text Position Y (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.004</Value>
+		</RealNum>
+		<RealNum Name="fireOffsetMm">
+			<Description><![CDATA["Fire Rating Text Position X (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</RealNum>
+		<RealNum Name="fireOffsetCm">
+			<Description><![CDATA["Fire Rating Text Position X (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</RealNum>
+		<RealNum Name="fireOffsetPoint">
+			<Description><![CDATA["Fire Rating Text Position X (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>30</Value>
+		</RealNum>
+		<RealNum Name="fireOffsetM">
+			<Description><![CDATA["Fire Rating Text Position X (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.01</Value>
+		</RealNum>
+		<RealNum Name="fireDistMm">
+			<Description><![CDATA["Fire Rating Text Position Y (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</RealNum>
+		<RealNum Name="fireDistCm">
+			<Description><![CDATA["Fire Rating Text Position Y (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</RealNum>
+		<RealNum Name="fireDistPoint">
+			<Description><![CDATA["Fire Rating Text Position Y (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</RealNum>
+		<RealNum Name="fireDistM">
+			<Description><![CDATA["Fire Rating Text Position Y (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.001</Value>
+		</RealNum>
+		<RealNum Name="acousticOffsetMm">
+			<Description><![CDATA["Acoustic Rating Text Position X (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</RealNum>
+		<RealNum Name="acousticOffsetCm">
+			<Description><![CDATA["Acoustic Rating Text Position X (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</RealNum>
+		<RealNum Name="acousticOffsetPoint">
+			<Description><![CDATA["Acoustic Rating Text Position X (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>30</Value>
+		</RealNum>
+		<RealNum Name="acousticOffsetM">
+			<Description><![CDATA["Acoustic Rating Text Position X (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.01</Value>
+		</RealNum>
+		<RealNum Name="acousticDistMm">
+			<Description><![CDATA["Acoustic Rating Text Position Y (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>5</Value>
+		</RealNum>
+		<RealNum Name="acousticDistCm">
+			<Description><![CDATA["Acoustic Rating Text Position Y (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.5</Value>
+		</RealNum>
+		<RealNum Name="acousticDistPoint">
+			<Description><![CDATA["Acoustic Rating Text Position Y (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>15</Value>
+		</RealNum>
+		<RealNum Name="acousticDistM">
+			<Description><![CDATA["Acoustic Rating Text Position Y (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.005</Value>
+		</RealNum>
+		<RealNum Name="uvalueOffsetMm">
+			<Description><![CDATA["U-value Text Position X (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</RealNum>
+		<RealNum Name="uvalueOffsetCm">
+			<Description><![CDATA["U-value Text Position X (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</RealNum>
+		<RealNum Name="uvalueOffsetPoint">
+			<Description><![CDATA["U-value Text Position X (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>28.346</Value>
+		</RealNum>
+		<RealNum Name="uvalueOffsetM">
+			<Description><![CDATA["U-value Text Position X (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.01</Value>
+		</RealNum>
+		<RealNum Name="uvalueDistMm">
+			<Description><![CDATA["U-value Text Position Y (Paper Size - mm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>9</Value>
+		</RealNum>
+		<RealNum Name="uvalueDistCm">
+			<Description><![CDATA["U-value Text Position Y (Paper Size - cm)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.9</Value>
+		</RealNum>
+		<RealNum Name="uvalueDistPoint">
+			<Description><![CDATA["U-value Text Position Y (Paper Size - Point)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>25.5114</Value>
+		</RealNum>
+		<RealNum Name="uvalueDistM">
+			<Description><![CDATA["U-value Text Position Y (Paper Size - m)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.009</Value>
+		</RealNum>
+
+		<!-- gs_marker_custom: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_custom">
+			<Description><![CDATA["Customize Texts"]]></Description>
+		</Title>
+		<String Name="GS_CustomText_1">
+			<Description><![CDATA["Marker Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Компактный ID Элемента"]]></Value>
+		</String>
+		<Integer Name="GS_iCustomText_1">
+			<Description><![CDATA["Marker Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="AC_MarkerText_1">
+			<Description><![CDATA["ID Value"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Специальный"]]></Value>
+		</String>
+		<String Name="GS_CustomText_2">
+			<Description><![CDATA["Custom Opening Width Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Измеряемое Значение"]]></Value>
+		</String>
+		<Integer Name="GS_iCustomText_2">
+			<Description><![CDATA["Custom Opening Width Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="AC_MarkerText_2">
+			<Description><![CDATA["Opening Width Value"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Ширина"]]></Value>
+		</String>
+		<String Name="GS_CustomText_3">
+			<Description><![CDATA["Custom Opening Height Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Измеряемое Значение"]]></Value>
+		</String>
+		<Integer Name="GS_iCustomText_3">
+			<Description><![CDATA["Custom Opening Height Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="AC_MarkerText_3">
+			<Description><![CDATA["Opening Height Value"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Высота"]]></Value>
+		</String>
+		<String Name="GS_CustomText_4">
+			<Description><![CDATA["Custom Sill Height Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Измеряемое Значение"]]></Value>
+		</String>
+		<Integer Name="GS_iCustomText_4">
+			<Description><![CDATA["Custom Sill Height Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Boolean Name="GS_UniTextFormat">
+			<Description><![CDATA["Uniform Text Format"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="AC_MarkerText_4">
+			<Description><![CDATA["Sill Value"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["90"]]></Value>
+		</String>
+		<Boolean Name="AC_SillNominal">
+			<Description><![CDATA["Nominal Sill Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="AC_SillPrefix">
+			<Description><![CDATA["Sill Prefix"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value><![CDATA["Отлив"]]></Value>
+		</String>
+		<String Name="GS_CustomText_5">
+			<Description><![CDATA["Fire Rating Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Измеряемое Значение"]]></Value>
+		</String>
+		<Integer Name="GS_iCustomText_5">
+			<Description><![CDATA["Fire Rating Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="AC_MarkerText_5">
+			<Description><![CDATA["Fire Rating Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="AC_FirePrefix">
+			<Description><![CDATA["Fire Rating Prefix"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="GS_CustomText_6">
+			<Description><![CDATA["Acoustic Rating Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Измеряемое Значение"]]></Value>
+		</String>
+		<Integer Name="GS_iCustomText_6">
+			<Description><![CDATA["Acoustic Rating Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="AC_MarkerText_6">
+			<Description><![CDATA["Acoustic Rating Value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="AC_AcousticPrefix">
+			<Description><![CDATA["Acoustic Rating Prefix"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="GS_CustomText_7">
+			<Description><![CDATA["U-value Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Измеряемое Значение"]]></Value>
+		</String>
+		<Integer Name="GS_iCustomText_7">
+			<Description><![CDATA["U-value Text"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="AC_MarkerText_7">
+			<Description><![CDATA["U-value"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["U "]]></Value>
+		</String>
+		<String Name="AC_UvaluePrefix">
+			<Description><![CDATA["U-value Prefix"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+
+		<!-- gs_marker_text_1_title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_text_1_title">
+			<Description><![CDATA["Marker Text"]]></Description>
+		</Title>
+		<String Name="AC_TextFont_1">
+			<Description><![CDATA["Marker Text 1 Type (default)"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<Integer Name="AC_TextStyle_1">
+			<Description><![CDATA["Marker Text 1 Style (default)"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="AC_TextPen_1">
+			<Description><![CDATA["Marker Text 1 Pen (default)"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<RealNum Name="AC_TextSize_1">
+			<Description><![CDATA["Marker Text 1 Size (default)"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<Boolean Name="GS_Text_Style_1B">
+			<Description><![CDATA["Text Style 1 Bold"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_1I">
+			<Description><![CDATA["Text Style 1 Italic"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_1U">
+			<Description><![CDATA["Text Style 1 Underline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_marker_text_2_title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_text_2_title">
+			<Description><![CDATA["Opening Width Text"]]></Description>
+		</Title>
+		<String Name="AC_TextFont_2">
+			<Description><![CDATA["Marker Text 2 Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<Integer Name="AC_TextStyle_2">
+			<Description><![CDATA["Marker Text 2 Style"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="AC_TextPen_2">
+			<Description><![CDATA["Marker Text 2 Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<RealNum Name="GS_TextSize_2_e">
+			<Description><![CDATA["Font Size 2"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<RealNum Name="AC_TextSize_2">
+			<Description><![CDATA["Marker Text 2 Size"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<Boolean Name="GS_Text_Style_2B">
+			<Description><![CDATA["Text Style 2 Bold"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_2I">
+			<Description><![CDATA["Text Style 2 Italic"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_2U">
+			<Description><![CDATA["Text Style 2 Underline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_marker_text_3_title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_text_3_title">
+			<Description><![CDATA["Opening Height Text"]]></Description>
+		</Title>
+		<String Name="AC_TextFont_3">
+			<Description><![CDATA["Marker Text 3 Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<Integer Name="AC_TextStyle_3">
+			<Description><![CDATA["Marker Text 3 Style"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="AC_TextPen_3">
+			<Description><![CDATA["Marker Text 3 Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<RealNum Name="GS_TextSize_3_e">
+			<Description><![CDATA["Font Size 3"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<RealNum Name="AC_TextSize_3">
+			<Description><![CDATA["Marker Text 3 Size"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<Boolean Name="GS_Text_Style_3B">
+			<Description><![CDATA["Text Style 3 Bold"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_3I">
+			<Description><![CDATA["Text Style 3 Italic"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_3U">
+			<Description><![CDATA["Text Style 3 Underline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_marker_text_4_title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_text_4_title">
+			<Description><![CDATA["Sill Text"]]></Description>
+		</Title>
+		<String Name="AC_TextFont_4">
+			<Description><![CDATA["Marker Text 4 Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<Integer Name="AC_TextStyle_4">
+			<Description><![CDATA["Marker Text 4 Style"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="AC_TextPen_4">
+			<Description><![CDATA["Marker Text 4 Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<RealNum Name="GS_TextSize_4_e">
+			<Description><![CDATA["Font Size 4"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<RealNum Name="AC_TextSize_4">
+			<Description><![CDATA["Marker Text 4 Size"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<Boolean Name="GS_Text_Style_4B">
+			<Description><![CDATA["Text Style 3 Bold"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_4I">
+			<Description><![CDATA["Text Style 3 Italic"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_4U">
+			<Description><![CDATA["Text Style 3 Underline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_marker_text_5_title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_text_5_title">
+			<Description><![CDATA["Fire Rating Text"]]></Description>
+		</Title>
+		<String Name="AC_TextFont_5">
+			<Description><![CDATA["Text Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<Integer Name="AC_TextStyle_5">
+			<Description><![CDATA["Text Style"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="AC_TextPen_5">
+			<Description><![CDATA["Text Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<RealNum Name="GS_TextSize_5_e">
+			<Description><![CDATA["Font Size"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<RealNum Name="AC_TextSize_5">
+			<Description><![CDATA["Font Size"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<Boolean Name="GS_Text_Style_5B">
+			<Description><![CDATA["Text Style Bold"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_5I">
+			<Description><![CDATA["Text Style Italic"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_5U">
+			<Description><![CDATA["Text Style Underline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<PenColor Name="AC_Pen_FireRate">
+			<Description><![CDATA["Fire Rating Pen Color"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</PenColor>
+
+		<!-- gs_marker_text_6_title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_text_6_title">
+			<Description><![CDATA["Acoustic Rating Text"]]></Description>
+		</Title>
+		<String Name="AC_TextFont_6">
+			<Description><![CDATA["Text Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<Integer Name="AC_TextStyle_6">
+			<Description><![CDATA["Text Style"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="AC_TextPen_6">
+			<Description><![CDATA["Text Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<RealNum Name="GS_TextSize_6_e">
+			<Description><![CDATA["Font Size"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<RealNum Name="AC_TextSize_6">
+			<Description><![CDATA["Font Size"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<Boolean Name="GS_Text_Style_6B">
+			<Description><![CDATA["Text Style Bold"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_6I">
+			<Description><![CDATA["Text Style Italic"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_6U">
+			<Description><![CDATA["Text Style Underline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_marker_text_7_title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_text_7_title">
+			<Description><![CDATA["U-value Text"]]></Description>
+		</Title>
+		<String Name="AC_TextFont_7">
+			<Description><![CDATA["Text Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<Integer Name="AC_TextStyle_7">
+			<Description><![CDATA["Text Style"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<PenColor Name="AC_TextPen_7">
+			<Description><![CDATA["Text Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<RealNum Name="GS_TextSize_7_e">
+			<Description><![CDATA["Font Size"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<RealNum Name="AC_TextSize_7">
+			<Description><![CDATA["Font Size"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<Boolean Name="GS_Text_Style_7B">
+			<Description><![CDATA["Text Style Bold"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_7I">
+			<Description><![CDATA["Text Style Italic"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="GS_Text_Style_7U">
+			<Description><![CDATA["Text Style Underline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_marker_defaulf: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_marker_defaulf">
+			<Description><![CDATA["Marker System Parameters"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<RealNum Name="GS_Last_A_">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>100</Value>
+		</RealNum>
+		<Integer Name="GS_LastUnit">
+			<Description><![CDATA["Last Set Working Unit"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="GS_Separator">
+			<Description><![CDATA["Separator between W & H"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["на"]]></Value>
+		</String>
+		<RealNum Name="AC_MarkerSize">
+			<Description><![CDATA["Marker Size"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>10</Value>
+		</RealNum>
+		<Boolean Name="AC_Readable">
+			<Description><![CDATA["Readable Text"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="AC_WIDO_ID">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["ID"]]></Value>
+		</String>
+		<Length Name="AC_WIDO_A_SIZE">
+			<Description><![CDATA["Window Width"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1.45</Value>
+		</Length>
+		<Length Name="AC_WIDO_B_SIZE">
+			<Description><![CDATA["Window Height"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1.8</Value>
+		</Length>
+		<Boolean Name="AC_WIDO_REVEAL_SIDE">
+			<Description><![CDATA["Reveal Side"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="AC_WIDO_REVEAL_SIDE_2">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Angle Name="AC_SYMB_ROTANGLE">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Boolean Name="AC_WIDO_MIRRORED">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="AC_WIDO_OVERSIZE_B">
+			<Description><![CDATA["Window Oversize Bottom"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="AC_WIDO_SUBFL_THICKNESS">
+			<Description><![CDATA["Subfloor Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="AC_WALL_THICKNESS">
+			<Description><![CDATA["Wall Thickness"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.3</Value>
+		</Length>
+		<Length Name="AC_GLOB_ELEVATION">
+			<Description><![CDATA["Global Elevation"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.9</Value>
+		</Length>
+		<Integer Name="AC_WIDO_TYPE">
+			<Description><![CDATA["DW Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Length Name="AC_SILL_TO_CURR_STORY">
+			<Description><![CDATA["Sill Height 1"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.9</Value>
+		</Length>
+		<Length Name="AC_SILL_TO_ANCHOR_LEVEL">
+			<Description><![CDATA["Sill to Anchor"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Angle Name="AC_SKYL_ROTANGLE">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Boolean Name="gs_show_hotspot_ui">
+			<Description><![CDATA["Show Editable Hotspot on UI"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D Representation"]]></Description>
+		</Title>
+		<Boolean Name="gs_MarkerFill">
+			<Description><![CDATA["Use Marker Fill"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<FillPattern Name="AC_MarkerFill">
+			<Description><![CDATA["Marker Fill"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Contour Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+
+		<!-- gs_dwg_export_title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_dwg_export_title">
+			<Description><![CDATA["DWG Export"]]></Description>
+		</Title>
+		<String Name="ac_dwg_block_name">
+			<Description><![CDATA["DWG-Export Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="gs_ui_current_page">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gsIsNedMarker">
+			<Description><![CDATA["It is a NED Marker"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="gs_GLOB_MODPAR_NAME">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Boolean Name="RotWidthText">
+			<Description><![CDATA["Width Text under Sill Text"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Angle Name="gs_readable_angle">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>90</Value>
+		</Angle>
+		<String Name="LibraryLangCode">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["RUS"]]></Value>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["quantity_text_formatter"]]></MName>
+		<MainGUID>5E4D02A3-CF83-4DE5-8F7D-C5FF522A117A</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["ui_tab_popup"]]></MName>
+		<MainGUID>A0E69B6A-A2E3-4BA9-BFE2-EEB20935B708</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["ui_arrow"]]></MName>
+		<MainGUID>8B47697B-B040-4302-A0A6-C61CB4AD8614</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+EPS = 0.00001
+
+dim stShapes[9]
+	stShapes[1] = `Окружность`
+	stShapes[2] = `Ромб`
+	stShapes[3] = `Прямоугольник`
+	stShapes[4] = `Овал`
+	stShapes[5] = `Треугольник`
+	stShapes[6] = `Пятиугольник`
+	stShapes[7] = `Шестиугольник`
+	stShapes[8] = `Восьмиугольник`
+	stShapes[9] = `Нет`
+
+SHAPE_CIRCLE	= 1
+SHAPE_RECT		= 2
+SHAPE_FRAGMENT	= 3
+SHAPE_OVAL		= 4
+SHAPE_TRIANGLE	= 5
+SHAPE_PENTAGON	= 6
+SHAPE_HEXAGON	= 7
+SHAPE_OCTAGON	= 8
+SHAPE_NONE		= 0
+
+dim stCustomText[4]
+	stCustomText[1] = `Компактный ID Элемента`
+	stCustomText[2] = `Измеряемое Значение`
+	stCustomText[3] = `Специальный Текст`
+	stCustomText[4] = `Полный ID Элемента`
+
+CTXT_IDNUMBER		= 1
+CTXT_MEASUREDVALUE	= 2
+CTXT_CUSTOMTEXT		= 3
+CTXT_FULLIDNUM		= 4
+
+dim stMarkerDirValues[4]
+	stMarkerDirValues[1] = `Стандарт`
+	stMarkerDirValues[2] = `Выровнять по Линии Маркера`
+	stMarkerDirValues[3] = `Горизонтально`
+	stMarkerDirValues[4] = `Вертикально`
+
+DIMUNIT_MM		= 11  
+DIMUNIT_CM		= 12
+DIMUNIT_METER	= 13
+DIMUNIT_INCH	= 14
+DIMUNIT_DM		= 15
+DIMUNIT_PROJECT	= 10
+
+dim stUnitFormats[6]
+	stUnitFormats[1] = `мм`
+	stUnitFormats[2] = `см`
+	stUnitFormats[3] = `дм`
+	stUnitFormats[4] = `м`
+	stUnitFormats[5] = `дюймы`
+	stUnitFormats[6] = `по Параметрам Проекта`
+
+dim stShowSillToValues[3]
+	if gs_dw_marker_type = 3 then
+		stShowSillToValues[1] = `Основание Крыши/Свода`
+	else
+		stShowSillToValues[1] = `Основание Стены`
+	endif
+	stShowSillToValues[2] = `Этаж Вставки`
+	stShowSillToValues[3] = `Привязка`
+
+
+if GLOB_SCRIPT_TYPE = 7 | GLOB_SCRIPT_TYPE = 8 then
+
+	goto "end of master script"
+endif
+
+main = ""
+frac = ""
+
+! ==============================================================================
+! Uniform Text Format
+! ==============================================================================
+
+if GS_UniTextFormat then
+	AC_TextFont_2	= AC_TextFont_1
+	AC_TextSize_2	= AC_TextSize_1
+	AC_TextPen_2	= AC_TextPen_1
+	AC_TextStyle_2	= AC_TextStyle_1
+	AC_TextFont_3	= AC_TextFont_1
+	AC_TextSize_3	= AC_TextSize_1
+	AC_TextPen_3	= AC_TextPen_1
+	AC_TextStyle_3	= AC_TextStyle_1
+	AC_TextFont_4	= AC_TextFont_1
+	AC_TextSize_4	= AC_TextSize_1
+	AC_TextPen_4	= AC_TextPen_1
+	AC_TextStyle_4	= AC_TextStyle_1
+	AC_TextFont_5	= AC_TextFont_1
+	AC_TextSize_5	= AC_TextSize_1
+	AC_TextPen_5	= AC_TextPen_1
+	AC_TextStyle_5	= AC_TextStyle_1
+	AC_TextFont_6	= AC_TextFont_1
+	AC_TextSize_6	= AC_TextSize_1
+	AC_TextPen_6	= AC_TextPen_1
+	AC_TextStyle_6	= AC_TextStyle_1
+	AC_TextFont_7	= AC_TextFont_1
+	AC_TextSize_7	= AC_TextSize_1
+	AC_TextPen_7	= AC_TextPen_1
+	AC_TextStyle_7	= AC_TextStyle_1
+else
+	AC_TextStyle_1 = GS_Text_Style_1B + 2 * GS_Text_Style_1I + 4 * GS_Text_Style_1U
+	AC_TextStyle_2 = GS_Text_Style_2B + 2 * GS_Text_Style_2I + 4 * GS_Text_Style_2U
+	AC_TextStyle_3 = GS_Text_Style_3B + 2 * GS_Text_Style_3I + 4 * GS_Text_Style_3U
+	AC_TextStyle_4 = GS_Text_Style_4B + 2 * GS_Text_Style_4I + 4 * GS_Text_Style_4U
+	AC_TextStyle_5 = GS_Text_Style_5B + 2 * GS_Text_Style_5I + 4 * GS_Text_Style_5U
+	AC_TextStyle_6 = GS_Text_Style_6B + 2 * GS_Text_Style_6I + 4 * GS_Text_Style_6U
+	AC_TextStyle_7 = GS_Text_Style_7B + 2 * GS_Text_Style_7I + 4 * GS_Text_Style_7U
+endif
+
+! ==============================================================================
+
+dim stDimensionTypes[8]
+	stDimensionTypes[1] = `Размеры Проема`
+	stDimensionTypes[2] = `Размеры Блока`
+	stDimensionTypes[3] = `Размеры Полотна`
+	stDimensionTypes[4] = `Размеры Прохода`
+	stDimensionTypes[5] = `Размеры Четверти`
+	stDimensionTypes[6] = `Размеры Проема - ширина х высота`
+	stDimensionTypes[7] = `Размеры Прохода - ширина x высота`
+	stDimensionTypes[8] = `Размеры Полотна - ширина x высота`
+
+if GLOB_MODPAR_NAME = "gs_dimension_select" then
+	for iType = 1 to vardim1(stDimensionTypes)
+		if gs_dimension_select = stDimensionTypes[iType] then
+			gs_dimension_select_int = iType
+		endif
+	next iType
+	parameters gs_dimension_select_int = gs_dimension_select_int
+else
+	gs_dimension_select = stDimensionTypes[min(gs_dimension_select_int,vardim1(stDimensionTypes))]
+	parameters gs_dimension_select = gs_dimension_select
+endif
+
+
+if gs_dimension_select_int = 6 or gs_dimension_select_int = 7 or gs_dimension_select_int = 8 then
+	bIsDutchDimType = 1
+else
+	bIsDutchDimType = 0
+endif
+
+if not(gsIsNedMarker) or not(bIsDutchDimType) then
+	RotWidthText = 0
+endif
+
+
+_bLockLinearUnitDecimal		= (not(AC_WidHei_On)	| iWorkUnitLinear	= DIMUNIT_INCH	| iWorkUnitLinear	= DIMUNIT_PROJECT)
+_bLockSillHgtUnitDecimal	= (not(AC_Sill_On)		| iWorkUnitSillHgt	= DIMUNIT_INCH	| iWorkUnitSillHgt	= DIMUNIT_PROJECT)
+
+
+! ==============================================================================
+! Marker text measured values
+! ==============================================================================
+
+! --- Sill Height --------------------------------------------------------------
+
+sillExtraPrecision = ""
+
+if (GLOB_SCRIPT_TYPE = 5 or (GLOB_SCRIPT_TYPE = 2 and AC_Sill_On)) \
+		and GS_iCustomText_4 = CTXT_MEASUREDVALUE then
+
+	if (iShowSillTo <> 1 & iShowSillTo <> 2 & iShowSillTo <> 3) then
+		if AC_SillNominal then
+			lengthValue = AC_GLOB_ELEVATION
+		else
+			lengthValue = AC_SILL_TO_CURR_STORY - AC_WIDO_OVERSIZE_B - AC_WIDO_SUBFL_THICKNESS
+		endif
+	endif
+
+	if iShowSillTo = 1 then
+		if AC_SillNominal then
+			lengthValue = AC_GLOB_ELEVATION
+		else
+			lengthValue = AC_GLOB_ELEVATION - AC_WIDO_OVERSIZE_B - AC_WIDO_SUBFL_THICKNESS
+		endif
+	endif
+
+	if iShowSillTo = 2 then
+		if AC_SillNominal then
+			lengthValue = AC_SILL_TO_CURR_STORY
+		else
+			lengthValue = AC_SILL_TO_CURR_STORY - AC_WIDO_OVERSIZE_B - AC_WIDO_SUBFL_THICKNESS
+		endif
+	endif
+
+	if iShowSillTo = 3 then
+		if AC_SillNominal then
+			lengthValue = AC_SILL_TO_ANCHOR_LEVEL
+		else
+			lengthValue = AC_SILL_TO_ANCHOR_LEVEL - AC_WIDO_OVERSIZE_B - AC_WIDO_SUBFL_THICKNESS
+		endif
+	endif
+
+	szFormat	= ""
+	rrr = request ("Sill_Height_Dimension", "", szFormat)
+
+	gosub "format_length_2_main_n_frac"
+
+	_lengthSillValue = lengthValue
+	AC_MarkerText_4 = AC_SillPrefix + " " + main
+	sillExtraPrecision = frac
+
+endif
+
+widhei_form = ""
+
+! --- Window Width -------------------------------------------------------------
+
+extra	= ""
+
+if (GLOB_SCRIPT_TYPE = 5 or (GLOB_SCRIPT_TYPE = 2 and AC_WidHei_On)) \
+		and GS_iCustomText_2 = CTXT_MEASUREDVALUE then
+
+	if gs_dimension_select_int = 1 then		! Wall Opening Sizes
+		wwidth = 0
+		if gsIsNedMarker then
+			rrr = request ("ASSOCLP_PARVALUE", "A",
+				index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, wwidth)
+		else
+			rrr = request ("ASSOCLP_PARVALUE", "ac_wallhole_width",
+				index_ww, type_ww, flags_ww, dim1_ww, dim2_ww, wwidth)
+		endif
+		widthSize = wwidth
+	else
+		if gs_dimension_select_int = 3 then		! Leaf Sizes
+			leafwidth = 0
+			if gs_dw_marker_type = 2 then	! door
+				if gsIsNedMarker then
+					rrr = request ("ASSOCLP_PARVALUE", "Brdeur",
+						index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, leafwidth)
+				else
+					rrr = request ("ASSOCLP_PARVALUE", "ac_leaf_width",
+						index_lw, type_lw, flags_lw, dim1_lw, dim2_lw, leafwidth)
+				endif
+			endif
+			widthSize = leafwidth
+		else
+			if gs_dimension_select_int = 2 then		! Unit Sizes
+				unitwidth = 0
+				if gsIsNedMarker then
+					rrr = request ("ASSOCLP_PARVALUE", "BrDag",
+						index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, unitwidth)
+				else
+					rrr = request ("ASSOCLP_PARVALUE", "ac_unit_width",
+						index_uw, type_uw, flags_uw, dim1_uw, dim2_uw, unitwidth)
+				endif
+				widthSize = unitwidth
+			else
+				if gs_dimension_select_int = 4 then		! Egress Sizes
+					egresswidth = 0
+					if gs_dw_marker_type = 2 then	! door
+						if gsIsNedMarker then
+							rrr = request ("ASSOCLP_PARVALUE", "brdag",
+								index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, egresswidth)
+						else
+							rrr = request ("ASSOCLP_PARVALUE", "ac_egress_width",
+								index_ew, type_ew, flags_ew, dim1_ew, dim2_ew, egresswidth)
+						endif
+					endif
+					widthSize = egresswidth
+				else
+					revealwidth = 0
+					if gs_dw_marker_type = 1 | gs_dw_marker_type = 3 then	! window, skylight
+						rrr = request ("ASSOCLP_PARVALUE", "ac_reveal_width",
+							index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, revealwidth)
+					endif
+					widthSize = revealwidth
+				endif
+			endif
+		endif
+	endif
+	if widthSize < EPS then
+		widthSize = AC_WIDO_A_SIZE
+	endif
+
+	rrr = request("Window_Door_Dimension", "", widhei_form)
+	szFormat = widhei_form
+	lengthValue = widthSize
+
+	gosub "format_length_2_main_n_frac"
+
+	_lengthWidthValue = lengthValue
+	AC_MarkerText_2 = main
+	extra = frac
+
+endif
+
+! --- Window Height ------------------------------------------------------------
+
+extraH	= ""
+
+if (GLOB_SCRIPT_TYPE = 5 or (GLOB_SCRIPT_TYPE = 2 and AC_WidHei_On)) \
+		and GS_iCustomText_3 = CTXT_MEASUREDVALUE then
+
+	if gs_dimension_select_int = 1 then		! Wall Opening Sizes
+		wheight = 0
+		if gsIsNedMarker then
+			rrr = request ("ASSOCLP_PARVALUE", "B",
+				index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, wheight)
+		else
+			rrr = request ("ASSOCLP_PARVALUE", "ac_wallhole_height",
+				index_wh, type_wh, flags_wh, dim1_wh, dim2_wh, wheight)
+		endif
+		heightSize = wheight
+	else
+		if gs_dimension_select_int = 3 then		! Leaf Sizes
+			leafheight = 0
+			if gs_dw_marker_type = 2 then	! door
+				if gsIsNedMarker then
+					rrr = request ("ASSOCLP_PARVALUE", "Hodeur",
+						index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, leafheight)
+				else
+					rrr = request ("ASSOCLP_PARVALUE", "ac_leaf_height",
+						index_lh, type_lh, flags_lh, dim1_lh, dim2_lh, leafheight)
+				endif
+			endif
+			heightSize = leafheight
+		else
+			if gs_dimension_select_int = 2 then		! Unit Sizes
+				unitheight = 0
+				if gsIsNedMarker then
+					rrr = request ("ASSOCLP_PARVALUE", "HoDag",
+						index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, unitheight)
+				else
+					rrr = request ("ASSOCLP_PARVALUE", "ac_unit_height",
+						index_uh, type_uh, flags_uh, dim1_uh, dim2_uh, unitheight)
+				endif
+				heightSize = unitheight
+			else
+				if gs_dimension_select_int = 4 then		! Egress Sizes
+					egressheight = 0
+					if gs_dw_marker_type = 2 then	! door
+						if gsIsNedMarker then
+							rrr = request ("ASSOCLP_PARVALUE", "hodag",
+								index_rw, type_rw, flags_rw, dim1_rw, dim2_rw, egressheight)
+						else
+							rrr = request ("ASSOCLP_PARVALUE", "ac_egress_height",
+								index_eh, type_eh, flags_eh, dim1_eh, dim2_eh, egressheight)
+						endif
+					endif
+					heightSize = egressheight
+				else
+					revealheight = 0
+					if gs_dw_marker_type = 1 | gs_dw_marker_type = 3 then	! window, skylight
+						rrr = request ("ASSOCLP_PARVALUE", "ac_reveal_height",
+							index_rh, type_rh, flags_rh, dim1_rh, dim2_rh, revealheight)
+					endif
+					heightSize = revealheight
+				endif
+			endif
+		endif
+	endif
+	if heightSize < EPS then
+		heightSize = AC_WIDO_B_SIZE
+	endif
+
+	if widhei_form = "" then
+		rrr = request("Window_Door_Dimension", "", widhei_form)
+	endif
+	szFormat = widhei_form
+	lengthValue = heightSize
+
+	gosub "format_length_2_main_n_frac"
+
+	_lengthHeightValue = lengthValue
+	AC_MarkerText_3 = main
+	extraH = frac
+
+endif
+
+! --- Fire Rating --------------------------------------------------------------
+
+if (LibraryLangCode = "AUT" or LibraryLangCode = "CHE" or LibraryLangCode = "GER") and\
+	gs_dw_marker_type <> 3 then
+	
+	if AC_show_firerating & GS_iCustomText_5 = CTXT_MEASUREDVALUE then
+
+		_contExpressionFR = ""
+
+		rrr = request ("ASSOCLP_PARVALUE", "gs_list_FR_expression",
+				dummy, dummy, dummy, dummy, dummy, _contExpressionFR)
+
+		if gs_dw_marker_type = 2 then													! D Marker
+
+			_contbInsulation = 0
+			_contindexInsul = ""
+		
+			rrr = request ("ASSOCLP_PARVALUE", "gs_list_bInsulation",
+					dummy, dummy, dummy, dummy, dummy, _contbInsulation)
+	
+			rrr = request ("ASSOCLP_PARVALUE", "gs_list_FR_indexSelfClosing",
+					dummy, dummy, dummy, dummy, dummy, _contindexInsul)
+		else																			! W Marker
+			_contbSelfC = 0
+			_contindexSelfC = ""
+	
+			rrr = request ("ASSOCLP_PARVALUE", "gs_list_FR_bSelfClosing",
+					dummy, dummy, dummy, dummy, dummy, _contbSelfC)
+	
+			rrr = request ("ASSOCLP_PARVALUE", "gs_list_FR_indexSelfClosing",
+					dummy, dummy, dummy, dummy, dummy, _contindexSelfC)
+		endif
+	endif
+else
+	if GS_iCustomText_5 = CTXT_MEASUREDVALUE or not(AC_show_firerating) then
+		firerating = ""
+		rrr = request ("ASSOCLP_PARVALUE", "gs_list_firerating",
+			index_firerating, type_firerating, flags_firerating,
+			dim1_firerating, dim2_firerating, firerating)
+		AC_MarkerText_5 = AC_FirePrefix + firerating	! Fire Rating Value
+		parameters AC_MarkerText_5 = AC_MarkerText_5
+	endif
+endif
+
+! --- Acoustic Rating ----------------------------------------------------------
+
+if GS_iCustomText_6 = CTXT_MEASUREDVALUE or not(AC_show_acousticrating) then
+	acousticrating = ""
+	rrr = request ("ASSOCLP_PARVALUE", "gs_list_acousticrating",
+		index_acousticrating, type_acousticrating, flags_acousticrating,
+		dim1_acousticrating, dim2_acousticrating, acousticrating)
+	AC_MarkerText_6 = AC_AcousticPrefix + acousticrating	! Acoustic Rating Value
+	parameters AC_MarkerText_6 = AC_MarkerText_6
+endif
+
+! --- U-value ----------------------------------------------------------
+
+if GS_iCustomText_7 = CTXT_MEASUREDVALUE or not(AC_show_Uvalue) then
+	uvalue = ""
+	rrr = request ("ASSOCLP_PARVALUE", "gs_list_heattransfer",
+		index_uvalue, type_uvalue, flags_uvalue,
+		dim1_uvalue, dim2_uvalue, uvalue)
+	AC_MarkerText_7 = AC_UvaluePrefix + uvalue	! U-Value
+	parameters AC_MarkerText_7 = AC_MarkerText_7
+endif
+
+! ==============================================================================
+! Marker Text
+! ==============================================================================
+
+if GLOB_SCRIPT_TYPE <> 5 and (GS_iCustomText_1 <> CTXT_CUSTOMTEXT) then
+	dim _MasterID[]
+	result = REQUEST("Full_ID_of_parent", "", _MasterID)
+	AC_MarkerText_1 = ""
+	if result then
+		if GS_iCustomText_1 = CTXT_IDNUMBER then
+			AC_MarkerText_1 = _MasterID[vardim1(_MasterID)]
+		else
+			for i = 1 to vardim1 (_MasterID)
+				AC_MarkerText_1 = AC_MarkerText_1 + _MasterID[i]
+			next i
+		endif
+	endif
+endif
+
+! ==============================================================================
+! end of master script
+! ==============================================================================
+goto "end of master script"
+
+! ==============================================================================
+! Format length value into main and frac strings
+! Input:
+!	szFormat:    formatted string
+!	lengthValue: length value
+! Output:
+!	main: the main part of the length which should be written in normal type
+!	frac: the fractal part which should be written smaller
+! ==============================================================================
+
+"format_length_2_main_n_frac":
+	szFormattedLength = str{2}(szFormat, lengthValue, szExtraPrecision)
+
+	if strstr(szFormat, "*10") <= 0 then
+		main = szFormattedLength
+		frac = szExtraPrecision
+	else
+
+		slash = strstr(szFormattedLength, "/")
+
+		main = ""
+		frac = ""
+
+		if not(slash) then	! No Fractions
+			main = szFormattedLength
+		else				! Fractions
+			if slash > 2 then
+				slen  = strlen(szFormattedLength)
+				main = strsub(szFormattedLength, 1, slash - 3)
+				frac = strsub(szFormattedLength, slash - 2, slen)
+
+				if strstr(frac," ") | strstr(frac,"-") then
+					temp = frac
+					frac = ""
+					frac = strsub(temp, 2, strlen(temp))
+				endif
+
+				fine = strsub(main, strlen(main), strlen(main))
+
+				if fine = " " | fine = "-" then
+					temp = main
+					main = ""
+					main = strsub(temp, 1, strlen(temp) - 1)
+				endif
+			else
+				frac = szFormattedLength
+			endif
+		endif
+
+	endif
+
+return
+
+"end of master script":
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+
+ui_dialog `Параметры Маркера`,444,266
+
+! ==============================================================================
+! Tabpage IDs, Titles and Icons
+! ==============================================================================
+
+PAGE_ID_GEOMETRY	= 1
+PAGE_ID_CONTENT_1	= 2
+PAGE_ID_CONTENT_2	= 3
+PAGE_ID_TEXT_1		= 4
+PAGE_ID_TEXT_2		= 5
+
+dim tabTitles[5]
+	tabTitles[1] = `Геометрия Маркера`
+	tabTitles[2] = `Данные Маркера 1 - ID, Отлив, Размеры`
+	tabTitles[3] = `Данные Маркера 2 - Огнестойкость, Шумозащита`
+	tabTitles[4] = `Формат Текста 1 - Текст Маркера и Размеры`
+	tabTitles[5] = `Формат Текста 2 - Отлив, Огнестойкость и Шумозащита`
+
+dim tabIcons[5]
+	tabIcons[1] = "uiTab_MarkerGeom_flat(1)"
+	tabIcons[2] = "uiTab_MarkerLabelContent_flat(1)"
+	tabIcons[3] = "uiTab_MarkerLabelContent_flat(1)"
+	tabIcons[4] = "uiTab_TextMarkerLabelZone_flat(1)"
+	tabIcons[5] = "uiTab_TextMarkerLabelZone_flat(1)"
+
+file_dependence "uiTab_MarkerGeom_flat(1)"
+file_dependence "uiTab_MarkerLabelContent_flat(1)"
+file_dependence "uiTab_TextMarkerLabelZone_flat(1)"
+
+ui_current_page gs_ui_current_page
+ui_page gs_ui_current_page
+
+! ==============================================================================
+! Call tabpage selector
+! ==============================================================================
+call "ui_tab_popup" parameters 	nTabs 				= vardim1(tabTitles),
+								gs_ui_current_page 	= gs_ui_current_page,
+								tabTitles			= tabTitles,
+								tabIcons			= tabIcons
+
+
+! ==============================================================================
+! Tabpages
+! ==============================================================================
+
+uiPaperSize = `Размер Бумаги`
+
+prev_pos_x=278
+prev_pos_y=90
+
+px = 30
+py = 20
+cx = px
+cy = py
+
+
+ui_page PAGE_ID_GEOMETRY
+	gosub "GeometryPage"
+
+ui_page PAGE_ID_CONTENT_1
+	gosub "Content1Page"
+
+ui_page PAGE_ID_CONTENT_2
+	gosub "Content2Page"
+
+ui_page PAGE_ID_TEXT_1
+	gosub "Text1Page"
+
+ui_page PAGE_ID_TEXT_2
+	gosub "Text2Page"
+
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! en
+! ==============================================================================
+
+
+! ==============================================================================
+"GeometryPage":
+! ------------------------------------------------------------------------------
+
+	x1		=	10
+	x2		=	165
+	x3 		= 	210
+	yblock	=	35
+	xCheckbox	= 15
+	outFldHgt	= 15
+	inFldHgt	= 19
+
+	if iMarkerShape = SHAPE_CIRCLE or iMarkerShape = SHAPE_FRAGMENT then
+		rot_flag = 4
+	else
+		rot_flag = 0
+	endif
+! ------------------------------------------------------------------------------
+
+	ui_separator prev_pos_x-5, yblock, prev_pos_x-5, 266
+
+	ui_infield{3} "AC_SameSide",	x1,		yblock-4,		prev_pos_x - x1 -10,	inFldHgt,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Зеркальное Расположение Маркера`, 0,
+		2,`Зеркальное Расположение Маркера`, 1
+
+	yblock = yblock + 21
+
+	ui_outfield `Форма Маркера`,		x1 + xCheckbox,	yblock,		x2-(x1 + xCheckbox)-1,		outFldHgt
+	ui_infield{4} "iMarkerShape", x2, yblock-4, prev_pos_x - x2 -10, inFldHgt,
+		8, "", 9, 1,
+		0, 0, 0, 0,
+		1, stShapes[1], SHAPE_CIRCLE,
+		2, stShapes[2], SHAPE_RECT,
+		3, stShapes[3], SHAPE_FRAGMENT,
+		4, stShapes[4], SHAPE_OVAL,
+		5, stShapes[5], SHAPE_TRIANGLE,
+		6, stShapes[6], SHAPE_PENTAGON,
+		7, stShapes[7], SHAPE_HEXAGON,
+		8, stShapes[8], SHAPE_OCTAGON,
+		9, stShapes[9], SHAPE_NONE
+
+	yblock	=	yblock + 21
+
+	if iMarkerShape = SHAPE_CIRCLE then
+		ui_infield{3} "gs_markertext_fit",	x1,		yblock-4,		prev_pos_x - x1 -10,	inFldHgt,
+			7,"",2,1,
+			0,0,0,0,
+			1,`Маркер по Размеру Текста`, 0,
+			2,`Маркер по Размеру Текста`, 1
+	else
+		ui_infield{3} "gs_marker_rotation",	x1,		yblock-4,		prev_pos_x - x1 -10,	inFldHgt,
+			7,"",2,1,
+			0,0,0,0,
+			1,`Поворот Маркера`, 0,
+			2,`Поворот Маркера`, 1
+	endif
+
+	yblock = yblock + 21
+
+	ui_outfield `Ориентации Текста ID`,	x1 + xCheckbox,		yblock,		x2-(x1 + xCheckbox)-1,	outFldHgt
+	ui_infield{4} "iMarkerDir", x2, yblock-4, prev_pos_x - x2 -10, inFldHgt,
+		8, "", 4, 1,
+		0, 0, 0, 0,
+		1, stMarkerDirValues[1], 1,
+		2, stMarkerDirValues[2], 2,
+		3, stMarkerDirValues[3], 3,
+		4, stMarkerDirValues[4], 4
+
+	yblock = yblock + 19
+
+! ------------------------------------------------------------------------------
+	ui_separator 	x1,		yblock, 	prev_pos_x-10,	yblock
+
+	yblock = yblock + 7
+
+	ui_outfield `Единицы Размеров Маркера`,		x1 + xCheckbox, yblock,		x3-(x1 + xCheckbox)-1,	outFldHgt
+	ui_infield{4} "iMarkerSizeUnit", x3, yblock-4, prev_pos_x - x3 -10, inFldHgt,
+		8, "", 3, 1,
+		0, 0, 0, 0,
+		1, `мм`, 1,
+		2, `см`, 2,
+		3, `точки`, 3
+	yblock = yblock + 21
+
+	ui_outfield `(1)`,					0,				yblock,	x1 + xCheckbox-1,		outFldHgt
+	ui_outfield `Расположение Маркера`,		x1 + xCheckbox, yblock,	x3-(x1 + xCheckbox)-1, 	outFldHgt
+	if iMarkerSizeUnit = 1 then	ui_infield "headDistMm",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 2 then	ui_infield "headDistCm",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 3 then	ui_infield "headDistPoint",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+
+	yblock = yblock + 21
+
+	ui_outfield `(2)`,					0,				yblock,	x1 + xCheckbox-1,		outFldHgt
+	ui_outfield `Смещение Маркера`,		x1 + xCheckbox, yblock,	x3-(x1 + xCheckbox)-1,	outFldHgt
+	if iMarkerSizeUnit = 1 then	ui_infield "markerOffsetMm",	x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 2 then	ui_infield "markerOffsetCm",	x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 3 then	ui_infield "markerOffsetPoint", x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+
+	yblock = yblock + 21
+
+	ui_outfield `(3)`,					0,				yblock,	x1 + xCheckbox-1,		outFldHgt, 4 * not(AC_WidHei_On)
+	ui_outfield `Расположение Размеров`,		x1 + xCheckbox, yblock,	x3-(x1 + xCheckbox)-1,	outFldHgt, 4 * not(AC_WidHei_On)
+	if iMarkerSizeUnit = 1 then	ui_infield "whDistMm",			x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 2 then	ui_infield "whDistCm",			x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 3 then	ui_infield "whDistPoint",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+
+	yblock = yblock + 21
+
+	ui_outfield `(4)`,					0,				yblock,		x1 + xCheckbox-1,		outFldHgt
+	ui_infield{3} "GS_Center_Line",		x1 + xCheckbox,	yblock-4,	x3-(x1 + xCheckbox)-1,	inFldHgt,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Продление Линии`, 0,
+		2,`Продление Линии`, 1
+	if iMarkerSizeUnit = 1 then	ui_infield "footLengthMm",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 2 then	ui_infield "footLengthCm",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 3 then	ui_infield "footLengthPoint",	x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+
+	yblock = yblock + 21
+
+	ui_outfield `(5)`,					0,				yblock, x1 + xCheckbox-1,		outFldHgt, 4 * not(AC_Sill_On)
+	ui_outfield `Расстояние до Высоты Отлива`, x1 + xCheckbox, yblock, x3-(x1 + xCheckbox)-1,	outFldHgt, 4 * not(AC_Sill_On)
+	if iMarkerSizeUnit = 1 then	ui_infield "sillDistMm",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 2 then	ui_infield "sillDistCm",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 3 then	ui_infield "sillDistPoint",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+
+	yblock = yblock + 21
+
+	ui_outfield `(6)`,					0,				yblock, x1 + xCheckbox-1,		outFldHgt, 4 * not(AC_Sill_On)
+	ui_outfield `Смещение Высоты Отлива `,	x1 + xCheckbox, yblock, x3-(x1 + xCheckbox)-1,	outFldHgt, 4 * not(AC_Sill_On)
+	if iMarkerSizeUnit = 1 then	ui_infield "sillOffsetMm",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 2 then	ui_infield "sillOffsetCm",		x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+	if iMarkerSizeUnit = 3 then	ui_infield "sillOffsetPoint",	x3, yblock-4, prev_pos_x - x3 -10, inFldHgt ui_tooltip uiPaperSize
+
+	yblock = yblock + 21
+
+	bIsFirstPage = 1
+	gosub "getPictures"
+
+return
+
+
+! ==============================================================================
+"Content1Page":
+! ------------------------------------------------------------------------------
+
+	prev_pos_x = 278
+
+	x1			=	1
+	x2			=	165
+	x3 			= 	210
+
+	yblock		=	28
+	xCheckbox	=	15
+	heightRow	= 	18
+
+! ------------------------------------------------------------------------------
+	ui_separator prev_pos_x-5, yblock, prev_pos_x-5, 266
+	yblock = yblock + 6
+
+! --- Marker Text --------------------------------------------------------------
+
+	ui_style 0, 1
+	ui_infield{3} "AC_ID_On",		x1,		yblock,		x2 -x1-1,	heightRow*1.5,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Показ ID`, 0,
+		2,`Показ ID`, 1
+	ui_style 0, 0
+
+	ui_infield{4} "GS_iCustomText_1",	x2,		yblock-2,	prev_pos_x - x2 -10, heightRow,
+		8,"",3,1,
+		0,0,0,0,
+		1,stCustomText[1], CTXT_IDNUMBER,
+		2,stCustomText[4], CTXT_FULLIDNUM,
+		3,stCustomText[3], CTXT_CUSTOMTEXT
+
+	yblock = yblock + 21
+
+	ui_infield "AC_MarkerText_1", 	x2,		yblock-2,	prev_pos_x - x2 -10, heightRow
+
+	yblock = yblock + 21
+
+! ------------------------------------------------------------------------------
+	ui_separator 	x1,		yblock, 	prev_pos_x-10,	yblock
+	yblock = yblock + 6
+
+! --- Sill Values --------------------------------------------------------------
+
+	ui_sill_flag = 0
+	if AC_Sill_On = 0 then ui_sill_flag = 4
+	if GS_iCustomText_4 = CTXT_CUSTOMTEXT then ui_sill_flag = 4
+
+	ui_style 0, 1
+	ui_infield{3} "AC_Sill_On",		x1,		yblock,		x2 -x1-1,			heightRow,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Показ Высоты Отлива`, 0,
+		2,`Показ Высоты Отлива`, 1
+	ui_style 0, 0
+
+	ui_infield{4} "GS_iCustomText_4", 	x2,		yblock,	prev_pos_x - x2 -10, heightRow,
+		8,"",2,1,
+		0,0,0,0,
+		1, stCustomText[2], CTXT_MEASUREDVALUE,
+		2, stCustomText[3], CTXT_CUSTOMTEXT
+
+	yblock = yblock + 21
+
+	if GS_iCustomText_4 = CTXT_CUSTOMTEXT then
+		ui_infield "AC_MarkerText_4", 			x2,			yblock,	prev_pos_x - x2 -10, heightRow
+	else
+		ui_outfield `Высота Отлива от` , x1+xCheckbox, 	yblock,	x2 -x1-1 -xCheckbox, heightRow, ui_sill_flag
+		ui_infield{4} "iShowSillTo",		x2,				yblock,	prev_pos_x - x2 -10, heightRow,
+			8, "", 3, 1,
+			0, 0, 0, 0,
+			1, stShowSillToValues[1], 1,
+			2, stShowSillToValues[2], 2,
+			3, stShowSillToValues[3], 3
+	endif
+
+
+	yblock = yblock + 21
+
+	if gs_dw_marker_type = 1 | gs_dw_marker_type = 2 then
+		ui_infield{3} "AC_SillNominal",		x1,		yblock-2,		x2 -x1-1-30, heightRow*1.5,
+			7,"",2,1,
+			0,0,0,0,
+			1,`Номинальная Высота Отлива`, 0,
+			2,`Номинальная Высота Отлива`, 1
+	endif
+
+	ui_outfield `Префикс`,			x2 - 30,	yblock,		50, heightRow, ui_sill_flag
+	ui_infield "AC_SillPrefix", 	x2 + 21,	yblock,	prev_pos_x - x2 -10 -21, heightRow
+
+	yblock = yblock + 30
+
+	ui_style 0, 1
+
+! ------------------------------------------------------------------------------
+	ui_separator 	x1,		yblock, 	prev_pos_x-10,	yblock
+	yblock = yblock + 6
+
+
+! --- Marker Dimensions --------------------------------------------------------
+	! NOT NED version Marker UI page
+	if not(gsIsNedMarker) then
+		if AC_WidHei_On=0 then ui_WH_flag=4 else ui_WH_flag=0
+
+		ui_style 0, 1
+		ui_infield{3} "AC_WidHei_On",	x1,		yblock,		x2 -x1-1,			heightRow,
+			7,"",2,1,
+			0,0,0,0,
+			1,`Показ Размеров`, 0,
+			2,`Показ Размеров`, 1
+		ui_style 0, 0
+
+		if gs_dw_marker_type <> 3 then
+			!ui_infield "gs_dimension_select",	x2,		yblock,	prev_pos_x - x2 -10, heightRow
+			ui_infield{4} "gs_dimension_select_int", x2, yblock, prev_pos_x - x2 -10, heightRow,
+				8, "", 8, 1,
+				0, 0, 0, 0,
+				1, stDimensionTypes[1], 1,
+				2, stDimensionTypes[2], 2,
+				3, stDimensionTypes[3], 3,
+				4, stDimensionTypes[4], 4,
+				5, stDimensionTypes[5], 5,
+				6, stDimensionTypes[6], 6,
+				7, stDimensionTypes[7], 7,
+				8, stDimensionTypes[8], 8
+		endif
+
+		yblock = yblock + 21
+
+		ui_outfield `Ширина Проема`, x1 + xCheckBox, yblock, 148, 20, ui_WH_flag
+		ui_infield{4} "GS_iCustomText_2", x2,		yblock,	prev_pos_x - x2 -10, heightRow,
+			8,"",2,1,
+			0,0,0,0,
+			1, stCustomText[2], CTXT_MEASUREDVALUE,
+			2, stCustomText[3], CTXT_CUSTOMTEXT
+
+		yblock = yblock + 21
+
+		ui_infield "AC_MarkerText_2", x2,		yblock,	prev_pos_x - x2 -10, heightRow
+
+		yblock = yblock + 21
+
+		ui_outfield `Высота Проема`, x1 + xCheckBox, yblock, 148, 20, ui_WH_flag
+		ui_infield{4} "GS_iCustomText_3", x2,		yblock,	prev_pos_x - x2 -10, heightRow,
+			8,"",2,1,
+			0,0,0,0,
+			1, stCustomText[2], CTXT_MEASUREDVALUE,
+			2, stCustomText[3], CTXT_CUSTOMTEXT
+
+		yblock = yblock + 21
+
+		ui_infield "AC_MarkerText_3", x2,		yblock,	prev_pos_x - x2 -10, heightRow
+	endif
+
+	if gsIsNedMarker then
+		if AC_WidHei_On=0 then ui_WH_flag=4 else ui_WH_flag=0
+
+		ui_style 0, 1
+		ui_infield{3} "AC_WidHei_On",	x1,		yblock,		x2 -x1-1,	heightRow,
+			7,"",2,1,
+			0,0,0,0,
+			1,`Показ Размеров`, 0,
+			2,`Показ Размеров`, 1
+		ui_style 0, 0
+
+		ui_infield{4} "gs_dimension_select_int", 90, yblock+23-3, 180, heightRow,
+			8, "", 8, 1,
+			0, 0, 0, 0,
+			1, stDimensionTypes[1], 1,
+			2, stDimensionTypes[2], 2,
+			3, stDimensionTypes[3], 3,
+			4, stDimensionTypes[4], 4,
+			5, stDimensionTypes[5], 5,
+			6, stDimensionTypes[6], 6,
+			7, stDimensionTypes[7], 7,
+			8, stDimensionTypes[8], 8
+		yblock=yblock+21
+		ui_style 0, 0
+
+		IF  bIsDutchDimType THEN
+
+			ui_outfield `Префикс`, 140, yblock+21, 50, heightRow, ui_WH_flag
+			ui_infield "NedSizePref", 191, yblock+21-3, 80, heightRow
+
+			ui_outfield `Разделитель`, 140, yblock+42, 50, heightRow, ui_WH_flag
+			ui_infield "NedSizeSep", 191, yblock+42-3, 80, heightRow
+
+			ui_outfield `Показ текста под Отливом`, 80, yblock+63, 110, heightRow, ui_WH_flag
+			ui_infield "RotWidthText",  191, yblock+63-3, 80, heightRow
+
+		endif
+
+	endif
+
+	ui_style 0, 0
+
+	bIsFirstPage = 0
+	gosub "getPictures"
+
+return
+
+
+! ==============================================================================
+"Content2Page":
+! ------------------------------------------------------------------------------
+
+	prev_pos_x = 278
+
+	x1			=	1
+	x2			=	165
+	x3 			= 	210
+
+	yblock		=	32
+	xCheckbox	=	15
+	heightRow	= 	18
+
+
+! ------------------------------------------------------------------------------
+	ui_separator prev_pos_x-5, yblock, prev_pos_x-5, 266
+
+! --- Fire Rating --------------------------------------------------------------
+
+	ui_fire_flag = 1	! Aligns to the right edge
+	if GS_iCustomText_5 = CTXT_CUSTOMTEXT and AC_show_firerating then
+		ui_fire_flag = ui_fire_flag + 4
+	endif
+
+	ui_style 0, 1
+	ui_infield{3} "AC_show_firerating",		x1,		yblock,		x2 -x1-3,	heightRow*2,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Показ Огнестойкости`, 0,
+		2,`Показ Огнестойкости`, 1
+	ui_style 0, 0
+
+	ui_infield{4} "GS_iCustomText_5",	x2,		yblock+8,	prev_pos_x - x2 -10, heightRow,
+		8,"",2,1,
+		0,0,0,0,
+		1, stCustomText[2], CTXT_MEASUREDVALUE,
+		2, stCustomText[3], CTXT_CUSTOMTEXT
+
+	yblock = yblock + 21 + 10
+
+	ui_infield "AC_MarkerText_5", 	x2,		yblock-2,	prev_pos_x - x2 -10, heightRow
+
+	yblock = yblock + 21
+
+	ui_outfield `Префикс`,			x1,		yblock,		x2 -x1-3, heightRow, ui_fire_flag
+	ui_infield "AC_FirePrefix", 	x2,		yblock-2,	prev_pos_x - x2 -10, heightRow
+
+	yblock=yblock+21
+
+! ------------------------------------------------------------------------------
+	ui_separator 	x1,		yblock, 	prev_pos_x-10,	yblock
+	yblock = yblock + 6
+
+! --- Acoustic Rating ----------------------------------------------------------
+
+	ui_acoustic_flag = 1		! Aligns to the right edge
+	if GS_iCustomText_6 = CTXT_CUSTOMTEXT and AC_show_acousticrating then
+		ui_acoustic_flag = ui_acoustic_flag + 4
+	endif
+
+	ui_style 0, 1
+	ui_infield{3} "AC_show_acousticrating",		x1,		yblock,		x2 -x1-3,	heightRow*2 ,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Показ Шумозащиты`, 0,
+		2,`Показ Шумозащиты`, 1
+	ui_style 0, 0
+
+	ui_infield{4} "GS_iCustomText_6",	x2,		yblock+8,	prev_pos_x - x2 -10, heightRow,
+		8,"",2,1,
+		0,0,0,0,
+		1, stCustomText[2], CTXT_MEASUREDVALUE,
+		2, stCustomText[3], CTXT_CUSTOMTEXT
+
+	yblock = yblock + 21 + 10
+
+	ui_infield "AC_MarkerText_6", 	x2,		yblock-2,	prev_pos_x - x2 -10, heightRow
+
+	yblock = yblock + 21
+
+	ui_outfield `Префикс`,			x1,		yblock,		x2 -x1-3, heightRow, ui_acoustic_flag
+	ui_infield "AC_AcousticPrefix", x2,		yblock-2,	prev_pos_x - x2 -10, heightRow
+
+	yblock = yblock + 21
+
+! ------------------------------------------------------------------------------
+	ui_separator 	x1,		yblock, 	prev_pos_x-10,	yblock
+	yblock = yblock + 6
+
+! --- U-value ----------------------------------------------------------
+
+	ui_uvalue_flag = 1		! Aligns to the right edge
+	if GS_iCustomText_7 = CTXT_CUSTOMTEXT and AC_show_Uvalue then
+		ui_uvalue_flag = ui_uvalue_flag + 4
+	endif
+
+	ui_style 0, 1
+	ui_infield{3} "AC_show_Uvalue",		x1,		yblock,		x2 -x1-3,	heightRow*2 ,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Показ U-значения`, 0,
+		2,`Показ U-значения`, 1
+	ui_style 0, 0
+
+	ui_infield{4} "GS_iCustomText_7",	x2,		yblock+8,	prev_pos_x - x2 -10, heightRow,
+		8,"",2,1,
+		0,0,0,0,
+		1, stCustomText[2], CTXT_MEASUREDVALUE,
+		2, stCustomText[3], CTXT_CUSTOMTEXT
+
+	yblock = yblock + 21 + 10
+
+	ui_infield "AC_MarkerText_7", 	x2,		yblock-2,	prev_pos_x - x2 -10, heightRow
+
+	yblock = yblock + 21
+
+	ui_outfield `Префикс`,			x1,		yblock,		x2 -x1-3, heightRow, ui_acoustic_flag
+	ui_infield "AC_UvaluePrefix", x2,		yblock-2,	prev_pos_x - x2 -10, heightRow
+
+	yblock = yblock + 21
+
+	bIsFirstPage = 0
+	gosub "getPictures"
+
+return
+
+
+! ==============================================================================
+"Text1Page":
+! ------------------------------------------------------------------------------
+
+	yblock	= 35
+	x1 		= 1
+
+	ui_style 0, 1
+	ui_infield{3} "GS_UniTextFormat",		x1,		yblock,		350,	heightRow,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Единые Параметры Текста`, 0,
+		2,`Единые Параметры Текста`, 1
+
+	yblock=yblock+23
+
+	ui_style 0, 0
+
+
+!  --- Marker Text -------------------------------------------------------------
+
+	if Gs_UniTextFormat then
+		ui_outfield `Текст Маркера`, 0, yblock, 150, 15
+		iFlag = 4
+	else
+		ui_outfield `Текст ID`, 0, yblock, 150, 15
+		iFlag = 0
+	endif
+
+	yblock=yblock+21
+
+	ui_pict "Pen Colour_flat(1)", 20, yblock-4, 13, 19, 1
+	ui_infield "AC_TextPen_1", 40, yblock-4, 30, 19
+
+	ui_pict "ui_FontSize_flat(1)", 75, yblock-1, 27, 14, 1
+	ui_infield "AC_TextSize_1", 105, yblock-4, 35, 19
+
+	ui_infield "AC_TextFont_1", 150, yblock-4, 100, 19
+
+	if not (Gs_UniTextFormat) then
+		ui_infield{3} "GS_Text_Style_1B", 270, yblock-7, 24, 24,
+			6, "",
+			2,
+			1, 16, 16, 16, 16,
+			"ui_bold_flat(1)", "", 0,
+			"ui_bold_flat(1)", "", 1\
+			ui_tooltip `Жирный`
+
+		ui_infield{3} "GS_Text_Style_1I", 305, yblock-7, 24, 24,
+			6, "",
+			2,
+			1, 16, 16, 16, 16,
+			"ui_italic_flat(1)", "", 0,
+			"ui_italic_flat(1)", "", 1\
+			ui_tooltip `Курсив`
+
+		ui_infield{3} "GS_Text_Style_1U", 340, yblock-7, 24, 24,
+			6, "",
+			2,
+			1, 16, 16, 16, 16,
+			"ui_underline_flat(1)", "", 0,
+			"ui_underline_flat(1)", "", 1\
+			ui_tooltip `Подчеркнутый`
+	endif
+
+	yblock=yblock+23
+
+
+! --- Opening Width ------------------------------------------------------------
+
+	ui_outfield `Ширина Проема`, 0, yblock, 150, 15, iFlag
+
+	yblock=yblock+21
+
+	ui_pict "Pen Colour_flat(1)", 20, yblock-4, 13, 19, 1
+	ui_infield "AC_TextPen_2", 40, yblock-4, 30, 19
+
+	ui_pict "ui_FontSize_flat(1)", 75, yblock-1, 27, 14, 1
+	ui_infield "AC_TextSize_2", 105, yblock-4, 35, 19
+
+	ui_infield "AC_TextFont_2", 150, yblock-4, 100, 19
+
+	ui_infield{3} "GS_Text_Style_2B", 270, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_bold_flat(1)", "", 0,
+		"ui_bold_flat(1)", "", 1\
+		ui_tooltip `Жирный`
+
+	ui_infield{3} "GS_Text_Style_2I", 305, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_italic_flat(1)", "", 0,
+		"ui_italic_flat(1)", "", 1\
+		ui_tooltip `Курсив`
+
+	ui_infield{3} "GS_Text_Style_2U", 340, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_underline_flat(1)", "", 0,
+		"ui_underline_flat(1)", "", 1\
+		ui_tooltip `Подчеркнутый`
+
+	yblock=yblock+23
+
+
+! --- Opening Height -----------------------------------------------------------
+
+	ui_outfield `Высота Проема`, 0, yblock, 150, 15, iFlag
+
+	yblock=yblock+23
+
+	ui_pict "Pen Colour_flat(1)", 20, yblock-4, 13, 19, 1
+	ui_infield "AC_TextPen_3", 40, yblock-4, 30, 19
+
+	ui_pict "ui_FontSize_flat(1)", 75, yblock-1, 27, 14, 1
+	ui_infield "AC_TextSize_3", 105, yblock-4, 35, 19
+
+	ui_infield "AC_TextFont_3", 150, yblock-4, 100, 19
+
+	ui_infield{3} "GS_Text_Style_3B", 270, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_bold_flat(1)", "", 0,
+		"ui_bold_flat(1)", "", 1\
+		ui_tooltip `Жирный`
+
+	ui_infield{3} "GS_Text_Style_3I", 305, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_italic_flat(1)", "", 0,
+		"ui_italic_flat(1)", "", 1\
+		ui_tooltip `Курсив`
+
+	ui_infield{3} "GS_Text_Style_3U", 340, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_underline_flat(1)", "", 0,
+		"ui_underline_flat(1)", "", 1\
+		ui_tooltip `Подчеркнутый`
+
+	yblock=yblock+26
+
+	ui_outfield `Единицы Размеров`,  0, yblock,	148, 15, 4 * not(AC_WidHei_On)
+	ui_infield{3} "iWorkUnitLinear", 150, yblock-4, 144, 19,
+			8, "", 3, 1, 0, 0, 0, 0,
+			"", stUnitFormats[1],	DIMUNIT_MM,
+			"", stUnitFormats[2],	DIMUNIT_CM,
+			"", stUnitFormats[3],	DIMUNIT_DM,
+			"", stUnitFormats[4],	DIMUNIT_METER,
+			"", stUnitFormats[5],	DIMUNIT_INCH,
+			"", stUnitFormats[6],	DIMUNIT_PROJECT
+
+	ui_outfield `Десятичные`,  300, yblock,	100, 15, 4 * _bLockLinearUnitDecimal
+	ui_infield{3} "iWorkUnitLinearDecimal", 402 , yblock-4,	40, 19,
+			8, "", 3, 1, 0, 0, 0, 0,
+			"", '0', 0,
+			"", '1', 1,
+			"", '2', 2,
+			"", '3', 3,
+			"", '4', 4
+
+return
+
+
+! ==============================================================================
+"Text2Page":
+! ------------------------------------------------------------------------------
+
+	yblock	= 35
+	x1 		= 1
+
+	ui_style 0, 1
+	ui_infield{3} "GS_UniTextFormat",		x1,		yblock,		350,	heightRow,
+		7,"",2,1,
+		0,0,0,0,
+		1,`Единые Параметры Текста`, 0,
+		2,`Единые Параметры Текста`, 1
+
+	yblock=yblock+23
+
+	ui_style 0, 0
+
+
+! --- Sill ---------------------------------------------------------------------
+
+	ui_outfield `Параметры Отлива`, 0, yblock, 150, 15, iFlag
+
+	yblock=yblock+21
+
+	ui_pict "Pen Colour_flat(1)", 20, yblock-4, 13, 19, 1
+	ui_infield "AC_TextPen_4", 40, yblock-4, 30, 19
+
+	ui_pict "ui_FontSize_flat(1)", 75, yblock-1, 27, 14, 1
+	ui_infield "AC_TextSize_4", 105, yblock-4, 35, 19
+
+	ui_infield "AC_TextFont_4", 150, yblock-4, 100, 19
+
+	ui_infield{3} "GS_Text_Style_4B", 270, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_bold_flat(1)", "", 0,
+		"ui_bold_flat(1)", "", 1\
+		ui_tooltip `Жирный`
+
+	ui_infield{3} "GS_Text_Style_4I", 305, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_italic_flat(1)", "", 0,
+		"ui_italic_flat(1)", "", 1\
+		ui_tooltip `Курсив`
+
+	ui_infield{3} "GS_Text_Style_4U", 340, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_underline_flat(1)", "", 0,
+		"ui_underline_flat(1)", "", 1\
+		ui_tooltip `Подчеркнутый`
+
+	yblock=yblock+26
+
+	ui_outfield `Единицы Высоты Отлива`,  0, yblock,	148, 15, 4 * not(AC_Sill_On)
+	ui_infield{3} "iWorkUnitSillHgt", 150, yblock-4, 144, 19,
+			8, "", 3, 1, 0, 0, 0, 0,
+			"", stUnitFormats[1],	DIMUNIT_MM,
+			"", stUnitFormats[2],	DIMUNIT_CM,
+			"", stUnitFormats[3],	DIMUNIT_DM,
+			"", stUnitFormats[4],	DIMUNIT_METER,
+			"", stUnitFormats[5],	DIMUNIT_INCH,
+			"", stUnitFormats[6],	DIMUNIT_PROJECT
+
+	ui_outfield `Десятичные`,  300, yblock,	100, 15, 4 * _bLockSillHgtUnitDecimal
+	ui_infield{3} "iWorkUnitSillHgtDecimal", 402 , yblock-4,	40, 19,
+			8, "", 3, 1, 0, 0, 0, 0,
+			"", '0', 0,
+			"", '1', 1,
+			"", '2', 2,
+			"", '3', 3,
+			"", '4', 4
+
+	yblock=yblock+23
+
+
+! --- Fire Rating --------------------------------------------------------------
+
+	ui_outfield `Текст Огнестойкости`, 0, yblock, 150, 15, iFlag
+
+	yblock=yblock+21
+
+	ui_pict "Pen Colour_flat(1)", 20, yblock-4, 13, 19, 1
+	ui_infield "AC_TextPen_5", 40, yblock-4, 30, 19
+
+	ui_pict "ui_FontSize_flat(1)", 75, yblock-1, 27, 14, 1
+	ui_infield "AC_TextSize_5", 105, yblock-4, 35, 19
+
+	ui_infield "AC_TextFont_5", 150, yblock-4, 100, 19
+
+	ui_infield{3} "GS_Text_Style_5B", 270, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_bold_flat(1)", "", 0,
+		"ui_bold_flat(1)", "", 1\
+		ui_tooltip `Жирный`
+
+	ui_infield{3} "GS_Text_Style_5I", 305, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_italic_flat(1)", "", 0,
+		"ui_italic_flat(1)", "", 1\
+		ui_tooltip `Курсив`
+
+	ui_infield{3} "GS_Text_Style_5U", 340, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_underline_flat(1)", "", 0,
+		"ui_underline_flat(1)", "", 1\
+		ui_tooltip `Подчеркнутый`
+
+	yblock=yblock+23
+
+
+! --- Acoustic Rating ----------------------------------------------------------
+
+	ui_outfield `Текст Шумозащиты`, 0, yblock, 150, 15, iFlag
+
+	yblock=yblock+21
+
+	ui_pict "Pen Colour_flat(1)", 20, yblock-4, 13, 19, 1
+	ui_infield "AC_TextPen_6", 40, yblock-4, 30, 19
+
+	ui_pict "ui_FontSize_flat(1)", 75, yblock-1, 27, 14, 1
+	ui_infield "AC_TextSize_6", 105, yblock-4, 35, 19
+
+	ui_infield "AC_TextFont_6", 150, yblock-4, 100, 19
+
+	ui_infield{3} "GS_Text_Style_6B", 270, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_bold_flat(1)", "", 0,
+		"ui_bold_flat(1)", "", 1\
+		ui_tooltip `Жирный`
+
+	ui_infield{3} "GS_Text_Style_6I", 305, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_italic_flat(1)", "", 0,
+		"ui_italic_flat(1)", "", 1\
+		ui_tooltip `Курсив`
+
+	ui_infield{3} "GS_Text_Style_6U", 340, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_underline_flat(1)", "", 0,
+		"ui_underline_flat(1)", "", 1\
+		ui_tooltip `Подчеркнутый`
+
+	yblock=yblock+23
+
+
+! --- U-value ----------------------------------------------------------
+
+	ui_outfield `Текст U-значения`, 0, yblock, 150, 15, iFlag
+
+	yblock=yblock+21
+
+	ui_pict "Pen Colour_flat(1)", 20, yblock-4, 13, 19, 1
+	ui_infield "AC_TextPen_7", 40, yblock-4, 30, 19
+
+	ui_pict "ui_FontSize_flat(1)", 75, yblock-1, 27, 14, 1
+	ui_infield "AC_TextSize_7", 105, yblock-4, 35, 19
+
+	ui_infield "AC_TextFont_7", 150, yblock-4, 100, 19
+
+	ui_infield{3} "GS_Text_Style_7B", 270, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_bold_flat(1)", "", 0,
+		"ui_bold_flat(1)", "", 1\
+		ui_tooltip `Жирный`
+
+	ui_infield{3} "GS_Text_Style_7I", 305, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_italic_flat(1)", "", 0,
+		"ui_italic_flat(1)", "", 1\
+		ui_tooltip `Курсив`
+
+	ui_infield{3} "GS_Text_Style_7U", 340, yblock-7, 24, 24,
+		6, "",
+		2,
+		1, 16, 16, 16, 16,
+		"ui_underline_flat(1)", "", 0,
+		"ui_underline_flat(1)", "", 1\
+		ui_tooltip `Подчеркнутый`
+
+return
+
+
+! ==============================================================================
+"getPictures":
+! ------------------------------------------------------------------------------
+
+	arrow_bot_mod = 0
+	arrow_top_mod = 0
+	if gs_dw_marker_type = 1 then
+		ui_pict "Marker Window Preview(13)", prev_pos_x, prev_pos_y, 150, 140, 1
+	endif
+	if gs_dw_marker_type = 2 then
+		ui_pict "Marker Door Preview(13)", prev_pos_x, prev_pos_y, 150, 140, 1
+	endif
+	if gs_dw_marker_type = 3 then
+		ui_pict "Marker Skylight Preview(15)", prev_pos_x+(150-68)/2+7, prev_pos_y+40, 68, 96, 1
+		arrow_bot_mod = 8
+		arrow_top_mod = 61
+	endif
+
+	if abs(markerOffsetMm) < EPS then
+		Moffset = 0
+	else
+		if markerOffsetMm > 0 then
+			Moffset = 25
+		else
+			Moffset = -25
+		endif
+	endif
+
+	if Moffset <> 0 then
+		ui_pict "Marker Center Line(13)", prev_pos_x+82, prev_pos_y+20
+	endif
+
+	if GS_Center_Line then
+		ui_pict "Marker Line(13)",			prev_pos_x+Moffset+82, prev_pos_y-36
+	else
+		ui_pict "Marker Dashed Line(13)",	prev_pos_x+Moffset+82, prev_pos_y-36, 1, 180, 1
+	endif
+
+	if AC_Sill_On then
+		if abs(sillOffsetMm) < EPS then
+			Soffset=0
+		else
+			if sillOffsetMm > 0 then
+				Soffset = 15
+			else
+				Soffset = -15
+			endif
+		endif
+
+		ui_style 0, 1
+		ui_outfield `Отлив`, prev_pos_x+Moffset+Soffset+82-35, prev_pos_y+155, 70, 20,2
+	endif
+
+
+	if AC_show_firerating then
+		ui_outfield `ОС`, prev_pos_x+145, prev_pos_y+85, 20, 20
+	endif
+
+	if AC_show_acousticrating then
+		ui_outfield `ШЗ`, prev_pos_x+145, prev_pos_y+65, 20, 20
+	endif
+
+	if AC_show_Uvalue then
+		ui_outfield `U`, prev_pos_x+145, prev_pos_y+45, 20, 20
+	endif
+
+	if bIsFirstPage then
+		call "ui_arrow" parameters	dir=0, pixel=136-arrow_top_mod, x=prev_pos_x+18, y=prev_pos_y-35, type=1,
+									auto_type=1, num=1, num_pos=4, sec_pos=0
+
+		if GS_Center_Line then
+			call "ui_arrow" parameters	dir=0, pixel=16-arrow_bot_mod, x=prev_pos_x+18, y=prev_pos_y+128+arrow_bot_mod, type=1,
+										auto_type=1, num=4, num_pos=4, sec_pos=0
+		endif
+
+		if AC_WidHei_On then
+			call "ui_arrow" parameters	dir=0, pixel=101-arrow_top_mod, x=prev_pos_x+142, y=prev_pos_y, type=1,
+										auto_type=1, num=3, num_pos=4, sec_pos=0
+		endif
+
+		if AC_Sill_On then
+			call "ui_arrow" parameters	dir=0, pixel=42-arrow_bot_mod, x=prev_pos_x+142, y=prev_pos_y+128+arrow_bot_mod, type=1,
+										auto_type=1, num=5, num_pos=4, sec_pos=0
+
+			if Soffset >= 0 then
+				call "ui_arrow" parameters	dir=1, pixel=Soffset, x=prev_pos_x+Moffset+83,
+											 y=prev_pos_y+150, type=1,
+											auto_type=1, num=6, num_pos=4, sec_pos=4
+			else
+				call "ui_arrow" parameters	dir=1, pixel=-1*Soffset, x=prev_pos_x+Moffset+Soffset+82,
+											 y=prev_pos_y+150, type=1,
+											auto_type=1, num=6, num_pos=6, sec_pos=6
+			endif
+		endif
+
+		if Moffset >= 0 then
+			call "ui_arrow" parameters	dir=1, pixel=Moffset, x=prev_pos_x+82,
+										y=prev_pos_y+70, type=1,
+										auto_type=1, num=2, num_pos=1, sec_pos=1
+		else
+			call "ui_arrow" parameters	dir=1, pixel=-1*Moffset, x=prev_pos_x+Moffset+83,
+										y=prev_pos_y+70, type=1,
+										auto_type=1, num=2, num_pos=3, sec_pos=0
+		endif
+	endif
+
+	if iMarkerShape <> SHAPE_NONE then
+		if iMarkerShape = SHAPE_CIRCLE or iMarkerShape = SHAPE_FRAGMENT or iMarkerShape = SHAPE_OVAL then
+
+			if iMarkerShape = SHAPE_FRAGMENT then
+				ui_pict "MH Fragment(13)", prev_pos_x+Moffset+56, prev_pos_y-56, 53, 39, 1
+			else
+				if iMarkerShape = SHAPE_CIRCLE then
+					ui_pict "MH Circle(13)", prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				else
+					ui_pict "MH Oval(13)", prev_pos_x+Moffset+56, prev_pos_y-56, 53, 41, 1
+				endif
+			endif
+		else
+			if gs_marker_rotation then
+				if iMarkerShape = SHAPE_TRIANGLE Then ui_pict "MH Triangle Rotated(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				if iMarkerShape = SHAPE_RECT Then ui_pict "MH Rectangle Rotated(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				if iMarkerShape = SHAPE_PENTAGON Then ui_pict "MH Pentagon Rotated(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				if iMarkerShape = SHAPE_HEXAGON Then ui_pict "MH Hexagon Rotated(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				if iMarkerShape = SHAPE_OCTAGON Then ui_pict "MH Octagon Rotated(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+			else
+				if iMarkerShape = SHAPE_TRIANGLE Then ui_pict "MH Triangle Normal(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				if iMarkerShape = SHAPE_RECT Then ui_pict "MH Rectangle Normal(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				if iMarkerShape = SHAPE_PENTAGON Then ui_pict "MH Pentagon Normal(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				if iMarkerShape = SHAPE_HEXAGON Then ui_pict "MH Hexagon Normal(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+				if iMarkerShape = SHAPE_OCTAGON Then ui_pict "MH Octagon Normal(13)",
+					prev_pos_x+Moffset+61, prev_pos_y-56, 43, 43, 1
+			endif
+		endif
+	endif
+
+	if AC_ID_On then
+		if GS_iCustomText_1 = CTXT_CUSTOMTEXT then
+			ui_pict "C Letter(13)", prev_pos_x+Moffset+77, prev_pos_y-40, 11, 18, 1
+		else
+			ui_pict "N Letter(13)", prev_pos_x+Moffset+77, prev_pos_y-40, 11, 18, 1
+		endif
+	endif
+
+	if AC_WidHei_On then
+		if GS_iCustomText_2 = CTXT_CUSTOMTEXT then
+			ui_pict "Marker Custom(14)", prev_pos_x+Moffset+70, prev_pos_y+6, 9, 20, 1
+		else
+			if bIsDutchDimType THEN
+				if RotWidthText then
+					ui_pict "Marker HeightWidth(14)", prev_pos_x+Moffset+50, prev_pos_y+140, 75, 11, 1
+				else
+					ui_pict "Marker HeightWidth Vert(14)", prev_pos_x+Moffset+70, prev_pos_y, 11, 75, 1
+				endif
+			else
+				ui_pict "Marker Width(14)", prev_pos_x+Moffset+70, prev_pos_y, 11, 33, 1
+			endif
+		endif
+		if GS_iCustomText_3 = CTXT_CUSTOMTEXT then
+			ui_pict "Marker Custom(14)", prev_pos_x+Moffset+86, prev_pos_y+6, 9, 20, 1
+		else
+			if not(bIsDutchDimType) THEN
+				ui_pict "Marker Height(14)", prev_pos_x+Moffset+86, prev_pos_y, 11, 33, 1
+			endif
+		endif
+	endif
+
+	if gs_show_hotspot_ui and bIsFirstPage then
+		! Marker Head Position Editing
+		ui_pict "Hotspot HorDir(13)", prev_pos_x+Moffset+70, prev_pos_y-34, 25, 5, 1
+		ui_pict "Hotspot VerDir(13)", prev_pos_x+Moffset+80, prev_pos_y-46, 5, 25, 1
+
+		! Center Line Length Editing
+		ui_pict "Hotspot HorDir(13)", prev_pos_x+Moffset+70, prev_pos_y+140, 25, 5, 1
+		ui_pict "Hotspot VerDir(13)", prev_pos_x+Moffset+80, prev_pos_y+130, 5, 25, 1
+
+		if AC_WidHei_On then
+			! Width/Height Position Editing
+			ui_pict "Hotspot VerDir(13)", prev_pos_x+Moffset+80, prev_pos_y, 5, 25, 1
+		endif
+
+		If AC_Sill_On then
+			ui_pict "Hotspot HorDir(13)", prev_pos_x+Moffset+Soffset+70, prev_pos_y+169, 25, 5, 1
+			ui_pict "Hotspot VerDir(13)", prev_pos_x+Moffset+Soffset+80, prev_pos_y+159, 5, 25, 1
+		endif
+
+		if AC_show_firerating then
+			ui_pict "Hotspot HorDir(13)", prev_pos_x+135, prev_pos_y+95, 25, 5, 1
+			ui_pict "Hotspot VerDir(13)", prev_pos_x+145, prev_pos_y+85, 5, 25, 1
+		endif
+
+		if AC_show_acousticrating then
+			ui_pict "Hotspot HorDir(13)", prev_pos_x+135, prev_pos_y+75, 25, 5, 1
+			ui_pict "Hotspot VerDir(13)", prev_pos_x+145, prev_pos_y+65, 5, 25, 1
+		endif
+
+		if AC_show_Uvalue then
+			ui_pict "Hotspot HorDir(13)", prev_pos_x+135, prev_pos_y+55, 25, 5, 1
+			ui_pict "Hotspot VerDir(13)", prev_pos_x+145, prev_pos_y+45, 5, 25, 1
+		endif
+	endif
+
+return
+
+
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

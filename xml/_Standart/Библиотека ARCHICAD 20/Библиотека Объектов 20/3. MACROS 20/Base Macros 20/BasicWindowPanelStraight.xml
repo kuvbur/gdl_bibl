@@ -1,0 +1,2269 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="E3F9CED6-9A4A-499F-BC87-74CFD2CA7D3E" MigrationValue="Normal" Owner="0" Signature="1465080141" Version="38">
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Contact person: <NJ>
+
+! ==============================================================================
+! Draws a window panel in 2D view
+! ------------------------------------------------------------------------------
+! Input parameters:
+!	A:						width of panel (width value)
+!	gs_iPanelType:			panel type (0: fix / 1: casement / 2: edwardian / 3: pivot / 4: sliding)
+!	gs_iPanelSubType:		panel subtype (fix: 0: INT fix / 1: NED fix / 2: NED panel)
+!	gs_bFrameLeft:			draw a frame on the left side of the panel (0 / 1)
+!	gs_bFrameRight:			draw a frame on the right side of the panel (0 / 1)
+!	gs_frame_thk:
+!	gs_frame_width:
+!	gs_frame_width_left:
+!	gs_frame_width_right:
+!	gs_frame_cut_width:
+!	gs_frame_cut_depth:
+!	gs_frame_ovhg_left_out:
+!	gs_frame_ovhg_right_out:
+!	gs_frame_ovhg_left_in:
+!	gs_frame_ovhg_right_in:
+!	gs_frame_corner_connect:		frame connection line in corners (0 / 1)
+!	gs_frame_left_corner_angle:		left corner angle (angle)
+!	gs_frame_right_corner_angle:	right corner angle (angle)
+!	gs_frame_left_endline_comp:		Draw frame end line at left (integer)
+!						(-1: old method / 0: do not show / 1: show always / 2: show in list view only
+!	gs_frame_right_endline_comp:	Draw frame end line at left (integer)
+!						(-1: old method / 0: do not show / 1: show always / 2: show in list view only
+!	gs_sash_thk:
+!	gs_sash_width:
+!	lod2D:					level of detail (1: basic / 2,3: simple / 4,5: detailed)
+!	gs_pen_2D:				pen for 2D contours (pen)
+!	gs_frame_pen_cont:		contour pen of the frame and sash - if 0 then drawn with gs_pen_2D (pen)
+!	gs_fillFr:				frame fill pattern type (fill)
+!	gs_penFr_fg:			frame fill foreground pen
+!	gs_penFr_bg:			frame fill background pen
+!	gs_fillSh:				sash fill pattern type (fill)
+!	gs_penSh_fg:			sash fill foreground pen
+!	gs_penSh_bg:			sash fill background pen
+!	gs_fillShCover:
+!	gs_penShCov_fg:
+!	gs_penShCov_bg:
+!
+! Related Global Variables:
+!	GLOB_CONTEXT
+!	WIDO_ORIG_DIST
+!
+! Remark:
+! ==============================================================================
+
+drawindex 40 	! Draw symbol at the top
+
+lod2D					= DET2D_FS_OFF
+bFullSashOpeningIn2D	= 0
+iSymbolGlassType		= SYMBGLASS_SIMPLEGLASS
+_bShowRebateOnFixGlass	= 0
+_bShowRebateOnFrame		= 1
+
+if iLoD2D = SYMBW_S_1LINE then				lod2D = DET2D_FS_SIMPLE_ONE 		! Simple - One Line --> INT 200
+if iLoD2D = SYMBW_S_CENTERLINE then			lod2D = DET2D_FS_SIMPLE_ONE 		! Simple - Centerline --> SWE 200
+if iLoD2D = SYMBW_S_2LINE_ACC then			lod2D = DET2D_FS_SIMPLE_TWO 		! Simple - Two Lines
+if iLoD2D = SYMBW_S_2LINE then				lod2D = DET2D_FS_SIMPLE_CHI			! Chinese Simple
+if iLoD2D = SYMBW_M_2LINE_GLASS then		lod2D = DET2D_FS_MIDDLE 			! Middle - without acc
+if iLoD2D = SYMBW_M_2LINE_NOGLASS then		lod2D = DET2D_FS_SIMPLE_TWO 		! Middle - with acc --> INT 100
+if iLoD2D = SYMBW_M_FRAMESASH then			lod2D = DET2D_FS_DETAILED			! NLD 100
+if iLoD2D = SYMBW_D_SGLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> INT 50, DAN 20
+if iLoD2D = SYMBW_D_REBATEONGLASS then		lod2D = DET2D_FS_DETAILED 			! Detailed --> NLD 50
+if iLoD2D = SYMBW_D_SGLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> INT 50, DAN 20
+if iLoD2D = SYMBW_D_2GLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> NOR 50
+if iLoD2D = SYMBW_D_2LINE_HS then			lod2D = DET2D_FS_DETAILED_CHI		! Chinese Detailed
+
+if iLoD2D = SYMBW_M_FRAMESASH then			! NLD Middle
+	_bShowRebateOnFrame		= 0
+endif
+if	iLoD2D = SYMBW_D_REBATEONGLASS &\		! Detailed --> NLD 50
+	abs(gs_frame_cut_depth) > EPS &\
+	abs(gs_frame_cut_width) > EPS	then
+	_bShowRebateOnFixGlass	= 1
+endif
+if iLoD2D = SYMBW_D_2GLASS then 			! Detailed --> NOR 50
+	bFullSashOpeningIn2D	= 1
+	iSymbolGlassType		= SYMBGLASS_DOUBLEGLASS
+endif
+
+if NOT(_bShowRebateOnFrame) then gs_frame_cut_width = 0
+
+
+
+halfA = A / 2
+
+!!!!	Chinese Symbol	!!!
+if lod2D = DET2D_FS_SIMPLE_CHI | lod2D = DET2D_FS_DETAILED_CHI then
+	pen gs_pen_2d
+	fill gs_fillShCover
+
+	poly2_b{2} 4, 1 + 2 * (gs_fillFr > 0) + 4 + 8 + 64, gs_penShCov_fg, gs_penShCov_bg,
+			0, 0, 0,
+			-halfA - gs_frame_ovhg_left_out, 0,1,
+			halfA + gs_frame_ovhg_right_out, 0,0,
+			halfA + gs_frame_ovhg_right_in, -gs_frame_thk,1,
+			-halfA - gs_frame_ovhg_left_in, -gs_frame_thk,0
+
+	leftPos  = -halfA + gs_frame_width_left  * gs_bFrameLeft
+	rightPos =  halfA - gs_frame_width_right * gs_bFrameRight
+
+	if gs_iPanelType = PANEL_DOUBLE_HUNG then
+		leftPos = -(rightPos + leftPos)/2
+
+		bMirrored = 0
+		for ij = 1 to 2
+			gosub 1000		! hotspot editing of sash
+			gosub 2000		! swing line, arc
+
+			mul2 -1,1
+			bMirrored = 1
+		next ij
+		del 2
+	else
+		bMirrored = 0
+		gosub 1000		! hotspot editing of sash
+		gosub 2000		! swing line, arc
+	endif
+endif
+
+
+if gs_frame_pen_cont = 0 then gs_frame_pen_cont = gs_pen_2D
+
+bListView = (GLOB_CONTEXT = 6 | GLOB_CONTEXT = 46)
+
+if gs_frame_left_endline_comp = -1 then
+	bDrawLeftEndLine = (bListView | gs_frame_left_endline)
+else
+	if gs_frame_left_endline_comp = 2 then
+		bDrawLeftEndLine = bListView
+	else
+		bDrawLeftEndLine = (gs_frame_left_endline_comp = 1)
+	endif
+endif
+
+if gs_frame_right_endline_comp = -1 then
+	bDrawRightEndLine = (bListView | gs_frame_right_endline)
+else
+	if gs_frame_right_endline_comp = 2 then
+		bDrawRightEndLine = bListView
+	else
+		bDrawRightEndLine = (gs_frame_right_endline_comp = 1)
+	endif
+endif
+
+
+! =============================================================================
+!
+! =============================================================================
+
+if iLoD2D = SYMBW_M_FRAMESASH then		! NLD 100
+	if gs_iPanelType = 0 then
+		lod2D = DET2D_FS_MIDDLE
+		gs_sash_width = 0
+	else
+		lod2D = DET2D_FS_DETAILED
+	endif
+	gs_frame_cut_width = 0
+else
+	if gs_iPanelType = PANEL_FIX then	! Fix sash
+		gs_sash_width = gs_frame_cut_width
+		if lod2D = DET2D_FS_DETAILED & iMullionStyle <> MULLION_SOLID_PANEL then lod2D = DET2D_FS_MIDDLE
+	endif
+endif
+
+if lod2d = DET2D_FS_DETAILED then
+	if abs(VertGridThk) < EPS then VertGridThk = gs_sash_thk
+else
+	if abs(VertGridThk) < EPS then VertGridThk = gs_frame_thk
+endif
+
+
+! =============================================================================
+! Straight window panel - Simple symbol
+! =============================================================================
+
+if lod2D = DET2D_FS_SIMPLE_ONE then
+	pen gs_pen_2D
+	line_property 0
+
+	frameWidth_left  = gs_frame_width_left  + gs_sash_width - not(bSliding) * gs_frame_cut_width
+	frameWidth_right = gs_frame_width_right + gs_sash_width - not(bSliding) * gs_frame_cut_width
+
+	! left window frame
+	if gs_bFrameLeft then
+		frameWidthUsed = frameWidth_left
+	else
+		frameWidthUsed = gs_sash_width
+	endif
+
+	leftPos  = -halfA + frameWidthUsed
+
+	! right window frame
+	if gs_bFrameRight then
+		frameWidthUsed = frameWidth_right
+	else
+		frameWidthUsed = gs_sash_width
+	endif
+
+	rightPos =  halfA - frameWidthUsed
+
+	add2 0, gs_frame_thk * (WIDO_REVEAL_SIDE - 2 * not(WIDO_REVEAL_SIDE))
+
+	if gs_iPanelType = PANEL_DOUBLE_HUNG then
+		leftPos = -(rightPos + leftPos)/2
+
+		bMirrored = 0
+		for ij = 1 to 2
+			gosub 1000		! hotspot editing of sash
+			gosub 2000		! swing line, arc
+
+			mul2 -1,1
+			bMirrored = 1
+		next ij
+		del 2
+	else
+		bMirrored = 0
+		gosub 1000		! hotspot editing of sash
+
+		gosub 2000		! swing line, arc
+	endif
+
+	del 1
+
+	if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then
+		line_type gs_Demolition_linetype
+	else
+		line_type 1
+	endif
+	pen gs_pen_2D
+
+	if WIDO_REVEAL_SIDE then
+		line2  -halfA - gs_frame_ovhg_left_out,	0,
+				halfA + gs_frame_ovhg_right_out, 0
+	else
+		line2  -halfA - gs_frame_ovhg_left_in, -gs_frame_thk,
+				halfA + gs_frame_ovhg_right_in, -gs_frame_thk
+	endif
+
+	gosub 3000	! Tolerance separating line & Unit Hotspots
+
+	end ! =============================================================== END =
+endif
+
+
+
+! =============================================================================
+
+if not(gs_bFrameLeft) then
+	gs_frame_ovhg_left_out	= 0
+	gs_frame_ovhg_left_in	= 0
+endif
+
+if not(gs_bFrameRight) then
+	gs_frame_ovhg_right_out	= 0
+	gs_frame_ovhg_right_in	= 0
+endif
+
+
+! =============================================================================
+! Straight window panel - Basic symbol
+! =============================================================================
+
+if lod2D = DET2D_FS_SIMPLE_TWO | lod2D = DET2D_FS_MIDDLE | lod2D = DET2D_FS_MIDDLE_USA then
+	frameWidth_left  = gs_frame_width_left  + (gs_sash_width - not(bSliding) * gs_frame_cut_width) * (lod2d <> DET2D_FS_MIDDLE_USA)
+	frameWidth_right = gs_frame_width_right + (gs_sash_width - not(bSliding) * gs_frame_cut_width) * (lod2d <> DET2D_FS_MIDDLE_USA)
+
+	pen gs_frame_pen_cont
+	line_property 2
+	fill gs_fillFr
+
+	_bShowOverhang = not(bCasingTolerance) | (bCasingTolerance)*(lod2D = DET2D_FS_SIMPLE_TWO)
+
+	! left window frame
+	if gs_bFrameLeft then
+		frameWidthUsed = frameWidth_left
+	else
+		frameWidthUsed = gs_sash_width * (lod2d <> DET2D_FS_MIDDLE_USA)
+	endif
+
+	leftPos  = -halfA + frameWidthUsed
+
+	if (frameWidthUsed > EPS | gs_frame_ovhg_left_out > EPS | gs_frame_ovhg_left_in > EPS) & (bFrCornerLeft <> 0) then
+		if _bShowRebateOnFixGlass then
+			if FixGlassDir_m = 2 then
+				add2 0, -gs_frame_thk
+				mul2 1, -1
+			endif
+
+			poly2_b 6, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+				-halfA,	 						 0,									32 + 1,
+				leftPos,						 0,									32 + 1,
+				leftPos,						-gs_frame_thk+gs_frame_cut_depth,	32 + 1,
+				leftPos-gs_frame_cut_width,		-gs_frame_thk+gs_frame_cut_depth,	32 + 1,
+				leftPos-gs_frame_cut_width,		-gs_frame_thk,						32 + 1,
+				-halfA,							-gs_frame_thk,						32 + bDrawLeftEndLine
+
+			if FixGlassDir_m = 2 then
+				del 2
+			endif
+		else
+			poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+					-halfA, 	 0,            32 + 1,
+					leftPos,     0,            32 + 1,
+					leftPos,    -gs_frame_thk, 32 + 1,
+					-halfA, 	-gs_frame_thk, 32 + bDrawLeftEndLine
+		endif
+
+		if _bShowOverhang & ((gs_frame_ovhg_left_out > EPS) | (gs_frame_ovhg_left_in > EPS)) then
+			if (gs_frame_ovhg_left_out > EPS) then put -halfA - gs_frame_ovhg_left_out,	 0,	32 + 1
+			put -halfA,  0,				32
+			put -halfA, -gs_frame_thk,	32 + (bDrawLeftEndLine | (gs_frame_ovhg_left_in > EPS))
+			if (gs_frame_ovhg_left_in > EPS) then put -halfA - gs_frame_ovhg_left_in, -gs_frame_thk,	32 + bDrawLeftEndLine
+
+			poly2_b nsp/3, 1 + 2*bLeftCornerFunction + 4 + 16 + 32, gs_penFr_fg, gs_penFr_bg,
+					get(nsp)
+		endif
+	endif
+
+	if lod2d = DET2D_FS_MIDDLE_USA then
+		add2 0, -(gs_frame_thk - gs_sash_thk) / 2
+		poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+				leftPos, 					 0,            	32 + 1,
+				leftPos + gs_sash_width,     0,            	32 + 1,
+				leftPos + gs_sash_width,    -gs_sash_thk, 	32 + 1,
+				leftPos, 					-gs_sash_thk, 	32
+		del 1
+	endif
+
+
+	! right window frame
+	if gs_bFrameRight then
+		frameWidthUsed = frameWidth_right
+	else
+		frameWidthUsed = gs_sash_width * (lod2d <> DET2D_FS_MIDDLE_USA)
+	endif
+
+	rightPos =  halfA - frameWidthUsed
+
+	if (frameWidthUsed > EPS | gs_frame_ovhg_right_out > EPS | gs_frame_ovhg_right_in > EPS) & (bFrCornerRight <> 0) then
+		if _bShowRebateOnFixGlass then
+			if FixGlassDir_m = 2 then
+				add2 0, -gs_frame_thk
+				mul2 1, -1
+			endif
+			poly2_b 6, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+				halfA,							 0,									32 + 1,
+				rightPos,						 0,									32 + 1,
+				rightPos,						-gs_frame_thk+gs_frame_cut_depth,	32 + 1,
+				rightPos+gs_frame_cut_width,	-gs_frame_thk+gs_frame_cut_depth,	32 + 1,
+				rightPos+gs_frame_cut_width,	-gs_frame_thk,						32 + 1,
+				halfA,							-gs_frame_thk,						32 + bDrawRightEndLine
+			if FixGlassDir_m = 2 then
+				del 2
+			endif
+		else
+			poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+				halfA,		 0,            32 + 1,
+				rightPos,	 0,            32 + 1,
+				rightPos,	-gs_frame_thk, 32 + 1,
+				halfA,		-gs_frame_thk, 32 + bDrawRightEndLine
+		endif
+
+		if _bShowOverhang & ((gs_frame_ovhg_right_out > EPS) | (gs_frame_ovhg_right_in > EPS)) then
+			if (gs_frame_ovhg_right_out > EPS) then put halfA + gs_frame_ovhg_right_out,	 0,	32 + 1
+			put halfA,  0,				32
+			put halfA, -gs_frame_thk,	32 + (bDrawRightEndLine | (gs_frame_ovhg_right_in > EPS))
+			if (gs_frame_ovhg_right_in > EPS) then put halfA + gs_frame_ovhg_right_in, -gs_frame_thk,	32 + bDrawRightEndLine
+
+			poly2_b nsp/3, 1 + 2*bRightCornerFunction + 4 + 16 + 32, gs_penFr_fg, gs_penFr_bg,
+					get(nsp)
+		endif
+	endif
+
+	if lod2d = DET2D_FS_MIDDLE_USA then
+		add2 0, -(gs_frame_thk - gs_sash_thk) / 2
+		poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+				rightPos, 					 0,            32 + 1,
+				rightPos - gs_sash_width,    0,            32 + 1,
+				rightPos - gs_sash_width,   -gs_sash_thk, 32 + 1,
+				rightPos,	 				-gs_sash_thk, 32
+		del 1
+	endif
+
+	if gs_iPanelType = PANEL_DOUBLE_HUNG | gs_iPanelType = PANEL_DOUBLE_SLIDING then
+		if gs_iPanelType = PANEL_DOUBLE_HUNG then
+			midWidth = gs_sash_width
+		else
+			midWidth = gs_sash_width / 2
+		endif
+		midPos = (rightPos + leftPos) / 2
+
+		add2 midPos, 0
+		poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+			 midWidth,	 0,				32 + 1,
+			-midWidth,	 0,				32 + 1,
+			-midWidth,	-gs_frame_thk,	32 + 1,
+			 midWidth,	-gs_frame_thk,	32 + 1
+		del 1
+	endif
+
+	if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then
+		line_type gs_Demolition_linetype
+	else
+		line_type 1
+	endif
+
+	pen gs_pen_2D
+	line_property 0
+
+	! --- glass line in the center of the frame --------------------------------
+
+	if bFrCornerRight <> 0 then
+		rightGlassPos = rightPos - (lod2d = DET2D_FS_MIDDLE_USA) * gs_sash_width
+	else
+		rightGlassPos = halfA + (gs_frame_ovhg_right_out + gs_frame_ovhg_right_in) / 2
+	endif
+
+	if bFrCornerLeft <> 0 then
+		leftGlassPos = leftPos + (lod2d = DET2D_FS_MIDDLE_USA) * gs_sash_width
+	else
+		leftGlassPos = -halfA - (gs_frame_ovhg_left_out + gs_frame_ovhg_left_in) / 2
+	endif
+
+
+	if lod2D = DET2D_FS_MIDDLE | lod2D = DET2D_FS_MIDDLE_USA then
+		if gs_iPanelType = PANEL_DOUBLE_HUNG | gs_iPanelType = PANEL_DOUBLE_SLIDING then
+			if (_bEnableSashRotaion and abs(gs_open_2D) < EPS) | not(_bEnableSashRotaion) then
+				line2 leftGlassPos,			-gs_frame_thk / 2,
+					  midPos - midWidth,	-gs_frame_thk / 2
+				line2 midPos + midWidth,	-gs_frame_thk / 2,
+					  rightGlassPos,		-gs_frame_thk / 2
+			endif
+		else
+			if (_bEnableSashRotaion and abs(gs_open_2D) < EPS) | not(_bEnableSashRotaion) then
+				if _bShowRebateOnFixGlass then
+					if FixGlassDir_m = 2 then
+						DifY = -gs_frame_cut_depth
+					else
+						DifY = -gs_frame_thk+gs_frame_cut_depth
+					endif
+				else
+					DifY = -gs_frame_thk / 2
+				endif
+	
+				if iSymbolGlassType = SYMBGLASS_DOUBLEGLASS then
+					add2 0, DifY + gs_glass_thk / 2
+						poly2_b 4, 1+2+4+16+32, gs_penSh_fg, gs_penSh_bg,
+								rightGlassPos,					0,					32 + 1,
+								leftGlassPos,	0,					0,
+								leftGlassPos,	-gs_glass_thk,	32 + 1,
+								rightGlassPos,					-gs_glass_thk,	0
+					del 1
+				else
+					line2 leftGlassPos,  DifY,
+						  rightGlassPos, DifY
+				endif
+			endif
+		endif
+	endif
+
+
+	! --- horizontal lines and cover fill --------------------------------------
+	fill gs_fillShCover
+
+	if lod2D = DET2D_FS_SIMPLE_TWO | lod2D = DET2D_FS_MIDDLE | lod2D = DET2D_FS_MIDDLE_USA then
+		if lod2D = DET2D_FS_MIDDLE_USA then
+			thk = gs_sash_thk
+			add2 0, -(gs_frame_thk - gs_sash_thk) / 2
+		else
+			thk = gs_frame_thk
+		endif
+
+		if bFrCornerRight = 0 then
+			rightIn = halfA + gs_frame_ovhg_right_in
+			rightOut = halfA + gs_frame_ovhg_right_out
+		else
+			rightIn = rightPos - (lod2D = DET2D_FS_MIDDLE_USA) * gs_sash_width
+			rightOut = rightIn
+		endif
+
+		if bFrCornerLeft = 0 then
+			leftIn = -halfA - gs_frame_ovhg_left_in
+			leftOut = -halfA - gs_frame_ovhg_left_out
+		else
+			leftIn = leftPos + (lod2D = DET2D_FS_MIDDLE_USA) * gs_sash_width
+			leftOut = leftIn
+		endif
+
+		if _bShowRebateOnFixGlass then
+			if FixGlassDir_m = 2 then
+				add2 0, -gs_frame_thk
+				mul2 1, -1
+			endif
+			if gs_iPanelType = PANEL_DOUBLE_HUNG | gs_iPanelType = PANEL_DOUBLE_SLIDING then
+				poly2_b 6, 1 + 2 * (gs_fillShCover > 0) + 4 + 16 + 64, gs_penShCov_fg, gs_penShCov_bg,
+						leftOut,	 						0,		not(bInnerSash),
+						midPos - midWidth,	 				0,		0,
+						midPos - midWidth,					-thk ,	1,
+						leftOut - gs_frame_cut_width,		-thk ,	1,
+						leftOut - gs_frame_cut_width,		-thk +gs_frame_cut_depth,	1,
+						leftIn,								-thk +gs_frame_cut_depth,		0
+
+				poly2_b 6, 1 + 2 * (gs_fillShCover > 0) + 4 + 16 + 64, gs_penShCov_fg, gs_penShCov_bg,
+						midPos + midWidth,	 0,		not(bInnerSash),
+						rightOut,	 0,		0,
+						rightOut,	 -thk +gs_frame_cut_depth,		0,
+						rightIn + gs_frame_cut_width,	 -thk +gs_frame_cut_depth,		0,
+						rightIn + gs_frame_cut_width,	-thk,	1,
+						midPos + midWidth,		-thk,	0
+			else
+				_bGlassCornerOnLeft		= (bLeftCornerFunction & bFrCornerLeft = 0)
+				_bGlassCornerOnRight	= (bRightCornerFunction & bFrCornerRight = 0)
+
+				if not(_bGlassCornerOnLeft) then
+					put	leftIn - gs_frame_cut_width,	-thk +gs_frame_cut_depth,		not(bInnerSash),
+						leftIn,							-thk +gs_frame_cut_depth,		not(bInnerSash)
+				endif
+				put	leftOut,						0,		not(bInnerSash),
+					rightOut,						0,		0
+				if not(_bGlassCornerOnRight) then
+					put	rightIn,						-thk +gs_frame_cut_depth,	1,
+						rightIn + gs_frame_cut_width,	-thk +gs_frame_cut_depth,	1
+				endif
+				put	rightIn + gs_frame_cut_width * not(_bGlassCornerOnRight),	-thk,	1,
+					leftIn - gs_frame_cut_width * not(_bGlassCornerOnLeft),	-thk,	0
+
+				poly2_b nsp/3, 1 + 2 * (gs_fillShCover > 0) + 4 + 16 + 64, gs_penShCov_fg, gs_penShCov_bg,
+						get(nsp)
+			endif
+			if FixGlassDir_m = 2 then
+				del 1
+			endif
+		else
+			if gs_iPanelType = PANEL_DOUBLE_HUNG | gs_iPanelType = PANEL_DOUBLE_SLIDING then
+				poly2_b 4, 1 + 2 * (gs_fillShCover > 0) + 4 + 16 + 64, gs_penShCov_fg, gs_penShCov_bg,
+						leftOut,	 0,		not(bInnerSash),
+						midPos - midWidth,	 0,		0,
+						midPos - midWidth,	-thk,	1,
+						leftIn,		-thk,	0
+				poly2_b 4, 1 + 2 * (gs_fillShCover > 0) + 4 + 16 + 64, gs_penShCov_fg, gs_penShCov_bg,
+						midPos + midWidth,	 0,		not(bInnerSash),
+						rightOut,	 0,		0,
+						rightIn,	-thk,	1,
+						midPos + midWidth,		-thk,	0
+			else
+				poly2_b 4, 1 + 2 * (gs_fillShCover > 0) + 4 + 16 + 64, gs_penShCov_fg, gs_penShCov_bg,
+						leftOut,	 0,		not(bInnerSash),
+						rightOut,	 0,		0,
+						rightIn,	-thk,	1,
+						leftIn,		-thk,	0
+			endif
+		endif
+
+		if lod2D = DET2D_FS_MIDDLE_USA then del 1
+	endif
+
+	if lod2D = DET2D_FS_MIDDLE then add2 0, thk / 2
+	if gs_iPanelType = PANEL_DOUBLE_HUNG then
+		if lod2D = DET2D_FS_MIDDLE then
+			midWidth = gs_sash_width
+		else
+			midWidth = 0
+		endif
+
+		leftPos = (gs_bFrameLeft * gs_frame_width_left - gs_bFrameRight * gs_frame_width_right)/2 + midWidth
+
+		bMirrored = 0
+		for ij = 1 to 2
+			gosub 1000		! hotspot editing of sash
+			gosub 2000		! swing line, arc
+
+			mul2 -1,1
+			add2 -leftPos * 2 + midWidth * 2,0
+			bMirrored = 1
+		next ij
+		del 4
+	else
+		bMirrored = 0
+		gosub 1000		! hotspot editing of sash
+		gosub 2000		! swing line, arc
+	endif
+	if lod2D = DET2D_FS_MIDDLE then del 1
+endif
+
+
+! =============================================================================
+! Straight window panel - Detailed symbol
+! =============================================================================
+
+if lod2D = DET2D_FS_DETAILED then
+	pen gs_frame_pen_cont
+	line_property 2
+	fill gs_fillFr
+
+	! left window frame
+	if gs_bFrameLeft then
+		if	gs_iPanelType = PANEL_VER_SLIDING | \
+			gs_iPanelType = PANEL_PIVOT | \
+			gs_iPanelType = PANEL_HOR_SLIDING | \
+			gs_iPanelType = PANEL_DOUBLE_SLIDING | \
+			(gs_iPanelType = PANEL_FIX & not(_bShowRebateOnFixGlass)) then
+			poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+					-halfA,							 0,				32 + 1,
+					-halfA + gs_frame_width_left,	 0,				32 + 1,
+					-halfA + gs_frame_width_left,	-gs_frame_thk,	32 + 1,
+					-halfA,						-gs_frame_thk,	32 + bDrawLeftEndLine
+		else
+			if bFrCornerLeft <> 0 then
+			poly2_b 6, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+					-halfA,				 								 0,									32 + 1,
+					-halfA + gs_frame_width_left,						 0,									32 + 1,
+					-halfA + gs_frame_width_left,						-gs_frame_thk + gs_frame_cut_depth, 32 + 1,
+					-halfA + gs_frame_width_left - gs_frame_cut_width,	-gs_frame_thk + gs_frame_cut_depth, 32 + 1,
+					-halfA + gs_frame_width_left - gs_frame_cut_width,	-gs_frame_thk,						32 + 1,
+					-halfA,												-gs_frame_thk,						32 + bDrawLeftEndLine
+			endif
+		endif
+
+		if (gs_frame_ovhg_left_out > EPS) | (gs_frame_ovhg_left_in > EPS) then
+			if (gs_frame_ovhg_left_out > EPS) then put -halfA - gs_frame_ovhg_left_out,	 0,	32 + 1
+			put -halfA,  0,				32
+			put -halfA, -gs_frame_thk,	32 + (bDrawLeftEndLine | (gs_frame_ovhg_left_in > EPS))
+			if (gs_frame_ovhg_left_in > EPS) then put -halfA - gs_frame_ovhg_left_in, -gs_frame_thk,	32 + bDrawLeftEndLine
+
+			poly2_b nsp/3, 1 + 2*bLeftCornerFunction + 4 + 16 + 32, gs_penFr_fg, gs_penFr_bg,
+					get(nsp)
+		endif
+	endif
+
+	! right window frame
+	if gs_bFrameRight then
+		if	gs_iPanelType = PANEL_VER_SLIDING | \
+			gs_iPanelType = PANEL_PIVOT | \
+			gs_iPanelType = PANEL_HOR_SLIDING | \
+			gs_iPanelType = PANEL_DOUBLE_SLIDING | \
+			(gs_iPanelType = PANEL_FIX & not(_bShowRebateOnFixGlass)) then
+			poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+					halfA,							 0,				32 + 1,
+					halfA - gs_frame_width_right,				 0,				32 + 1,
+					halfA - gs_frame_width_right,				-gs_frame_thk,	32 + 1,
+					halfA ,							-gs_frame_thk,	32 + bDrawRightEndLine
+		else
+			if bFrCornerRight <> 0 then
+			poly2_b 6, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+					halfA,												 0,									32 + 1,
+					halfA - gs_frame_width_right,							 0,									32 + 1,
+					halfA - gs_frame_width_right,							-gs_frame_thk + gs_frame_cut_depth,	32 + 1,
+					halfA - gs_frame_width_right + gs_frame_cut_width,	-gs_frame_thk + gs_frame_cut_depth,	32 + 1,
+					halfA - gs_frame_width_right + gs_frame_cut_width,	-gs_frame_thk,						32 + 1,
+					halfA,												-gs_frame_thk,						32 + bDrawRightEndLine
+			endif
+		endif
+
+		if (gs_frame_ovhg_right_out > EPS) | (gs_frame_ovhg_right_in > EPS) then
+			if (gs_frame_ovhg_right_out > EPS) then put halfA + gs_frame_ovhg_right_out,	 0,	32 + 1
+			put halfA,  0,				32
+			put halfA, -gs_frame_thk,	32 + (bDrawRightEndLine | (gs_frame_ovhg_right_in > EPS))
+			if (gs_frame_ovhg_right_in > EPS) then put halfA + gs_frame_ovhg_right_in, -gs_frame_thk,	32 + bDrawRightEndLine
+
+			poly2_b nsp/3, 1 + 2*bRightCornerFunction + 4 + 16 + 32, gs_penFr_fg, gs_penFr_bg,
+					get(nsp)
+		endif
+	endif
+
+	rightPos2 = 0
+	leftPos2 = 0
+
+	if gs_iPanelType = PANEL_HUNG | gs_iPanelType = PANEL_DOUBLE_HUNG then
+		if gs_iPanelType = PANEL_DOUBLE_HUNG then
+			rightPos = halfA - gs_bFrameRight * (gs_frame_width_right - gs_frame_cut_width)
+			leftPos = (gs_bFrameLeft * (gs_frame_width_left - gs_frame_cut_width) - gs_bFrameRight * (gs_frame_width_right - gs_frame_cut_width))/2
+
+			rightPos2 = halfA - gs_bFrameLeft * (gs_frame_width_left - gs_frame_cut_width)
+			leftPos2 = -leftPos
+		else
+			rightPos = halfA - gs_bFrameRight * (gs_frame_width_right - gs_frame_cut_width)
+			leftPos = -halfA + gs_bFrameLeft * (gs_frame_width_left - gs_frame_cut_width)
+		endif
+		py = -gs_frame_thk + gs_frame_cut_depth
+	endif
+
+	if gs_iPanelType = PANEL_FIX | gs_iPanelType = PANEL_VER_SLIDING | gs_iPanelType = PANEL_PIVOT | gs_iPanelType = PANEL_HOR_SLIDING | gs_iPanelType = PANEL_DOUBLE_SLIDING then
+		if gs_iPanelType = PANEL_DOUBLE_SLIDING then
+			leftPos = -halfA + gs_bFrameLeft * gs_frame_width_left
+			rightPos = (A - gs_bFrameLeft * gs_frame_width_left - gs_bFrameRight * gs_frame_width_right)/2 + gs_sash_width/2 - ABS(leftPos)
+
+			leftPos2 = -halfA + gs_bFrameRight * gs_frame_width_right
+			rightPos2 = (A - gs_bFrameLeft * gs_frame_width_left - gs_bFrameRight * gs_frame_width_right)/2 + gs_sash_width/2 - ABS(leftPos2)
+		else
+			leftPos = -halfA + gs_bFrameLeft  * gs_frame_width_left
+			rightPos = halfA - gs_bFrameRight * gs_frame_width_right
+		endif
+		if gs_iPanelType = PANEL_PIVOT & bNORPivottedRoundWindow then
+			py = (-gs_frame_thk + gs_sash_thk)/2
+		else
+			py = -gs_frame_thk + gs_sash_thk
+		endif
+	endif
+
+
+	pen gs_pen_2D
+	line_property 0
+
+	bMirrored = 0
+	gosub 1000		! hotspot editing of sash
+
+	if PanelNum = 1 then
+		temp_LeftFrame	= gs_bFrameLeft
+		temp_RightFrame	= gs_bFrameRight
+	else
+		temp_LeftFrame	= 0
+		temp_RightFrame	= gs_bFrameRight
+	endif
+
+
+	if gs_optype_m = SASH_SLIDING_HOR | gs_optype_m = SASH_DOUBLE_SLIDING_HOR then
+		mul2 -1,1
+
+		tempLeftPos = leftPos
+		leftPos		= leftPos2
+		leftPos2	= tempLeftPos
+
+		tempRightPos	= rightPos
+		rightPos		= rightPos2
+		rightPos2		= tempRightPos
+	endif
+
+	! The Opening Sash is always inside by Single Hung and Double Hung Sash Type
+	if gs_optype_m = SASH_SLIDING_VER | gs_optype_m = SASH_DOUBLE_SLIDING_VER then
+		if not(WIDO_REVEAL_SIDE) then
+			add2 0,-gs_frame_thk
+			mul2 1, -1
+		endif
+	endif
+
+	for ij = 1 to PanelNum
+		line_property 0
+
+		gosub 2000		! swing line, arc
+
+		pen gs_pen_2D
+		if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then
+			line_type gs_Demolition_linetype
+		else
+			line_type 1
+		endif
+
+		! --- horizontal lines and cover fill --------------------------------------
+
+		if NOT(bFullSashOpeningIn2D) then
+			if gs_iPanelType = PANEL_PIVOT & bNORPivottedRoundWindow then
+				put	leftPos,					py*2 - gs_sash_thk,	0,
+					leftPos,					py - gs_sash_thk,	0,
+					leftPos + gs_sash_width,	py - gs_sash_thk,	0,
+					leftPos + gs_sash_width,	py,					0
+			else
+				if gs_iPanelType = PANEL_HOR_SLIDING then
+					put	leftPos,	py - gs_sash_thk,	0
+				else
+					if iMullionStyle <> MULLION_SOLID_PANEL then
+						put	leftPos + gs_sash_width,	py - gs_sash_thk,	0
+					endif
+				endif
+
+				if gs_iPanelType <> PANEL_HOR_SLIDING & iMullionStyle <> MULLION_SOLID_PANEL then
+					put leftPos + gs_sash_width,	py,					0
+				endif
+			endif
+
+			if gs_iPanelType <> PANEL_PIVOT & gs_iPanelType <> PANEL_HOR_SLIDING & gs_iPanelType <> PANEL_DOUBLE_SLIDING  then
+				put	leftPos + (gs_iPanelType <> PANEL_VER_SLIDING & gs_iPanelType <> PANEL_PIVOT & gs_iPanelType <> PANEL_FIX) * temp_LeftFrame * gs_frame_cut_width,   py, 0,
+					leftPos + (gs_iPanelType <> PANEL_VER_SLIDING & gs_iPanelType <> PANEL_PIVOT & gs_iPanelType <> PANEL_FIX) * temp_LeftFrame * gs_frame_cut_width, 0, 1,
+					rightPos - (gs_iPanelType <> PANEL_VER_SLIDING & gs_iPanelType <> PANEL_PIVOT & gs_iPanelType <> PANEL_FIX) * temp_RightFrame * gs_frame_cut_width, 0, 0,
+					rightPos - (gs_iPanelType <> PANEL_VER_SLIDING & gs_iPanelType <> PANEL_PIVOT & gs_iPanelType <> PANEL_FIX) * temp_RightFrame * gs_frame_cut_width, py, 0
+			endif
+	
+			if gs_iPanelType = PANEL_HOR_SLIDING then
+				put	leftPos,   py, 0,
+					leftPos, 0, 1,
+					rightPos, 0, 0,
+					rightPos, py, 0
+			endif
+	
+			if gs_iPanelType = PANEL_DOUBLE_SLIDING then
+				put	leftPos,   py, 0,
+					leftPos, 0, 1,
+					rightPos - gs_sash_width, 0, 0,
+					rightPos - gs_sash_width, py, 0
+			endif
+	
+			if gs_iPanelType = PANEL_PIVOT & gs_sash_thk < gs_frame_thk then
+				put rightPos,	 py,	0,
+					rightPos,	0,		1,
+					leftPos,	0,		0,
+					leftPos,	 py,	0
+			endif
+
+			if gs_iPanelType = PANEL_PIVOT & bNORPivottedRoundWindow then
+				put	rightPos - gs_sash_width,	py,					0,
+					rightPos - gs_sash_width,	py - gs_sash_thk,	0,
+					rightPos,					py - gs_sash_thk,	0,
+					rightPos,					py*2 - gs_sash_thk,	1
+			else
+				if gs_iPanelType <> PANEL_HOR_SLIDING & iMullionStyle <> MULLION_SOLID_PANEL then
+					put	rightPos - gs_sash_width,	py,					0
+				endif
+
+				if gs_iPanelType = PANEL_HOR_SLIDING then
+					put	rightPos,	py - gs_sash_thk,	1
+				else
+					if iMullionStyle <> MULLION_SOLID_PANEL then
+						put	rightPos - gs_sash_width,	py - gs_sash_thk,	1
+					endif
+				endif
+			endif
+	
+			fill gs_fillShCover
+	
+			if gs_iPanelType = PANEL_HOR_SLIDING then drawindex 30
+			if nsp then
+				poly2_b nsp/3, 1*not(bInnerSash) + 2 * (gs_fillShCover > 0) + 4 + 16 + 64, gs_penShCov_fg, gs_penShCov_bg, get(nsp)
+			endif
+
+			if	(gs_iPanelType = PANEL_HUNG |\
+				gs_iPanelType = PANEL_DOUBLE_HUNG) &\
+				(gs_frame_thk + py - gs_sash_thk) > EPS then
+
+				poly2_b 4, 1+2+4+64, gs_penShCov_fg, gs_penShCov_bg,
+					leftPos,	py - gs_sash_thk,	0,
+					rightPos,	py - gs_sash_thk,	0,
+					rightPos,	-gs_frame_thk,		1,
+					leftPos,	-gs_frame_thk,		0
+			endif
+		endif
+
+		if gs_iPanelType = PANEL_HOR_SLIDING then
+			add2 owning2D, 0
+			drawindex 40
+		endif
+
+		if gs_iPanelType = PANEL_FIX then
+			if gs_iPanelSubType = 1 then
+				line2 leftPos + gs_sash_width, py,
+					 rightPos - gs_sash_width, py
+			endif
+			if gs_iPanelSubType = 2 then
+				line2 leftPos + gs_sash_width, py - 0.015,
+					 rightPos - gs_sash_width, py - 0.015
+			endif
+		endif
+
+		if gs_iPanelType = PANEL_HOR_SLIDING then del 1
+
+		gosub "drawSash"
+
+		temp_LeftFrame	= 0
+		temp_RightFrame	= gs_bFrameLeft
+
+		if gs_iPanelType = PANEL_DOUBLE_SLIDING then
+			mul2 1, -1
+			add2 0, 2*gs_sash_thk
+		endif
+		if gs_iPanelType = PANEL_DOUBLE_HUNG then
+			bMirrored = 1
+			gosub 1000		! hotspot editing of sash
+		endif
+
+		mul2 -1,1
+
+		tempLeftPos = leftPos
+		leftPos		= leftPos2
+		leftPos2	= tempLeftPos
+
+		tempRightPos	= rightPos
+		rightPos		= rightPos2
+		rightPos2		= tempRightPos
+	next ij
+	del PanelNum
+	if gs_iPanelType = PANEL_DOUBLE_SLIDING then del PanelNum*2
+
+	if gs_optype_m = SASH_SLIDING_HOR | gs_optype_m = SASH_DOUBLE_SLIDING_HOR then del 1
+endif
+
+
+! =============================================================================
+! Connection line (connection column)
+! =============================================================================
+
+if gs_frame_corner_connect then
+
+	pen gs_frame_pen_cont
+
+	mul2 1,-1
+
+	if gs_frame_left_endline and abs(gs_frame_left_corner_angle - 180) > EPS then
+		if gs_frame_left_corner_angle < 180 then
+			line2 -HalfA, -1 * (WIDO_REVEAL_SIDE) * gs_frame_thk, -HalfA - gs_frame_thk / TAN(gs_frame_left_corner_angle/2), -1 * (WIDO_REVEAL_SIDE) * gs_frame_thk
+			hotspot2 -HalfA - gs_frame_thk / tan(gs_frame_left_corner_angle/2), -1 * (WIDO_REVEAL_SIDE) * gs_frame_thk, unit_UnID + 8
+		else
+			line2 -HalfA, -1 * not(WIDO_REVEAL_SIDE) * gs_frame_thk, -HalfA + gs_frame_thk / TAN(gs_frame_left_corner_angle/2), -1 * not(WIDO_REVEAL_SIDE) * gs_frame_thk
+			hotspot2 -HalfA + gs_frame_thk / tan(gs_frame_left_corner_angle/2), -1 * not(WIDO_REVEAL_SIDE) * gs_frame_thk, unit_UnID + 8
+		endif
+	endif
+
+	del 1
+
+	if gs_frame_right_endline and abs(gs_frame_right_corner_angle - 180) > EPS then
+		if gs_frame_right_corner_angle < 180 then
+			line2 HalfA, -1 * (WIDO_REVEAL_SIDE) * gs_frame_thk, HalfA + gs_frame_thk / TAN(gs_frame_right_corner_angle/2), -1 * (WIDO_REVEAL_SIDE) * gs_frame_thk
+			hotspot2 HalfA + gs_frame_thk / tan(gs_frame_right_corner_angle/2),-1 * (WIDO_REVEAL_SIDE) * gs_frame_thk, unit_UnID + 9
+		else
+			line2 HalfA, -1 * not(WIDO_REVEAL_SIDE) * gs_frame_thk, HalfA - gs_frame_thk / TAN(gs_frame_right_corner_angle/2), -1 * not(WIDO_REVEAL_SIDE) * gs_frame_thk
+			hotspot2 HalfA - gs_frame_thk / tan(gs_frame_right_corner_angle/2), -1 * not(WIDO_REVEAL_SIDE) * gs_frame_thk, unit_UnID + 9
+		endif
+	endif
+endif
+
+
+gosub 3000	! Tolerance separating line & Unit Hotspots
+
+
+end ! =================================================================== END =
+
+
+
+1000:		!!! Hotspot editing of swinging sashes
+
+	! =============================================================================
+	! Hotspot Editing
+	! =============================================================================
+
+	unID = sh_UnID
+	rev_A = 512
+	rev_B = 0
+
+
+	if	gs_optype_m = SASH_SIDE_HUNG |\
+		gs_optype_m = SASH_SIDE_HUNG_M |\
+		gs_optype_m = SASH_TILT_TURN |\
+		gs_optype_m = SASH_TILT_TURN_M |\
+		gs_iPanelType = PANEL_DOUBLE_HUNG then
+
+		sash_thk_oh = 0
+		if bMirrored then			! Only at W Casement 3
+			if rev_A = 512 then
+				rev_A = 0
+			else
+				rev_A = 512
+			endif
+			if rev_B = 512 then
+				rev_B = 0
+			else
+				rev_B = 512
+			endif
+		endif
+
+
+		if lod2D = DET2D_FS_DETAILED then
+			sash_thk_oh = gs_frame_cut_depth - gs_sash_thk
+		endif
+
+		if lod2D = DET2D_FS_SIMPLE_ONE then
+			if WIDO_REVEAL_SIDE then
+				sash_thk_oh = 0
+			else
+				sash_thk_oh = gs_frame_thk
+			endif
+			if not(WIDO_REVEAL_SIDE) then
+				sash_thk_oh = sash_thk_oh + gs_frame_thk
+			endif
+		endif
+
+		if gs_sash_op_LR = 2 then
+
+			add2 0, -gs_frame_thk + sash_thk_oh
+
+			hotspot2 rightPos, 0, unID,		gs_open_2D, 6 + rev_A	! Center
+			hotspot2 leftPos,  0, unID + 1,	gs_open_2D, 4+128		! Base
+			hotspot2 rightPos-(abs(leftPos-rightPos))*cos(gs_open_2D),
+						-(abs(leftPos-rightPos))*sin(gs_open_2D),
+						unID + 2, gs_open_2D,5						! Moving
+			unID = unID + 3
+			del 1
+		endif
+
+		if gs_sash_op_LR = 1 then
+
+			add2 0, -gs_frame_thk + sash_thk_oh
+
+			hotspot2 leftPos, 0, unID,		gs_open_2D, 6 + rev_B	! Center
+			hotspot2 rightPos, 0, unID + 1, gs_open_2D, 4+128		! Base
+			hotspot2 leftPos+(abs(leftPos-rightPos))*cos(gs_open_2D),
+						-(abs(leftPos-rightPos))*sin(gs_open_2D),
+						unID + 2, gs_open_2D,5						! Moving
+			unID = unID + 3
+			del 1
+		endif
+
+	endif
+
+	if gs_iPanelType = PANEL_PIVOT then				! reversible, pivot
+
+		if bNORPivottedRoundWindow then
+			if rev_A = 512 then
+				rev_A = 0
+			else
+				rev_A = 512
+			endif
+			if rev_B = 512 then
+				rev_B = 0
+			else
+				rev_B = 512
+			endif
+		endif
+
+		add2 (leftPos + rightPos)/2,0
+
+		if lod2D = DET2D_FS_SIMPLE_ONE & not(WIDO_REVEAL_SIDE) then
+			add2 0, gs_frame_thk*2
+		endif
+
+		if gs_sash_op_LR = 1 & (gs_optype_m = SASH_VER_PIVOT | gs_optype_m = SASH_VER_PIVOT_M) then
+
+			add2 0, -gs_frame_thk
+
+			hotspot2 0, 0, unID,		gs_open_2D, 6 + rev_A	! Center
+			hotspot2 leftPos,  0, unID + 1,	gs_open_2D, 4+128		! Base
+			hotspot2 -(abs(leftPos-rightPos)/2)*cos(gs_open_2D),
+						-(abs(leftPos-rightPos)/2)*sin(gs_open_2D),
+						unID + 2, gs_open_2D,5						! Moving
+			unID = unID + 3
+			del 1
+		endif
+
+		if gs_sash_op_LR = 2 & (gs_optype_m = SASH_VER_PIVOT | gs_optype_m = SASH_VER_PIVOT_M) then
+
+			add2 0, -gs_frame_thk
+
+			hotspot2 0, 0, unID,		gs_open_2D, 6 + rev_B	! Center
+			hotspot2 rightPos,  0, unID + 1,	gs_open_2D, 4+128		! Base
+			hotspot2 (abs(leftPos-rightPos)/2)*cos(gs_open_2D),
+						-(abs(leftPos-rightPos)/2)*sin(gs_open_2D),
+						unID + 2, gs_open_2D,5						! Moving
+			unID = unID + 3
+			del 1
+		endif
+
+		if lod2D = DET2D_FS_SIMPLE_ONE & not(WIDO_REVEAL_SIDE) then del 1
+		del 1
+
+	endif
+
+	if bNEDOpLineSymbole & \
+		(gs_optype_m = SASH_BOTTOM_HUNG |\
+		gs_optype_m = SASH_TOP_HUNG |\
+		gs_optype_m = SASH_HOR_PIVOT) then
+
+			add2 0, -gs_frame_thk + sash_thk_oh
+
+			hotspot2 0, 0, unID, gs_openLength_2D, 1 : unID = unID +1
+			hotspot2 0, -gs_openLength_2D, unID, gs_openLength_2D, 2 : unID = unID +1
+			hotspot2 0, 1,	unID, gs_openLength_2D, 3 : unID = unID +1
+
+			del 1
+
+			if gs_optype_m = SASH_HOR_PIVOT then
+				hotspot2 0, 0, unID, gs_openLength_2D, 1 : unID = unID +1
+				hotspot2 0, gs_openLength_2D, unID, gs_openLength_2D, 2 : unID = unID +1
+				hotspot2 0, -1,	unID, gs_openLength_2D, 3 : unID = unID +1
+			endif
+	endif
+
+	sh_UnID = unID
+return
+
+
+2000:				! --- swing line, arc
+
+	if (abs(gs_open_2D) > EPS & abs(gs_open_2D - 360) > EPS) | gs_openLength_2D > 0 then
+
+		pen gs_opLinePen
+
+		if bNEDOpLineSymbole & \
+		  (gs_optype_m = SASH_TILT_TURN | gs_optype_m = SASH_TILT_TURN_M |\
+		   gs_optype_m = SASH_BOTTOM_HUNG | gs_optype_m = SASH_TOP_HUNG |\
+		   gs_optype_m = SASH_HOR_PIVOT) then
+
+			gs_tiltTurn_open_2D = gs_open_2D
+
+			if gs_optype_m = SASH_TILT_TURN |\
+				gs_optype_m = SASH_TILT_TURN_M then
+				
+				if gs_sash_op_LR = 2 then
+					if NOT(bFullSashOpeningIn2D) then 
+						line2	rightPos, -gs_frame_thk+sash_thk_oh,
+									rightPos-(abs(leftPos-rightPos))*cos(gs_tiltTurn_open_2D),
+									-(abs(leftPos-rightPos))*sin(gs_tiltTurn_open_2D)-gs_frame_thk + sash_thk_oh
+						
+						line_type gs_swingLineType
+						_sashWidthHalf = ((abs(leftPos-rightPos))*cos(gs_tiltTurn_open_2D))/2
+						line2	leftPos, -gs_frame_thk+sash_thk_oh,
+									rightPos - _sashWidthHalf,
+									-(_sashWidthHalf)*tan(gs_tiltTurn_open_2D)-gs_frame_thk + sash_thk_oh
+					endif
+				endif
+				
+				if gs_sash_op_LR = 1 then
+					if NOT(bFullSashOpeningIn2D) then
+						line2	leftPos, -gs_frame_thk+sash_thk_oh,
+									leftPos+(abs(leftPos-rightPos))*cos(gs_tiltTurn_open_2D),
+									-(abs(leftPos-rightPos))*sin(gs_tiltTurn_open_2D)-gs_frame_thk + sash_thk_oh
+
+						line_type gs_swingLineType
+						_sashWidthHalf = ((abs(leftPos-rightPos))*cos(gs_tiltTurn_open_2D))/2
+						line2	rightPos, -gs_frame_thk+sash_thk_oh,
+									leftPos + _sashWidthHalf,
+									-(_sashWidthHalf)*tan(gs_tiltTurn_open_2D)-gs_frame_thk + sash_thk_oh
+					endif
+				endif
+			endif
+
+			if gs_optype_m = SASH_BOTTOM_HUNG |\
+				gs_optype_m = SASH_TOP_HUNG |\
+				gs_optype_m = SASH_HOR_PIVOT then
+
+					_sashWidthHalf	= abs(leftPos-rightPos)/2
+					_openingDist	= gs_openLength_2D
+
+					line_type gs_swingLineType
+
+					line2	leftPos, -gs_frame_thk+sash_thk_oh,
+							leftPos + _sashWidthHalf,
+							-_openingDist - gs_frame_thk + sash_thk_oh
+					line2	rightPos, -gs_frame_thk+sash_thk_oh,
+							rightPos - _sashWidthHalf,
+							-_openingDist - gs_frame_thk + sash_thk_oh
+
+					if gs_optype_m = SASH_HOR_PIVOT then
+						line2	leftPos, 0,
+								leftPos + _sashWidthHalf, _openingDist
+						line2	rightPos, 0,
+								rightPos - _sashWidthHalf, _openingDist
+					endif
+
+					line_type gs_openingDistLineType
+
+					line2	rightPos, -gs_frame_thk+sash_thk_oh,
+							rightPos, -_openingDist - gs_frame_thk + sash_thk_oh
+
+					line2	leftPos, -gs_frame_thk+sash_thk_oh,
+							leftPos, -_openingDist - gs_frame_thk + sash_thk_oh
+
+					line2	leftPos, -_openingDist - gs_frame_thk + sash_thk_oh,
+							rightPos, -_openingDist - gs_frame_thk + sash_thk_oh
+
+					if gs_optype_m = SASH_HOR_PIVOT then
+						line2	rightPos, 0,
+								rightPos, _openingDist
+
+						line2	leftPos, 0,
+								leftPos, _openingDist
+
+						line2	leftPos, _openingDist,
+								rightPos , _openingDist
+					endif
+			endif
+			
+		else ! bNEDOpLineSymbole
+
+			if	gs_optype_m = SASH_SIDE_HUNG |\
+				gs_optype_m = SASH_SIDE_HUNG_M |\
+				gs_optype_m = SASH_TILT_TURN |\
+				gs_optype_m = SASH_TILT_TURN_M |\
+				gs_iPanelType = PANEL_DOUBLE_HUNG then
+
+				if gs_sash_op_LR = 2 then
+					if NOT(bFullSashOpeningIn2D) then 
+						line2	rightPos, -gs_frame_thk+sash_thk_oh,
+									rightPos-(abs(leftPos-rightPos))*cos(gs_open_2D),
+									-(abs(leftPos-rightPos))*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh
+					endif
+
+					line_type gs_swingLineType
+
+					if gs_iSwingType = 1 then		! Curved
+						if gs_open_2D > ASN(gs_sash_thk / ABS(leftPos-rightPos)) * bFullSashOpeningIn2D then
+							arc2	rightPos, -gs_frame_thk+sash_thk_oh, ABS(leftPos-rightPos), 180, 180+gs_open_2D - ASN(gs_sash_thk / ABS(leftPos-rightPos)) * bFullSashOpeningIn2D
+						endif
+					else							! Straight
+						line2	leftPos, -gs_frame_thk+sash_thk_oh,
+								rightPos-(abs(leftPos-rightPos))*cos(gs_open_2D) - gs_sash_thk * sin(gs_open_2D) * bFullSashOpeningIn2D,
+								-(abs(leftPos-rightPos))*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh + gs_sash_thk * cos(gs_open_2D) * bFullSashOpeningIn2D
+					endif
+				endif
+
+				if gs_sash_op_LR = 1 then
+					if NOT(bFullSashOpeningIn2D) then 
+						line2	leftPos, -gs_frame_thk+sash_thk_oh,
+									leftPos+(abs(leftPos-rightPos))*cos(gs_open_2D),
+									-(abs(leftPos-rightPos))*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh
+					endif
+
+					line_type gs_swingLineType
+
+					if gs_iSwingType = 1 then		! Curved
+						if gs_open_2D > ASN(gs_sash_thk / ABS(leftPos-rightPos)) * bFullSashOpeningIn2D then
+							arc2	leftPos, -gs_frame_thk+sash_thk_oh, abs(leftPos-rightPos), -gs_open_2D + ASN(gs_sash_thk / ABS(leftPos-rightPos)) * bFullSashOpeningIn2D, 0
+						endif
+					else
+						line2	rightPos, -gs_frame_thk+sash_thk_oh,
+								leftPos+(abs(leftPos-rightPos))*cos(gs_open_2D) + gs_sash_thk * sin(gs_open_2D) * bFullSashOpeningIn2D,
+								-(abs(leftPos-rightPos))*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh + gs_sash_thk * cos(gs_open_2D) * bFullSashOpeningIn2D
+					endif
+				endif
+			endif
+		endif
+
+		if gs_iPanelType = PANEL_PIVOT then
+
+			add2 (leftPos + rightPos)/2,0
+			if lod2D = DET2D_FS_SIMPLE_ONE & not(WIDO_REVEAL_SIDE) then
+				add2 0, gs_frame_thk*2
+			endif
+
+			if gs_sash_op_LR = 1 & (gs_optype_m = SASH_VER_PIVOT | gs_optype_m = SASH_VER_PIVOT_M) then
+				if NOT(bFullSashOpeningIn2D) then 
+					line2	 (abs(leftPos-rightPos)/2)*cos(gs_open_2D),
+							 (abs(leftPos-rightPos)/2)*sin(gs_open_2D)-gs_frame_thk+sash_thk_oh,
+							-(abs(leftPos-rightPos)/2)*cos(gs_open_2D),
+							-(abs(leftPos-rightPos)/2)*sin(gs_open_2D)-gs_frame_thk
+				endif
+
+				line_type gs_swingLineType
+
+				if gs_iSwingType = 1 then		! Curved
+					if gs_open_2D > ASN(gs_sash_thk / rightPos) * bFullSashOpeningIn2D then
+						arc2	0, -gs_frame_thk, abs(leftPos-rightPos)/2, 180, 180+gs_open_2D - ASN(gs_sash_thk / rightPos) * bFullSashOpeningIn2D
+					endif
+					arc2	0, -gs_frame_thk, abs(leftPos-rightPos)/2, 0, gs_open_2D
+				else							! Straight
+					line2	rightPos, -gs_frame_thk+sash_thk_oh,
+							(abs(leftPos-rightPos)/2)*cos(gs_open_2D),
+							(abs(leftPos-rightPos)/2)*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh
+					line2	leftPos, -gs_frame_thk+sash_thk_oh,
+							-(abs(leftPos-rightPos)/2)*cos(gs_open_2D) - gs_sash_thk * sin(gs_open_2D) * bFullSashOpeningIn2D,
+							-(abs(leftPos-rightPos)/2)*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh + gs_sash_thk * cos(gs_open_2D) * bFullSashOpeningIn2D
+				endif
+			endif
+
+			if gs_sash_op_LR = 2 & (gs_optype_m = SASH_VER_PIVOT | gs_optype_m = SASH_VER_PIVOT_M) then
+				if NOT(bFullSashOpeningIn2D) then 
+					line2	-(ABS(leftPos-rightPos)/2)*cos(gs_open_2D),
+							 (abs(leftPos-rightPos)/2)*sin(gs_open_2D)-gs_frame_thk,
+							 (abs(leftPos-rightPos)/2)*cos(gs_open_2D),
+							-(abs(leftPos-rightPos)/2)*sin(gs_open_2D)-gs_frame_thk
+				endif
+
+				line_type gs_swingLineType
+
+				if gs_iSwingType = 1 then		! Curved
+					if gs_open_2D > ASN(gs_sash_thk / rightPos) * bFullSashOpeningIn2D then
+						arc2	0, -gs_frame_thk, abs(leftPos-rightPos)/2, -gs_open_2D + ASN(gs_sash_thk / rightPos) * bFullSashOpeningIn2D, 0
+					endif
+					arc2	0, -gs_frame_thk, abs(leftPos-rightPos)/2, 180-gs_open_2D, 180
+				else							! Straight
+
+					line2	leftPos, -gs_frame_thk+sash_thk_oh,
+							-(abs(leftPos-rightPos)/2)*cos(gs_open_2D),
+							 (abs(leftPos-rightPos)/2)*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh
+					line2	rightPos, -gs_frame_thk+sash_thk_oh,
+							 (abs(leftPos-rightPos)/2)*cos(gs_open_2D) + gs_sash_thk * sin(gs_open_2D) * bFullSashOpeningIn2D,
+							-(abs(leftPos-rightPos)/2)*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh + gs_sash_thk * cos(gs_open_2D) * bFullSashOpeningIn2D
+				endif
+			endif
+
+			if lod2D = DET2D_FS_SIMPLE_ONE & not(WIDO_REVEAL_SIDE) then del 1
+			del 1
+
+		endif
+
+	endif
+
+return
+
+
+3000:
+! =============================================================================
+! Tolerance separating line & Unit Hotspots
+! =============================================================================
+
+drawindex 40
+
+if lod2D > DET2D_FS_SIMPLE_ONE & lod2D <> DET2D_FS_SIMPLE_CHI then
+	if gs_bFrameLeft & gs_frame_left_unitline & bFrCornerLeft <> 0 then
+		if lod2D > DET2D_FS_SIMPLE_ONE & (gs_frame_ovhg_left_out > EPS | gs_frame_ovhg_left_in > EPS) then
+			line2 -halfA, 0,
+				  -halfA, -gs_frame_thk
+		endif
+	endif
+
+	if gs_bFrameRight & gs_frame_right_unitline & bFrCornerRight <> 0 then
+		if lod2D > DET2D_FS_SIMPLE_ONE & (gs_frame_ovhg_right_out > EPS | gs_frame_ovhg_right_in > EPS) then
+			line2 halfA, 0,
+				  halfA, -gs_frame_thk
+		endif
+	endif
+endif
+
+! unit hotspots
+if bShowUnitHotspots then
+	if gs_frame_left_unitline | bLeftCornerFunction then
+		if bLeftCornerFunction then
+			hotspot2 -halfA - gs_frame_ovhg_left_out,  0,            unit_UnID
+			hotspot2 -halfA - gs_frame_ovhg_left_in,  -gs_frame_thk * (lod2D > DET2D_FS_SIMPLE_ONE & lod2D <> DET2D_FS_SIMPLE_CHI), unit_UnID + 2
+		else
+			if FixGlassDir_m = 2 then
+				hotspot2 -halfA,  0,            unit_UnID
+				hotspot2 -halfA, gs_frame_thk * (lod2D > DET2D_FS_SIMPLE_ONE & lod2D <> DET2D_FS_SIMPLE_CHI), unit_UnID + 2
+			else
+				hotspot2 -halfA,  0,            unit_UnID
+				hotspot2 -halfA, -gs_frame_thk * (lod2D > DET2D_FS_SIMPLE_ONE & lod2D <> DET2D_FS_SIMPLE_CHI), unit_UnID + 2
+			endif
+		endif
+	endif
+	if gs_frame_right_unitline | bRightCornerFunction then
+		if bRightCornerFunction then
+			hotspot2  halfA + gs_frame_ovhg_right_out,  0,            unit_UnID + 1
+			hotspot2  halfA + gs_frame_ovhg_right_in,  -gs_frame_thk * (lod2D > DET2D_FS_SIMPLE_ONE & lod2D <> DET2D_FS_SIMPLE_CHI), unit_UnID + 3
+		else
+			if FixGlassDir_m = 2 then
+				hotspot2  halfA, 0,            unit_UnID + 1
+				hotspot2  halfA, gs_frame_thk * (lod2D > DET2D_FS_SIMPLE_ONE & lod2D <> DET2D_FS_SIMPLE_CHI), unit_UnID + 3
+			else
+				hotspot2  halfA,  0,            unit_UnID + 1
+				hotspot2  halfA, -gs_frame_thk * (lod2D > DET2D_FS_SIMPLE_ONE & lod2D <> DET2D_FS_SIMPLE_CHI), unit_UnID + 3
+			endif
+		endif
+	endif
+endif
+
+return
+
+
+
+"drawSash":
+
+	add2 0, sashOffset
+
+	if gs_iPanelType <> PANEL_FIX | iMullionStyle = MULLION_SOLID_PANEL then	!!! there is no sash in case of fix panel
+		if gs_iPanelType = PANEL_HOR_SLIDING then add2 owning2D, 0
+
+		if bFullSashOpeningIn2D then
+			if _bEnableSashRotaion then
+				if gs_iPanelType = PANEL_PIVOT then
+					if _bMirroredSash then
+						add2 0, py - gs_sash_thk
+						rot2 -gs_open_2D
+						add2 0, -py + gs_sash_thk
+					else
+						add2 0, py - gs_sash_thk
+						rot2 gs_open_2D
+						add2 0, -py + gs_sash_thk
+					endif
+				else
+					if _bMirroredSash then
+						add2 leftPos, py - gs_sash_thk
+						rot2 -gs_open_2D
+						add2 -leftPos, -py + gs_sash_thk
+					else
+						add2 rightPos, py - gs_sash_thk
+						rot2 gs_open_2D
+						add2 -rightPos, -py + gs_sash_thk
+					endif
+				endif
+			endif
+		endif
+
+
+		! --- sash fill for both sides --------------------------------------------
+		pen gs_frame_pen_cont
+		fill gs_fillSh
+		line_property 2
+
+		if iMullionStyle = MULLION_SOLID_PANEL then
+			if _bShowRebateOnFixGlass & gs_iPanelType = PANEL_FIX then								! Detailed --> NLD 50,  Fix sash
+
+				poly2_b 4, 1 + 2 * (gs_fillSh > 0) + 4 + 16 + 64, gs_penSh_fg, gs_penSh_bg,
+						leftPos - gs_sash_width,	py,					32 + 1,
+						leftPos - gs_sash_width,	py - gs_sash_thk,	32 + 1,
+						rightPos + gs_sash_width,	py - gs_sash_thk,	32 + 1,
+						rightPos + gs_sash_width,	py,					32 + 1
+			else
+				poly2_b 4, 1 + 2 * (gs_fillSh > 0) + 4 + 16 + 64, gs_penSh_fg, gs_penSh_bg,
+						leftPos,					py,					32 + 1,
+						leftPos,					py - gs_sash_thk,	32 + 1,
+						rightPos,					py - gs_sash_thk,	32 + 1,
+						rightPos,					py,					32 + 1
+			endif
+		else
+			! left sash frame
+			poly2_b 4, 1 + 2 * (gs_fillSh > 0) + 4 + 16 + 32, gs_penSh_fg, gs_penSh_bg,
+					leftPos,					py,					32 + 1,
+					leftPos + gs_sash_width,	py,					32 + 1,
+					leftPos + gs_sash_width,	py - gs_sash_thk,	32 + 1,
+					leftPos,					py - gs_sash_thk,	32 + 1
+
+			! right sash frame
+			poly2_b 4, 1 + 2 * (gs_fillSh > 0) + 4 + 16 + 32, gs_penSh_fg, gs_penSh_bg,
+					rightPos,					py,					32 + 1,
+					rightPos - gs_sash_width,	py,					32 + 1,
+					rightPos - gs_sash_width,	py - gs_sash_thk,	32 + 1,
+					rightPos,					py - gs_sash_thk,	32 + 1
+
+			line_property 2
+
+			! sash contour lines
+			fill gs_fillShCover
+			poly2_b 4, 1 + 2 * (gs_fillShCover > 0) + 4 + 16 + 64, gs_penShCov_fg, gs_penShCov_bg,
+					rightPos - gs_sash_width,					py,					64 + 1,
+					leftPos + gs_sash_width,	py,					0,
+					leftPos + gs_sash_width,	py - gs_sash_thk,	64 + 1,
+					rightPos - gs_sash_width,					py - gs_sash_thk,	0
+
+			line_property 0
+								
+			! --- glass line in the center of the sash frame --------------------------------
+			if iSymbolGlassType = SYMBGLASS_DOUBLEGLASS then
+				add2 0, py + gs_glass_thk / 2 - gs_sash_thk / 2
+					poly2_b 4, 1+2+4+16+32, gs_penSh_fg, gs_penSh_bg,
+							rightPos - gs_sash_width,					0,					32 + 1,
+							leftPos + gs_sash_width,	0,					0,
+							leftPos + gs_sash_width,	-gs_glass_thk,	32 + 1,
+							rightPos - gs_sash_width,					-gs_glass_thk,	0
+				del 1
+			else
+				line2 leftPos + gs_sash_width,  py - gs_sash_thk / 2,
+					  rightPos - gs_sash_width, py - gs_sash_thk / 2
+			endif
+		endif
+
+		if bFullSashOpeningIn2D then
+			if _bEnableSashRotaion then
+				del 3
+			endif
+		endif
+
+		if gs_iPanelType = PANEL_HOR_SLIDING then del 1
+	endif	! if gs_iPanelType <> PANEL_FIX then
+
+	del 1
+
+return
+
+
+
+]]>
+</Script_2D>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>true</AutoHotspots>
+		<HoleBits>
+			<WDBit_3DFrame/>
+		</HoleBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Width of Panel"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Height of Panel"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Show 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="gs_macro_version">
+			<Description><![CDATA["Macro Version"]]></Description>
+			<Value>10</Value>
+		</Integer>
+		<Integer Name="iTypeDemolitionFill">
+			<Description><![CDATA["Demolition / New construction"]]></Description>
+			<Value>0</Value>
+		</Integer>
+		<LineType Name="gs_Demolition_linetype">
+			<Description><![CDATA["Demolition line type"]]></Description>
+			<Value>1</Value>
+		</LineType>
+		<Integer Name="gs_optype_m">
+			<Description><![CDATA["Opening Type"]]></Description>
+			<Value>0</Value>
+		</Integer>
+		<Boolean Name="bLeftCornerFunction">
+			<Description><![CDATA["Left Corner"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bRightCornerFunction">
+			<Description><![CDATA["Right Corner"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_window_frame: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_frame">
+			<Description><![CDATA["Window Frame"]]></Description>
+		</Title>
+		<Length Name="gs_frame_thk">
+			<Description><![CDATA["Frame Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_frame_width">
+			<Description><![CDATA["Frame Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.08</Value>
+		</Length>
+		<Length Name="gs_frame_width_left">
+			<Description><![CDATA["Frame Width Left"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_frame_width_right">
+			<Description><![CDATA["Frame Width Right"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_frame_cut_width">
+			<Description><![CDATA["Frame Cut Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_frame_cut_depth">
+			<Description><![CDATA["Frame Cut Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="gs_bFrameLeft">
+			<Description><![CDATA["Draw Frame on Left Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="gs_bFrameRight">
+			<Description><![CDATA["Draw Frame on Right Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="gs_frame_right_endline">
+			<Description><![CDATA["Draw Right Endline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="gs_frame_right_endline_comp">
+			<Description><![CDATA["Draw Right Endline Compatibility"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>-1</Value>
+		</Integer>
+		<Boolean Name="gs_frame_left_endline">
+			<Description><![CDATA["Draw Left Endline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="gs_frame_left_endline_comp">
+			<Description><![CDATA["Draw Left Endline Compatibility"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>-1</Value>
+		</Integer>
+		<Boolean Name="gs_frame_right_unitline">
+			<Description><![CDATA["Draw Right Tolerance Line"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_frame_left_unitline">
+			<Description><![CDATA["Draw Left Tolerance Line"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="gs_frame_ovhg_left_out">
+			<Description><![CDATA["Left Outside Overhang"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_frame_ovhg_right_out">
+			<Description><![CDATA["Right Outside Overhang"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_frame_ovhg_left_in">
+			<Description><![CDATA["Left Inside Overhang"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_frame_ovhg_right_in">
+			<Description><![CDATA["Right Inside Overhang"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="gs_frame_corner_connect">
+			<Description><![CDATA["Corner Connection Line"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Angle Name="gs_frame_left_corner_angle">
+			<Description><![CDATA["Left Corner Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>180</Value>
+		</Angle>
+		<Angle Name="gs_frame_right_corner_angle">
+			<Description><![CDATA["Right Corner Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>180</Value>
+		</Angle>
+
+		<!-- gs_window_sash: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_sash">
+			<Description><![CDATA["Sash Frame"]]></Description>
+		</Title>
+		<Length Name="gs_sash_thk">
+			<Description><![CDATA["Sash Frame Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.04</Value>
+		</Length>
+		<Length Name="gs_sash_width">
+			<Description><![CDATA["Sash Frame Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.06</Value>
+		</Length>
+		<Length Name="gs_glass_thk">
+			<Description><![CDATA["Glass Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+		<Integer Name="FixGlassDir_m">
+			<Description><![CDATA["Fixed Glass Direction"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="iMullionStyle">
+			<Description><![CDATA["Grid Style"]]></Description>
+			<Value>1</Value>
+		</Integer>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D and Section Representation"]]></Description>
+		</Title>
+		<Angle Name="gs_open_2D">
+			<Description><![CDATA["Opening Angle in 2D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Length Name="gs_openLength_2D">
+			<Description><![CDATA["Opening Length in 2D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="owning2D">
+			<Description><![CDATA["Opening in 2D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="lod2D">
+			<Description><![CDATA["Level of Detail in 2D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</Integer>
+		<Integer Name="iLoD2D">
+			<Description><![CDATA["Level of Detail in 2D Window"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="gs_iSwingType">
+			<Description><![CDATA["Swing Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<LineType Name="gs_swingLineType">
+			<Description><![CDATA["Swing Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</LineType>
+		<PenColor Name="gs_pen_2D">
+			<Description><![CDATA["Uncut Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</PenColor>
+		<PenColor Name="gs_frame_pen_cont">
+			<Description><![CDATA["Cut Line Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<FillPattern Name="gs_fillFr">
+			<Description><![CDATA["Frame Fill Pattern"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</FillPattern>
+		<PenColor Name="gs_penFr_fg">
+			<Description><![CDATA["Frame Fill ForeGround"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<PenColor Name="gs_penFr_bg">
+			<Description><![CDATA["Frame Fill BackGround"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<FillPattern Name="gs_fillSh">
+			<Description><![CDATA["Sash Fill Pattern"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</FillPattern>
+		<PenColor Name="gs_penSh_fg">
+			<Description><![CDATA["Sash Fill Foreground"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<PenColor Name="gs_penSh_bg">
+			<Description><![CDATA["Sash Fill Background"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<FillPattern Name="gs_fillShCover">
+			<Description><![CDATA["Sash Cover Fill Pattern"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_penShCov_fg">
+			<Description><![CDATA["Sash Cover Fill Foreground"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>-1</Value>
+		</PenColor>
+		<PenColor Name="gs_penShCov_bg">
+			<Description><![CDATA["Sash Cover Fill Background"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>-1</Value>
+		</PenColor>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+		</Title>
+		<Integer Name="lod3D">
+			<Description><![CDATA["Level of Detail in 3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<PenColor Name="gs_frame_pen">
+			<Description><![CDATA["Frame Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<PenColor Name="gs_sash_pen">
+			<Description><![CDATA["Sash Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<PenColor Name="gs_glass_pen">
+			<Description><![CDATA["Glass Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+
+		<!-- gs_window_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_material">
+			<Description><![CDATA["Surfaces"]]></Description>
+		</Title>
+		<Material Name="gs_frame_mat">
+			<Description><![CDATA["Frame Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>15</Value>
+		</Material>
+		<Material Name="gs_sash_mat">
+			<Description><![CDATA["Sash Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>15</Value>
+		</Material>
+		<Material Name="gs_glass_mat">
+			<Description><![CDATA["Glass Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>24</Value>
+		</Material>
+		<String Name="gs_stWindowPanel">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="24" SecondDimension="0">
+				<AVal Row="1"><![CDATA["Коробка и Створка"]]></AVal>
+				<AVal Row="2"><![CDATA["Внутри"]]></AVal>
+				<AVal Row="3"><![CDATA["Снаружи"]]></AVal>
+				<AVal Row="4"><![CDATA["Открывание"]]></AVal>
+				<AVal Row="5"><![CDATA["Направление"]]></AVal>
+				<AVal Row="6"><![CDATA["Угол"]]></AVal>
+				<AVal Row="7"><![CDATA["Стекло"]]></AVal>
+				<AVal Row="8"><![CDATA["Толщина"]]></AVal>
+				<AVal Row="9"><![CDATA["Перо 3D"]]></AVal>
+				<AVal Row="10"><![CDATA["Стекло"]]></AVal>
+				<AVal Row="11"><![CDATA["Рама"]]></AVal>
+				<AVal Row="12"><![CDATA["Перо 3D"]]></AVal>
+				<AVal Row="13"><![CDATA["Рама"]]></AVal>
+				<AVal Row="14"><![CDATA["Перо Контура"]]></AVal>
+				<AVal Row="15"><![CDATA["Тип Штриховки"]]></AVal>
+				<AVal Row="16"><![CDATA["Перо Штриховки"]]></AVal>
+				<AVal Row="17"><![CDATA["Перо Фона"]]></AVal>
+				<AVal Row="18"><![CDATA["Створка"]]></AVal>
+				<AVal Row="19"><![CDATA["Перо 3D"]]></AVal>
+				<AVal Row="20"><![CDATA["Створка"]]></AVal>
+				<AVal Row="21"><![CDATA["Перо Контура"]]></AVal>
+				<AVal Row="22"><![CDATA["Тип Штриховки"]]></AVal>
+				<AVal Row="23"><![CDATA["Перо Штриховки"]]></AVal>
+				<AVal Row="24"><![CDATA["Перо Фона"]]></AVal>
+			</ArrayValues>
+		</String>
+		<Integer Name="idTab_FrameSettings">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_bFills">
+			<Description><![CDATA["Use Fills"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="sh_UnID">
+			<Description><![CDATA["ID"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="unit_UnID">
+			<Description><![CDATA["ID"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>100</Value>
+		</Integer>
+		<Length Name="VertGridThk">
+			<Description><![CDATA["Vert. Grid Thickness"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="bFrCornerRight">
+			<Description><![CDATA[""]]></Description>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="bFrCornerLeft">
+			<Description><![CDATA[""]]></Description>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="bCasingTolerance">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<PenColor Name="gs_opLinePen">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</PenColor>
+		<Boolean Name="bShowUnitHotspots">
+			<Description><![CDATA["Show Unit Hotspots"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bInnerSash">
+			<Description><![CDATA["Historic Window Inner Sash"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bNORPivottedRoundWindow">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="sashOffset">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="bNEDOpLineSymbole">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<LineType Name="gs_openingDistLineType">
+			<Description><![CDATA["Swing Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4</Value>
+		</LineType>
+	</Parameters>
+</ParamSection>
+
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>B2970E4C-8680-4061-8670-2F4B638F3953</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Contact person: <NJ>
+
+
+! ==============================================================================
+! Draws a window panel
+! ------------------------------------------------------------------------------
+! Remark:
+!	See the input parameters at the 2D/3D Scripts
+! ==============================================================================
+
+EPS = 0.0001
+WOD = abs(WIDO_ORIG_DIST)
+
+if abs(gs_frame_width_left)  < EPS then gs_frame_width_left  = gs_frame_width
+if abs(gs_frame_width_right) < EPS then gs_frame_width_right = gs_frame_width
+
+DET2D_FS_OFF				= 0
+DET2D_FS_SCALESENS			= -1
+DET2D_FS_SIMPLE_ONE			= 11
+DET2D_FS_SIMPLE_TWO			= 12
+DET2D_FS_MIDDLE				= 21
+DET2D_FS_MIDDLE_USA			= 22
+DET2D_FS_DETAILED			= 30
+DET2D_FS_DETAILED_FIX_GRID	= 31
+DET2D_FS_DETAILED_USA		= 32
+DET2D_FS_SIMPLE_CHI			= 51
+DET2D_FS_DETAILED_CHI		= 52
+
+! iLoD2D
+SYMBW_OFF					= 0
+SYMBW_SCALESENS				= 1
+SYMBW_S_1LINE				= 11
+SYMBW_S_2LINE				= 12
+SYMBW_S_CENTERLINE			= 13
+SYMBW_S_2LINE_ACC			= 14
+SYMBW_S_5					= 15
+SYMBW_S_6					= 16
+SYMBW_S_7					= 17
+SYMBW_S_8					= 18
+SYMBW_S_9					= 19
+SYMBW_M_2LINE_NOGLASS		= 21
+SYMBW_M_2LINE_GLASS			= 22
+SYMBW_M_FRAMESASH			= 23
+SYMBW_M_2LINE_FRAME			= 24
+SYMBW_M_5					= 25
+SYMBW_M_6					= 26
+SYMBW_M_7					= 27
+SYMBW_M_8					= 28
+SYMBW_M_9					= 29
+SYMBW_D_SGLASS				= 31
+SYMBW_D_2GLASS				= 32
+SYMBW_D_2LINE_HS			= 33
+SYMBW_D_NOGLASS				= 34
+SYMBW_D_REBATEONGLASS		= 35
+SYMBW_D_2GLASS_OVERLAP		= 36
+SYMBW_D_7					= 37
+SYMBW_D_8					= 38
+SYMBW_D_9					= 39
+
+SYMBGLASS_NOGLASS			= 0
+SYMBGLASS_SIMPLEGLASS		= 1
+SYMBGLASS_DOUBLEGLASS		= 2
+
+
+! gs_optype_m
+SASH_FIXED					= 1		! Fixed Glass
+SASH_FIXED_SCREW			= 2		! Fixed Sash
+SASH_SIDE_HUNG				= 3		! Side Hung
+SASH_SIDE_HUNG_M			= 4		! Side Hung Mirrored
+SASH_TILT_TURN				= 5		! Tilt and Turn
+SASH_TILT_TURN_M			= 6		! Tilt and Turn Mirrored
+SASH_BOTTOM_HUNG			= 7		! Bottom Hung
+SASH_TOP_HUNG				= 8		! Top Hung
+SASH_HOR_PIVOT				= 9		! Horizontal Pivot Hung
+SASH_VER_PIVOT				= 10	! Vertical Pivotted
+SASH_TILT_SLIDE				= 11	! Tilt and Slide
+SASH_LEFT_SLIDING			= 12	! Left Sliding
+SASH_RIGHT_SLIDING			= 13	! Right Sliding
+SASH_UP_SLIDING				= 14	! Sliding Up
+SASH_DOWN_SLIDING			= 15	! Sliding Down
+SASH_VER_PIVOT_M			= 16	! Vertical Pivotted Mirrored
+SASH_FIXED_SLIDE			= 17	! Fixed Sliding Sash
+SASH_DOUBLE_SIDE_HUNG		= 18	! Double Sash
+SASH_DOUBLE_TILT_TURN		= 19	! Double Tilt and Turn
+SASH_DOUBLE_TILT_TURN_M		= 20	! Double Tilt and Turn Mirrored
+SASH_SLIDING_HOR			= 21	! Sliding
+SASH_SLIDING_HOR_M			= 22	! Sliding Mirrored
+SASH_DOUBLE_SLIDING_HOR		= 23	! Double Sliding
+SASH_DOUBLE_SLIDING_HOR_M	= 24	! Double Sliding Mirrored
+SASH_SLIDING_VER			= 25	! Single Hung
+SASH_DOUBLE_SLIDING_VER		= 26	! Double Hung
+
+! gs_iPanelType
+PANEL_FIX				= 0
+PANEL_HUNG				= 1
+PANEL_VER_SLIDING		= 2
+PANEL_PIVOT				= 3
+PANEL_HOR_SLIDING		= 4
+PANEL_DOUBLE_HUNG		= 5
+PANEL_DOUBLE_SLIDING	= 6
+
+! FixGlassDir_m
+FIXGLASS_OPENING_DIR	= 1
+FIXGLASS_OPPOSITE_DIR	= 2
+
+! iMullionStyle:
+MULLION_NONE			= 1
+MULLION_HVGRID			= 2
+MULLION_EDITABLEGRID	= 3
+MULLION_CUSTOM			= 4
+MULLION_PRAIRIE			= 5
+MULLION_DIVIDED			= 6
+MULLION_SUNBURST_1		= 7
+MULLION_SUNBURST_2		= 8
+MULLION_SUNBURST_3		= 9
+MULLION_SUNBURST_4		= 10
+MULLION_SUNBURST_5		= 11
+MULLION_SUNBURST_6		= 12
+MULLION_SOLID_GLAZED	= 13
+MULLION_DIVIDED_FRAME	= 14
+MULLION_SOLID_PANEL		= 15
+MULLION_VENT_PANEL		= 16
+MULLION_FRENCH_PANEL	= 17
+
+! iTypeDemolitionFill
+RENOVATION_FILL_EXIST		= 1
+RENOVATION_FILL_DEMOLISHED	= 2
+RENOVATION_FILL_NEW			= 3
+RENOVATION_FILL_NEW_FULL	= 4
+
+gs_iPanelType	= PANEL_FIX
+if	gs_optype_m = SASH_FIXED_SCREW | gs_optype_m = SASH_SIDE_HUNG | gs_optype_m = SASH_SIDE_HUNG_M |\
+	gs_optype_m = SASH_TILT_TURN | gs_optype_m = SASH_TILT_TURN_M | gs_optype_m = SASH_BOTTOM_HUNG | gs_optype_m = SASH_TOP_HUNG \
+		then gs_iPanelType = PANEL_HUNG
+if	gs_optype_m = SASH_SLIDING_VER | gs_optype_m = SASH_DOUBLE_SLIDING_VER | gs_optype_m = SASH_UP_SLIDING | gs_optype_m = SASH_DOWN_SLIDING \
+		then gs_iPanelType = PANEL_VER_SLIDING
+if	gs_optype_m = SASH_HOR_PIVOT | gs_optype_m = SASH_VER_PIVOT | gs_optype_m = SASH_VER_PIVOT_M \
+		then gs_iPanelType = PANEL_PIVOT
+if	gs_optype_m = SASH_TILT_SLIDE | gs_optype_m = SASH_LEFT_SLIDING | gs_optype_m = SASH_RIGHT_SLIDING | gs_optype_m = SASH_FIXED_SLIDE \
+		then gs_iPanelType = PANEL_HOR_SLIDING
+if	gs_optype_m = SASH_DOUBLE_SIDE_HUNG | gs_optype_m = SASH_DOUBLE_TILT_TURN | gs_optype_m = SASH_DOUBLE_TILT_TURN_M \
+		then gs_iPanelType = PANEL_DOUBLE_HUNG
+if	gs_optype_m = SASH_SLIDING_HOR | gs_optype_m = SASH_SLIDING_HOR_M | gs_optype_m = SASH_DOUBLE_SLIDING_HOR | gs_optype_m = SASH_DOUBLE_SLIDING_HOR_M \
+		then gs_iPanelType = PANEL_DOUBLE_SLIDING
+
+gs_sash_op_LR	= 2
+if	gs_optype_m = SASH_SIDE_HUNG_M | gs_optype_m = SASH_TILT_TURN_M | gs_optype_m = SASH_VER_PIVOT_M then gs_sash_op_LR	= 1
+
+bSliding	= (gs_iPanelType = PANEL_VER_SLIDING | gs_iPanelType = PANEL_HOR_SLIDING | gs_iPanelType = PANEL_DOUBLE_SLIDING)
+
+PanelNum = 1
+if	gs_iPanelType = PANEL_DOUBLE_HUNG | gs_iPanelType = PANEL_DOUBLE_SLIDING then PanelNum = 2
+if	gs_iPanelType = PANEL_VER_SLIDING | gs_iPanelType = PANEL_DOUBLE_SLIDING then gs_sash_thk = gs_frame_thk/2
+
+_bEnableSashRotaion	=	(gs_optype_m = SASH_SIDE_HUNG |\
+						gs_optype_m = SASH_SIDE_HUNG_M |\
+						gs_optype_m = SASH_TILT_TURN |\
+						gs_optype_m = SASH_TILT_TURN_M |\
+						gs_optype_m = SASH_VER_PIVOT |\
+						gs_optype_m = SASH_VER_PIVOT_M |\
+						gs_iPanelType = PANEL_DOUBLE_HUNG)
+
+_bMirroredSash		=	(gs_optype_m = SASH_SIDE_HUNG_M |\
+						gs_optype_m = SASH_TILT_TURN_M |\
+						gs_optype_m = SASH_VER_PIVOT |\
+						gs_iPanelType = PANEL_DOUBLE_HUNG)
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+</CalledMacros>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

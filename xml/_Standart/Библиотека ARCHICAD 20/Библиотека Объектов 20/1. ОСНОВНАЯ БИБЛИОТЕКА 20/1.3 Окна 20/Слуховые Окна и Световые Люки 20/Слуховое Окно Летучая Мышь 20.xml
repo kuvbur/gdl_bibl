@@ -1,0 +1,2667 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="true" IsPlaceable="true" MainGUID="ABEE4C71-B51B-4B04-B532-5DBCF23CEABB" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+
+! =============================================================================
+! GS Skylight Functions
+! =============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= bEnableLining,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+	returned_parameters	iLoD3D,
+						lod3D_Casing,
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen
+
+
+! Horizontal and low Roof
+if abs(ac_roofang) < MIN_ROOF_ANGLE | ac_roofang > 90 + EPS then
+	rotx ac_roofang
+
+	B = max(B, 1.0)
+	B = min(B, 3.0)
+
+	if SHELLBASE_VIEW_PEN > 0 then
+		pen SHELLBASE_VIEW_PEN
+	else
+		pen 1
+	endif
+
+	material ac_side_mat
+	wallniche 4, 1, 8+16,
+		0, 0, 1,	0,
+		 A/2, 0, 31,
+		-A/2, 0, 31,
+		-A/2, B, 31,
+		 A/2, B, 31
+
+	hotspot -A/2,0,0, 100
+	hotspot  A/2,0,0, 101
+	hotspot -A/2,B,0, 102
+	hotspot  A/2,B,0, 103
+
+	del 1
+
+	end
+endif
+
+
+
+pen gs_cont_pen
+resol 72
+
+
+!**** Parameter Kontrolle - Neigungen und Konstr.starke
+
+if ac_roofang >= 90 or ac_roofang <= 0 then ac_roofang = 45
+if ng >= ac_roofang then ng = ac_roofang-20
+
+if ac_roofthk < 0.025+0.05*sin(ng) then ac_roofthk = 0.025+0.05*sin(ng)
+
+
+
+km1 = 0.08*tan(ac_roofang)
+
+dr1 = (0.08-0.025*sin(ng)) * tan(ng) - 0.025 * cos(ng)
+
+dr2 = (ac_roofthk-0.025 - 0.05*sin(ng)) / cos(ng) - dr1 + 0.01
+dr2_frame = (gs_frame_thk-0.025 - 0.05*sin(ng)) / cos(ng) - dr1 + 0.01	!!!Frame Thickness of the Window
+
+dr3 = 0.025 * cos(ng)
+
+
+!**** Hauptradius und Winkel
+
+
+rr = ( ((hh+km1)/2)^2 + (a/4)^2 ) / 2 / ((hh+km1)/2)
+
+if abs(a/4 - (rr-dr1)) < 0.01 then
+	ww = 90
+else
+	ww = 90 - acs((a/4)/(rr-dr1))
+endif
+
+
+ra=ac_roofang
+
+yy=hh*(tan(ra)/tan(ng))/((tan(ra)/tan(ng))-1)+0.08*tan(ra)
+xx=(yy/tan(ra)+0.08)*(-1)
+
+
+!**** Y-Koordinaten der Hauptmittelpunkte
+
+m1y = -km1 + rr
+
+m2y = hh - rr
+
+
+! ==============================================================================
+! Wallhole
+! ==============================================================================
+
+! Lower cutting
+
+
+if useroofmat then
+	lower_mat=ac_lower_mat
+else
+	lower_mat=gs_innside_mat
+endif
+
+
+wx = 90+ww
+
+x11 = 0.05
+y11 = (m2y+(rr-dr1)*sin(wx))
+x12 = x11 + cos(ng)
+y12 = y11 + sin(ng)
+
+x21 = 0
+y21 = 0
+x22 = x21 + cos(ac_roofang)
+y22 = y21 + sin(ac_roofang)
+
+gosub 100	! Line - Line Intersection
+
+if state = 1 then
+	rotx ac_roofang
+	call "SkylightRect_RoofCutting_macro" parameters all A = a/2,
+			B					= sqr(cx^2 + cy^2),
+			AC_edge_lower_type	= AC_edge_lower_type,
+			AC_edge_upper_type	= 3,
+			AC_edge_upper_angle = ac_roofang - ng,
+			gs_lower_bott_mat	= lower_mat,
+			gs_lower_top_mat	= lower_mat,
+			bUpperCut			= 0,
+			ShowUpContLines		= 1
+	del 1
+endif
+
+ang_diff = ac_roofang - ng
+for ii = 1 to 25 step 1
+	put (rr-dr1)*cos(wx), m2y+(rr-dr1)*sin(wx), 95
+	wx = wx-ww/12
+next ii
+put a/4, (m2y+(rr-dr1)*sin(wx)), 95
+put -a/4, (m2y+(rr-dr1)*sin(wx)), 95
+
+addy 0.05
+rotx 90
+
+if SHELLBASE_VIEW_PEN > 0 then
+	pen SHELLBASE_VIEW_PEN
+else
+	pen 1
+endif
+material ac_lower_mat
+wallniche nsp/3, 1, 2+16,
+	0, -SIN(ng), COS(ng),	0,
+	get(nsp)
+
+del 2
+
+! Upper cutting
+
+material ac_upper_mat
+
+addx -A/4
+roty 90
+wallniche 3, 1, 2,
+	0, 0, 1, A/2,
+	0, 0, 31,
+	0, (m2y+(rr-dr1)*sin(wx)), 31,
+	-cx, cy, 31
+
+del 2
+
+pen gs_cont_pen
+
+! --- Symbol to Projected 2D
+
+bProjected2DContext = (GLOB_VIEW_TYPE = 2)
+
+if bProjected2DContext then
+	addz B * sin(ac_roofang)
+
+	dist = a/4
+	r = (dist)/sin(45)
+
+	model wire
+
+	muly (B * cos(ac_roofang))/((r-r*cos(45))*2)
+
+	addy r-dist*2
+	arc r, 45, 90
+	add dist, dist, 0
+
+	mulx -1
+	rotz -90
+	add -dist, -dist, 0
+	arc r, 0, 45
+	del 5
+
+	mulx -1
+	addy r-dist*2
+	arc r, 45, 90
+
+	add dist, dist, 0
+	mulx -1
+	rotz -90
+	add -dist, -dist, 0
+	arc r, 0, 45
+	del 7
+
+	model solid
+
+	del 1
+endif
+
+
+!**** Shleife fur 2 Seiten
+
+!for ii = 1 to 2
+
+
+!**** Stock
+
+
+
+addy 0.05
+rotx 90
+
+material gs_frame_mat
+
+	if iLoD3D >= SYMBS_3D_M_1 then
+		mask15 = 15
+		mask79 = 79
+	else
+		mask15 = 1
+		mask79 = 1
+	endif
+
+	wx = 270
+	for kj = 1 to 12
+		put -a/2+(rr-dr1)*cos(wx), m1y+(rr-dr1)*sin(wx), mask79
+		wx = wx+ww/12
+	next kj
+
+	wx = 90+ww-ww/12
+	for kj = 1 to 23
+		put (rr+dr1)*cos(wx), m2y+(rr+dr1)*sin(wx), mask79
+		wx = wx-ww/12
+	next kj
+
+	wx = 270-ww+ww/12
+	for kj = 1 to 12
+		put a/2+(rr-dr1)*cos(wx), m1y+(rr-dr1)*sin(wx), mask79
+		wx = wx+ww/12
+	next kj
+
+		wx = 270
+		put -a/2+(rr-dr1)*cos(wx), m1y+(rr-dr1)*sin(wx), -1
+
+
+	if iLoD3D = SYMBS_3D_D_1 | iLoD3D = SYMBS_3D_D_2 then
+		prism_ 4, 0.03,		!!OK
+			-a/2 + (rr-dr1) * cos(asn((rr-km1)/(rr-dr1))), 0, mask15,
+			-a/2 + (rr-dr1) * cos(asn((rr-km1)/(rr-dr1))), 0.05, mask15,
+			a/2 - (rr-dr1) * cos(asn((rr-km1)/(rr-dr1))), 0.05, mask15,
+			a/2 - (rr-dr1) * cos(asn((rr-km1)/(rr-dr1))), 0, mask15
+	endif
+
+addz 0.03
+
+
+cutplane 90
+
+
+if iLoD3D >= SYMBS_3D_M_1 then
+	if iLoD3D = SYMBS_3D_M_1 then
+		frame_thick = 0.05
+		addz -0.03
+	else
+		frame_thick = 0.02
+	endif
+
+	prism_ nsp/3+12, frame_thick,		!!OK
+		get(nsp),
+
+		-0.05, 0.09, 15,
+		-0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs(0.05/(rr-dr2_frame-0.04))), 79,
+		0, m2y, 900+mask79,
+		-a/4+0.04+0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs((a/4-0.04-0.05)/(rr-dr2_frame-0.04))), 3015,
+		-a/4+0.04+0.05, 0.09, 15,
+		-0.05, 0.09, -1,
+
+		0.05, 0.09, 15,
+		0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs(0.05/(rr-dr2_frame-0.04))), 79,
+		0, m2y, 979,
+		a/4-0.04-0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs((a/4-0.04-0.05)/(rr-dr2_frame-0.04))), 3015,
+		a/4-0.04-0.05, 0.09, 15,
+		-0.05, 0.09, -1
+
+	if iLoD3D = SYMBS_3D_M_1 then ! --- Glass
+		material gs_glass_mat
+		body -1
+
+		for jj = 1 to 2
+			poly_ 5,
+				-0.05, 0.09, 1,
+				-0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs(0.05/(rr-dr2_frame-0.04))), 1,
+				0, m2y, 901,
+				-a/4+0.04+0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs((a/4-0.04-0.05)/(rr-dr2_frame-0.04))), 3001,
+				-a/4+0.04+0.05, 0.09, 1
+
+			poly_ 5,
+				0.05, 0.09, 1,
+				0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs(0.05/(rr-dr2_frame-0.04))), 1,
+				0, m2y, 901,
+				a/4-0.04-0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs((a/4-0.04-0.05)/(rr-dr2_frame-0.04))), 3001,
+				a/4-0.04-0.05, 0.09, 1
+
+			body -1
+			addz 0.05
+		next jj
+		del 2
+	endif
+
+	if iLoD3D = SYMBS_3D_M_1 then del 1
+else
+	addz 0.02
+		poly_ nsp/3+12, 			!!OK
+			get(nsp),
+
+			-0.05, 0.09, mask15,
+			-0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs(0.05/(rr-dr2_frame-0.04))), mask79,
+			0, m2y, 900+mask79,
+			-a/4+0.04+0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs((a/4-0.04-0.05)/(rr-dr2_frame-0.04))), 3000+mask15,
+			-a/4+0.04+0.05, 0.09, mask15,
+			-0.05, 0.09, -1,
+
+			0.05, 0.09, 15,
+			0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs(0.05/(rr-dr2_frame-0.04))), 79,
+			0, m2y, 979,
+			a/4-0.04-0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs((a/4-0.04-0.05)/(rr-dr2_frame-0.04))), 3015,
+			a/4-0.04-0.05, 0.09, 15,
+			-0.05, 0.09, -1
+
+	! --- Glass
+		material gs_glass_mat
+		body -1
+
+		poly_ 6,
+			-0.05, 0.09, 1,
+			-0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs(0.05/(rr-dr2_frame-0.04))), 1,
+			0, m2y, 901,
+			-a/4+0.04+0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs((a/4-0.04-0.05)/(rr-dr2_frame-0.04))), 3001,
+			-a/4+0.04+0.05, 0.09, 1,
+			-0.05, 0.09, -1
+
+		poly_ 6,
+			0.05, 0.09, 1,
+			0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs(0.05/(rr-dr2_frame-0.04))), 1,
+			0, m2y, 901,
+			a/4-0.04-0.05, hh-rr + (rr-dr2_frame-0.04) * sin(acs((a/4-0.04-0.05)/(rr-dr2_frame-0.04))), 3001,
+			a/4-0.04-0.05, 0.09, 1,
+			-0.05, 0.09, -1
+
+		body -1
+	del 1
+endif
+
+cutend
+
+!!!**** Rahmen
+
+if iLoD3D = SYMBS_3D_D_1 | iLoD3D = SYMBS_3D_D_2 then
+	!!!**** Shleife fur 2 Seiten
+
+	for fg = 1 to 2
+
+		addz -0.05
+
+		material gs_frame_mat
+
+		prism_ 12, 0.05,	!!OK
+			-0.01, 0.05, 15,
+			-0.01, hh-rr + (rr-dr2_frame) * sin(acs(0.01/(rr-dr2_frame))), 79,
+			0, m2y, 900,
+			-a/4+0.05, hh-rr + (rr-dr2_frame) * sin(acs((a/4-0.05)/(rr-dr2_frame))), 3015,
+			-a/4+0.05, 0.05, 15,
+			-0.01, 0.05, -1,
+
+			-0.08, 0.12, 15,
+			-0.08, hh-rr + (rr-dr2_frame-0.07) * sin(acs(0.08/(rr-dr2_frame-0.07))), 79,
+			0, m2y, 900,
+			-a/4+0.07+0.05, hh-rr + (rr-dr2_frame-0.07) * sin(acs((a/4-0.07-0.05)/(rr-dr2_frame-0.07))), 3015,
+			-a/4+0.07+0.05, 0.12, 15,
+			-0.08, 0.12, -1
+
+		!!!**** Glas
+
+		addz 0.02
+
+		material gs_glass_mat
+
+		prism_ 6, 0.01,
+			-0.08, 0.12, 15,
+			-0.08, hh-rr + (rr-dr2_frame-0.07) * sin(acs(0.08/(rr-dr2_frame-0.07))), 79,
+			0, m2y, 900,
+			-a/4+0.07+0.05, hh-rr + (rr-dr2_frame-0.07) * sin(acs((a/4-0.07-0.05)/(rr-dr2_frame-0.07))), 3015,
+			-a/4+0.07+0.05, 0.12, 15,
+			-0.08, 0.12, -1
+
+		del 2
+
+		mulx -1
+
+	next fg
+
+	del 2
+endif
+
+del 3
+
+
+!**** Dachziegel
+
+if useroofmat then
+	material ac_upper_mat
+else
+	material gs_upper_mat
+endif
+
+rotx 90
+
+!****
+
+!if lod3D_DW > 1 then		! 139211 javitasa utan
+
+	wx = 270
+	for ii = 1 to 12 step 1
+		put -a/2+(rr-dr1)*cos(wx), m1y+(rr-dr1)*sin(wx), 1
+		wx = wx+ww/12
+	next ii
+
+	wx = 90+ww-ww/12
+	for ii = 1 to 23 step 1
+		put (rr+dr1)*cos(wx), m2y+(rr+dr1)*sin(wx), 1
+		wx = wx-ww/12
+	next ii
+
+	wx = 270-ww+ww/12
+	for ii = 1 to 12 step 1
+		put a/2+(rr-dr1)*cos(wx), m1y+(rr-dr1)*sin(wx), 1
+		wx = wx+ww/12
+	next ii
+
+
+	dxx = 0.08-0.025*sin(ng)
+
+	wx = 270
+	for ii = 1 to 12 step 1
+		put -a/2+(rr+dr3)*cos(wx), m1y+(rr+dr3)*sin(wx), dxx
+		wx = wx+ww/12
+	next ii
+
+	wx = 90+ww-ww/12
+	for ii = 1 to 23 step 1
+		put (rr-dr3)*cos(wx), m2y+(rr-dr3)*sin(wx), dxx
+		wx = wx-ww/12
+	next ii
+
+	wx = 270-ww+ww/12
+	for ii = 1 to 12 step 1
+		put a/2+(rr+dr3)*cos(wx), m1y+(rr+dr3)*sin(wx), dxx
+		wx = wx+ww/12
+	next ii
+
+
+	ruled (nsp/6), 16+32,
+		get (nsp)
+
+
+	wx = 270
+	for ii = 1 to 13 step 1
+		put -a/2+(rr+dr3)*cos(wx), m1y+(rr+dr3)*sin(wx), 1
+		wx = wx+ww/12
+	next ii
+
+	wx = 90+ww-ww/12
+	for ii = 1 to 24 step 1
+		put (rr-dr3)*cos(wx), m2y+(rr-dr3)*sin(wx), 1
+		wx = wx-ww/12
+	next ii
+
+	wx = 270-ww+ww/12
+	for ii = 1 to 12 step 1
+		put a/2+(rr+dr3)*cos(wx), m1y+(rr+dr3)*sin(wx), 1
+		wx = wx+ww/12
+	next ii
+
+
+	dx2 = 0.025*sin(ng)
+
+
+	wx = 270
+	for ii = 1 to 13 step 1
+		put -a/2+(rr-0.015)*cos(wx), m1y+(rr-0.015)*sin(wx), dx2
+		wx = wx+ww/12
+	next ii
+
+	wx = 90+ww-ww/12
+	for ii = 1 to 24 step 1
+		put (rr+0.015)*cos(wx), m2y+(rr+0.015)*sin(wx), dx2
+		wx = wx-ww/12
+	next ii
+
+	wx = 270-ww+ww/12
+	for ii = 1 to 12 step 1
+		put a/2+(rr-0.015)*cos(wx), m1y+(rr-0.015)*sin(wx), dx2
+		wx = wx+ww/12
+	next ii
+
+
+
+	addz dxx
+
+
+	ruled (nsp/6), 16+32,
+		get (nsp)
+
+
+	del 1
+!endif
+
+
+
+!**** Deckflache
+
+wx = 270
+put -a/2-0.5, m1y+(rr-0.015)*sin(wx), 1
+
+for ii = 1 to 13 step 1
+	put -a/2+(rr-0.015)*cos(wx), m1y+(rr-0.015)*sin(wx), 1
+	wx = wx+ww/12
+next ii
+
+wx = 90+ww-ww/12
+for ii = 1 to 24 step 1
+	put (rr+0.015)*cos(wx), m2y+(rr+0.015)*sin(wx), 1
+	wx = wx-ww/12
+next ii
+
+wx = 270-ww+ww/12
+for ii = 1 to 12 step 1
+	put a/2+(rr-0.015)*cos(wx), m1y+(rr-0.015)*sin(wx), 1
+	wx = wx+ww/12
+next ii
+
+put a/2+0.5, m1y+(rr-0.015)*sin(wx), 1
+
+127:
+
+put -a/2-0.5, yy,xx
+
+wx = 270
+for ii = 1 to 13 step 1
+	put -a/2+(rr)*cos(wx),
+yy,xx
+	wx = wx+ww/12
+next ii
+
+wx = 90+ww-ww/12
+for ii = 1 to 24 step 1
+	put (rr)*cos(wx),
+yy,xx
+	wx = wx-ww/12
+next ii
+
+wx = 270-ww+ww/12
+for ii = 1 to 12 step 1
+	put a/2+(rr)*cos(wx),
+yy,xx
+	wx = wx+ww/12
+next ii
+
+put a/2+0.5,yy,xx
+
+
+
+
+addz 0.08
+
+! Cutting/hiding contour lines of the dormer
+rotx -90
+cutpolya 4, 1, 0,
+	-a/2-1,	0,	8,
+	-a/2,	0,	8,
+	-a/2,	yy+0.08+1,	8,
+	-a/2-1,	yy+0.08+1,	8
+cutpolya 4, 1, 0,
+	a/2+1,	0,	8,
+	a/2,	0,	8,
+	a/2,	yy+0.08+1,	8,
+	a/2+1,	yy+0.08+1,	8
+del 1
+
+
+if iLoD3D > SYMBS_3D_S_1 then
+	ruled (nsp/6), 16,
+		get (nsp)
+else
+	addy 0.0002
+	ruled (nsp/6), 16,
+		use (nsp)
+	del 1
+	if useroofmat then
+		material ac_lower_mat
+	else
+		material gs_lower_mat
+	endif
+	ruled (nsp/6), 16,
+		get (nsp)
+endif
+
+
+rotx ac_roofang
+
+alpha = 2 * (ac_roofang - 45)
+
+base
+vert 0, 0, 0
+vert 1, 0, 0
+vert 0, 0, 1
+vert 0, cos(alpha), -sin(alpha)
+coor 1, -1, -2, -3, -4
+body -1
+
+cutend
+cutend
+
+del 2
+
+
+
+!**** Innenputz
+
+!if lod3D_DW > 1 then		! 139211 javitas utan
+
+	ysxx = hh-rr + (rr-dr2_frame+0.01) * sin(acs((a/4+0.01)/(rr-dr2_frame+0.01)))
+
+	iP_gap = 0.002
+
+	wx = 90+ww
+	for ii = 1 to 25 step 1
+		put (rr-dr1-iP_gap)*cos(wx), m2y+(rr-dr1-iP_gap)*sin(wx), 1
+		wx = wx-ww/12
+	next ii
+
+
+	addz -0.05
+	addy -ac_roofthk/cos(ac_roofang)+0.05*tan(ac_roofang)
+	rotx -((90-ac_roofang)+180)
+	cutplane
+	del 2
+
+
+	mulz -1
+
+	if useroofmat then
+		material ac_lower_mat
+	else
+		material gs_lower_mat
+	endif
+
+	base
+	extrude nsp/3, 0, 10*tan(ng), 10, 16+32,
+			get(nsp)
+	rotx 90-ac_roofang
+	vert 0, 0, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	vert 0, 1, 0
+	coor 2, -1, -2, -3, -4
+	body 1
+
+	del 1
+
+	if useroofmat then
+		material ac_lower_mat
+	else
+		material gs_innside_mat
+	endif
+
+	wx = 90+ww
+
+	roty 90
+
+	for ij = 1 to 2
+		addz -a/4+iP_gap
+
+		base
+
+		poly_ 6,
+			0.05, -1, 1,
+			0.05, 0, 1,
+			0, 0, 1,
+			0, m2y+(rr-dr1-iP_gap)*sin(wx), 1,
+			-10, m2y+(rr-dr1-iP_gap)*sin(wx)+10*tan(ng), 1,
+			-10, 10*tan(ng), 1
+		rotz -ac_roofang
+		vert 0, 0, 0
+		vert 0, 0, 1
+		vert 0, 1, 0
+		vert 1, 0, 0
+		coor 2, -1, -2, -3, -4
+		body 1
+
+		del 1
+
+		del 1
+		mulz -1
+	next ij
+	del 2
+	del 1
+
+	del 1
+
+	cutend
+
+!endif
+
+end
+
+
+! ==============================================================================
+! Line - Line intersection
+! ------------------------------------------------------------------------------
+! Input variables:
+!	EPS:				epsylon
+!	x11,y11, x12,y12	line #1
+!	x21,y21, x22,y22	line #2
+!
+! Returned variables:
+!	state:				0 = no intersection point
+!						1 = valid intersection point
+!	cx, cy:				intersection point
+! ==============================================================================
+
+100:
+	lliDiv = (x11-x12) * (y21-y22) - (y11-y12) * (x21-x22)
+
+	if abs(lliDiv) > EPS then
+		! Intersection
+
+		temp1 = x11 * y12 - y11 * x12
+		temp2 = x21 * y22 - y21 * x22
+
+		tempx = temp1 * (x21-x22) - (x11-x12) * temp2
+		tempy = temp1 * (y21-y22) - (y11-y12) * temp2
+
+		state = 1
+		cx = (tempx / lliDiv)
+		cy = (tempy / lliDiv)
+	else
+		! No Intersection
+		state = 0
+		cx = 0
+		cy = 0
+	endif
+return
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+
+! =============================================================================
+! GS Skylight Functions
+! =============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= bEnableLining,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+	returned_parameters	iLoD2D,
+		gs_opLinePen, gs_openedSashPen, gs_iSwingType, gs_swingLineType, gs_opline_style_m
+
+if iLoD2D = SYMBS_OFF | iLoD2D = SYMBS_S_1 then end
+
+
+! Horizontal and low Roof
+if abs(ac_roofang) < EPS | ac_roofang > 90+EPS then
+	rect2 -A/2, 0, A/2, B*COS(ac_roofang)
+
+	end
+endif
+
+
+! ==============================================================================
+! Symbolic 2D
+! ==============================================================================
+
+pen gs_cont_pen
+fill gs_fill_type
+
+hotspot2 0, 0
+hotspot2 -a/2, -0.08
+hotspot2 a/2, -0.08
+hotspot2 -a/2, ttt*cos(ac_roofang)
+hotspot2 a/2, ttt*cos(ac_roofang)
+
+hotspot2 -a/4-0.01, 0
+hotspot2 a/4+0.01, 0
+hotspot2 -a/4-0.01, ttt*cos(ac_roofang)
+hotspot2 a/4+0.01, ttt*cos(ac_roofang)
+
+rect2 -a/2, -0.08,a/2, ttt*cos(ac_roofang)
+
+if gs_back_pen<>0 then
+	mask=1+2+4+64
+else
+	mask=1+4
+endif
+
+poly2_b	5, mask, gs_fill_pen, gs_back_pen,
+	   -a/2, -0.08, 1,
+		a/2, -0.08, 1,
+		a/2, ttt*cos(ac_roofang), 1,
+	   -a/2, ttt*cos(ac_roofang), 1,
+	   -a/2, -0.08, -1
+
+line_type 4
+
+if iLoD2D = SYMBS_D_1 | iLoD2D = SYMBS_D_2 then
+	line2 -a/4-0.01, 0, a/4+0.01, 0
+	line2 -a/4-0.01, 0,
+		-a/4-0.01, ttt*cos(ac_roofang)
+	line2 a/4+0.01, 0,
+		a/4+0.01, ttt*cos(ac_roofang)
+endif
+
+
+!**** Parameter Kontrolle - Neigungen und Konstr.starke
+
+if ac_roofang >= 90 or ac_roofang <= 0 then ac_roofang = 45
+if ng >= ac_roofang then ng = ac_roofang-20
+
+if ac_roofthk < 0.025+0.05*sin(ng) then ac_roofthk = 0.025+0.05*sin(ng)
+
+
+
+km1 = 0.08*tan(ac_roofang)
+
+dr1 = (0.08-0.025*sin(ng)) * tan(ng) - 0.025 * cos(ng)
+
+dr2 = (ac_roofthk-0.025 - 0.05*sin(ng)) / cos(ng) - dr1 + 0.01
+
+dr3 = 0.025 * cos(ng)
+
+
+!**** Hauptradius und Winkel
+
+
+rr = ( ((hh+km1)/2)^2 + (a/4)^2 ) / 2 / ((hh+km1)/2)
+
+ww = 90 - acs(a/4/rr)
+
+
+ra=ac_roofang
+
+yy=hh*(tan(ra)/tan(ng))/((tan(ra)/tan(ng))-1)+0.08*tan(ra)
+xx=(yy/tan(ra)+0.08)*(-1)
+
+end
+if  a > 4*(rr-dr2) then
+	text2 0, 0, `Неправильные параметры!`
+end
+endif
+
+if hh-rr + (rr-dr2-0.07) * sin(acs((a/4-0.07)/(rr-dr2-0.07))) <= 0.12 then
+	text2 0, 0, `Неправильные параметры!`
+end
+endif
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! const values for parameter: iDWDet3D
+DETLEVEL_DW3D_SCALESENS    = 1
+DETLEVEL_DW3D_DETAILED     = 2
+DETLEVEL_DW3D_SIMPLE       = 3
+DETLEVEL_DW3D_OFF          = 4
+DETLEVEL_DW3D_CHI_SIMPLE   = 5
+DETLEVEL_DW3D_CHI_DETAILED = 6
+
+
+EPS = 0.0001
+MIN_ROOF_ANGLE = 3.0
+LENGTH_12_FEET = 12'
+LENGTH_12_INCHES = 12"
+
+! iLoD2D
+SYMBS_OFF					= 0
+SYMBS_SCALESENS				= 1
+SYMBS_S_1					= 11
+SYMBS_S_2					= 12
+SYMBS_S_3					= 13
+SYMBS_S_4					= 14
+SYMBS_S_5					= 15
+SYMBS_S_6					= 16
+SYMBS_S_7					= 17
+SYMBS_S_8					= 18
+SYMBS_S_9					= 19
+SYMBS_M_1					= 21
+SYMBS_M_2					= 22
+SYMBS_M_3					= 23
+SYMBS_M_4					= 24
+SYMBS_M_5					= 25
+SYMBS_M_6					= 26
+SYMBS_M_7					= 27
+SYMBS_M_8					= 28
+SYMBS_M_9					= 29
+SYMBS_D_1					= 31
+SYMBS_D_2					= 32
+SYMBS_D_3					= 33
+SYMBS_D_4					= 34
+SYMBS_D_5					= 35
+SYMBS_D_6					= 36
+SYMBS_D_7					= 37
+SYMBS_D_8					= 38
+SYMBS_D_9					= 39
+
+! iLoD3D
+SYMBS_3D_OFF					= 0
+SYMBS_3D_SCALESENS				= 1
+SYMBS_3D_S_1					= 11
+SYMBS_3D_S_2					= 12
+SYMBS_3D_S_3					= 13
+SYMBS_3D_S_4					= 14
+SYMBS_3D_S_5					= 15
+SYMBS_3D_S_6					= 16
+SYMBS_3D_S_7					= 17
+SYMBS_3D_S_8					= 18
+SYMBS_3D_S_9					= 19
+SYMBS_3D_M_1					= 21
+SYMBS_3D_M_2					= 22
+SYMBS_3D_M_3					= 23
+SYMBS_3D_M_4					= 24
+SYMBS_3D_M_5					= 25
+SYMBS_3D_M_6					= 26
+SYMBS_3D_M_7					= 27
+SYMBS_3D_M_8					= 28
+SYMBS_3D_M_9					= 29
+SYMBS_3D_D_1					= 31
+SYMBS_3D_D_2					= 32
+SYMBS_3D_D_3					= 33
+SYMBS_3D_D_4					= 34
+SYMBS_3D_D_5					= 35
+SYMBS_3D_D_6					= 36
+SYMBS_3D_D_7					= 37
+SYMBS_3D_D_8					= 38
+SYMBS_3D_D_9					= 39
+
+bEnableLining			= 0
+bEnableEdgeTypesUpper	= 0
+bEnableEdgeTypesLower	= 1
+
+if ac_roofang < EPS then ac_roofang = ac_roofang + 360
+if ac_roofang > 360 + EPS then ac_roofang = ac_roofang - 360
+if abs(ac_roofang - 360) < EPS then ac_roofang = 0
+
+if not(ac_skylight_function) then
+	ac_roofang = gs_roofang_deg
+else
+	gs_roofang_deg = ac_roofang
+	parameters gs_roofang_deg = gs_roofang_deg
+endif
+
+if	(ac_edge_lower_type = 0 & abs(ac_roofang - 90) < MIN_ROOF_ANGLE) | \
+	(ac_edge_lower_type = 2 & (abs(ac_roofang) < MIN_ROOF_ANGLE | abs(ac_roofang-360) < MIN_ROOF_ANGLE)) then
+	ac_edge_lower_type = 1
+	parameters ac_edge_lower_type = ac_edge_lower_type
+endif
+
+ng = gs_shedroofang_deg
+
+if ng > ac_roofang-1 then ng = ac_roofang-1
+
+if gs_cont_pen=0 then parameters gs_cont_pen=2
+hh = zzyzx
+
+pp = 0
+uu = 0
+if abs(tan(ac_roofang))>EPS and abs(tan(ng))>EPS then
+	pp = hh*(tan(ac_roofang)/tan(ng))/((tan(ac_roofang)/tan(ng))-1)+0.08*tan(ac_roofang)
+	uu = (pp/tan(ac_roofang))*(-1)
+endif
+
+ttt=sqr(pp^2+uu^2)
+
+temp=ttt
+
+parameters b=temp
+
+
+km1 = 0.08*tan(ac_roofang)
+dr1 = (0.08-0.025*sin(ng)) * tan(ng) - 0.025 * cos(ng)
+dr2 = (ac_roofthk-0.025 - 0.05*sin(ng)) / cos(ng) - dr1 + 0.01
+dr2_frame = (gs_frame_thk-0.025 - 0.05*sin(ng)) / cos(ng) - dr1 + 0.01	!!!Frame Thickness of the Window
+dr3 = 0.025 * cos(ng)
+
+
+!**** Hauptradius und Winkel
+
+
+rr = ( ((hh+km1)/2)^2 + (a/4)^2 ) / 2 / ((hh+km1)/2)
+ww = 90 - acs(a/4/rr)
+ra=ac_roofang
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[Слуховое окно овальное с зависимым от масштаба разрезом и настраиваемый навес ската крыши.]]>
+</Comment>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_UIDefault/>
+			<STBit_FixSize/>
+			<STBit_UIUseHierarchicalPages/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>-1</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Ширина"]]></Description>
+			<Fix/>
+			<Value>4</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Длина"]]></Description>
+			<Fix/>
+			<Value>2.8519100026</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Показ Узловых 2D Точек в 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Отметка Низа"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Отметка Верха"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="ac_type">
+			<Description><![CDATA["Тип Расширения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["Световой Люк"]]></Value>
+		</String>
+		<Boolean Name="ac_skylight_debug">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="ac_skylight_function">
+			<Description><![CDATA["Функция Светового Люка"]]></Description>
+			<Fix/>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="ac_roofang_slope_mode">
+			<Description><![CDATA["Единица Уклона"]]></Description>
+			<Value><![CDATA["°"]]></Value>
+		</String>
+		<Angle Name="gs_roofang_deg">
+			<Description><![CDATA["Наклон Ската"]]></Description>
+			<Value>40</Value>
+		</Angle>
+		<RealNum Name="gs_roofang_perc">
+			<Description><![CDATA["Наклон Ската"]]></Description>
+			<Value>58.3333333333</Value>
+		</RealNum>
+		<Length Name="gs_roofang_12f">
+			<Description><![CDATA["Наклон Ската"]]></Description>
+			<Value>2.1336</Value>
+		</Length>
+		<Length Name="gs_roofang_12i">
+			<Description><![CDATA["Наклон Ската"]]></Description>
+			<Value>0.1778</Value>
+		</Length>
+		<Angle Name="ac_roofang">
+			<Description><![CDATA["Угол Крыши"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>40</Value>
+		</Angle>
+		<Angle Name="gs_shedroofang_deg">
+			<Description><![CDATA["Уклон Крыши Окна"]]></Description>
+			<Value>20</Value>
+		</Angle>
+		<RealNum Name="gs_shedroofang_perc">
+			<Description><![CDATA["Уклон Крыши Окна"]]></Description>
+			<Value>36.3970234266</Value>
+		</RealNum>
+		<Length Name="gs_shedroofang_12f">
+			<Description><![CDATA["Уклон Крыши Окна"]]></Description>
+			<Value>1.33125752885</Value>
+		</Length>
+		<Length Name="gs_shedroofang_12i">
+			<Description><![CDATA["Уклон Крыши Окна"]]></Description>
+			<Value>0.110938127404</Value>
+		</Length>
+		<Length Name="ac_roofthk">
+			<Description><![CDATA["Толщина Крыши"]]></Description>
+			<Fix/>
+			<Value>0.2</Value>
+		</Length>
+		<String Name="fontType">
+			<Description><![CDATA["Тип Шрифта"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["Arial"]]></Value>
+		</String>
+		<RealNum Name="gs_fontsize">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</RealNum>
+		<Length Name="gs_frame_thk">
+			<Description><![CDATA["Толщина Коробки Окна"]]></Description>
+			<Value>0.1</Value>
+		</Length>
+
+		<!-- gs_edge_types: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_edge_types">
+			<Description><![CDATA["Угол Торца"]]></Description>
+		</Title>
+		<String Name="gs_edge_lower_type">
+			<Description><![CDATA["Торец Отлива"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Вертикальный"]]></Value>
+		</String>
+		<Integer Name="AC_edge_lower_type">
+			<Description><![CDATA["Торец Отлива"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Angle Name="AC_edge_lower_angle">
+			<Description><![CDATA["Угол Торца Отлива"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>90</Value>
+		</Angle>
+
+		<!-- AC_Custom_3D_Hole: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="AC_Custom_3D_Hole">
+			<Description><![CDATA["Осекающее Тело"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="gs_hole_edge_upper_depth">
+			<Description><![CDATA["Глубина Нижнего Отверстия"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.5</Value>
+		</Length>
+		<Length Name="gs_hole_edge_lower_depth">
+			<Description><![CDATA["Глубина Верхнего Отверстия"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.5</Value>
+		</Length>
+		<Length Name="gs_hole_outside_depth">
+			<Description><![CDATA["Глубина Наружного Отверстия"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.5</Value>
+		</Length>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D-отображение и Сечение"]]></Description>
+			<Fix/>
+		</Title>
+		<Boolean Name="AC_special_2D_symbol">
+			<Description><![CDATA["Символ Зависит от Этажа"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="AC_plane_definition">
+			<Description><![CDATA["Определение Плоскости Крыши"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="6" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+				<AVal Row="5">0</AVal>
+				<AVal Row="6">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Integer Name="AC_symb_display_option">
+			<Description><![CDATA["Показ на Плане Этажа"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Boolean Name="AC_use_symb_display_option">
+			<Description><![CDATA["Использовать Показ на Плане Этажа"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="AC_symb_show_projection_to">
+			<Description><![CDATA["Показать Проекцию"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Boolean Name="gs_use_3D_view_attributes">
+			<Description><![CDATA["Использовать Реквизиты 3D-вида"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Перо Контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Тип Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Перо Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>103</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Перо Фона Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<LineType Name="AC_cut_linetype">
+			<Description><![CDATA["Линии Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="AC_uncut_pen">
+			<Description><![CDATA["Перо Линии Видимого Контура"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<LineType Name="AC_overhead_linetype">
+			<Description><![CDATA["Линии Проекции"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>21</Value>
+		</LineType>
+		<PenColor Name="AC_overhead_pen">
+			<Description><![CDATA["Перо Линии Проекции"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</PenColor>
+
+		<!-- gs_detail_level: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_detail_level">
+			<Description><![CDATA["Уровень Детализации"]]></Description>
+		</Title>
+		<String Name="gs_detlevel_2D">
+			<Description><![CDATA["2D-детализация"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["по ПМВ"]]></Value>
+		</String>
+		<Integer Name="gs_detlevel_2D_m">
+			<Description><![CDATA["2D-детализация"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>100</Value>
+		</Integer>
+		<String Name="gs_detlevel_3D">
+			<Description><![CDATA["3D-детализация"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Детальный"]]></Value>
+		</String>
+		<Integer Name="iDWDet3D">
+			<Description><![CDATA["3D-детализация"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Integer Name="gs_detlevel_3D_m">
+			<Description><![CDATA["3D-детализация"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="gs_detlevel_SE">
+			<Description><![CDATA["Разрез / Фасад"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["по ПМВ"]]></Value>
+		</String>
+		<Integer Name="gs_detlevel_SE_m">
+			<Description><![CDATA["Разрез / Фасад"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>100</Value>
+		</Integer>
+
+		<!-- gs_roof_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_roof_material">
+			<Description><![CDATA["Покрытия Крыши"]]></Description>
+			<Fix/>
+		</Title>
+		<Material Name="ac_upper_mat">
+			<Description><![CDATA["Верхняя Поверхность Крыши"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>36</Value>
+		</Material>
+		<Material Name="ac_lower_mat">
+			<Description><![CDATA["Нижняя Поверхность Крыши"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>77</Value>
+		</Material>
+		<Material Name="ac_side_mat">
+			<Description><![CDATA["Поверхность Крыши"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>77</Value>
+		</Material>
+
+		<!-- gs_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_material">
+			<Description><![CDATA["Покрытия"]]></Description>
+		</Title>
+		<Boolean Name="useroofmat">
+			<Description><![CDATA["Использовать Покрытия Крыши/Оболочки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Material Name="gs_innside_mat">
+			<Description><![CDATA["Боковая Стена Внутри"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>18</Value>
+		</Material>
+		<Material Name="gs_frame_mat">
+			<Description><![CDATA["Коробка Окна"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>15</Value>
+		</Material>
+		<Material Name="gs_glass_mat">
+			<Description><![CDATA["Стекло"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>24</Value>
+		</Material>
+		<Material Name="gs_upper_mat">
+			<Description><![CDATA["Крыша Слухового Окна Снаружи"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>36</Value>
+		</Material>
+		<Material Name="gs_lower_mat">
+			<Description><![CDATA["Крыша Слухового Окна Внутри"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>18</Value>
+		</Material>
+		<String Name="ifc_optypestr">
+			<Description><![CDATA["Операция IFC"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["Не определена"]]></Value>
+		</String>
+		<Integer Name="ifc_optype">
+			<Description><![CDATA["Операция IFC"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="gs_ui_current_page">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="gs_marker_text_dist">
+			<Description><![CDATA["Расстояние Текста Маркера"]]></Description>
+			<Value>0.05</Value>
+		</Length>
+
+		<!-- gs_list: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_list">
+			<Description><![CDATA["Параметры Спецификаций"]]></Description>
+			<Fix/>
+		</Title>
+		<RealNum Name="gs_list_cost">
+			<Description><![CDATA["Цена"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_manufacturer">
+			<Description><![CDATA["Производитель"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_note">
+			<Description><![CDATA["Примечания"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_location">
+			<Description><![CDATA["Расположение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_accessories">
+			<Description><![CDATA["Аксессуары"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_glazing">
+			<Description><![CDATA["Остекление"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_headdet">
+			<Description><![CDATA["Данные о Перемычке"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_jambdet">
+			<Description><![CDATA["Данные об Откосах"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_silldet">
+			<Description><![CDATA["Деталь Отлива"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_hwsetno">
+			<Description><![CDATA["Фурнитура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_optype">
+			<Description><![CDATA["Тип Операции"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_finish">
+			<Description><![CDATA["Отделка"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_elevation">
+			<Description><![CDATA["Возвышение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_hings">
+			<Description><![CDATA["Петли"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_lockset">
+			<Description><![CDATA["Запорное Устройство"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="gs_list_glassarea_tmp">
+			<Description><![CDATA["Общая Площадь Остекления"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<Boolean Name="gs_list_glassarea_override">
+			<Description><![CDATA["Коррекция Площади Остекления"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<RealNum Name="gs_list_glassarea">
+			<Description><![CDATA["Общая Площадь Остекления"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="gs_list_glassperimeter">
+			<Description><![CDATA["Общий Периметр Остекления"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_heattransfer">
+			<Description><![CDATA["U-значение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_firerating">
+			<Description><![CDATA["Огнестойкость"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_ventilation">
+			<Description><![CDATA["Вентиляция"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_acousticrating">
+			<Description><![CDATA["Шумозащита"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_Type">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Другой"]]></Value>
+		</String>
+		<Integer Name="iFMType">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>25</Value>
+		</Integer>
+		<String Name="FM_InventoryNumber">
+			<Description><![CDATA["Инвентарный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_SerialNumber">
+			<Description><![CDATA["Серийный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductionYear">
+			<Description><![CDATA["Год Производства"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ObjectWeight">
+			<Description><![CDATA["Вес Изделия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ObjectWeightUnit">
+			<Description><![CDATA["Единица Веса"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["кг"]]></Value>
+		</String>
+		<String Name="gs_list_custom1">
+			<Description><![CDATA["Пользовательское Значение 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom2">
+			<Description><![CDATA["Пользовательское Значение 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom3">
+			<Description><![CDATA["Пользовательское Значение 3"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom4">
+			<Description><![CDATA["Пользовательское Значение 4"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom5">
+			<Description><![CDATA["Пользовательское Значение 5"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="13810" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000800000
+	008008020000004C5CF69C000000097048597300002E2300002E230178A53F76
+	000020004944415478DAECBCD7AFEDD9712656552BFDD24E27DD73430736C96E
+	4AE4285023582303031BF06030F00C60BF187EF4BB5FFCE2FFC27F836DC0B065
+	0C208F608F929548256A462225B5C8A6C4D4CD4E379D7376FC8515AACA0FFBDC
+	EEA6A4D150624B1ADB773D6CEC70CE06767D15BEFAD6AA85AA0ACFD7DFDFA2E7
+	26780EC073009EAFE7003C07E0F97A0EC073009EAFE7003C07E0F97A0EC07300
+	9EAFE7003C07E0F97A0EC073009EAFE700FC7F7ED9E726F83B5E1FDD0143447C
+	BE23F67159F36FF6F7CF23E0EF1992E711F0B765FDBFDAB01F7CFA1C80BFDD08
+	505544FC77E1A1AACF01F8BB4E44C78F8ED5F739007FCF303CEF03FE76D731F9
+	FC15D657D5E7003CEF03FE7F998B9EB3A0FF5060780EC0DF3306CF6BC0DFA9F5
+	11F1CF55E6E711F0B7EEEC08A01F79EBC397CF8BF07F08203D17E33E9E252208
+	C0C208282222A2C2AA804400507256919C331902C0921333B7B379379BD9FFD7
+	BB900A92116615115555656654656666166163AD8AA86A4E09008C3129C51C13
+	0020999263CA39C78988405455FA613080C65963CC61BF4B5302E166BE98867E
+	7D7393E3345B2C9AD9FCBDB7DE04D194A294BC3CBF73F5F0BDC292C6C36C754E
+	04378FDE130654EE5627268427DFFA46CC398FFDE98317BD778FBEF5F5CD4DFF
+	5FFE77FFFD7FF24FFFD9C70CC078388CC310AA8A85C7BE0755E652B7B3C36E93
+	A63117AEAA8A45A6619052628CF39393CDD5931413C7D8CC675278BFDDB0AA45
+	22634A4E2946E012EA5A85534A99D9212220021C861E001A67004D8C71B3DBB5
+	B52734C06518FA31A5DABBE03D003CBEBA6942A81D191F86A13F0CA53250070F
+	06A7B18CB978C2262020AD77539CE29DB30EC910C1D57AABCCCB26009A74D85C
+	F71C53BE7BDE8E91350EEB43F24616ADBF411FC7DD683A5B0EB19E3B87258E32
+	BB43C3763C3CD15274BBD5EE6261C46E9F28998BD3D5F2DE4BDEBB8F39051D36
+	EBFFE1BFFD6F0E8F0E9FFAC91F9138BCF5D56F81857983272F7EF2E157BF1901
+	2A4B27F75725A6FD3435B5AFA984D5BDCDE3F70FA3CC9C35819C81DD645D552F
+	2A1011213790DC592CBDB339F32E656FCCBC6B116037C4B1A4B393D354B97118
+	1FAFB7C1B7B55402304C793FC65957071F10747DE813EB69F0CEDA699A26466B
+	B1ED3A4B108B8C1A8DA379DB1AD424D2976D376FAAB6F3D64C799A1856B379A8
+	5CBF3FD87AA679689B0AAD6D50A37106FAC67B6B8C4A71ED82DDDC737004162D
+	7B82AA8578B0C64A016AE7CB07F7E33BDFA463605A473E781FE0E3DD9079FD77
+	BF78BA5C5CCE3AB77B38C5FCCA3FFC315D3F0C06745C3FF8914F25E69533A54C
+	63F0B3175FA94A6F05C638362777EC342D672D296CC7C97A58CDDAC6BB587893
+	A4F16E369FB3D24DDC46305D3B2B64C718379967759B19A6FDA400D65555ED6F
+	F693710684676D00C07E1A0929155E36E1304C29E5B6A92A6F5068BB1F584A55
+	7952B048EB7D6F08008C01B244D7DB1D21A59CB224D5667F38A47152C4DD6E7B
+	DAD58C1E8173CCE361F095B8DA00C09478C807D558B58D826666105666001553
+	4A4233C69C121B524406345C8CB51F270069ECBFFDD5D749D55A4DFD088BCB52
+	269DB6D57C99D88AAB70BC66EB73E64351BABEB21596C287313DBAD95D2E3B4B
+	38E4B41E2754D2B61E86B82D1C4B69827D74B363551FFCDCC266BDAEDA66D1D4
+	B3CAC69C77DBF5723EF7C6CE67F67AE855645955DED4532987CC46A0F6689D8D
+	B91CF687AEAA6B6F0D613FC4318EABB66E82EF2C45D6DD7A3B6FDBCADB7AD128
+	C293F5BEAA8343B36A9A34C57E1C1520A7C22053620345B90880822002886696
+	94529114E6B50208472548879D5701911233D633542D59D80A1060ED55F4C842
+	3F3600BEF6FBFFE6C95BDFA9212398299576BE3CBCFF66D3CC62CADACE394EB5
+	2750180BC7C273272066ECA79B7E08C15B67C65236C33471399F2D9E6E768BF9
+	6A35AB8CA5F56E6F9DBB582C0DC17ADF2BC0DC398FB0DB8F4FB6DB3A5425E5AC
+	D33E9529CBA26BFA9C63E1CD6100838BAADAF59368196311C402BAD9EDBD7737
+	87519833C8300DAA74982661260590022C7D8C299779532F6A5F84F7E3544A99
+	555ED1366E89C0DB248659102A5F45857148A5140100A231F138652410DF9498
+	90A5C75C72325D5D4412A7A8364F25B4C0B938EF3FC608D037FFF40D23C97B13
+	FB8339BD48C38152EFBAD329A5C8E4F258CD9B7E180F91E37890F9EA6A334CE3
+	90D0CEAB6A2267189BAA9AB795281575CBCABA601FAF3739C9E97C61509FAE77
+	D78771D974EBC3DE90CD5982F52C7ABD3F2C675D57DB5943B144118BDEACE6F5
+	14CBF6D0076F6A17021AAEC2E6D03B84CAB979E5ACA9F77DBFE67CBE3C5160EF
+	FC58CAFE307917B643CC2C31C641392B0CFD94A68875A82B8700A27CD36F4FBA
+	E08C239471E29B3E555565A990F5CA309654794B3979C2C2B28D711A5243372A
+	0040D743811C574B4871EFC3C75703DEF8CA1F7CE78D3F92526E8472123F0B65
+	BF63B0FD7E34C6A4715D39B37E74E3097349B3B63B4C314FD3AA9B5FCEDA1227
+	0C66D1D5D6DAED6EF7FED5F66C3E1384F566D8EDA7AAF559F5FDAB6DB074D135
+	C39414E1EC64E61BD98FD32E96F3E5BC09BE947275388840ED8301C8A96CF787
+	9862E7970802CA877E4AE3B058AEA0E4D69BC8DC8FC37CD6351E2A53ABDA8737
+	6B06682D11405755BB29A524D6D321272210D1543259B3EFA79C273275DD782E
+	0C53622E4DD5CE5C70DE8F7162B5AD75CE5B00604BFB31366D132005E733559B
+	0CD5ACA9F2B625E39DFBD800F8E35FFDC599C4C1521FF36C36AFA4C7201BF6D6
+	B859657D0B91FCE170580483B52B42EFEFAECEE6DDC97C3E320FCA46B5648E91
+	1F3ED9AAA182E61099092ECF974A76EA0FCB5079C227FB7E62BE383B31060E63
+	BC1AA3372673B9DE265105C0606C3FA6C219040074D57687546448DEDB514AA8
+	FC24B9F281196EB60705F09652CCC6603FC5C37E385B767565CFA012A4F17A4A
+	928CAD08A918139901D188C6124B2E225072CEAC82088698192CA5CCFD18A761
+	320DAD3C1596C290586A472138295C58FCEC4C4B2488D6578AF8F100F0C6EF7E
+	E1F0F5DF59DCFB8466ADA743172A02398C494B5A759D4360829BEDB6B1C65155
+	787CBAD99422CE62E47CE8473526B830A6B4DEF74074329B59E797B39A100E87
+	3EA5446032E87E2C03C07C311F533EF463D7D4A77500C5DDA16F4275326F0C99
+	DD70585F6F17A1692A47D6A794C73185E03A6F1ADBB2C0CD308AE2ACF14D6D3B
+	F431977ECAC1DAC330A0416B29A5E282DF1D06E65C55CEE6745259247FB5E97B
+	C2CADA298BB596155366B4662AD91A4F6804310B97224084524A319939671100
+	111165010163EBF9ECF0E846BD352E10927E2C6AE89FFEE62FFBF9695FC8B886
+	8A3A8229F193ED0E04BC2134B4EDC7F13004EF731AA75236DB61D1540E6D624E
+	C631997E2A532ACBB679E9F254411A671074BBDB4F80E86C54D8C7325B349FB8
+	3CAB9C9DFA7E16EA001AC8ACFB5E59822511394CD3E3EB1DB390C5C4E530A5A7
+	87B1300732252511EDD3384DA325762ACBA66A0C01404AC98206E74E165D065A
+	8FFD90CA980B00A00259135CAD00060425371E1B6783F3FB981FDDEC6EFAD4A7
+	02C692A5CCCAE9D856270512662352B48CC38000CCC002894580000009D05863
+	0DFEE011F09D3FFEF2CD775E37F30B6CE679BF0E24D394C6294E535A9D2CA69C
+	1460DB8F755519E158CA6ECC68099D5D17113075E511211599D74D5DD9EBC3A0
+	0842F8743FCEE7B353676F76FBC8F9F2ECD420F47D7C74B3EE9A3696940A8021
+	EB7CD735BB94038045336FBC80D9A618D00467BD31CED04DDF43C95DD7F51323
+	1802137311D12CB2DDEC9A1010645159636937E5714ADE87694AD607565180C8
+	5100138B8258D0D379EB811EEF7B36148C8150913163CCDB52886154C885522A
+	A4000085C19015150650224030DE396311845C30F6E3A8017FF6A52FBAAA55D7
+	50A8F4FDB569AA694C37432424EB5C2A9C0486389D2D5737BB419DDB4FD372DE
+	4D428BE0565D0BA8D787C11B6B2CACFBCC404D1DA2F26216E6C10E63BADAECBB
+	A6BED91E9C35AA7AB26893C830C53BE767DEE1A2E8F57EEF4A69AA852142179E
+	6E772A329FCF88B069ABED1887713C9F77AD21F2062A3BC67213C759E5A34061
+	40501065E5C4B8DF1F0C7385F4E0A413A2EBF57E332523C58730A6A9F256C118
+	A0C4994B3204F3DAB9C6890BC3B0DD4D6841BDF5932900F2F450AC258B940046
+	86433FA9500894D6370A74F578733157EBEC0F2A453C7AFBBB7FF4855F6816AB
+	30F3F1FAC976BFDF0C1951F68761DE55EF5FED9AAE72D69CAD56AA9452BADB35
+	2717AB91258B9CCC1A60D9F57D2E008E377D6ADBD022311A127068369BFDF5AE
+	F7CE492E99E3E99D334BB44B79D8EECF4E97081AC7BC1EC6BE1F676D338C63C9
+	DC4FE9304D275D37A56C9DCDA56C87D10278851CC7604C12381CB62EB8AE0AB6
+	E4FAA41B277EDA8F15A8F56118A6C57C2652D0924533AFFCA3CD81094B962240
+	4A00100B73D1CC4200CAAC1601386531A89D773E9829724AD39065E1AB451DB2
+	2165DEC7C9597F326FFA7157CDFC55F4755311991F7447EC777EE15F5F5F2500
+	375C3DE4ABC784D6229C56FE95F3F9B2A9EBB67A70E7FCCEBCBE9877B1EFE76D
+	D5D49577F566BF6FAA8A59F743BF8FAC48FB7E5F57EEA4AEA622FB71426B367D
+	64D13BCBC5BC327DDFAF666D4AF950CAA3EBB5756E7318DE7D7C3D4CB97276D1
+	36A9944D3F903375EB2F961D926E73EE731972CE69AA9CDD4DD36E98F67DDA8E
+	634CB9B59E9967956FBD054DFD6E4DC6C652000D80C953CAA5A49C8718531A4E
+	1A5759385DCE32421F994B14C0948BB3965518601CE234C55CC05824E71020C6
+	A202468BB5F674517BEFACF54D1D2AE797B3CE146E9B59379B5B6B7EA0141477
+	9B475FFDFD573FF3C2B2ED80E3CD261790BBAB19012BD0C3DD61B95C5A9122BA
+	DD1D621AEEACCEC5D9ED38585F05EFFB719A0A346D350D43F0F5ACAEAFFA5141
+	E66DCB5C6616AD71FB981F5DEF674DBBEDA37132EFAA07A7AB43DFDFDCF477EE
+	9CCE8247D4BDF0A64FB3DAB7969C757DCC3787C120768EC8C0DCCEA7CCEB6194
+	94679D495CBC770292722184A4348EB10975E31D10AC9AB01BE2F5D02F70EE1D
+	47151030BEEA0ABBA61A1DDD4CE566D72FE66D2EE2AA5A004A2E298B1220482E
+	8C0808A5B094242548D17218301719B934E2C67142D52965B633320EE90703E0
+	0F7FEB0B53BFAFE78D488A49AEA2CC2AEF4023EB769AF6315D380320A9C093C3
+	7ED6752104B46E3F1CAAA6D98CA9947231F352E02AC6F393D9584055CF67DD3E
+	95711A8B3AB49472B9B39A17E654CAB26E1D4266BCDEF6557006F1302545584F
+	190C3963622987711A7319535AB5015573660648A508E7D3E5ACAD435B1281E9
+	05FA31FA52104C1FE3C5EA44549C00596B2D289794F334712CB9AA3CAB108992
+	71D601EF1A6F6BE3DAA62A00D7BB8337DE194C59BC010442D09C2116561130D6
+	58CBC22232EE8764C8846008C03AAA02AB10D10F5003B8FCE9577E9F880C481C
+	E2F5103343B0AE2F3917D88FD3BC6BBCB14A125518C47BD7671DC66DD776C1DB
+	98D372DED5DE7DFBFA5168BABA72F39AD8379B613A8C198122E413DF9ECCEA6D
+	3FEEC638AFEB31E689CD104B33AB2B1F6EF6635D076BA8AB5CC9F8743F58044F
+	2631076F32C3551CACB1A8BA8DD1572154BE2807E70B200C83B2D44D48CC4D5D
+	0B402EACC0A4D0F753B0CE5B6D2B77336ACEA514F5AA0525269EE274325BCC2A
+	B76A5662ED77FB7EE234198AB9A0F187311B05550132D6A3355611D1B81207B2
+	0400A8A24599516A638C25A2BF7904BCFE7BBF73F3EEB7E75D4584431E0786D6
+	8333C42A4535319C56F5763FA881C7EB7D857E28000117C1B455D88E2301A9E4
+	ABCD687D385DCEEAAA1A8AC62935C6DBC6ECC7A9F10189FAC89B71E8BAD9FE70
+	B0D69D3661DEF898CA7618EB60565D6D545294C77D2A719A775D1BBCB28A81F5
+	38658579130021A278EB471652CE5AD4F87E4ADE1A0BE09D99CDDB51F0E97617
+	AC5DCC7CC9D9FA00CCAEA92FBCCF393FDE8EC1488B0804682D1A4A45AC274068
+	0CA9715D63099A587418C64D4CC8C20045749FD2B0158756411440148698258B
+	F156014D083F901CFDC61FFC1E0088C27E2C87291DA674D636BB310BC06E1CC8
+	57432AFB613C9D7517B3608D1BA678D6D69E60C871CA4C4A5386BAF5B5601FA3
+	0DF5FA66B3AA7DD734EF5CAD8BCA7E8C41A06BC2DD6EBE1F274B7C3A5B7A4BA9
+	94EBFD21155E3A3F8D53611E63DE0DA9362610945C44784C308CD3A26D1A6BAC
+	B58B2A6C87F874B7E7CCB3A6CE691CA7DC762E336BE2D639644666DB3687C493
+	C23258E02248C042480472885C784252C9E25DE5508AF034CA982634B2A86D15
+	9C03368D5380CE02318C2589C094D328695655B5AFC69486282252A997EB272F
+	FB1F3B9E4EF99B00F0FAEFFEE657BFF0CB8B8B8B77AF7706845416CE2299DDD8
+	AFE6CBBB8DEB9AF666DF9FD6EEACF355B578B85E2359045043BBCD948A5A634E
+	EAE051AF630ABEEEB7BB16D4203EDA1F008D536182655739C4AB437FD30FF3AE
+	1B523C2416B40AD8D461C8BA19FB591532701D9C55584FC95B679D398C230279
+	82384EC9A020A59439A56557378E762356951B384304043E1833A6A8086D152C
+	EAAC5A1D46666050C879CA4C52B233D61064411661802C4C4429A7C4D23AE012
+	A30800F4634E3981F7C1586B2896324EE9B46B964D404403FADE7A9F73396BEA
+	B8BD9A578E45ECDF0C80377EE9673FF3C2E50846633E5BB41EB509FEE17EB26E
+	76B96849F398E5D0F717AB3363ED5864DB0F67CBA5B3B4D91FC6AC9D37755D01
+	C0B6E8C9623E0EFD388D6A3C082C9A2A61BADEF4DD6CB6EF47564D00A727AB69
+	1A6E0EE3C96CBE5AD4259871CA9BF566D68465156A5426DEA7342605C9C17A17
+	AC111D228F90BD3580E630450208CE18C255EDE79ED643BE1AA6DA626B6CCA62
+	9D01504778DACD828B8FAEE2BA9F5A02669E62AA2BBB6883F11E4B9E0AEF0EBB
+	93E5AA30B08002E4A950650420A5C25C082A016180C2920054010151612AA20A
+	0A640D3847BEAE5515E0AF7F3AFAEBBFF51BC39B5FF3CDEC7AB30BC1CCBABA0A
+	619FF87AB36B7CC592A3E8D3CD4E012A4F31EB767FB02638EF1FAEB731CBFD45
+	132C46298C7AFF6C5972DEED23B9C606B3EC02003EDC6CC26CB639F4BB719875
+	B3FB27AB4070B33BB4A1EE821D0FFB69181EDFAC0BABB1B69F0650998A0C910D
+	406B4D67ED655B2F6A2F2AD7876917CB54B84F628307012E5A528A0CCA49F3E4
+	0832731FA3B5D620B2F09825585A34F67ABBBD190B1AF48E44A5A8386BEE9F2D
+	5A87DB29DD0C694A91014440E0A8F328821880224580804401B4E4C2A56856D5
+	C2ECBC0F4D6558879E892C28A8FCF559D01BBFF6F3667E72B5DB669655085C18
+	01363191A1BAF2254F19CCBA3FBC78790F546232EBDDD686EEF1CDA1B566D554
+	59391B07C6CCEAD934E65C60BE9803C7CA87A968DF0F779667512624B87F7E66
+	3D1E86FEED478F55C462BCBED9C5691AA7F2EEF57431773B987650C8FAA294B8
+	9CCE97A1F69113A7128BC434359E96C17AEFEBCAF7C37873186BE39C4506D9C5
+	14BC6F42A8BCD79201ED30C52658164D3165010732ABC3761C8108119C753965
+	6560E593B6A90DEC6359B5DD984A9C520736101CF14020342811D41000200217
+	101400C902CA921044B2719E0CC15F774BF2ADD7BFF2F48D2F772FBEBCBFDA18
+	A2265855CD0AEBCDFE7239879CC098FD2E12D054D26EC86AEC62BE929253E165
+	DD8A72424B04DE602C0944164DFD7073635DD8F5C3C96C7EFF62B51FC7F7DEDB
+	9C9ECE76FD7AFFCE3A8ED3BB8F7B2092ADAB020260CCD276562C943C95C8691A
+	52815DC9FE4EC1C9BBBA066B8A706698374E5589A803B1DEDDF4F97A1AEA2A18
+	4415F0BE024002B998B551E99DF5E6E0C3A5F1AA3C4EC91A6A6B4F16B60793E3
+	01C8E49C43E50ED77D4AA5F56EE5BD0B6EA77293E1AA1F2A822C628D9D4AC945
+	3C02A1653006444501B2B08C29792205CF42C63B445491BF1E005FFDF55F72B3
+	667B88FD30DD3D3B212011B9D9476309C95C0F8371D5D56EBB982FD687615687
+	7BABAE1479E7FA7ADECD58855D58D6E166BF67F0C1A223BAEA0FD6F9691A664D
+	B35C34BB71FCEE7B6FBFFDF6F5B4BB31A259A038BAF3F2A2AE2A6B8C73D61873
+	16BC7756014A4925323367E618F3F1B40BECA714F3A12858BA585D56C14AC963
+	2C9921A5DC54C13B930B3BEF8D010548A984BAD62CAE2406BA391C3CC218C779
+	D30A994508DED05B8F0E5366075CC48B14EB2C001144C4E010029479D32D6A2B
+	B6DA6C0F91CBB61F6A6FBD2B20324C12A701498C21144082C2322631CE21A0FE
+	B58AF0A3EFBEF5E55FFE95934FDC5D6FB668A92FBCBFD939E737876DDBB68FD7
+	7BF2F6D2D10BCB164D65994F8223B4FBCD8D31D63B5FAC5DB6CDCD669332B733
+	1BAC1D4AB9582D36DBEDA12424FFE4BDB7D74F9F3E5A17F5C62CDAB60B75A8EA
+	A66AEB2A048F00888080887A3C12478654404011401458781A73DFF7433FBA3E
+	AEAFB7570F9F9C2C3AF0D687761CF398275F85CAC03C841C7CCF1C0172C9587C
+	2C3CC674DAB590D204264EE2171E14622ECEDB7BCBF9F5D0734AE7679532D8CA
+	5963664D9BC04C9B9292189AFC6C5135BEC6663FA552CA3CF8E0C90194023B2E
+	712CB3CA962239C240F4FE08421609E9AF05C0177FFEE736059662BCB55DD76E
+	8791902E6A773EBBE0A28FD3F6F264DE19283A7FF3F17530E04360C07D89BEAE
+	6F727EA15A264E60CCD25B63693DC4CBD325687EF3ED778D14D9AD0B88787FF7
+	93F393D5B26DAAE0BDB1042CACA2CA394BE132A55C0577B29823E87B8FAFA629
+	9D2C67C7B6C620CDDA6A3E6F988585873E5E5D6D6E1E3EB50255356CC652B755
+	557B5000346D6B1CC3E3CD9AB3861A324F48200C8DA5AAA90FE34101554441A5
+	1405305C06963EE789CBCA0472C068508D8214413450C0B082284F2909973ACC
+	5A6F67210C31866439A4B9F5C65061890C29F48EE87832FAFB0520ED36DFFDCD
+	7FFDEA27EF2C5B30ED62641847B87FBAAA2D58EFBFF3DE431570045965DD1705
+	E99A4EC9EE763BB041D19E2D1AD2328D93471B99B6EBEDC9EA24F2F4A77FF667
+	DF7EFFFA62D5D0ACED96B3C57CD6D5C179A3A2CC3C8EB1B024B6502D5CB38230
+	279EE6E52D2240B4C1872D2FF39DCF3BCCFDB8D5E95A87B523F1DE1A32CB7933
+	9FB7772E579BEBDDE66673F370825D5A7CB20EB3364DCA898B14C8D9BA7A1F79
+	3A44EF8E79DB1299974E4F2674C33835DEC6CCB9F030A6B3D52C000CDE17A061
+	9C12BABA3128020468AC32979299A5000011331786CA39001AA7E41C1943D610
+	A950DD9D5F26630C2189F2F70BC0977EF9E7E33E5F5EFADA9AA9F0F5B637CEBA
+	604A29FB7EB8DE1F2ECF2FB8885A33A63154B575EEC9B607E17BAB2E01196BD2
+	30D5A1DA1705515BB7FBC3F5E3371FAFB7D3BD078BFBF7CFCE568B2A78630DE7
+	324E718ACC7E65572F75270F56B395ADDAAAAA7CA8D6EF7F2B3C7C87C812625D
+	F9CA9C9C7FE273CE0711C969E2E950866DDCBC3F6DDF3171ED9D699B6AD636E7
+	97A7ABCBEDC3B79FEC1F5F35C0BEAD93F86948FD349DD44D30321942A81080AC
+	53046F0809BFBB1E4E9A8004A2C25298B96EDD03DB329877AFF7C2655E788A99
+	000D9182945C14004408C91AB0D68E9215000DB5DE3A6F95A170CA68C0CFAC73
+	8800DF6F04A87CF5B77F7D7EFFCCA266D6CD216DE3F4C2FC840B03C076DF5BF2
+	8DF72CCA02AC4CE0DEBFE9CF56DDE96C9EB9A4C42E1607548C9D913C9A641EAA
+	A7EFFCD975D1B397CEEF9C9FCCBB0A08734CC3348D99DCF967E6AF7EAA9E5FD4
+	6D6BAD45442E22C2226209080D1112222059732C088C803E5454B77872A9F73F
+	35F543DE3F1E1F7FB3ACBFD504E38CB97FE7F474357FF4FED3A7EF3C5DC6895D
+	DBA78C40C050057A70BADA8E25954488CA9A154B4E3A8D5B80B622611101638C
+	E4EC0C386B4EAA7AD38FBB6110420A1E04D298AD07222D0AA2C02A89458522C7
+	9213579615D020184222F2C17A0FDFBF14F1955FFFBF77578F4E66B32292321F
+	D258075F87400839CBFA70589EAC0468641EA6D8D49D4AF2737FF7F424A7B89B
+	B888068F05B0ABC3DB4FB66FBDF167AB85C94DB8FBE0E4CED922F85072EE638C
+	ECFCBD9FBC73EFD3B3D599B54E84558499F57B26AA1010418FC3268C80440448
+	C7B11F11460000ACDAB6997DAABD7879DCFEF8F8E49BF9D11FD71EBCB52FBE78
+	BF99358FBFF3DE70F5F46A2ACB8B3919453295F7D6D827071E33D75689805973
+	9EBCF3C3A81605800D9A980BA851D02965E7EC892187554F6EB7DF6F87D274BE
+	3616000889908E2302029481A65C1C80B1C44089059DB1D6C2F77F2CE58F7EFB
+	379CAF8211476E3BC57D4CF72FCE45741FF3CD6154B4BE5DBEF7F4F1E962FED2
+	7286488F9F8ECB6EC90A875814A00B75C9E9139F79EDC97EF8DAEBBF37029F9C
+	9CBC7CF77431AB0960D7F7532CEEF2272E5EFAECFCF49CD08830735105223A8A
+	E6FA91D166042022500685E3F94AC267E356080804A0A27AEC10BBD59D7675D1
+	5FBC3ABCFF35B97ABD0AD5D9C9B20EE1E1A3A7577FFAB8BF39CC4205B62900C2
+	D25A7B3D8EA3F0D9C9C99027226B48964DB5494C2E586BB04C0258E214A7831A
+	9F8C0F64CF5BDF9AF67A8C910B89A422C6D26648DE7BE1898CAF02358E10A0B0
+	281022900DD6B9EF578C7BFD77BEF89D7FFBFBE7F72F7613438CEBC3E8AB6AC8
+	F074BFAFAC5549F7CE56CEC0E56276FFCE191A7CF4E4A912556DD50F5392BCF0
+	6113FB4FFC83CF7FEBF1D33FF88D2F26E21F7AEDDE4B0FCE9A2AA4C2BB3126B3
+	5CFEC83F3EBFFF8AB5A69422C048080A44C7692A05D0E33304053CCA2B4A6891
+	0C2A822A7CF02900801CFB4F4050056656D57675D62CFEF1E1E9CBFD9BBFE3D2
+	A6A9AB175FB8E742F8F257DE7CF2CD77EE9EED7EE8E5978B32AB428A7B86B940
+	3F4E406091BC73A7CE1868B392294CE8626616204720A01E593478E7262684B3
+	AE5E194A71ECC7F268BB23D1596B53917D290C0200CED9C2FB265447C7FABE00
+	F8D59FF99FEB85DB8FE338A426F845E72FCECF865C48F9ACAD6ADB14F2EF3DBD
+	BA73714E44432CDBC3D8CDE68721E769B8B79A5DF571767AE79BEFBEF7A52FFE
+	F6D969F8CC4B0FEEDD39AD4218A7619C8A9EFFF8DD4F7D7EB95889726139EE51
+	DC4EB61D0D8A88800A820440789B81589480001444555455E1987B408EFF2AB7
+	68202220300B2ACC2F5FF1F38BE1EDAF94ABD72DE1BD3BA7FEA7CC1F7EF9CDF7
+	1FAFBBCADFBDB8CB9CA79896F376C8854508BD213A6EACDC99B737919F6C0E97
+	67957016018704204A36154939F7D3C13BCF2A9D734CB5C358101A82DA10878A
+	59A2C2764A4EC9C40199F118D9FF5E00BEFE9BBFD65DBD7579FF95A7375727A7
+	B38573DD49A7E4AEB6DBDABA365834F6E9AE27170C61CA65B3DEA4C263CA98FA
+	BBCB655FA4907BFA09E210210000158E49444154E8FDEF7CEBBB6D6D5E79F9F2
+	EC6451577EB7DF8F49EB4FFDA7773FF923C638960247CD0504F0D6A90108F098
+	65E0E8FAF0CCCC8AA8709C383CDE3902DF031C1C93D3ED6B5444025060CEBE6E
+	FCABFFF1BE3D99BEFD6BDEDBCBB3D39FF887F8877FF0D6E16677E5BC314641DA
+	A60D7598FAA0260A8028E458EA2AD4A618479BC4948B5A6B9D052970FC626106
+	0B4080040A528AB0C429354DE58CADAD00B8F5183B4797AB5699EAD39577FE18
+	01FF1E35F46BBFFCAFBAB3BBEBCD2616B24864681CCBBA3FE498BBA6490A43D1
+	21E5505B041D525CF793B1554EF174D682453566BBDFF64F1FBAC6BEFAEADDB3
+	9345D736DBEDBE4FD0FDD03F7FF1B5CF1B2250253244C7115A8380008448CFDE
+	013C827354754101801008F1E8FEB706BF0D976708E00773A080747B69C6517B
+	51D1E58B9F6B3FFB5F24B1A27CE7FCF4F33FF94A77D2049E1E5FDD38EB01C859
+	7BBE9C93ABC957CCA22468CD7E8ADED88A4401D079003286D018511022003044
+	A21C53CE8559418A0088704280CC9C181449105BEF9C0BFA6C3EF5AF02E03BBF
+	FFA5ED5B5F2F2EECC6090C5843280C258F636ABA860C289A3E464257BB7075B3
+	7B747D58B6D53C406D51C98E7D9F90300E13C10BAFDCB97F79DA36F576BF9F34
+	CC3FFB2FEEBFF29A8A001212DEE6EC5BE7C667D3CC7FD90D47A06408D13C3332
+	22287EC4F9F103BB1F4F007EF8FC38598680904B9A9DBFD4FDF0BF881244CAC5
+	E9F2D3AFBD40D69E0583C62A82B02C66CDAAAB8FE671E41820E791596A477797
+	DD8B672B05B8E9D3CDEEA000880608D0008B4C9945654AE558BA982515511056
+	E15C4474E8A371E6FB9A94FFDA177EC92E4E8731A2B5B521E0120BECC6B4DBF7
+	8D0D2C2808FB7132957FB8EEA7143F79E7B4F3B81F06221AC6ED9DCFFD441CD3
+	A3AB9BD9C5EAEEF9AAAEEAFDD0C762679FF9A70F3EF1AA082B1EBDFC99996E9F
+	023CF3F463C53D6E5C7C483E8FFE8E88400802B7D751297CCFC033221DB7716F
+	61C18FC4070231E7EEECFEE2B3FF3C8B0595E5727EF6E2B977C4D32E65468022
+	BAEC6A6FFD3EC5225C584B01721680D050EDFDC5BCEE02ED627ABCDD1F868844
+	28824064908572295C54B308429A52292252584B6189693A1E9880BF3A021E7D
+	FB1BEFFFE16FDB6ED9E7288E9C350A94A16C620E75187359F7F1D16E04A059F0
+	46E2DDC5CA3A7BBD19944299E20B9FFB293B5BBCF5FA9F84B3EEEEF9B2A9AA31
+	8E632CCD6BFFD9DD973FCD5C880CDD5A04FF5CEEC05BA31E2D7B9C3D0579665F
+	61E1E3502AF033789EA59C6750111EC9F82DB81FA624B845049038A5F6F46EFB
+	DA3F9B1283EAF9E97271EFC415596F1E2B82AA82B1047CB3D9AF87899963118B
+	5601544054540044BA601755158C68917D925D4C7D625601B2B7823F0B195BB2
+	D4C6767593632E9181ECADA6F85700F0C7BFF14BDA7553CE134385AEA80E31AF
+	8718B330D887EB2D21DDE9C2A7EE9EE5E11098ABAEDA6ED6898B77E6F4EE4BFE
+	ECF28B3FF72FC7C65DDE3D9BB57591328EB97AE11FDFFFE4675505896E53C387
+	15F659917D66A18F5CA9A07A9BFAD1D007998A100C3EB3B13EAB044748E40819
+	08807C58213E723F00000051C96976FE62FDA97F22CA4878EFC1457B67393DED
+	9FAEAF4420E702068C26061C6256167246A5B0328BA65C3200E7E2104E9AFA85
+	93C549D7F6B93CD9EF1EEF87C84589586462D98F930264A5344D064555D5D80F
+	EE28F8CB59D0F6EAC9AFFCECBFBA78E95E5AEF8A1407F4743DCCAA6AE9FDD9BC
+	4A245D3DBB5874B3A6DE1DF64FAFD7E7CB8525BB1F46F2615E371BD52FFDAFFF
+	230EC3FDCFDC3F9DCFACB5DB6D9FE7AFDCFBF48F3DCB0ECF98FDED237E405F10
+	8FE9E67B2E5A383E1222598360F019E9B9ED84098EE949F5C8406F65EBDB8162
+	55F8289DFA281480B9E4F9FD5737E30D5FFD9135F685972F779BDDD7FFECEDFA
+	C7EAA69AC56942439DB768000D19E38413939042E652B818F2AC858C73D638EF
+	53CABD948B79C74576D3743DE6BE2889CC2A6167310BC5B259C773B0648E65E0
+	DFA105FDFEAFFE626DE5DE7296A20BCEEEA7D1A674B16C9AE0A72CDBC3A1EB6A
+	B23696FCF4668D006D553FD91DB09A3DE8C236E6CDFB6FEF6ED62FBF7AF7CED9
+	3C049762DE253D7FF927DAB62D5CBEB7C01EBD51E1432FC6EF7156FAA0AEA275
+	C61804842380084806BD234346015884F959315004FAE08B6EC1FC909BEA4712
+	9EA2A8D40F7E747BF376A7DBF9AC7DF1D30FDE7EF8F5B7DF7AE7C14BAFA4C848
+	94395FCC9ADCB6895959BC75AAA2CA0C84A580AD008D8830484E9327DB86602B
+	6C2D8DBE6CD2249917C127A00CC0456E32D8E03FA0697F590A4AF16BBFF2739F
+	7CED138BDA9ECF5B659EF6435305EFBDA0591F76A2A5AD3B22DC0FE33EC6C57C
+	7E75880AEEFE69B7EBC7ED767B585FDF7B69F5E0DE69D354CE59E7C8D8A66967
+	007FC97D2DF051FE88A8FA81C5105401F128485843C61C0FB7A8485115052682
+	109C0FC639630D59BABD221240E0783F818ACA4772D207B55A3FC2A24443D586
+	76458654F5EEC5E98FFFD8CB72C8EBA78F2360CEE2AD17D1CBE5ECAC6B0F591E
+	1FC6698A844659BCF306A4302B409C78CA4500A629E79C89488172863AD44DB0
+	ABC65E2C9BB37973AF335D5D9B6711F09700F0BBBFFCF3BB27D75568997548F1
+	308E29495D55A27218C6584AA81B5F0544DAF5A3B5D5A8264BBA9C59084DF11E
+	0F1B0EF6C1833BF3AE0BD61A42042050A40F641B05FD48CFF4E1E34718FD33FA
+	43008868880C91B5688C39C68F882A0091F18EBC256BC91A22F38C5011900163
+	C01090B92DC7FA912FC723D5FA8003A00228111DBBC1575EB9FFE0D53BEEB01F
+	B76BF496904081C8048B27B51BA7691DF3C4CC0002924BC931A7C27DEC6F733A
+	8A222940E404C2058A9235409C2529B8B621679F5D26FA9715E1DFFEBFFEE5FC
+	EE1D6721739926BEDE8FAEB2DE7B1518A6699FCABC5B80CA7A3FA4A2F3764679
+	9A9374771ED0EA3CAE9FBCD70F970F2ECE56CBE0ACB1C70ECBDC1242FC90E8C0
+	470DF2CC287F3132F419AB47024445BCADAA44844084E02D7A87D68231888848
+	8A08D6501D5C5DD9AAB25565837FE6081F581F3F4ABEF018790A628888D05AFA
+	C427EFBA459895D23A8F0659A5000B9028B78102628C85C596240AC22C718A20
+	360E996FB768A0B05863550005444A5151221130CE23D95BA7F88B2CE8F5DFFA
+	8DEB37DF5F9E9C202217DD8FFD98CBA29B8996243A716A9AB6187A6FB3659117
+	4EE69E24EDD60F7EF8476FA8FEC32F7DF13BEF3D397BE1FCF27CE52C5A4B0601
+	91E8F8F3948E3DEE2DE987DB447EABB7DD66EE0F193BDE0A3988B70A28184240
+	01D52387434443E8089D016BD0182404503504DE5BE76DA86CA86C08C67B632C
+	11DE4A75B761F541F57FC6558D31C6186B0C2254DEBDFCC3AFF8B3C66E371908
+	439DA624207D2A2C501BB83B6FEFCC9A58CA36CA764A699A540B7A63083815CE
+	CC000548AC416345816F8B92142E2E047C26C6FD79007EF717FECFF307ABCA1B
+	6619E37475B39D57D690D91CD2BA1F7AA66636DBEC0F8DF52F9CCE9DF7EFBFFF
+	CEFDCFFFF4DBA3FE1FFFFBCFBCFDCEA38B972F5EBC7716BC73DE137D20021C05
+	65D18F56C20F73FFADDE79CB84143F9A973EECAF14585444F58342A2C710D163
+	6E171142B0869C33CE9235E0089C416FD0DE22441F828AF03DD5FE59D777E4B4
+	061101E76DFDCA0F7D32CEFC57FEE41B6FDFECC3C9599C126741222132DE9C75
+	D5834567899EECA7752EFD988CB5445601462E0250B85847C159444024615132
+	CCC9FB609E55DFEF01E0DB7FF4078FDEF8CAEAFCEE38A5F5613CA44264AD6FDF
+	BEDE3C1D4606FAF40B774F9B2A009FB43559FFE8EA2A5235E5FC8D2FFCDA69E3
+	5E79EDDE8BF7CEAA50796F9D2163F056D301BCEDAAE4D99D3EDFBBE019775150
+	40FD0B37021D8565E50C2248B77FA1B7A556951598E596561BE39CB38E8C4122
+	340496D03B740E8D2134884716FCAC0FF9201DE991B41292B164C85A43D6746D
+	F8DCE73E7D795A7FFBAB6FF460CF5F7935F6438EC9108848924C0835D2CA636B
+	AC2381228798AEA6B44F05809C01103086ACF30A4554D0863C0919F301F1FE1E
+	1AFA0BFFDBFF826DB3E9F7C3949C71C879B558FACAA7D4DF5F9DDF399921EA77
+	9F5C0340A8C298551677AEBFFDEEF6377EBD396BEFBF707971B6AC8273F6F833
+	E1380375AC7E220A40E6781687FEBCCCA30A881F5601BD6532B70C15F1D6CD59
+	848B082889001900D6E3060889B01E87B38F79893EAAB4A01E5B0B0244BDAD3C
+	A8C78EE8C35E8340D190AA00082A08884144A2AE0D3FFD8F3EFBCDAF7FFBCDDF
+	FD1DF8A97FF4E0477F62FDDE5BC36E5B9D9D810278293D8035B3B6C1342D14C8
+	FB9B293DDE8C532B049472DEF5D36468CCA572DEE080291BE79EFDC28F9C8CFB
+	F6977FCF3EF9C6675E79E5F17A33AFFCF9BC6B9C519687EB9D453A5BCEC8DAAB
+	9BED7AB379E5E54FC0ECF4DD474FDFFEFA9F6C0FC30B2F2F1EBC70B99CCD8277
+	CE194B47555F415584AD73AAA02A79DC8F7BAFA24A1FC00F80473D87541501D1
+	D85B309EE90A70541D09440454622E9E8E8D18026862CD49311022904134D618
+	34F6B61E2021201844503546C9B261510042AB0084729BF6141051918E90EBD1
+	3040CFAA16CDDAF0997FF0E937DB77DEFCB75FDA52F8FC4FFF746770FFEE3740
+	596DAB6E44205169BC27153634AFBC00AC2A0F86064FC8B29E4A2ED2C7DE79B3
+	4B82D6E25FBC33EE5B5FFCC5CBFB2FF439E69CDB3ACCEA0A84AFF6C3CD767F71
+	BA426B628AEBFDE6E2FE4BD5E5CBDF7AE36BBB77DEEC013EF9DA9D175FB8D356
+	9577CE18340444084751EA59C33AC6E8A1376FFFE6E1BDDB0C4F68E043FA89AA
+	1A822F05F4989EF599D802108223E3002095ACAA693854D8CFDA56110FFD98F2
+	DBEF7EF917AD31B72DC35162B0F683627E8C2391A391A9140644249272FBFD68
+	1D11B1E2B47D5C07B6CE92B1B785E8B81DCDACA295B5AFBDFAF2E264FE275FFB
+	EE1F7DF1B7FEF3FFFABFBA78F1E5AB6F7FEDEAE17B29176641B45913892842CA
+	A5C464BBA6ABDC695731ABDFF5432A95F36DA84EA1D4DEB3C8F74CC8BCFFF5D7
+	D76F7DD5CC2F9FAC1F4D93DC59AD00608879370C6918E7F7EF89F0A0E640ED70
+	B35B3FFAD2EEEADA9CB69FB8589E9DCCEBAA72D6184BB7AAAFB1F481B4E99C8A
+	9C9FAE4E163363F8B63D5505E4A322414802A0AAC64435C24501858ED9424049
+	2D254210910A150C949A4BB1220C48A727CB13819636C2A2B7B144000A0544B2
+	8020A2EA3100048154C5CA71C3E718770AAA1255451CA24A5608A0A2F02C51DD
+	FA0A81432902C297A7CBF97FD47EF7EDC75FF899FFE9C51FFEB1173EFBB9CBD5
+	E5FE4FFE30EEF708474429AB942C686DE2A262C0B822CC20850BB96A164CB39A
+	13996331FC30057DFDB77E055C7B18877D3F756D8325EEAE0F13C37ABB7DF1B3
+	3FDADEBBFBC657FE0D95F4D6BBEBCCFDC5D97C76AF5B9DCC668D379881011099
+	0D2128DE3A96B184B7A9586E0F2C14202200126500243240466EBB5FE50C8456
+	A4C8512835A4A2209811450A28A2211224246B41A5286270888AA272DC535005
+	240145052532C7FC4FB78D37DDDE3CF0A1F00180A8A2729BF161E16BC4DB9B3D
+	6F09161A05506454A0802AB614EEC8BDF6EA4B27278BF7BFF1D6577EF6EBA7AF
+	FD5046BF7AF113E5EA9DC67B8E07C22A72120143949905849944818C3508F2FF
+	B4772DCD6D1441B8BBF72559B26CC5512C12528103658AE204551CF9071CF8C7
+	FC028EA470B95C3C1C489CD8B2654996B433DD1CE6B1332B27B8802ACAF6CC69
+	BD5AEDCAFDCD747FFDF5EC8C30534159866E1DD71C00CE7E3B3EF9F1876AEFF9
+	F4EDBBACC887BB8FCAE1888A6A7179B13C5F28B53A3E7C29D3F36931D87AF1FC
+	D1DEF0C9E8F17067A7D7DB2ACAA22AB23CCB29CB4C9E4B80CC8A5C7DCAA896C2
+	4AD56B4FB8CDAA3BC0AEC2EE0401666D88924F92452BD30DBD98235A116B2042
+	B60A0380B64EDCDE0A986BF305B6BD59336B10462FBD880833EB1A9DC86DA82D
+	0001300B63A88B8068A54DA0302A89563CD882FCF3A7677B6717AF8F7E7F3BBB
+	AA7A8F475D28F3EEDE9814C06C214ACB72A93B250109D05A83D29C95A56280AC
+	A22CF3A26C2E22C7873FC3D32F26B3F9C9C575773058157D9C5F5DCD4EDE9D5D
+	2E6A753ABDC6B22A0EBE79361A7F7670B0BF3FDEEAF7ABAA2ACBB2288B3CCB89
+	0CDFB4C2B0D5CFC447382044664B66DC329B4EE877348445C0D61741444C07B1
+	16769DC5AEC7E9B435A31A096BB15C15EC0DC518D17ECB50001127B50A7B08DC
+	056CD012AD2CEF75798BD6B5A3C2C22220A275CD5A2BA5EBBA5EAD96D3ABD98B
+	37A76FFE78BD3C7E599FFD499F54DDDD5135CABA20DB831E2CE77C3D1761514A
+	540D7ABD5EAFF3ED8288008311C059F9ECCBAF35D1F8AB75A7D3C9810B80B2D7
+	EF6C0FBADBDB4559E5593ED8D9E9F77BD408F02202680A5A664964A24679746A
+	B3309BF3C2DAE8D0910C2A8E7134C66AA9D0E83A28983C59A2AF02A219098208
+	CC372D116FBA3DFA68DC6C1FE21E4AFE6E1E3D10064466B35C875F9A553C3A6C
+	D625554A29B598CF2717E7BF1E1DBD3A3ABCFCE5F0F4F0A7D3CBEB7E55569F7E
+	BC3B1AD370BC9E4E56734DB2C877466559760643CA0B72922436D950600BF35E
+	C3FB3680F8C7CB9AC5C9A70B730D66A14792F66E38CC88242E51166143A4BD29
+	DB288A984F7DC5D8F3245744433B7002488C0FF43F94CD0D992DD862A6C24B08
+	A118314864369B4D2693F9ECEAEA723ABB9CA8D9C5FCF5ABB5522BC817B566AD
+	06DD8A1077474FBEFDEEFBFDF147A64A8DB7DD6DE93F06E39690B193CDA292AF
+	3774F3E39D077266F5383A170FE837346A41151EBB6E6066D94A3038C4F71F73
+	4F2232BE2DAAB4994684885AEBC56221CC799E33735DAF9552A27456E483DD61
+	59967771F16E894B2CE86B90E680109DB221A1C4E393EDCDFFD5862591A0AE2C
+	01781202163FD9E1C1E2AB102652183E627448DF7711C0E68F08AC7573FEAEAE
+	9EEE26C3D968D4F44D0906AE09B0366499D980CC4284DEF722B6B1F14C01015D
+	E0B103C80D2600A4E007F83A76CBC7BAD37EE060D3E9FD1CC0BBBF7CBDF9C704
+	1A526B39151061A3F521344614B18943D3BB8D386C2DE88171D4393652545175
+	854D9375BBB4069DF9FD41E800DDDBC374CFB63089E28173FAD0109CB0F66CFB
+	7533990203B7E2530AF071DB57ACBD7B8AC70E12456CC245054BA9A36993AD92
+	D33DDCC041A2F1E1CCDF62BAAD4880DE1A1871346F4A233560534A9696A3B1B3
+	E7C9CECC8E0684D7170542D285F77A0B936040846685B6AFDF44AD4593377D7C
+	74D030A80F11C590B661C08FEFFD162662538056746DDE2AB0FEAA61ABDEEE4D
+	4CC578D24CE3F4C3A720F847DD3274E143DAC62A4C23FC0008D9A4406B42B0C4
+	1117374E620C4D94D0BD37FD8C9E24F2A07651727CC9DB3EE8C56EA0E086E121
+	263C375ED37CD49A0C06F23734FAE1EDA264A851E8516EC0A0F59E477826BC26
+	BA38624FB01121E2EE6F3F7C889B79DAE914D8CA67DD8B655EF9B0C10211C3C9
+	D508E11B68B8696D8C47CCC65FD83EF12077D2DBC4001B0361FC3AC1860BB721
+	C3E5681BC32B28B506C25FF0CE546BA276DAC8ED5FCBBA11D7829B62C7074C9C
+	00F89F5BDACC33019000482D019000482D019000482D019000482D019000482D
+	019000482D019000482D019000482D019000482D019000482D01703FDB5FD60C
+	E08F3FF636B00000000049454E44AE426082
+	]]>
+</Picture>
+
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>6ACDA889-69B2-4EC5-936C-CB1DA7032A92</MainGUID>
+	<MainGUID>5921D56A-82F2-4253-BD84-6091E5717DC4</MainGUID>
+	<MainGUID>A714DB74-67E4-4889-9796-26A6BDFC069B</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Contact person: <NJ>
+
+ui_current_page gs_ui_current_page
+ui_dialog `Параметры Светового Люка`
+
+! =============================================================================
+
+iPageIDRoot		=-1
+iPageIDGeneral	= 1
+
+pageStartY 		= 5
+
+! ==============================================================================
+!UI_PAGES
+! ==============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= bEnableLining,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+					iSkylightType			= 1
+
+
+
+UI_PAGE iPageIDGeneral, iPageIDRoot, `Общие Параметры`, "uiTab_SkylightGeneral_flat(1)"
+
+	sep1x = 222	! Separator positions
+
+	x1 = 12
+	x2 = 140
+	x3 = sep1x - 10
+	x4 = sep1x + 10
+	xMat = x4 + 33
+	dy = 22
+
+	ui_separator sep1x,pageStartY - 2, sep1x,pageStartY + 231
+
+! Nominal Opening - Oversize --------------------------------------------------
+
+	yCurrent = pageStartY + 2
+
+	ui_style 0,1
+	ui_outfield `Размеры`, x1, yCurrent, x3-x1, 15
+	yCurrent = yCurrent + 30
+
+	ui_style 1,0
+	ui_outfield `Ширина`, 			x1, yCurrent, 		x2-x1-2, 	15
+	ui_infield "A", 				x2,	yCurrent-4, 	x3-x2,		dy
+	yCurrent = yCurrent + 30
+
+	ui_outfield `Высота`, 			x1, yCurrent, 		x2-x1-2, 	15
+	ui_infield "ZZYZX", 			x2,	yCurrent-4, 	x3-x2,		dy
+	yCurrent = yCurrent + 30
+
+	ui_outfield `Толщина Коробки`, 	x1, yCurrent, 		x2-x1-2, 	15
+	ui_infield "gs_frame_thk", 		x2,	yCurrent-4, 	x3-x2,		dy
+	yCurrent = yCurrent + 30
+
+	if not (ac_skylight_function) then
+		ui_outfield `Толщина Крыши`, 	x1, yCurrent, 		x2-x1-2, 	15
+		ui_infield "ac_roofthk", 		x2,	yCurrent-4, 	x3-x2,		dy
+		yCurrent = yCurrent + 30
+	endif
+
+	ui_outfield `Уклон Крыши Окна`, 	x1, yCurrent+22, 		x2-x1-2, 	15
+	if ac_roofang_slope_mode = `°` then
+		ui_infield "gs_shedroofang_deg", 	x2,	yCurrent+20, 	x3-x2,		dy
+	endif
+	if ac_roofang_slope_mode = `%` then
+		ui_infield "gs_shedroofang_perc", 	x2,	yCurrent+20, 	x3-x2,		dy
+	endif
+	if ac_roofang_slope_mode = `на 12'` then
+		ui_infield "gs_shedroofang_12f", 	x2,	yCurrent+20, 	x3-x2,		dy
+	endif
+	if ac_roofang_slope_mode = `на 12"` then
+		ui_infield "gs_shedroofang_12i", 	x2,	yCurrent+20, 	x3-x2,		dy
+	endif
+	ui_outfield ac_roofang_slope_mode, x3-63, yCurrent, 40, dy, 1
+	ui_infield{3} "ac_roofang_slope_mode", x3-15, yCurrent, 15, 15, 2,
+				"", 4, 1, 10, 10, 10, 10,
+				1, `°`, `°`,
+				2, `%`, `%`,
+				3, `на 12'`, `на 12'`,
+				4, `на 12"`, `на 12"`
+
+	yCurrent = yCurrent + 53
+
+
+! Materials -------------------------------------------------------------------
+
+	yCurrent = pageStartY + 2
+
+	bFlag = useroofmat
+	iFlag = 4 * bFlag
+
+	dy = 26
+	ui_style 0,1
+	ui_outfield `Покрытия`, 	x4, yCurrent, 	440-x4-2, 	15	! Materials
+	yCurrent = yCurrent + 20
+
+	ui_style 1,0
+
+	ui_infield{3} "useroofmat",	x4,	yCurrent,	440-x4-2,	30,
+		7, "", 2, 1, 0, 0, 0, 0,
+		1, `Использовать Покрытия Крыши/Оболочки`, 0,
+		2, `Использовать Покрытия Крыши/Оболочки`, 1
+	yCurrent = yCurrent + 30
+
+	ui_outfield `Крыша Слухового Окна `, 	x4,	yCurrent,		440-x4-2,	15, iFlag	! Shed Roof Material
+	ui_infield "gs_upper_mat",	x4,	yCurrent+16,	440-xMat,	dy
+	yCurrent = yCurrent + 50
+
+	ui_outfield `Коробка Окна`, x4,	yCurrent,		440-x4-2,	15		! Window Frame Material
+	ui_infield "gs_frame_mat",	x4,	yCurrent+16,	440-xMat,	dy
+	yCurrent = yCurrent + 50
+
+	ui_outfield `Стекло`, 		x4,	yCurrent,		440-x4-2,	15		! Glass Material
+	ui_infield "gs_glass_mat", 	x4,	yCurrent+16,	440-xMat,	dy
+
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! =============================================================================
+! GS Skylight Functions
+! =============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= bEnableLining,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+					iSkylightType			= 1
+
+ss = ""
+rrr = request("Linear_dimension", "", ss)
+bMetric = 0
+if strstr (ss, "m") > 0 then bMetric = 1
+
+parameters gs_marker_text_dist = 0.05
+parameters ac_show2DHotspotsIn3D = 0
+
+if bMetric then
+	values "ac_roofang_slope_mode" `°`,`%`
+else
+	values "ac_roofang_slope_mode" `°`,`%`, `на 12'`,`на 12"`
+endif
+
+!! Pitch Unit setting !!
+
+if ac_roofang_slope_mode = `°` then
+	gs_roofang_perc	= tan(gs_roofang_deg) * 100
+	gs_roofang_12f	= (gs_roofang_perc / 100) * LENGTH_12_FEET
+	gs_roofang_12i	= (gs_roofang_perc / 100) * LENGTH_12_INCHES
+
+	hideparameter "gs_roofang_perc"
+	hideparameter "gs_roofang_12f"
+	hideparameter "gs_roofang_12i"
+endif
+
+if ac_roofang_slope_mode = `%` then
+	gs_roofang_deg  = atn(gs_roofang_perc / 100)
+	gs_roofang_12f	= (gs_roofang_perc / 100) * LENGTH_12_FEET
+	gs_roofang_12i	= (gs_roofang_perc / 100) * LENGTH_12_INCHES
+
+	hideparameter "gs_roofang_deg"
+	hideparameter "gs_roofang_12f"
+	hideparameter "gs_roofang_12i"
+endif
+
+if ac_roofang_slope_mode = `на 12'` then
+	slope = gs_roofang_12f / LENGTH_12_FEET
+	gs_roofang_deg	= atn(slope)
+	gs_roofang_perc	= slope * 100
+	gs_roofang_12i	= slope * LENGTH_12_INCHES
+
+	hideparameter "gs_roofang_deg"
+	hideparameter "gs_roofang_perc"
+	hideparameter "gs_roofang_12i"
+endif
+
+if ac_roofang_slope_mode = `на 12"` then
+	slope = gs_roofang_12i / LENGTH_12_INCHES
+	gs_roofang_deg	= atn(slope)
+	gs_roofang_perc	= slope * 100
+	gs_roofang_12f	= slope * LENGTH_12_FEET
+
+	hideparameter "gs_roofang_deg"
+	hideparameter "gs_roofang_perc"
+	hideparameter "gs_roofang_12f"
+endif
+
+parameters gs_roofang_deg	= gs_roofang_deg
+parameters gs_roofang_perc	= gs_roofang_perc
+parameters gs_roofang_12f	= gs_roofang_12f
+parameters gs_roofang_12i	= gs_roofang_12i
+
+
+!! shed roof Pitch Unit setting !!
+
+if ac_roofang_slope_mode = `°` then
+	gs_shedroofang_perc	= TAN (gs_shedroofang_deg) * 100
+	gs_shedroofang_12f	= (gs_shedroofang_perc / 100) * LENGTH_12_FEET
+	gs_shedroofang_12i	= (gs_shedroofang_perc / 100) * LENGTH_12_INCHES
+
+	hideparameter "gs_shedroofang_perc"
+	hideparameter "gs_shedroofang_12f"
+	hideparameter "gs_shedroofang_12i"
+endif
+
+if ac_roofang_slope_mode = `%` then
+	gs_shedroofang_deg  = ATN (gs_shedroofang_perc / 100)
+	gs_shedroofang_12f	= (gs_shedroofang_perc / 100) * LENGTH_12_FEET
+	gs_shedroofang_12i	= (gs_shedroofang_perc / 100) * LENGTH_12_INCHES
+
+	hideparameter "gs_shedroofang_deg"
+	hideparameter "gs_shedroofang_12f"
+	hideparameter "gs_shedroofang_12i"
+endif
+
+if ac_roofang_slope_mode = `на 12'` then
+	slope = gs_shedroofang_12f / LENGTH_12_FEET
+	gs_shedroofang_deg	= ATN(slope)
+	gs_shedroofang_perc	= slope * 100
+	gs_shedroofang_12i	= slope * LENGTH_12_INCHES
+
+	hideparameter "gs_shedroofang_deg"
+	hideparameter "gs_shedroofang_perc"
+	hideparameter "gs_shedroofang_12i"
+endif
+
+if ac_roofang_slope_mode = `на 12"` then
+	slope = gs_shedroofang_12i / LENGTH_12_INCHES
+	gs_shedroofang_deg	= ATN(slope)
+	gs_shedroofang_perc	= slope * 100
+	gs_shedroofang_12f	= slope * LENGTH_12_FEET
+
+	hideparameter "gs_shedroofang_deg"
+	hideparameter "gs_shedroofang_perc"
+	hideparameter "gs_shedroofang_12f"
+endif
+
+if gs_shedroofang_deg	< 0 then gs_shedroofang_deg = 0
+if gs_shedroofang_deg	> ac_roofang-1 then gs_shedroofang_deg = ac_roofang-1
+if gs_shedroofang_perc	< 0 then gs_shedroofang_perc = 0
+if gs_shedroofang_perc	> tan(ac_roofang-1) * 100 then gs_shedroofang_perc = tan(ac_roofang-1) * 100
+if gs_shedroofang_12f	< 0 then gs_shedroofang_12f = 0
+if gs_shedroofang_12f	> ((ac_roofang-1) / 100) * LENGTH_12_FEET then gs_shedroofang_12f = ((ac_roofang-1) / 100) * LENGTH_12_FEET
+if gs_shedroofang_12i	< 0 then gs_shedroofang_12i = 0
+if gs_shedroofang_12i	> ((ac_roofang-1) / 100) * LENGTH_12_INCHES then gs_shedroofang_12i = ((ac_roofang-1) / 100) * LENGTH_12_INCHES
+
+
+parameters gs_shedroofang_deg	= gs_shedroofang_deg
+parameters gs_shedroofang_perc	= gs_shedroofang_perc
+parameters gs_shedroofang_12f	= gs_shedroofang_12f
+parameters gs_shedroofang_12i	= gs_shedroofang_12i
+
+
+
+
+!!! FM Types
+call "FM_types" parameters all
+
+if useroofmat then
+	lock "gs_lower_mat","gs_upper_mat", "gs_innside_mat"
+	hideparameter "gs_lower_mat","gs_upper_mat", "gs_innside_mat"
+endif
+
+if ac_skylight_debug=0 then
+	hideparameter "ac_skylight_function"
+	if ac_skylight_function then
+		hideparameter	"ac_roofang",
+						"ac_roofthk",
+						"gs_roof_material",
+						"gs_roofang_deg",
+						"gs_roofang_perc",
+						"gs_roofang_12f",
+						"gs_roofang_12i"
+	endif
+endif
+
+
+!!if ac_roofthk < 0.025+0.05*sin(ng) then parameters ac_roofthk = 0.025+0.05*sin(ng)
+
+values "ac_roofthk" range (0.025+0.05*sin(ng),)
+
+values "A" range [1.8,)
+
+values "gs_frame_thk" range (0,(dr1-0.01+rr-a/4)*cos(ng)+0.025+0.05*sin(ng))
+
+lock "B"
+
+parameters gs_fontsize= abs(gs_fontsize)
+values "gs_fontsize" range (0,]
+
+
+! ==============================================================================
+! Convert Display Option settings of old library parts
+! ==============================================================================
+
+parameters AC_special_2D_symbol = 0
+hideparameter	"AC_special_2D_symbol",
+				"AC_plane_definition",
+				"AC_symb_display_option",
+				"AC_symb_show_projection_to"
+
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+parameters AC_use_symb_display_option = 1
+
+if AC_symb_display_option = 3 | AC_symb_display_option = 5 then
+	hideparameter "gs_use_3D_view_attributes"
+	lock "gs_use_3D_view_attributes"
+endif
+
+if gs_use_3D_view_attributes then
+	hideparameter "AC_uncut_pen"
+	lock "AC_uncut_pen"
+endif
+
+if AC_symb_display_option = 3 | AC_symb_display_option = 5 then
+	hideparameter "AC_cut_linetype", "AC_uncut_pen"
+	lock "AC_cut_linetype", "AC_uncut_pen"
+endif
+
+if AC_symb_display_option = 1 | AC_symb_display_option = 3 | AC_symb_display_option = 4 then
+	hideparameter "AC_overhead_linetype", "AC_overhead_pen"
+	lock "AC_overhead_linetype", "AC_overhead_pen"
+endif
+
+if AC_symb_display_option = 4 then
+	hideparameter "AC_cut_linetype"
+	lock "AC_cut_linetype"
+endif
+
+if AC_symb_display_option = 5 then
+	hideparameter "gs_fill_type", "gs_fill_pen", "gs_back_pen"
+	lock "gs_fill_type", "gs_fill_pen", "gs_back_pen"
+endif
+
+! ==============================================================================
+
+if not(AC_Custom_3D_Hole) then
+	hideparameter "gs_hole_edge_upper_depth", "gs_hole_edge_lower_depth", "gs_hole_outside_depth"
+	lock "gs_hole_edge_upper_depth", "gs_hole_edge_lower_depth", "gs_hole_outside_depth"
+endif
+]]>
+</Script_VL>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["GS Skylight Functions"]]></MName>
+		<MainGUID>EEDA1ABC-6555-4D13-950B-4EB5626A6EB6</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["SkylightRect_RoofCutting_macro"]]></MName>
+		<MainGUID>2FD3B130-AE5A-4282-8F5B-ADADDEB63EE4</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["FM_types"]]></MName>
+		<MainGUID>2759D2DF-AA8E-44D1-AD1D-261581266B34</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<MigrationTable SectVersion="1" SectionFlags="0" SubIdent="0">
+	<MigrationTableElement>
+		<MainGUID>B782E436-FB51-4B2C-A6F0-852E0B52324E</MainGUID>
+		<Version>19</Version>
+		<Name><![CDATA[""]]></Name>
+		<AutoMigration>true</AutoMigration>
+	</MigrationTableElement>
+</MigrationTable>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

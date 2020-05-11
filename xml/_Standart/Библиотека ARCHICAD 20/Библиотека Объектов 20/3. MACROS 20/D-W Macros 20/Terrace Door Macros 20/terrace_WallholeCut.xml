@@ -1,0 +1,2391 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="6FC4A6F5-43F7-47E8-8EA4-1D89258062B4" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>6ACDA889-69B2-4EC5-936C-CB1DA7032A92</MainGUID>
+	<MainGUID>F6AE9687-2BC7-4D47-88C9-8F793E1DE2D6</MainGUID>
+	<MainGUID>4ABD0A6E-634B-4931-B3AA-9BEE01F35CDF</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Contact person: <NJ>
+
+! ==============================================================================
+! This macro cuts the wallhole
+! ------------------------------------------------------------------------------
+! Input parameters:
+! Geometry ---------------------------------------------------------------------
+!	A:						Window nominal width (length)
+!	B:						Window nominal height (length)
+!	offsX:					for positioning 2D/3D along x (length)
+!	offsY:					for positioning 3D along y (length)
+!	archHeight:				Height of the arc (length)
+!	nArchResolution:		Arc resolution for arched windows (integer)
+!								if nArchResolution < 3 then WALL_RESOL used instead
+! Functions --------------------------------------------------------------------
+!	iWindowShape:			Shape of the window (integer)
+!								0 = rectangular (default)
+!								1 = arched
+!							Note: only the rectangular shape can be a Corner Window
+!	AC_Hole_Hotspot_Control:
+!	AC_HoleSideMaterial:
+!	AC_HoleMaterialCurved:
+! Reveal -----------------------------------------------------------------------
+!	iRevealType:
+!	gs_reveal_left_angle:
+!	gs_reveal_right_angle:
+!	gs_reveal_top_angle:
+!	gs_reveal_bottom_angle:
+! Corner Function --------------------------------------------------------------
+!	leftCornerFunction:		Turn macro in Corner Window mode at the left side (0 / 1)
+!	leftCornerAngle:		Angle between connected walls in case of Corner Window (angle)
+!	leftConnWallThk:		Thickness of the connected wall in case of Corner Window (length)
+!	rightCornerFunction:	Turn macro in Corner Window mode at the right side (0 / 1)
+!	rightCornerAngle:		Angle between connected walls in case of Corner Window (angle)
+!	rightConnWallThk:		Thickness of the connected wall in case of Corner Window (length)
+!	bCornerWindow:			Traditional Corner Window
+! Oversize ---------------------------------------------------------------------
+!	gs_left_oversize:		Left opening oversize (length)
+!	gs_right_oversize:		Right opening oversize (length)
+!	gs_upper_oversize:		Upper opening oversize (length)
+!	gs_lower_oversize:		Lower opening oversize (length)
+! Casing -----------------------------------------------------------------------
+!	gs_trim_width_in:		Width of inside Trim. (length)
+!	gs_trim_width_out:		Width of outside Trim. (length)
+! Sill -------------------------------------------------------------------------
+!	iSill:					Identifies the sides to be drawn
+!								(integer; 1 = none, 2 = inside (board), 3 = outside (sill), 4 = both)
+!	gs_sill_oversize:		Identifies the method as the macro handles the nominal
+!								opening sizes when Sill are turned on. (0 / 1)
+!	iSillType:				Identifies the type of the Sill. Not used yet.
+!								(integer; 1 = Standard Sill, 2 = Brick Sill, 3 = Stone Sill, 4 = Ceramic Sill)
+!								(5 = Eternite Sill, 6 = Concrete Tub, 7 = Aluminum Sill)
+!	iBoardType:				Identifies the type of the Board. Not used yet. (integer)
+!	gs_sill_thk:			Thickness of the Sill. (length)
+!	gs_sill_nosing:			Nosing of the Sill. (length)
+!	gs_sill_angle:			Sill slope. (angle)
+!	gs_sill_slip_in:		Slip in of the Sill. Only effective when iSillType = 2 or iSillType = 3 (length)
+!	gs_sill_width:			Width of the Brick Sill. Only effective when iSillType = 2 (length)
+!	gs_board_thk:			Thickness of the Board. (length)
+!	gs_board_slip_in:		Slip in of the Board. Only effective when iSillType = 2 or iSillType = 3 (length)
+! Ganging ----------------------------------------------------------------------
+!	gs_stack_left:			Align to door/window on left side (0 / 1)
+!	gs_stack_right:			Align to door/window on right side (0 / 1)
+!	gs_stack_top:			Align to door/window on upper side (0 / 1)
+!	gs_stack_bottom:		Align to door/window on bottom side (0 / 1)
+!
+! Related Global Variables:
+!	WALL_THICKNESS
+!	WALL_VIEW_PEN
+!	WIDO_FRAME_THICKNESS
+!	WIDO_SILL
+!	WIDO_LEFT_JAMB
+!	WIDO_RIGHT_JAMB
+!	WIDO_THRES_DEPTH
+!	WIDO_HEAD_DEPTH
+!	WIDO_ORIG_DIST
+!	WIDO_REVEAL_SIDE
+!	SYMB_MIRRORED
+!	SYMB_ROTANGLE
+! ==============================================================================
+
+
+bHaveSill = iSill = 3 | iSill = 4
+bHaveParapetInset = gs_parapet_wall_inset & gs_parapet_inset_thk > EPS
+
+if bHaveSill & (iSillType = 2 | iSillType = 3 | iSillType = 4 | iSillType = 5 | iSillType = 6 | iSillType = 7) then lowerJamb = 0
+
+
+! === Window Shape related definitions ===[
+if nArchResolution < 3 then nArchResolution = WALL_RESOL
+
+if iWindowShape = 1 then
+	if archHeight < EPS then
+		iWindowShape = 0		! Switch back to rectangular shape
+	else
+		if archHeight > (openingWidth / 2 - EPS) then
+			archHeight = openingWidth / 2
+			arcR = archHeight
+			bHalfCircle = 1
+		else
+			arcR = (openingWidth / 2) / sin(2 * atn(archHeight / (openingWidth / 2)))
+			bHalfCircle = 0
+		endif
+	endif
+endif
+! ]=== Window Shape related definitions ===
+
+pen WALL_VIEW_PEN
+resol nArchResolution
+
+if AC_HoleSideMaterial then
+	if WIDO_REVEAL_SIDE then
+		matRevealSide	= WALL_MAT_A
+		matOppositeSide = WALL_MAT_B
+	else
+		matRevealSide	= WALL_MAT_B
+		matOppositeSide = WALL_MAT_A
+	endif
+else
+	matRevealSide	= WALL_MAT_EDGE
+	matOppositeSide = WALL_MAT_EDGE
+endif
+
+add not(curvedWall) * offsX,-offsY,0
+
+
+if iRevealType = REVEAL_SLANTED then
+	if abs(WIDO_ORIG_DIST) > EPS then
+		if wallIsLeft then
+			alfa = atn((A / 2) / (WIDO_ORIG_DIST - WIDO_FRAME_THICKNESS))
+		else
+			alfa = atn((A / 2) / WIDO_ORIG_DIST)
+		endif
+		if WIDO_REVEAL_SIDE then alfa = -alfa
+
+		if SYMB_MIRRORED = WIDO_REVEAL_SIDE then
+			if gs_stack_left  then
+				gs_reveal_left_angle  = -alfa
+				rightDx = -WIDO_FRAME_THICKNESS * tan(alfa)
+			endif
+			if gs_stack_right then
+				gs_reveal_right_angle = -alfa
+				leftDx = WIDO_FRAME_THICKNESS * tan(alfa)
+			endif
+		else
+			if gs_stack_left  then
+				gs_reveal_right_angle  = -alfa
+				rightDx = -WIDO_FRAME_THICKNESS * tan(alfa)
+			endif
+			if gs_stack_right then
+				gs_reveal_left_angle = -alfa
+				leftDx = WIDO_FRAME_THICKNESS * tan(alfa)
+			endif
+		endif
+
+		if not(wallIsLeft) then
+			leftDx = 0
+			rightDx = 0
+		endif
+	endif
+
+	if SYMB_MIRRORED = WIDO_REVEAL_SIDE | gs_macro_version >= 11 then
+		temp = gs_reveal_right_angle
+		gs_reveal_right_angle = gs_reveal_left_angle
+		gs_reveal_left_angle = temp
+	endif
+endif
+
+
+! ==============================================================================
+! Cut Default Wallhole
+! ==============================================================================
+
+if iWindowShape = 0 | iWindowShape = 1 | bHaveParapetInset then
+
+	if not(curvedWall) then
+
+		! ===== Straight Wall =====
+
+		if WIDO_REVEAL_SIDE then
+			addz WIDO_SILL - WALL_THICKNESS + WIDO_FRAME_THICKNESS    ! Flip
+		else
+			addz -WIDO_SILL
+		endif
+
+		if WIDO_REVEAL_SIDE then
+			mulz -1
+			addz -WALL_THICKNESS
+		endif
+
+		if WIDO_SILL > EPS then
+
+			! ===== Cut Reveal Side =====
+
+			material matRevealSide
+
+			px1 =  rightWidth - rightJamb + overSizeRight
+			px2 = -leftWidth  + leftJamb  - overSizeLeft
+
+			if iWindowShape = 0 then	! Rectangular Shape
+				wallniche 4, 1, 2 + 16,
+					0,0,1,	WIDO_SILL,
+					px1,	lowerJamb - overSizeLower,		31,
+					px1,	B - upperJamb + overSizeUpper,	31,
+					px2,	B - upperJamb + overSizeUpper,	31,
+					px2,	lowerJamb - overSizeLower,		31
+			endif
+			if iWindowShape = 1 then	! Arched Shape
+				if bHalfCircle then
+					wallniche 4, 1, 2 + 16,
+						0,0,1,	WIDO_SILL,
+						px1,	lowerJamb - overSizeLower,	  31,
+						px1,	B - archHeight,				  95,
+						px2,	B - archHeight,				1095,
+						px2,	lowerJamb - overSizeLower,	  31
+				else
+					wallniche 5, 1, 2 + 16,
+						0,0,1,	WIDO_SILL,
+						(px1 + px2) / 2,	B - arcR, 900,
+						px1,	lowerJamb - overSizeLower,	  31,
+						px1,	B - archHeight,				  95,
+						px2,	B - archHeight,				3095,
+						px2,	lowerJamb - overSizeLower,	  31
+				endif
+			endif
+		endif
+
+		! ===== Cut Inside Face =====
+
+		material matOppositeSide
+
+		addz WALL_THICKNESS
+
+		if iWindowShape = 0 then	! Rectangular Shape
+			if iRevealType = REVEAL_SLANTED then
+				gosub 1000	! Slanted Reveal cutting body
+			else
+				wallniche 4, 1, 2 + 8 * (WIDO_SILL < EPS) + 16,
+					0,0,-1,	WALL_THICKNESS - WIDO_SILL,
+					 rightWidth + overSizeRight,	-overSizeLower,		31,
+					 rightWidth + overSizeRight,	 B + overSizeUpper,	31,
+					-leftWidth  - overSizeLeft,		 B + overSizeUpper,	31,
+					-leftWidth  - overSizeLeft,		-overSizeLower,		31
+			endif
+		endif
+		if iWindowShape = 1 then	! Arched Shape
+			px1 =  rightWidth + overSizeRight
+			px2 = -leftWidth  - overSizeLeft
+
+			if bHalfCircle then
+				wallniche 4, 1, 2 + 8 * (WIDO_SILL < EPS) + 16,
+					0,0,-1,	WALL_THICKNESS - WIDO_SILL,
+					px1,	-overSizeLower,		31,
+					px1,	 B - archHeight,	95,
+					px2,	 B - archHeight,	1095,
+					px2,	-overSizeLower,		31
+			else
+				wallniche 5, 1, 2 + 8 * (WIDO_SILL < EPS) + 16,
+					0,0,-1,	WALL_THICKNESS - WIDO_SILL,
+					(px1 + px2) / 2,	B - arcR, 900,
+					px1,	-overSizeLower,		31,
+					px1,	 B - archHeight,	95,
+					px2,	 B - archHeight,	3095,
+					px2,	-overSizeLower,		31
+			endif
+		endif
+
+		! ===== Cut Wall Inset =====
+
+		if bHaveParapetInset & SYMB_POS_Y > overSizeLower then
+			if iRevealType = REVEAL_SLANTED then
+				gosub 2000	!Wall Inset cutting body for Slanted Reveal
+			else
+				if abs(WALL_INCL) > EPS then
+					rotx 90
+
+					parapetInset = (gs_parapet_wall_inset * gs_parapet_inset_thk) / cos(WALL_INCL)
+					py1 = offsD + incX * (-leftWidth  - overSizeLeft)  + parapetInset
+					py2 = offsD + incX * ( rightWidth + overSizeRight) + parapetInset
+
+					wallniche 4, 1, 2,
+						0,0,-1,	-SYMB_POS_Y,
+						 rightWidth + overSizeRight,	-py1,	31,
+						 rightWidth + overSizeRight,	 10,	31,
+						-leftWidth  - overSizeLeft,		 10,	31,
+						-leftWidth  - overSizeLeft,		-py2,	31
+
+					del 1
+				else
+					wallniche 4, 1, 2 + 16,
+						0,0,-1,	gs_parapet_inset_thk,
+						 rightWidth + overSizeRight,	-overSizeLower,		31,
+						 rightWidth + overSizeRight,	-SYMB_POS_Y - 1,	31,
+						-leftWidth  - overSizeLeft,		-SYMB_POS_Y - 1,	31,
+						-leftWidth  - overSizeLeft,		-overSizeLower,		31
+				endif
+			endif
+		endif
+
+		del 2 + WIDO_REVEAL_SIDE * 2
+
+	else
+
+		! ===== Curved Wall =====
+
+		bReveal = WIDO_REVEAL_ON | WIDO_SILL > EPS | not(gs_IsCurved)
+		bUniformSideMats	= (matRevealSide = matOppositeSide)
+		bOneCUt				= (bUniformSideMats & WIDO_SILL < 0.005)	! Cut the hole with only one wallniche
+
+		if SYMB_ROTANGLE > EPS then addz WIDO_FRAME_THICKNESS
+		if WIDO_REVEAL_SIDE then mulz -1
+
+		if wallIsLeft then
+			addz -WIDO_FRAME_THICKNESS
+
+			dxL = WIDO_FRAME_THICKNESS * tan(alfaLeftOs)
+			dxR = WIDO_FRAME_THICKNESS * tan(alfaRightOs)
+
+			if (WIDO_SILL > EPS | not(gs_IsCurved)) & not(bOneCut) then
+
+				! ===== Cut Reveal Side =====
+
+				leftJamb	= leftWidth  + WOD * tan(alfaLeftOs - alfaLeftJamb) + gs_left_oversize
+				rightJamb	= rightWidth + WOD * tan(alfaRightOs - alfaRightJamb) + gs_right_oversize
+
+				if gs_stack_left then leftJamb = leftJamb - overSize
+				if gs_stack_right then rightJamb = rightJamb - overSize
+
+				material matRevealSide
+
+				px1 =  leftWidth  - leftJamb  + overSizeLeft  - overSize
+				px2 = -rightWidth + rightJamb - overSizeRight + overSize
+
+				if iWindowShape = 0 then	! Rectangular Shape
+					py1 = lowerJamb - overSizeLower
+					py2 = B - upperJamb + overSizeUpper
+
+					wallniche 4, 3, 2 + 16,
+						0,0,WOD, 0,
+						px1,	py1,	31,
+						px1,	py2,	31,
+						px2,	py2,	31,
+						px2,	py1,	31
+				endif
+				if iWindowShape = 1 then	! Arched Shape
+					mulRatio = (openingWidth + 2 * overSize - widoLeftJamb - widoLeftJamb) / abs(px1 - px2)
+					py = (-B + archHeight + lowerJamb - overSizeLower) / mulRatio
+
+					addy B - archHeight
+					muly abs(mulRatio)
+
+					if bHalfCircle then
+						wallniche 4, 3, 2 + 16,
+							0,0,WOD, 0,
+							px1,	py,	  31,
+							px1,	0,	  95,
+							px2,	0,	1095,
+							px2,	py,	  31
+					else
+						ta = openingWidth / 2 + overSize
+						tc = arcR + overSize
+						py1 = sqr(tc * tc - ta * ta) - arcR + archHeight
+
+						wallniche 5, 3, 2 + 16,
+							0,0,WOD, 0,
+							(px1 + px2) / 2,	archHeight * mulRatio - arcR, 900,
+							px1,	py,		  31,
+							px1,	py1,	  95,
+							px2,	py1,	3095,
+							px2,	py,		  31
+					endif
+
+					del 2
+				endif
+			endif
+
+			! ===== Cut Inside Face =====
+
+			material matOppositeSide
+
+			px1 =  rightWidth + dxR + overSizeRight
+			px2 = -leftWidth  - dxL - overSizeLeft
+
+			status = 2 + (8 + 16) * (not(bReveal) | bOneCUt)
+
+			if iWindowShape = 0 then	! Rectangular Shape
+				if iRevealType = REVEAL_SLANTED then
+					addz WALL_THICKNESS - WIDO_SILL
+					gosub 1000	! Slanted Reveal cutting body
+					del 1
+				else
+					wallniche 4, 3, status,
+						0,0,WOD, WOD,
+						px1,	-overSizeLower,		31,
+						px1,	 B + overSizeUpper,	31,
+						px2,	 B + overSizeUpper,	31,
+						px2,	-overSizeLower,		31
+				endif
+			endif
+			if iWindowShape = 1 then	! Arched Shape
+
+				mulRatio = (openingWidth + 2 * overSize) / abs(px1 - px2)
+				py = (-B + archHeight - overSizeLower) / mulRatio
+
+				addy B - archHeight
+				muly abs(mulRatio)
+
+				if bHalfCircle then
+					wallniche 4, 3, status,
+						0,0,WOD, WOD,
+						px1,	py,	  31,
+						px1,	0,	  95,
+						px2,	0,	1095,
+						px2,	py,	  31
+				else
+					ta = openingWidth / 2 + overSize
+					tc = arcR + overSize
+					py1 = sqr(tc * tc - ta * ta) - arcR + archHeight
+
+					wallniche 5, 3, status,
+						0,0,WOD, WOD,
+						(px1 + px2) / 2,	archHeight * mulRatio - arcR, 900,
+						px1,	py,		  31,
+						px1,	py1,	  95,
+						px2,	py1,	3095,
+						px2,	py,		  31
+				endif
+
+				del 2
+			endif
+
+			! ===== Cut Wall Inset =====
+
+			if bHaveParapetInset & SYMB_POS_Y > overSizeLower then
+				if iRevealType = REVEAL_SLANTED then
+					gosub 2000	!Wall Inset cutting body for Slanted Reveal
+				else
+					dy = abs(rBoard - abs(WOD)) - gs_parapet_inset_thk
+
+					dxL = dxL - dy * tan(alfaLeftOs)
+					dxR = dxR - dy * tan(alfaRightOs)
+
+					px1 =  rightWidth + dxR + overSizeRight
+					px2 = -leftWidth  - dxL - overSizeLeft
+
+					addz dy
+
+					wallniche 4, 3, 2,
+						0,0,WOD - dy, WALL_THICKNESS,
+						px1,	-overSizeLower,		31,
+						px1,	-SYMB_POS_Y - 1,	31,
+						px2,	-SYMB_POS_Y - 1,	31,
+						px2,	-overSizeLower,		31
+
+					del 1
+				endif
+			endif
+
+			del 1
+		else
+
+			if (WIDO_SILL > EPS | not(gs_IsCurved)) & not(bOneCUt) then
+
+				! ===== Cut Reveal Side =====
+
+				leftJamb	= leftWidth  + WOD * tan(alfaLeftOs  - alfaLeftJamb)  + gs_left_oversize
+				rightJamb	= rightWidth + WOD * tan(alfaRightOs - alfaRightJamb) + gs_right_oversize
+
+				if gs_stack_left	then leftJamb	= -overSize
+				if gs_stack_right	then rightJamb	= -overSize
+
+				material matRevealSide
+
+				px1 =  rightWidth - rightJamb + overSizeRight - overSize
+				px2 = -leftWidth  + leftJamb  - overSizeLeft  + overSize
+
+				if iWindowShape = 0 then	! Rectangular Shape
+					py1 = lowerJamb - overSizeLower
+					py2 = B - upperJamb + overSizeUpper
+
+					wallniche 4, 3, 2,
+						0,0,WOD, abs(WOD),
+						px1,	py1,	31,
+						px1,	py2,	31,
+						px2,	py2,	31,
+						px2,	py1,	31
+				endif
+				if iWindowShape = 1 then	! Arched Shape
+					mulRatio = (openingWidth + 2 * overSize - widoLeftJamb - widoLeftJamb) / abs(px1 - px2)
+					py = (-B + archHeight + lowerJamb - overSizeLower) / mulRatio
+
+					addy B - archHeight
+					muly abs(mulRatio)
+
+					if bHalfCircle then
+						wallniche 4, 3, 2,
+							0,0,WOD, abs(WOD),
+							px1,	py,	  31,
+							px1,	0,	  95,
+							px2,	0,	1095,
+							px2,	py,	  31
+					else
+						ta = openingWidth / 2 + overSize
+						tc = arcR + overSize
+						py1 = sqr(tc * tc - ta * ta) - arcR + archHeight
+
+						wallniche 5, 3, 2,
+							0,0,WOD, abs(WOD),
+							(px1 + px2) / 2,	archHeight * mulRatio - arcR, 900,
+							px1,	py,		  31,
+							px1,	py1,	  95,
+							px2,	py1,	3095,
+							px2,	py,		  31
+					endif
+
+					del 2
+				endif
+			endif
+
+			! ===== Cut Inside Face =====
+
+			material matOppositeSide
+
+			px1 =  rightWidth + overSizeRight
+			px2 = -leftWidth - overSizeLeft
+
+			status = 2 + 8 * (not(bReveal) | bOneCUt) + 16
+
+			if iWindowShape = 0 then	! Rectangular Shape
+				if iRevealType = REVEAL_SLANTED then
+					addz WALL_THICKNESS - WIDO_SILL
+					gosub 1000	! Slanted Reveal cutting body
+					del 1
+				else
+					wallniche 4, 3, status,
+						0,0,WOD, 0,
+						px1,	-overSizeLower,		31,
+						px1,	 B + overSizeUpper,	31,
+						px2,	 B + overSizeUpper,	31,
+						px2,	-overSizeLower,		31
+				endif
+			endif
+			if iWindowShape = 1 then	! Arched Shape
+
+				mulRatio = (openingWidth + 2 * overSize) / abs(px1 - px2)
+				py = (-B + archHeight - overSizeLower) / mulRatio
+
+				addy B - archHeight
+				muly abs(mulRatio)
+
+				if bHalfCircle then
+					wallniche 4, 3, status,
+						0,0,WOD, 0,
+						px1,	py,	  31,
+						px1,	0,	  95,
+						px2,	0,	1095,
+						px2,	py,	  31
+				else
+					ta = openingWidth / 2 + overSize
+					tc = arcR + overSize
+					py1 = sqr(tc * tc - ta * ta) - arcR + archHeight
+
+					wallniche 5, 3, status,
+						0,0,WOD, 0,
+						(px1 + px2) / 2,	archHeight * mulRatio - arcR, 900,
+						px1,	py,		  31,
+						px1,	py1,	  95,
+						px2,	py1,	3095,
+						px2,	py,		  31
+				endif
+
+				del 2
+			endif
+
+			! ===== Cut Wall Inset =====
+
+			if bHaveParapetInset & SYMB_POS_Y > overSizeLower then
+
+				if iRevealType = REVEAL_SLANTED then
+					gosub 2000	!Wall Inset cutting body for Slanted Reveal
+				else
+
+					dy = rBoard * cos(alfaRefWidth) + WOD - gs_parapet_inset_thk
+
+					wallniche 4, 3, 2 + 16,
+						0,0,WOD, -dy,
+						px1,	-overSizeLower,		31,
+						px1,	-SYMB_POS_Y - 1,	31,
+						px2,	-SYMB_POS_Y - 1,	31,
+						px2,	-overSizeLower,		31
+				endif
+			endif
+		endif
+
+		del (SYMB_ROTANGLE > EPS) + WIDO_REVEAL_SIDE
+	endif
+endif
+
+
+! ==============================================================================
+! Cut Space for Brick Sill and Stone Sill
+! ==============================================================================
+
+if bHaveSill & (iSillType = 2 | iSillType = 3 | iSillType = 4 | iSillType = 5 | iSillType = 6 | iSillType = 7) & not(gs_stack_bottom) then
+
+	if not(curvedWall) then
+
+		! ===== Straight Wall =====
+
+		if iSillType = 2 then	! Brick Sill
+			cy = gs_sill_thk / cos(gs_sill_angle) + tan(gs_sill_angle) * (WIDO_SILL + gs_sill_slip_in)
+			cx = sin(gs_sill_angle) * gs_sill_thk
+		endif
+		if iSillType = 3 | iSillType = 4 | iSillType = 5 | iSillType = 6 | iSillType = 7 then	! Stone Sill
+			cy = gs_sill_thk
+			cx = 0
+		endif
+
+		if iSillType = 7 then	! Aluminum Sill
+			cy = 3/4*gs_sill_thk
+			cx = 0
+		endif
+
+		material matRevealSide
+
+		if WIDO_REVEAL_SIDE then
+			mulz -1
+			addz -WIDO_FRAME_THICKNESS
+		endif
+
+		wallniche 4, 1, 2 + 16,
+			0,0,1, gs_sill_slip_in + cx,
+			 rightWidth - rightJamb + overSizeRight,	 0,		31,
+			 rightWidth - rightJamb + overSizeRight,	-cy,	31,
+			-leftWidth  + leftJamb  - overSizeLeft,		-cy,	31,
+			-leftWidth  + leftJamb  - overSizeLeft,		 0,		31
+
+		if WIDO_REVEAL_SIDE then del 2
+	else
+
+		! ===== Curved Wall =====
+
+		if SYMB_ROTANGLE > EPS then addz WIDO_FRAME_THICKNESS
+		if WIDO_REVEAL_SIDE then mulz -1
+
+		maxSillLength = max(WIDO_SILL, abs(rSill - abs(WOD)))
+
+		if iSillType = 2 then	! Brick Sill
+			cy = gs_sill_thk / cos(gs_sill_angle) + tan(gs_sill_angle) * (maxSillLength + gs_sill_slip_in)
+			cx = sin(gs_sill_angle) * gs_sill_thk
+		endif
+		if iSillType = 3 | iSillType = 4 | iSillType = 5 | iSillType = 6 | iSillType = 7 then	! Stone Sill
+			cy = gs_sill_thk
+			cx = 0
+		endif
+
+		if wallIsLeft then
+			addz -WIDO_FRAME_THICKNESS
+
+			leftJamb	= leftWidth  + WOD * tan(alfaLeftOs  - alfaLeftJamb)  + gs_left_oversize
+			rightJamb	= rightWidth + WOD * tan(alfaRightOs - alfaRightJamb) + gs_right_oversize
+
+			if gs_stack_left then leftJamb = leftJamb - overSize
+			if gs_stack_right then rightJamb = rightJamb - overSize
+
+			material matRevealSide
+
+			wallniche 4, 3, 2 + 16,
+				0,0,WOD, gs_sill_slip_in + cx,
+				 rightWidth - leftJamb  + overSizeLeft  - overSize,	 0,		31,
+				 rightWidth - leftJamb  + overSizeLeft  - overSize,	-cy,	31,
+				-leftWidth  + rightJamb - overSizeRight + overSize,	-cy,	31,
+				-leftWidth  + rightJamb - overSizeRight + overSize,	 0,		31
+
+			del 1
+		else
+			dy = gs_sill_slip_in + cx
+
+			dxL = dy * tan(alfaLeftOs - alfaLeftJamb)
+			dxR = dy * tan(alfaRightOs - alfaRightJamb)
+
+			leftJamb	= leftWidth  + WOD * tan(alfaLeftOs  - alfaLeftJamb)  + gs_left_oversize
+			rightJamb	= rightWidth + WOD * tan(alfaRightOs - alfaRightJamb) + gs_right_oversize
+
+			if gs_stack_left then leftJamb = -overSize
+			if gs_stack_right then rightJamb = -overSize
+
+			addz dy
+
+			material matRevealSide
+
+			wallniche 4, 3, 2,
+				0,0,WOD - dy, 16 * WIDO_SILL,
+				 rightWidth + dxR - rightJamb + overSizeRight - overSize,	 0,		31,
+				 rightWidth + dxR - rightJamb + overSizeRight - overSize,	-cy,	31,
+				-leftWidth  - dxL + leftJamb  - overSizeLeft  + overSize,	-cy,	31,
+				-leftWidth  - dxL + leftJamb  - overSizeLeft  + overSize,	 0,		31
+
+			del 1
+		endif
+
+		del (SYMB_ROTANGLE > EPS) + WIDO_REVEAL_SIDE
+	endif
+endif
+
+end	! ===== end ===== end ===== end ===== end ===== end ===== end ===== end ===== end ===== end =====
+
+
+
+1000:
+! ==============================================================================
+! Slanted Reveal cutting body
+! ==============================================================================
+
+	slantedDepth = (WALL_THICKNESS - WIDO_SILL)
+
+	if iWindowShape = 0 then	! Rectangular Shape
+
+		dxl = (slantedDepth) * tan(gs_reveal_left_angle)	! --- Left
+		dxr = (slantedDepth) * tan(gs_reveal_right_angle)	! --- Right
+		dxt = (slantedDepth) * tan(gs_reveal_top_angle)		! --- Top
+		dxb = (slantedDepth) * tan(gs_reveal_bottom_angle)	! --- Bottom
+
+		! --- Horizontal
+		if gs_reveal_left_angle > EPS | gs_reveal_right_angle > EPS then
+			m = (openingWidth + dxl + dxr) / (tan(gs_reveal_left_angle) + tan(gs_reveal_right_angle))
+			midAlpha = (gs_reveal_left_angle - gs_reveal_right_angle) / 2
+
+			rxh = (m - WALL_THICKNESS + WIDO_SILL) * tan(gs_reveal_left_angle) - openingWidth/2
+			ryh = 0
+			rzh = -m
+			dh = -sqr(rxh^2 + rzh^2) * slantedDepth / rzh
+
+			method = 2
+		else
+			rxh = 0
+			ryh = 0
+			rzh = -slantedDepth
+			dh	=  slantedDepth
+
+			method = 1
+		endif
+
+		addy B/2
+		wallniche 4, method, 2 + 16,
+			-rxh,ryh,rzh, dh,
+			 rightWidth + dxl,	-B/2,	31,
+			-leftWidth  - dxr,	-B/2,	31,
+			-leftWidth  - dxr,	 B/2,	31,
+			 rightWidth + dxl,	 B/2,	31
+		del 1
+
+		! --- Vertical
+		if gs_reveal_top_angle > EPS | gs_reveal_bottom_angle > EPS then
+			m = (B + dxt + dxb) / (tan(gs_reveal_top_angle) + tan(gs_reveal_bottom_angle))
+			midAlpha = (gs_reveal_top_angle - gs_reveal_bottom_angle) / 2
+
+			rxv = (m - WALL_THICKNESS + WIDO_SILL) * tan(gs_reveal_top_angle) - B/2
+			ryv = 0
+			rzv = -m
+			dv = -sqr(rxv^2 + rzv^2) * slantedDepth / rzv
+
+			method = 2
+		else
+			rxv = 0
+			ryv = 0
+			rzv = -slantedDepth
+			dv	=  slantedDepth
+
+			method = 1
+		endif
+
+		addy B/2
+		rotz 90
+
+		wallniche 4, method, 2 + 16,
+			-rxv,ryv,rzv, dv,
+			 B/2+dxt,	-leftWidth,		31,
+			-B/2-dxb,	-leftWidth,		31,
+			-B/2-dxb,	 rightWidth,	31,
+			 B/2+dxt,	 rightWidth,	31
+		del 2
+
+
+		! --- Top - Left Corner
+		if abs(gs_reveal_top_angle) > EPS then
+			ratioTL = tan(gs_reveal_left_angle) / tan(gs_reveal_top_angle)
+			if openingWidth > B * ratioTL then
+				rytl = 2 * B / 3
+				rxtl = rytl * ratioTL
+			else
+				rxtl = 2 * openingWidth / 3
+				rytl = rxtl / ratioTL
+			endif
+
+			if abs(gs_reveal_left_angle) > EPS then
+				rztl = rxtl / tan(gs_reveal_left_angle)
+			else
+				rztl = rytl / tan(gs_reveal_top_angle)
+			endif
+		else
+			if abs(gs_reveal_left_angle) > EPS then
+				rxtl = 3 * openingWidth / 4
+				rytl = 0
+				rztl = rxtl / tan(gs_reveal_left_angle)
+			else
+				rxtl = 0
+				rytl = 0
+				rztl = 1
+			endif
+		endif
+
+		vx = (slantedDepth) * tan(gs_reveal_left_angle)
+		vy = (slantedDepth) * tan(gs_reveal_top_angle)
+		vz = (slantedDepth)
+		dtl = sqr(vx*vx + vy*vy + vz*vz)
+
+		ratioV = max(1, dtl / sqr(rxtl^2 + rytl^2 + rztl^2) * 2)
+		rxtl = rxtl * ratioV
+		rytl = rytl * ratioV
+		rztl = rztl * ratioV
+
+		add rightWidth + gs_right_oversize + overSize + dxl, B + gs_upper_oversize + overSize + dxt, 0
+			wallniche 4, 2, 2 + 16,
+				-rxtl,-rytl,-rztl, dtl,
+				 leftDx,					 0,				31,
+				-3 * openingWidth/4 - dxl,	 0,				31,
+				-3 * openingWidth/4 - dxl,	-4*B/4 - dxt,	31,
+				 leftDx,					-4*B/4 - dxt,	31
+		del 1
+
+		! --- Top - Right Corner
+		if abs(gs_reveal_top_angle) > EPS then
+			ratioTR = tan(gs_reveal_right_angle) / tan(gs_reveal_top_angle)
+			if openingWidth > B * ratioTR then
+				rytr = 2 * B / 3
+				rxtr = rytr * ratioTR
+			else
+				rxtr = 2 * openingWidth / 3
+				rytr = rxtr / ratioTR
+			endif
+
+			if abs(gs_reveal_right_angle) > EPS then
+				rztr = rxtr / tan(gs_reveal_right_angle)
+			else
+				rztr = rytr / tan(gs_reveal_top_angle)
+			endif
+		else
+			if abs(gs_reveal_right_angle) > EPS then
+				rxtr = 3 * openingWidth / 4
+				rytr = 0
+				rztr = rxtr / tan(gs_reveal_right_angle)
+			else
+				rxtr = 0
+				rytr = 0
+				rztr = 1
+			endif
+		endif
+
+		vx = (slantedDepth) * tan(gs_reveal_right_angle)
+		vy = (slantedDepth) * tan(gs_reveal_top_angle)
+		vz = (slantedDepth)
+		dtr = sqr(vx*vx + vy*vy + vz*vz)
+
+		ratioV = max(1, dtr / sqr(rxtr^2 + rytr^2 + rztr^2) * 2)
+		rxtr = rxtr * ratioV
+		rytr = rytr * ratioV
+		rztr = rztr * ratioV
+
+		add -leftWidth - gs_left_oversize - overSize - dxr, B + gs_upper_oversize + overSize + dxt, 0
+			if bCornerWindow then
+				wallniche 4, 2, 2 + 16,
+					rxtr,-rytr,-rztr, dtr,
+					 rightDx,			 0,				31,
+					 openingWidth + 10,	 0,				31,
+					 openingWidth + 10,	-3*B/4 - dxt,	31,
+					 rightDx,			-3*B/4 - dxt,	31
+			else
+				wallniche 4, 2, 2 + 16,
+					rxtr,-rytr,-rztr, dtr,
+					 rightDx,					 0,				31,
+					 3 * openingWidth/4 + dxr,	 0,				31,
+					 3 * openingWidth/4 + dxr,	-3*B/4 - dxt,	31,
+					 rightDx,					-3*B/4 - dxt,	31
+			endif
+		del 1
+
+		if abs(gs_reveal_bottom_angle) < EPS then	! Space for Board
+			dxb = dxb + overSizeLower
+		endif
+
+		! --- Bottom - Left Corner
+		if abs(gs_reveal_bottom_angle) > EPS then
+			ratioBL = tan(gs_reveal_left_angle) / tan(gs_reveal_bottom_angle)
+			if openingWidth > B * ratioBL then
+				rybl = 2 * B / 3
+				rxbl = rybl * ratioBL
+			else
+				rxbl = 2 * openingWidth / 3
+				rybl = rxbl / ratioBL
+			endif
+
+			if abs(gs_reveal_left_angle) > EPS then
+				rzbl = rxbl / tan(gs_reveal_left_angle)
+			else
+				rzbl = rybl / tan(gs_reveal_bottom_angle)
+			endif
+		else
+			if abs(gs_reveal_left_angle) > EPS then
+				rxbl = 3 * openingWidth / 4
+				rybl = 0
+				rzbl = rxbl / tan(gs_reveal_left_angle)
+			else
+				rxbl = 0
+				rybl = 0
+				rzbl = 1
+			endif
+		endif
+
+		vx = (slantedDepth) * tan(gs_reveal_left_angle)
+		vy = (slantedDepth) * tan(gs_reveal_bottom_angle)
+		vz = (slantedDepth)
+		dbl = sqr(vx*vx + vy*vy + vz*vz)
+
+		ratioV = max(1, dbl / sqr(rxbl^2 + rybl^2 + rzbl^2) * 2)
+		rxbl = rxbl * ratioV
+		rybl = rybl * ratioV
+		rzbl = rzbl * ratioV
+
+		add rightWidth + gs_right_oversize + overSize + dxl, -dxb - gs_lower_oversize - overSize, 0
+			wallniche 4, 2, 2 + 16,
+				-rxbl, rybl,-rzbl, dbl,
+				 leftDx,					 0,				31,
+				-3 * openingWidth/4 - dxl,	 0,				31,
+				-3 * openingWidth/4 - dxl,	 3*B/4 + dxt,	31,
+				 leftDx,					 3*B/4 + dxt,	31
+		del 1
+
+		! --- Bottom - Right Corner
+		if abs(gs_reveal_bottom_angle) > EPS then
+			ratioBR = tan(gs_reveal_right_angle) / tan(gs_reveal_bottom_angle)
+			if openingWidth > B * ratioBR then
+				rybr = 2 * B / 3
+				rxbr = rybr * ratioBR
+			else
+				rxbr = 2 * openingWidth / 3
+				rybr = rxbr / ratioBR
+			endif
+
+			if abs(gs_reveal_right_angle) > EPS then
+				rzbr = rxbr / tan(gs_reveal_right_angle)
+			else
+				rzbr = rybr / tan(gs_reveal_bottom_angle)
+			endif
+		else
+			if abs(gs_reveal_right_angle) > EPS then
+				rxbr = 3 * openingWidth / 4
+				rybr = 0
+				rzbr = rxbr / tan(gs_reveal_right_angle)
+			else
+				rxbr = 0
+				rybr = 0
+				rzbr = 1
+			endif
+		endif
+
+		vx = (slantedDepth) * tan(gs_reveal_right_angle)
+		vy = (slantedDepth) * tan(gs_reveal_bottom_angle)
+		vz = (slantedDepth)
+		dbr = sqr(vx*vx + vy*vy + vz*vz)
+
+		ratioV = max(1, dbr / sqr(rxbr^2 + rybr^2 + rzbr^2) * 2)
+		rxbr = rxbr * ratioV
+		rybr = rybr * ratioV
+		rzbr = rzbr * ratioV
+
+		add -leftWidth - gs_left_oversize - overSize - dxr, -dxb - gs_lower_oversize - overSize, 0
+			if bCornerWindow then
+				wallniche 4, 2, 2 + 16,
+					 rxbr, rybr,-rzbr, dbr,
+					 rightDx,			 0,				31,
+					 openingWidth + 10,	 0,				31,
+					 openingWidth + 10,	 3*B/4 + dxt,	31,
+					 rightDx,			 3*B/4 + dxt,	31
+			else
+				wallniche 4, 2, 2 + 16,
+					 rxbr, rybr,-rzbr, dbr,
+					 rightDx,					 0,				31,
+					 3 * openingWidth/4 + dxr,	 0,				31,
+					 3 * openingWidth/4 + dxr,	 3*B/4 + dxt,	31,
+					 rightDx,					 3*B/4 + dxt,	31
+			endif
+		del 1
+	endif
+
+return
+
+
+2000:
+! ==============================================================================
+! Wall Inset cutting body for Slanted Reveal
+! ==============================================================================
+
+	addz (abs(WIDO_ORIG_DIST) > EPS) * (WALL_THICKNESS - WIDO_SILL)
+
+	dxl = (WALL_THICKNESS - WIDO_SILL) * tan(gs_reveal_left_angle)		! --- Left
+	dxr = (WALL_THICKNESS - WIDO_SILL) * tan(gs_reveal_right_angle)		! --- Right
+
+	! --- Left
+	if abs(gs_reveal_left_angle) > EPS then
+		rxtl = 3 * openingWidth / 4
+		rytl = 0
+		rztl = rxtl / tan(gs_reveal_left_angle)
+	else
+		rxtl = 0
+		rytl = 0
+		rztl = 1
+	endif
+
+	vx = gs_parapet_inset_thk * tan(gs_reveal_left_angle)
+	vy = 0
+	vz = gs_parapet_inset_thk
+	dtl = sqr(vx*vx + vy*vy + vz*vz)
+
+	addx rightWidth + dxl
+		wallniche 4, 2, 2 + 16,
+			-rxtl,-rytl,-rztl, dtl,
+			 leftDx,					 0,				31,
+			-3 * openingWidth/4 - dxl,   0,				31,
+			-3 * openingWidth/4 - dxl,	-SYMB_POS_Y-10,	31,
+			 leftDx,					-SYMB_POS_Y-10,	31
+	del 1
+
+
+	! --- Right
+	if abs(gs_reveal_right_angle) > EPS then
+		rxtr = 3 * openingWidth / 4
+		rytr = 0
+		rztr = rxtr / tan(gs_reveal_right_angle)
+	else
+		rxtr = 0
+		rytr = 0
+		rztr = 1
+	endif
+
+
+	vx = gs_parapet_inset_thk * tan(gs_reveal_right_angle)
+	vy = 0
+	vz = gs_parapet_inset_thk
+	dtr = sqr(vx*vx + vy*vy + vz*vz)
+
+	addx -leftWidth - dxr
+		if bCornerWindow then
+			wallniche 4, 2, 2 + 16,
+				rxtr,-rytr,-rztr, dtr,
+				 rightDx,			 0,				31,
+				 openingWidth + 10,	 0,				31,
+				 openingWidth + 10,	-SYMB_POS_Y-10,	31,
+				 rightDx,			-SYMB_POS_Y-10,	31
+		else
+			wallniche 4, 2, 2 + 16 + 128,
+				rxtr,-rytr,-rztr, dtr,
+				 rightDx,					 0,				31,
+				 3 * openingWidth/4 + dxr,	 0,				31,
+				 3 * openingWidth/4 + dxr,	-SYMB_POS_Y-10,	31,
+				 rightDx,					-SYMB_POS_Y-10,	31
+		endif
+	del 1
+
+	del 1
+return
+
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+EPS = 0.0001
+
+! iRevealType:
+REVEAL_EDGE				= 0
+REVEAL_NO				= 1
+REVEAL_POSITIVE			= 2
+REVEAL_NEGATIVE			= 3
+REVEAL_SLANTED			= 4
+REVEAL_SPLAYED			= 5
+REVEAL_HISTORIC			= 6
+REVEAL_DOUBLE			= 7
+REVEAL_DOUBLE_SPLAYED	= 8
+REVEAL_OUTSIDE_SPLAYED	= 9
+
+! ==============================================================================
+
+curvedWall		= abs(WIDO_ORIG_DIST) > EPS
+wallIsLeft		= (SYMB_ROTANGLE > EPS) exor WIDO_REVEAL_SIDE
+bCornerWindow	= (ac_cw_function & ac_corner_window)
+
+
+! ==============================================================================
+! Compatibility
+! ==============================================================================
+
+if refWidth < EPS then refWidth = A
+if leftWidth < EPS then leftWidth = A / 2
+if rightWidth < EPS then rightWidth = A / 2
+
+openingWidth = leftWidth + rightWidth
+
+if gs_macro_version <= 11 then
+	leftCornerFunction		= 0
+	leftCornerAngle			= 0
+	leftConnWallThk			= 0
+	rightCornerFunction		= (ac_cw_function & ac_corner_window)
+	rightCornerAngle		= ac_corner_angle
+	rightConnWallThk		= ac_con_wall_thk
+	bCornerWindow			= 1
+endif
+
+! ==============================================================================
+
+overSize = 0
+
+if gs_macro_version = 9 then
+	widoRightJamb	= WIDO_RIGHT_JAMB
+	widoLeftJamb	= WIDO_LEFT_JAMB
+endif
+
+if gs_macro_version >= 10 then
+	if SYMB_MIRRORED exor (SYMB_ROTANGLE > EPS) then
+		widoRightJamb	= WIDO_LEFT_JAMB
+		widoLeftJamb	= WIDO_RIGHT_JAMB
+	else
+		widoRightJamb	= WIDO_RIGHT_JAMB
+		widoLeftJamb	= WIDO_LEFT_JAMB
+	endif
+endif
+
+
+! =============================================================================
+! Restrictions for Window Shapes
+! =============================================================================
+
+widoHeadDepth = WIDO_HEAD_DEPTH
+
+if iWindowShape = 1 then	! Arched Shape
+	widoLeftJamb	= widoRightJamb
+	widoHeadDepth	= widoRightJamb
+
+	gs_right_oversize	= 0
+	gs_left_oversize	= 0
+	WIDO_LEFT_JAMB = WIDO_RIGHT_JAMB
+endif
+
+
+if SYMB_MIRRORED exor (SYMB_ROTANGLE > EPS) then
+	leftJamb	= WIDO_RIGHT_JAMB
+	rightJamb	= WIDO_LEFT_JAMB
+else
+	leftJamb	= WIDO_LEFT_JAMB
+	rightJamb	= WIDO_RIGHT_JAMB
+endif
+
+if gs_macro_version >= 12 then
+	if iWindowShape = 0 & bCornerWindow & SYMB_MIRRORED then
+		temp		= leftJamb
+		leftJamb	= rightJamb
+		rightJamb	= temp
+	endif
+endif
+
+
+! =============================================================================
+! Calculations for Stack Window
+! =============================================================================
+
+if rightCornerFunction & abs(rightCornerAngle) > EPS then
+	beta = atn ((rightConnWallThk * sin(rightCornerAngle)) / (WALL_THICKNESS + rightConnWallThk * cos(rightCornerAngle)))
+	rx = 1 / tan(rightCornerAngle / 2)
+
+	if rightCornerAngle > 180 then
+		overSizeRight = max (0, WALL_THICKNESS / tan(360 - rightCornerAngle + beta) + WIDO_SILL / tan(rightCornerAngle / 2))
+	else
+		overSizeRight = (WIDO_FRAME_THICKNESS + WIDO_SILL) * rx + max (0, WALL_THICKNESS * tan(rightCornerAngle - beta - 90))
+	endif
+	rightJamb = 0
+	widoRightJamb = 0
+else
+	if gs_stack_right then
+		overSizeRight	= gs_right_oversize
+		rightJamb		= 0
+		widoRightJamb	= 0
+	else
+		overSizeRight	= gs_right_oversize + overSize
+	endif
+endif
+
+if leftCornerFunction & abs(leftCornerAngle) > EPS then
+	beta = atn ((leftConnWallThk * sin(leftCornerAngle)) / (WALL_THICKNESS + leftConnWallThk * cos(leftCornerAngle)))
+	lx = 1 / tan(leftCornerAngle / 2)
+
+	if leftCornerAngle > 180 then
+		overSizeLeft = max (0, WALL_THICKNESS / tan(360 - leftCornerAngle + beta) + WIDO_SILL / tan(leftCornerAngle / 2))
+	else
+		overSizeLeft = (WIDO_FRAME_THICKNESS + WIDO_SILL) * lx + max (0, WALL_THICKNESS * tan(leftCornerAngle - beta - 90))
+	endif
+	leftJamb = 0
+	widoLeftJamb = 0
+else
+	if bCornerWindow & SYMB_MIRRORED then
+		if gs_stack_right then
+			overSizeLeft	= gs_right_oversize
+			leftJamb		= 0
+			widoLeftJamb	= 0
+		else
+			overSizeLeft	= gs_right_oversize + overSize
+		endif
+	else
+		if gs_stack_left then
+			overSizeLeft	= gs_left_oversize
+			leftJamb		= 0
+			widoLeftJamb	= 0
+		else
+			overSizeLeft	= gs_left_oversize + overSize
+		endif
+	endif
+endif
+
+if gs_stack_top then
+	overSizeUpper	= gs_upper_oversize
+else
+	overSizeUpper	= gs_upper_oversize + overSize
+	upperJamb		= WIDO_HEAD_DEPTH
+endif
+
+if gs_stack_bottom then
+	overSizeLower = gs_lower_oversize
+else
+	if iSill = 1 then							! Off
+		overSizeLower = max(overSize, gs_lower_oversize)
+	else
+		if iSill = 2 then						! Inside
+			overSizeLower = gs_lower_oversize + max(gs_sill_oversize * gs_board_thk, overSize)
+		endif
+		if iSill = 3 then						! Outside
+			if iSillType = 1 then
+				overSizeLower = gs_lower_oversize + max(gs_sill_oversize * gs_sill_thk, overSize)
+			endif
+		endif
+		if iSill = 4 then	! Both Sides
+			if gs_sill_oversize then
+				if iSillType = 1 then
+					overSizeLower = gs_lower_oversize + max(gs_sill_thk, gs_board_thk)
+				else
+					overSizeLower = gs_board_thk
+				endif
+			else
+				overSizeLower = gs_lower_oversize
+			endif
+		endif
+	endif
+
+	lowerJamb = WIDO_THRES_DEPTH
+endif
+
+
+! ==============================================================================
+! Calculations for Inclined Walls
+! ==============================================================================
+
+if abs(WALL_INCL) > EPS then
+	bInclinedWall = 1
+	bFactor = SYMB_MIRRORED exor WIDO_REVEAL_SIDE exor wallIsLeft
+	incFactor = not(bFactor) - bFactor
+	incX = incFactor * tan(WALL_INCL)
+	incY = incFactor * (1 / cos(WALL_INCL))
+
+	bDir = SYMB_MIRRORED exor (SYMB_ROTANGLE > EPS)
+	iDir = not(bDir) - bDir
+	incH = cos(WALL_INCL)
+	incV = sin(WALL_INCL) * iDir
+	offsD = iDir * offsX * tan(WALL_INCL)
+else
+	bInclinedWall = 0
+	incX = 0
+	incY = 1
+	incH = 0
+	incV = 0
+endif
+
+
+! ==============================================================================
+! Calculations for Stack Window
+! ==============================================================================
+
+if gs_stack_left then
+	widoLeftJamb = 0
+	leftJamb	 = 0
+endif
+
+if gs_stack_right then
+	widoRightJamb = 0
+	rightJamb	  = 0
+endif
+
+
+! ==============================================================================
+! Calculations for Curved Walls
+! ==============================================================================
+
+if curvedWall then
+
+	if GLOB_SCRIPT_TYPE <> 2 then
+		widoOrigDist = -WIDO_ORIG_DIST
+	else
+		widoOrigDist = WIDO_ORIG_DIST
+	endif
+
+	WOD = abs(widoOrigDist) - (SYMB_ROTANGLE > EPS) * WIDO_FRAME_THICKNESS
+
+	alfaRefWidth = atn((refWidth + overSize) / WOD)
+
+	alfaLeftOs	= atn((leftWidth  + overSizeLeft)  / WOD)
+	alfaRightOs	= atn((rightWidth + overSizeRight) / WOD)
+
+	if WIDO_REVEAL_SIDE then
+		WOD = widoOrigDist + WIDO_FRAME_THICKNESS
+	else
+		WOD = -widoOrigDist
+	endif
+
+	if WIDO_REVEAL_SIDE exor SYMB_ROTANGLE < EPS then
+		if WIDO_REVEAL_SIDE then
+			rSill = sqr(refWidth^2 / 4 + WOD^2) - WIDO_SILL
+			rBoard = rSill + WALL_THICKNESS
+		else
+			rSill = sqr(refWidth^2 / 4 + WOD^2) - WIDO_SILL
+			rBoard = rSill + WALL_THICKNESS
+		endif
+	else
+		if WIDO_REVEAL_SIDE then
+			rBoard = sqr(refWidth^2 / 4 + WOD^2) + WIDO_SILL - WALL_THICKNESS
+			rSill = rBoard + WALL_THICKNESS
+		else
+			rSill = sqr(refWidth^2 / 4 + WOD^2) + WIDO_SILL
+			rBoard = rSill - WALL_THICKNESS
+		endif
+	endif
+
+	alfaLeftJamb	= 180 * leftJamb  / rSill / PI
+	alfaRightJamb	= 180 * rightJamb / rSill / PI
+
+endif	! curvedWall
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+bCustomReveal = (iRevealType = REVEAL_NEGATIVE | iRevealType = REVEAL_SLANTED)
+
+ui_page idTab_CustomRevealSettings
+
+
+x1 = 0
+x2 = x1 + 20
+x3 = 210
+y = 37
+
+cx = 20
+ui_style 0,1
+ui_outfield gs_stWallholeCut[7], x2,y+3,x3-x2-1,18, 4 * not(WIDO_REVEAL_ON)	! Custom Reveal
+ui_infield "AC_custom_reveal", x1,y,18,18
+y = y + 23
+
+
+px = 30
+py = 20
+cx = px + 10
+cy = py + 4
+
+ui_style 0, 0
+ui_outfield gs_stWallholeCut[8], x2,y+5,x3-x2-cx-7,20, 4 * not(WIDO_REVEAL_ON & bCustomReveal)	! Reveal Type
+ui_infield{3} "gs_reveal_type", x3-cx-6,y, cx, cy,
+	2, 13,	! ui_reveal_type.png
+	2, 1,
+	cx, cy, px, py,
+	1,	gs_stWallholeCut[1],	gs_stWallholeCut[1],	! Negative Reveal
+	2,	gs_stWallholeCut[2],	gs_stWallholeCut[2]		! Slanted Reveal
+y = y + 30
+
+
+
+
+sep1x = 222
+sep1y = 100
+
+dy = 22
+
+ui_separator sep1x,33, sep1x,sep1y-4
+ui_separator 0,sep1y, 444,sep1y
+
+
+! Wall Inset ----------------------------------------------------------
+
+if isWindow & (iWindowShape = 0 | iWindowShape = 1) then
+
+	x0 = 233
+	x1 = x0 + 30
+	x2 = 444
+	y = 37
+
+	cx = 18
+	ui_style 0,1
+	ui_outfield gs_stWallholeCut[5], x1,y+3, x2-x1-1,18, iFlag		! Wall Inset
+	ui_infield "gs_parapet_wall_inset", x0,y, cx,18
+	y = y + dy
+
+	iFlag = 4 * not(gs_parapet_wall_inset)
+
+	ui_style 0, 0
+	cx = 60
+	ui_outfield gs_stWallholeCut[6], x1,y+3, x2-x1-cx-1,18, iFlag		! Depth
+	ui_infield "gs_parapet_inset_thk", x2-cx,y, cx,18
+endif
+
+
+! Custom Reveal Sizes ---------------------------------------------------------
+
+x1 = 20
+y = sep1y + 10
+
+ui_style 0,1
+ui_outfield gs_stWallholeCut[4], x1,y, 444-sep1x-11,18, 4 * not(WIDO_REVEAL_ON & bCustomReveal)	! Custom Reveal Sizes
+y = y + 30
+
+if iRevealType = REVEAL_NEGATIVE then
+
+	x = 40
+	ui_style 0, 0
+	ui_infield "gs_reveal_top",		x,y+13, 60,18
+	ui_infield "gs_reveal_bottom",	x,y+81, 60,18
+
+	ui_pict 2, x+90,y,	 33,113, 1	! ui_reveal_negative_sect.png
+	ui_pict 5, x+72,y+16, 17,12, 1	! ui_arrow_v_12.png
+	ui_pict 5, x+72,y+85, 17,12, 1	! ui_arrow_v_12.png
+
+	x = 240
+	ui_infield "gs_reveal_right", x,	y, 60,18
+	ui_infield "gs_reveal_left",  x+80, y, 60,18
+
+	ui_pict 1, x+5,y+39, 121,33, 1	! ui_reveal_negative_plan.png
+	ui_pict 6, x+21,y+25, 14,14, 1	! ui_arrow_h_14.png
+	ui_pict 6, x+96,y+25, 14,14, 1	! ui_arrow_h_14.png
+endif
+
+if iRevealType = REVEAL_SLANTED then
+
+	x = 40
+	x5 = sep1x + 10
+	x6 = sep1x + 80
+	x7 = sep1x + 90
+
+	ui_style 0, 0
+	ui_infield "gs_reveal_top",			x+70,y+34, 60,18
+	ui_infield "gs_reveal_bottom",		x+70,y+59, 60,18
+	ui_infield "gs_reveal_top_angle",	x+70,y+7,  60,18
+	ui_infield "gs_reveal_bottom_angle",x+70,y+87, 60,18
+
+	ui_pict 4, x,	y,	 33,107,1	! ui_reveal_slanted_sect.png
+	ui_pict 7, x+36,y+25,13,10, 1	! ui_arrow_v_10.png
+	ui_pict 7, x+36,y+73,13,10, 1	! ui_arrow_v_10.png
+	ui_pict 8, x+36,y+4, 25,19, 1	! ui_angle_4.png
+	ui_pict 9, x+36,y+87,25,19, 1	! ui_angle_3.png
+
+	x = 240
+
+	ui_infield "gs_reveal_right",		x,	 y, 60,18
+	ui_infield "gs_reveal_left",		x+80,y, 60,18
+	ui_infield "gs_reveal_right_angle",	x,	 y+105, 60,18
+	ui_infield "gs_reveal_left_angle",	x+80,y+105, 60,18
+
+	ui_pict 3,  x+5,  y+39, 134,33,1	! ui_reveal_slanted_plan.png
+	ui_pict 10, x+29, y+25, 10,11, 1	! ui_arrow_h_10.png
+	ui_pict 10, x+105,y+25, 10,11, 1	! ui_arrow_h_10.png
+	ui_pict 11, x+3,  y+74, 19,25, 1	! ui_angle_1.png
+	ui_pict 12, x+120,y+74, 19,25, 1	! ui_angle_2.png
+endif
+
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Dimension 1"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Dimension 2"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Height"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Integer Name="AC_WallContours">
+			<Description><![CDATA["Wall Contours (0-None,1-Full,2-Side,3-Length)"]]></Description>
+			<Fix/>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="AC_Hole_Hotspot_Control">
+			<Description><![CDATA["Hotspots 0-None,1-2D,2-3D,3-All"]]></Description>
+			<Fix/>
+			<Value>3</Value>
+		</Integer>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Show 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="AC_Sill_To_Curr_Story">
+			<Description><![CDATA["Sill Height to Current Story"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="gs_macro_version">
+			<Description><![CDATA["Macro Version"]]></Description>
+			<Value>9</Value>
+		</Integer>
+		<Length Name="refWidth">
+			<Description><![CDATA["Reference Width"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Length Name="leftWidth">
+			<Description><![CDATA["Left Offset from the Origo"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Length Name="rightWidth">
+			<Description><![CDATA["Right Offset from the Origo"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="AC_HoleSideMaterial">
+			<Description><![CDATA["Hole has Wall's Side Surface"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="AC_HoleMaterialCurved">
+			<Description><![CDATA["Hole Surface's Split is Curved in Curved Walls"]]></Description>
+			<Fix/>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_window_frame: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_frame">
+			<Description><![CDATA["Window Frame"]]></Description>
+			<Fix/>
+		</Title>
+		<Length Name="gs_frame_thk">
+			<Description><![CDATA["Frame Thickness"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_frame_width">
+			<Description><![CDATA["Frame Width"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.07</Value>
+		</Length>
+
+		<!-- gs_window_sash: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_sash">
+			<Description><![CDATA["Sash Frame"]]></Description>
+			<Fix/>
+		</Title>
+		<Length Name="gs_sash_thk">
+			<Description><![CDATA["Sash Frame Thickness"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_sash_width">
+			<Description><![CDATA["Sash Frame Width"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="gs_glass_thk">
+			<Description><![CDATA["Glass Thickness"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D and Section Representation"]]></Description>
+			<Fix/>
+		</Title>
+		<PenColor Name="gs_pen_2D">
+			<Description><![CDATA["Symbol Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</PenColor>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+			<Fix/>
+		</Title>
+		<PenColor Name="gs_frame_pen">
+			<Description><![CDATA["Frame Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<PenColor Name="gs_sash_pen">
+			<Description><![CDATA["Sash Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<PenColor Name="gs_glass_pen">
+			<Description><![CDATA["Glass Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+
+		<!-- gs_window_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_material">
+			<Description><![CDATA["Surfaces"]]></Description>
+			<Fix/>
+		</Title>
+		<Material Name="gs_frame_mat">
+			<Description><![CDATA["Frame Surface"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>14</Value>
+		</Material>
+		<Material Name="gs_sash_mat">
+			<Description><![CDATA["Sash Surface"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>15</Value>
+		</Material>
+		<Material Name="gs_glass_mat">
+			<Description><![CDATA["Glass Surface"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>24</Value>
+		</Material>
+
+		<!-- ac_details: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="ac_details">
+			<Description><![CDATA["Computed Oversize Values"]]></Description>
+			<Fix/>
+		</Title>
+		<Length Name="ac_left_oversize">
+			<Description><![CDATA["AC Left Opening Oversize"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_right_oversize">
+			<Description><![CDATA["AC Right Opening Oversize"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_upper_oversize">
+			<Description><![CDATA["AC Upper Opening Oversize"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_lower_oversize">
+			<Description><![CDATA["AC Lower Opening Oversize"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="ifc_optypestr">
+			<Description><![CDATA["IFC Operation"]]></Description>
+			<Fix/>
+			<Value><![CDATA["Не определена"]]></Value>
+		</String>
+		<Integer Name="ifc_optype">
+			<Description><![CDATA["IFC Operation"]]></Description>
+			<Fix/>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="offsX">
+			<Description><![CDATA["Horizontal Offset Size"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Length Name="offsY">
+			<Description><![CDATA["Vertical Offset Size"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="isWindow">
+			<Description><![CDATA["Shutter Applied for a Window"]]></Description>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="gs_IsCurved">
+			<Description><![CDATA["Curved Window"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bOpeningDirection">
+			<Description><![CDATA["Opening Direction"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- iWindowShape: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Integer Name="iWindowShape">
+			<Description><![CDATA["Window Shape"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="archHeight">
+			<Description><![CDATA["Height of the Arc"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.25</Value>
+		</Length>
+		<Integer Name="nArchResolution">
+			<Description><![CDATA["Arch Resolution"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+
+		<!-- iRevealType: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Integer Name="iRevealType">
+			<Description><![CDATA["Reveal Type"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Angle Name="gs_reveal_left_angle">
+			<Description><![CDATA["Angle Side 2"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>20</Value>
+		</Angle>
+		<Angle Name="gs_reveal_right_angle">
+			<Description><![CDATA["Angle Side"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>20</Value>
+		</Angle>
+		<Angle Name="gs_reveal_top_angle">
+			<Description><![CDATA["Upper Side Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>20</Value>
+		</Angle>
+		<Angle Name="gs_reveal_bottom_angle">
+			<Description><![CDATA["Bottom Side Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>20</Value>
+		</Angle>
+
+		<!-- ac_corner_window: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="ac_corner_window">
+			<Description><![CDATA["Corner Window Function"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="leftCornerFunction">
+			<Description><![CDATA["Left Corner"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Angle Name="leftCornerAngle">
+			<Description><![CDATA["Left Corner Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Length Name="leftConnWallThk">
+			<Description><![CDATA["Left Connected Wall Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="rightCornerFunction">
+			<Description><![CDATA["Right Corner"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Angle Name="rightCornerAngle">
+			<Description><![CDATA["Right Corner Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Length Name="rightConnWallThk">
+			<Description><![CDATA["Right Connected Wall Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="bCornerWindow">
+			<Description><![CDATA["Corner Window"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="ac_cw_function">
+			<Description><![CDATA["Placement Type (1=CW,0=W)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Angle Name="ac_corner_angle">
+			<Description><![CDATA["Corner Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>90</Value>
+		</Angle>
+		<Boolean Name="ac_diff_con_wall_thk">
+			<Description><![CDATA["Diff. Conn. Wall Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_con_wall_thk">
+			<Description><![CDATA["Connecting Wall Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_window_trim: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<String Name="gs_window_trim">
+			<Description><![CDATA["Trim"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value><![CDATA["Откл."]]></Value>
+		</String>
+		<Length Name="gs_trim_width_in">
+			<Description><![CDATA["Trim Width Inside"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.025</Value>
+		</Length>
+		<Length Name="gs_trim_width_out">
+			<Description><![CDATA["Trim Width Outside"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.025</Value>
+		</Length>
+
+		<!-- gs_window_sill: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<String Name="gs_window_sill">
+			<Description><![CDATA["Sill"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value><![CDATA["Откл."]]></Value>
+		</String>
+		<Integer Name="iSill">
+			<Description><![CDATA["Sill"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="gs_sill_oversize">
+			<Description><![CDATA["Sill Oversize"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="iSillType">
+			<Description><![CDATA["Type of the Sill"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="gs_board_type">
+			<Description><![CDATA["Type of the Board"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="iBoardType">
+			<Description><![CDATA["Type of the Board"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="gs_sill_thk">
+			<Description><![CDATA["Sill Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.025</Value>
+		</Length>
+		<Length Name="gs_sill_nosing">
+			<Description><![CDATA["Sill Nosing"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Angle Name="gs_sill_angle">
+			<Description><![CDATA["Sill Angle"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Angle>
+		<Length Name="gs_sill_slip_in">
+			<Description><![CDATA["Sill Slip-in Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_sill_width">
+			<Description><![CDATA["Width of Sill"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_board_thk">
+			<Description><![CDATA["Board Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.025</Value>
+		</Length>
+		<Length Name="gs_board_slip_in">
+			<Description><![CDATA["Board Slip-in Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- AC_custom_reveal: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="AC_custom_reveal">
+			<Description><![CDATA["Custom Reveal"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="gs_reveal_type">
+			<Description><![CDATA["Outer Reveal Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+
+		<!-- gs_windw_stack: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_windw_stack">
+			<Description><![CDATA["Ganging"]]></Description>
+		</Title>
+		<Boolean Name="gs_stack_left">
+			<Description><![CDATA["Connection on the Left"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_stack_right">
+			<Description><![CDATA["Connection on the Right"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_stack_top">
+			<Description><![CDATA["Connection on the Top"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_stack_bottom">
+			<Description><![CDATA["Connection on the Bottom"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_window_oversize: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_window_oversize">
+			<Description><![CDATA["Oversize"]]></Description>
+		</Title>
+		<Length Name="gs_left_oversize">
+			<Description><![CDATA["Left Opening Oversize"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_right_oversize">
+			<Description><![CDATA["Right Opening Oversize"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_upper_oversize">
+			<Description><![CDATA["Upper Opening Oversize"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_lower_oversize">
+			<Description><![CDATA["Lower Opening Oversize"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_parapet_wall_inset: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="gs_parapet_wall_inset">
+			<Description><![CDATA["Wall Inset"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="gs_parapet_inset_thk">
+			<Description><![CDATA["Depth of Inset"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.2</Value>
+		</Length>
+		<String Name="gs_stWallholeCut">
+			<Description><![CDATA["String Resource"]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="8" SecondDimension="0">
+				<AVal Row="1"><![CDATA["Отрицательная Четверть"]]></AVal>
+				<AVal Row="2"><![CDATA["Четверть с Рассветами"]]></AVal>
+				<AVal Row="3"><![CDATA["Специальная Четверть"]]></AVal>
+				<AVal Row="4"><![CDATA["Размеры Специальной Четверти"]]></AVal>
+				<AVal Row="5"><![CDATA["Подоконная Ниша"]]></AVal>
+				<AVal Row="6"><![CDATA["Длина"]]></AVal>
+				<AVal Row="7"><![CDATA["Специальная Четверть"]]></AVal>
+				<AVal Row="8"><![CDATA["Тип Четверти"]]></AVal>
+			</ArrayValues>
+		</String>
+		<Integer Name="idTab_CustomRevealSettings">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+	</Parameters>
+</ParamSection>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+</CalledMacros>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="1" length_in_bytes="218" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000790000
+	00210803000000CAF9F4E100000009504C5445FF0000000000CCCCCCA7049C76
+	0000000174524E530040E6D866000000754944415478DAEDD4C10A85301043D1
+	89FFFFD1E2E23974F48540BA33773605A5874AB130AB9E2BFC993B90E9E59B33
+	ABAE01BFA773AC6127B6CA43E2323CDA90EB1BB25A6FA925C8CE359FEF89F26C
+	83BC70917559BD61F9DA9165D9FF871967368B1C3972E4C89137C820F932893F
+	64F30B6C4827B12F0CF819218AA10000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="2" length_in_bytes="185" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000210000
+	007102030000002604220B00000009504C5445FF0000000000CCCCCCA7049C76
+	0000000174524E530040E6D8660000005449444154785ECD93410A805008055F
+	90F7F212B3E986BF530692FDC55F96E4AC865909AA8E3318DECA6035599ADBD7
+	8DC0A5C77C975CC16D3F36836C5BB6B0DAF69AEA990DDAEC68B679436985B70B
+	8BF5FCE90B116D24445CD4B75C0000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="3" length_in_bytes="266" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000860000
+	002108030000002BBE23F50000000C504C5445FF0000000000CCCCCCD4D0C8EB
+	A3DE290000000174524E530040E6D866000000A24944415478DAEDD5410AC330
+	0C00C155F2FF3F975C7C1034EB5A6D0D41ABAB0D833098D0B0B9BA3FA2111AE5
+	42E390BEC338A46634A319CD68C68319E76FBEB6F343465889199329232B4805
+	9A5E79EBC01575863B70459DE10E5C5167B88359052B4F945907AEA86FC31DB8
+	A2CE7007AEA833DC812BEA0C7790159E3F512F3BF05DD4F37D90157B1C24C526
+	0749B1C941526C721023FE5E8C8811AB73B57675F40263BC0CD8324A52810000
+	000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="4" length_in_bytes="262" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000210000
+	006B0203000000844903F60000000C504C5445FF0000000000CCCCCCD4D0C8EB
+	A3DE290000000174524E530040E6D8660000009E49444154785EADD3B10DC330
+	0C04C0CF061EE947604135D94B23B09000EF1821D6AB6197908D1F6718B0AD27
+	DEF33B83B5298EF5638E6DC364415987CCB16D982C4CD62F995FDB86C982B20E
+	9963DB6DB2A02C700C3F5A5BF3981201E0F51857FAC75A3319652B5518B601BA
+	6AF2E8FE79B6F85D98BEB7E0FF9DF3502A39731973AFA623F72F987B3AFDCA7D
+	0ECBBD9F8EBC1FC1BC47D391F72D58BDDD1FE90A14A6E4B4A7AB000000004945
+	4E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="5" length_in_bytes="127" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000110000
+	000C0103000000BEEBC4FC00000006504C5445000000FF00001BFF8D22000000
+	0274524E53FF00E5B7304A0000001C4944415408D763B81BCAC0D0FFBF81811D
+	88EFE3C02039901AA05A003D6E17C1F0CC98E60000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="6" length_in_bytes="126" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000000E0000
+	000E01030000002586BF9200000006504C5445000000FF00001BFF8D22000000
+	0274524E53FF00E5B7304A0000001B4944415408D763B8FF8661FE1306200092
+	40F6FF3F0CF53FB09200B7CB166070333B110000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="7" length_in_bytes="126" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000000D0000
+	000A01030000005520468700000006504C5445000000FF00001BFF8D22000000
+	0274524E53FF00E5B7304A0000001B4944415408D76308BDC1F0BF83E13F03C3
+	FF1B48880124187A0300DEBD0EC322F8C4B60000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="8" length_in_bytes="158" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000190000
+	0013080300000052AC563700000006504C5445FF000000000041A31203000000
+	0174524E530040E6D8660000003C4944415478DA75D1410E0040040441FDFF4F
+	EFC14DB6E6223134618E1AC85655B436FC6968CB38E7637DE4447E9E1BF7E9E6
+	AF93E473FB3C7E84690F3FB6004D7DA27ABE0000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="9" length_in_bytes="158" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000190000
+	0013080300000052AC563700000006504C5445FF000000000041A31203000000
+	0174524E530040E6D8660000003C4944415478DA75D1410A004008C3C0F6FF9F
+	5E5672D3E43A084273D4DCF5A71409A835E61FB426D8164C0043C49065889852
+	0506E502D3097C3687075572004D07FC9A0E0000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="10" length_in_bytes="126" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000000A0000
+	000B01030000007CA08E5B00000006504C5445000000FF00001BFF8D22000000
+	0274524E53FF00E5B7304A0000001B4944415408D763B87780619E0303100049
+	20FBFF0186FA06641200CD180D33629F011E0000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="11" length_in_bytes="163" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000130000
+	00190103000000E90587E900000006504C5445000000FF00001BFF8D22000000
+	0274524E53FF00E5B7304A000000404944415408D763F8FFF7010318FF84E2AF
+	50FC168AEF42F15E28AE85E07B403D7E40DC0AC427FF2E60B825ABC0F0FB0103
+	C3F7BF0A40BC80E13D50FC3DC46C00F9CC3FCDEEB7E9000000000049454E44AE
+	426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="12" length_in_bytes="163" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000130000
+	00190103000000E90587E900000006504C5445FF000000000041A31203000000
+	0174524E530040E6D8660000004149444154785E2DC34B0D80301444D10B6131
+	E59314074861592995F1A4540AA2BA07D2CCE22018765B2D99C26EBB2C073A1B
+	DA1ECA11D41EBC0BD419CA4F93C10748CC08E524D9D3E80000000049454E44AE
+	426082
+	]]>
+</GDLPict>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="13" length_in_bytes="213" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000003C0000
+	00140803000000E6DDAE1B0000000F504C5445FF0000000000808080C0C0C0FF
+	FFFF602B5F1B0000000174524E530040E6D8660000006A4944415478DAEDCE41
+	0AC0200C445147BDFF991B1D309D211BF7FE064A1B9ED85ED7216AC51371CBCE
+	FFD3C631E5997CE530E8376ADC5427365D63D5072B8DA912AA999E18E863CE35
+	1D23D7A4B6756DC9B501784939FF90D4574CB4E34430AB1A3BC3CCAC5FEE75D9
+	07BD300121003D0C660000000049454E44AE426082
+	]]>
+</GDLPict>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

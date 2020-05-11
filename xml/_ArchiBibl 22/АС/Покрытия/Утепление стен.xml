@@ -1,0 +1,2484 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="true" IsPlaceable="true" MainGUID="74521AB1-EF34-4C19-B84B-BB6D77B18406" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>784EAEA1-5041-4AA6-B6F4-EF263A891EE7</MainGUID>
+	<MainGUID>21DE7666-EF71-4885-8222-629F88CB3F4A</MainGUID>
+	<MainGUID>66F6D7C2-637D-4243-91FD-6DB3FC8F91BE</MainGUID>
+	<MainGUID>8924BF73-5771-4731-9E84-F87F7C4BCEAB</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+!---------------!
+! Battered Wall !
+!---------------!
+
+material gs_mat
+
+if ac_refSide then
+	dir=-1
+else
+	dir=1
+endif
+
+group "battered wall"
+	if ac_wall_radius<eps then
+	!! Straight Wall
+		addx -over_beg
+		rotx 90
+		roty 90
+
+		prism 4, ac_wall_length+over_beg+over_end,
+			0,yl,
+			0,yh,
+			xh*dir,yh,
+			xl*dir,yl
+
+		del 3
+	else
+	!! Curved Wall
+
+		resol ac_wall_resol
+
+		roty -90
+		rotx 180
+		addy -ac_wall_radius
+		rotx -overang_1
+
+		Revolve 5, 180*ac_wall_length/ac_wall_radius/pi+overang_1+overang_2, 4+8+16+32,
+				yl,ac_wall_radius,      2,
+				yh,ac_wall_radius,      2,
+				yh,ac_wall_radius-xh*dir,      2,
+				yl,ac_wall_radius-xl*dir,      2,
+				yl,ac_wall_radius,      2
+
+		del 4
+	endif
+endgroup
+if gs_gdl_debug then
+	model wire
+	placegroup "battered wall"
+	model solid
+endif
+
+!!----------------!!!----------------!!!----------------!!
+!! Cutting Bodies !!! Cutting Bodies !!! Cutting Bodies !!
+!!----------------!!!----------------!!!----------------!!
+
+group "cutting body"
+	dim cut_set[5]
+	if uwbp then cut_set[1]=1 else cut_set[1]=0	! Lower Cut
+	if uwtp then cut_set[2]=1 else cut_set[2]=0	! Upper Cut
+	cut_set[3]=1	! End Cuts
+	cut_set[4]=1	! Window/Door
+	cut_set[5]=1	! Connecting Walls
+
+	call "Wall Cutting Body" parameters ref_thickness=ref_thickness, gs_mat=gs_mat, cut_set=cut_set,
+										ac_accessory_debug=ac_accessory_debug, gs_gdl_debug=gs_gdl_debug,
+										ac_wall_height=ac_wall_height, ac_wall_radius=ac_wall_radius, ac_wall_length=ac_wall_length,
+										ac_wall_resol=ac_wall_resol, ac_refside=ac_refside, ac_angles=ac_angles, ac_side_poly=ac_side_poly,
+										ac_top_poly=ac_top_poly, ac_bot_poly=ac_bot_poly,
+										ac_wd_poly=ac_wd_poly, ac_curved_wall=ac_curved_wall, ac_cont_pen=ac_cont_pen,
+										bot_ext=bot_ext, top_ext=top_ext
+endgroup
+if gs_gdl_debug then
+!	model wire
+	placegroup "cutting body"
+!	model solid
+endif
+
+!!------------------!!
+!! Solid Operations !!
+!!------------------!!
+
+wall_1=subgroup("battered wall","cutting body")
+placegroup wall_1
+
+base
+vert 0, 0, 0
+vert 1, 0, 0
+vert 0, 1, 0
+vert 0, 0, 1
+coor 2, -1, -2, -3, -4
+body 1
+
+
+end
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+!------------------
+! Precalculate data
+!------------------
+
+if gs_gdl_debug then
+	print "wd_hole"
+	for i=1 to vardim1(wd_hole)
+		print wd_hole[i]
+	next i
+endif
+
+dim td_symbol[][]
+
+i=1
+j=1
+L=1
+td_symbol[L][1]=0
+td_symbol[L][2]=ac_angles[1][1]
+td_symbol[L][3]=0
+
+if gs_gdl_debug then
+	print "td_symbol[",L,"][1]=",td_symbol[L][1]
+	print "td_symbol[",L,"][2]=",td_symbol[L][2]
+	print "td_symbol[",L,"][3]=",td_symbol[L][3]
+endif
+
+for k=1 to wd_num+1         ! The wall will be contain wd_num+1 pieces by sliceing the window.
+	if k<=wd_num then
+		Reference=wd_hole[j][1]
+	else
+		Reference=ac_wall_length
+	endif
+
+!	if gs_gdl_debug then print ac_side_poly[i][1],"<=",reference," and ",ac_side_poly[i][1],">=0 and",i,"<=",vardim1(ac_side_poly)," and ",vardim2(ac_side_poly),">2"
+
+	if i<=vardim1(ac_side_poly) and vardim2(ac_side_poly)>2 then
+		while ac_side_poly[i][1]<=Reference and ac_side_poly[i][1]>=0 and i<=vardim1(ac_side_poly) do
+			if gs_gdl_debug then print "i=",i
+
+			L=L+1
+			td_symbol[L][1]=ac_side_poly[i][1]
+			td_symbol[L][2]=ac_angles[i][2]
+			td_symbol[L][3]=0
+
+			if gs_gdl_debug then
+				print "td_symbol[",L,"][1]=",td_symbol[L][1]
+				print "td_symbol[",L,"][2]=",td_symbol[L][2]
+				print "td_symbol[",L,"][3]=",td_symbol[L][3]
+			endif
+
+			L=L+1
+			td_symbol[L][1]=ac_side_poly[i][3]
+			td_symbol[L][2]=ac_angles[i+1][1]
+			td_symbol[L][3]=0
+
+			if gs_gdl_debug then
+				print "td_symbol[",L,"][1]=",td_symbol[L][1]
+				print "td_symbol[",L,"][2]=",td_symbol[L][2]
+				print "td_symbol[",L,"][3]=",td_symbol[L][3]
+			endif
+
+			i=i+1
+
+			if i>vardim1(ac_side_poly) then goto 10101
+		endwhile
+	endif
+	10101:
+
+	if j<=wd_num then
+		L=L+1
+		td_symbol[L][1]=wd_hole[j][1]
+		td_symbol[L][2]=90
+		td_symbol[L][3]=wd_hole[j][2]
+
+		if gs_gdl_debug then
+			print "td_symbol[",L,"][1]=",td_symbol[L][1]
+			print "td_symbol[",L,"][2]=",td_symbol[L][2]
+			print "td_symbol[",L,"][3]=",td_symbol[L][3]
+		endif
+
+		L=L+1
+		td_symbol[L][1]=wd_hole[j][3]
+		td_symbol[L][2]=90
+		td_symbol[L][3]=wd_hole[j][2]
+
+		if gs_gdl_debug then
+			print "td_symbol[",L,"][1]=",td_symbol[L][1]
+			print "td_symbol[",L,"][2]=",td_symbol[L][2]
+			print "td_symbol[",L,"][3]=",td_symbol[L][3]
+		endif
+
+		j=j+1
+	endif
+next k
+
+L=L+1
+td_symbol[L][1]=ac_wall_length
+td_symbol[L][2]=ac_angles[sg_num][2]
+td_symbol[L][3]=0
+
+if gs_gdl_debug then
+	print "td_symbol[",L,"][1]=",td_symbol[L][1]
+	print "td_symbol[",L,"][2]=",td_symbol[L][2]
+	print "td_symbol[",L,"][3]=",td_symbol[L][3]
+endif
+
+!-------------------------------------------------
+! Check the td_symbol array for the corner windows
+!-------------------------------------------------
+
+dim temper[][]
+
+td_num=1
+for i=1 to L step 2
+	if td_symbol[i+1][1]>td_symbol[i][1]+epszilon then
+		temper[td_num]=td_symbol[i]
+		td_num=td_num+1
+		temper[td_num]=td_symbol[i+1]
+		td_num=td_num+1
+	endif
+next i
+td_num=td_num-1
+
+td_symbol=temper
+
+! ------------------------
+! Do the complete 2D symbol
+! ------------------------
+
+prw=(xh+xl)/2
+
+pen gs_cont_pen
+unID = 1
+
+if ac_wall_radius>epszilon then
+	if ac_refside=0 then
+		radius_1=ac_wall_radius
+		radius_2=ac_wall_radius-prw
+		radius_3=ac_wall_radius-xl
+	else
+		radius_1=ac_wall_radius
+		radius_2=ac_wall_radius+prw
+		radius_3=ac_wall_radius+xl
+	endif
+
+	! Editable Hotspots for Angle Editing
+
+	hsp_pos=prw/2
+
+	j=1
+	k=1
+	hotspot2 0,0,unID,ac_angles[j][k],6+512*ac_refside : unID = unID+1
+	hotspot2 1,0,unID,ac_angles[j][k],4+128 : unID = unID+1
+	hotspot2 hsp_pos/tan(ac_angles[j][k]),hsp_pos*sgn(not(ac_refside)-0.5),unID,ac_angles[j][k],5 : unID = unID+1
+
+	add2 0, ac_wall_radius
+	rot2 ac_wall_length*360/(2*ac_wall_radius*pi)
+	add2 0, -ac_wall_radius
+
+	j=vardim1(ac_angles)
+	k=2
+	hotspot2 0,0,unID,ac_angles[j][k],6+512*ac_refside : unID = unID+1
+	hotspot2 1,0,unID,ac_angles[j][k],4+128 : unID = unID+1
+	hotspot2 hsp_pos/tan(ac_angles[j][k]),hsp_pos*sgn(not(ac_refside)-0.5),unID,ac_angles[j][k],5 : unID = unID+1
+
+	del 3
+
+	j=1
+	k=2
+	for i=1 to sp_num
+		add2 0, ac_wall_radius
+		rot2 ac_side_poly[i][1]*360/(2*ac_wall_radius*pi)
+		add2 0, -ac_wall_radius
+
+		k=2
+		hotspot2 0,0,unID,ac_angles[j][k],6+512*ac_refside : unID = unID+1
+		hotspot2 1,0,unID,ac_angles[j][k],4+128 : unID = unID+1
+		hotspot2 hsp_pos/tan(ac_angles[j][k]),hsp_pos*sgn(not(ac_refside)-0.5),unID,ac_angles[j][k],5 : unID = unID+1
+
+		del 3
+
+		add2 0, ac_wall_radius
+		rot2 ac_side_poly[i][3]*360/(2*ac_wall_radius*pi)
+		add2 0, -ac_wall_radius
+
+		j=j+1
+		k=1
+
+		hotspot2 0,0,unID,ac_angles[j][k],6+512*ac_refside : unID = unID+1
+		hotspot2 1,0,unID,ac_angles[j][k],4+128 : unID = unID+1
+		hotspot2 hsp_pos/tan(ac_angles[j][k]),hsp_pos*sgn(not(ac_refside)-0.5),unID,ac_angles[j][k],5 : unID = unID+1
+
+		del 3
+	next i
+
+	!! End Of Editable Hotspots
+
+!    print "radius_1=",radius_1,"radius_2=",radius_2,"radius_3=",radius_3
+
+	!------------------------------------------
+	! Do the symbol from the precalculated data
+	!------------------------------------------
+
+	i=1
+	j=1
+	for i=1 to td_num/2 ! wd_num+sp_num+1
+		long_1=(td_symbol[j][1]*360/(2*radius_1*pi))-90
+		long_2=(td_symbol[j+1][1]*360/(2*radius_1*pi))-90
+
+		arc2 0, radius_1, radius_1, long_1, long_2
+
+		if td_symbol[j][2]<>90 then
+
+			fi_1b=(td_symbol[j][1])*360/(2*radius_1*pi)
+			beg_point_x1=radius_1*sin(fi_1b)
+			beg_point_y1=radius_1-radius_1*cos(fi_1b)
+
+			rad=radius_1
+			rad_act=radius_2
+			if ac_refside=0 then
+				kappa=td_symbol[j][2]
+			else
+				kappa=180-td_symbol[j][2]
+			endif
+
+			gosub 100
+
+			fi_2b=fi_1b+atn(sec_x/(radius_1-sec_y))
+			end_point_x1=(radius_2)*sin(fi_2b)
+			end_point_y1=radius_1-(radius_2)*cos(fi_2b)
+
+!			line2 beg_point_x1,beg_point_y1,end_point_x1,end_point_y1
+
+			rad=radius_1
+			rad_act=radius_3
+
+			gosub 100
+
+			fi_3b=fi_1b+atn(sec_x/(radius_1-sec_y))
+			bot_point_x1=(radius_3)*sin(fi_3b)
+			bot_point_y1=radius_1-(radius_3)*cos(fi_3b)
+
+			if show_bot=1 and td_symbol[j][3]<0.001 then
+				line2 end_point_x1,end_point_y1,bot_point_x1,bot_point_y1
+			endif
+		else
+			fi_1b=(td_symbol[j][1])*360/(2*radius_1*pi)
+			fi_2b=fi_1b
+			fi_3b=fi_1b
+
+			beg_point_x1=radius_1*sin(fi_1b)
+			beg_point_y1=radius_1-radius_1*cos(fi_1b)
+			end_point_x1=radius_2*sin(fi_2b)
+			end_point_y1=radius_1-radius_2*cos(fi_2b)
+
+			line2 beg_point_x1,beg_point_y1,end_point_x1,end_point_y1
+
+			bot_point_x1=(radius_3)*sin(fi_3b)
+			bot_point_y1=radius_1-(radius_3)*cos(fi_3b)
+
+			if show_bot=1 and td_symbol[j][3]<0.001 then
+				line2 end_point_x1,end_point_y1,bot_point_x1,bot_point_y1
+			endif
+		endif
+
+		if td_symbol[j+1][2]<>90 then
+			fi_1e=(td_symbol[j+1][1])*360/(2*radius_1*pi)
+			beg_point_x2=radius_1*sin(fi_1e)
+			beg_point_y2=radius_1-radius_1*cos(fi_1e)
+
+			rad=radius_1
+			rad_act=radius_2
+			if ac_refside=0 then
+				kappa=td_symbol[j+1][2]
+			else
+				kappa=180-td_symbol[j+1][2]
+			endif
+
+			gosub 100
+
+			fi_2e=fi_1e+atn(sec_x/(radius_1-sec_y))
+			end_point_x2=(radius_2)*sin(fi_2e)
+			end_point_y2=radius_1-(radius_2)*cos(fi_2e)
+
+			line2 beg_point_x2,beg_point_y2,end_point_x2,end_point_y2
+
+			rad=radius_1
+			rad_act=radius_3
+!!            if ac_refside=0 then
+!!                kappa=td_symbol[j+1][2]
+!!            else
+!!                kappa=180-td_symbol[j+1][2]
+!!            endif
+
+			gosub 100
+
+			fi_3e=fi_1e+atn(sec_x/(radius_1-sec_y))
+
+			bot_point_x2=(radius_3)*sin(fi_3e)
+			bot_point_y2=radius_1-(radius_3)*cos(fi_3e)
+
+			if show_bot=1 and td_symbol[j+1][3]<0.001 then
+				line2 end_point_x2,end_point_y2,bot_point_x2,bot_point_y2
+			endif
+		else
+			fi_1e=(td_symbol[j+1][1])*360/(2*radius_1*pi)
+			fi_2e=fi_1e
+			fi_3e=fi_1e
+
+			beg_point_x2=radius_1*sin(fi_1e)
+			beg_point_y2=radius_1-radius_1*cos(fi_1e)
+			end_point_x2=radius_2*sin(fi_2e)
+			end_point_y2=radius_1-radius_2*cos(fi_2e)
+			bot_point_x2=(radius_3)*sin(fi_2e)
+			bot_point_y2=radius_1-(radius_3)*cos(fi_2e)
+
+			line2 beg_point_x2,beg_point_y2,end_point_x2,end_point_y2
+
+			if show_bot=1 and td_symbol[j+1][3]<0.001 then
+				line2 end_point_x2,end_point_y2,bot_point_x2,bot_point_y2
+			endif
+		endif
+
+		sort_1=fi_2b-90
+		sort_2=fi_2e-90
+
+		if sort_2>sort_1 then
+			arc2 0, radius_1, radius_2, sort_1, sort_2
+		endif
+
+		sort_3=fi_3b-90
+		sort_4=fi_3e-90
+
+		if show_bot=1 and sort_4>sort_3 then
+			arc2 0, radius_1, radius_3, sort_3, sort_4
+		endif
+
+		! ---------------
+		! Do the hotspots
+		! ---------------
+
+		hotspot2 beg_point_x1,beg_point_y1
+		hotspot2 end_point_x1,end_point_y1
+		hotspot2 beg_point_x2,beg_point_y2
+		hotspot2 end_point_x2,end_point_y2
+		if td_symbol[j][3]=0 and show_bot=1 then
+			hotspot2 bot_point_x1,bot_point_y1
+		endif
+		if td_symbol[j+1][3]=0 and show_bot=1 then
+			hotspot2 bot_point_x2,bot_point_y2
+		endif
+
+		mu_1=long_2-long_1
+		mu_2=sort_2-sort_1
+		mu_3=sort_4-sort_3
+
+!		if mu_1>=0 and mu_2>=0 then
+!			fill gs_fill_type
+!			poly2_b 7, 2+4, gs_fill_pen, gs_back_pen,
+!					beg_point_x1, beg_point_y1, 1,
+!					end_point_x1, end_point_y1, 1,
+!					0, radius_1, 901,
+!					0, mu_2, 4001,
+!					beg_point_x2, beg_point_y2, 1,
+!					0, radius_1, 901,
+!					0, -mu_1, 4001
+!		endif
+
+!		if show_bot=1 and mu_2>=0 and mu_3>=0 then
+!			poly2_b 7, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+!					end_point_x1, end_point_y1, 1,
+!					bot_point_x1, bot_point_y1, 1,
+!					0, radius_1, 901,
+!					0, mu_3, 4001,
+!					end_point_x2, end_point_y2, 1,
+!					0, radius_1, 901,
+!					0, -mu_2, 4001
+!		endif
+
+		j=j+2
+	next i
+
+	!---------------------------------------------
+	! Do the lines and the fills around the window
+	!---------------------------------------------
+
+	for i=1 to wd_num
+		pen cont_pen_w
+
+		if wd_hole[i][2]>epszilon then
+			win_bot=xl-((xl-xh)*(wd_hole[i][3]+bot_ext))/height
+			if win_bot<prw or show_bot=0 then win_bot=prw
+
+			if ac_refside=0 then
+				radius_4=ac_wall_radius-win_bot
+			else
+				radius_4=ac_wall_radius+win_bot
+			endif
+
+			if wd_hole[i][3]<ac_wall_length-epszilon and wd_hole[i][1]>0+epszilon then
+
+				fi_1=(wd_hole[i][1])*360/(2*radius_1*pi)
+				fi_2=(wd_hole[i][3])*360/(2*radius_1*pi)
+
+				beg_point_x1=radius_1*sin(fi_1)
+				beg_point_y1=radius_1-radius_1*cos(fi_1)
+				end_point_x1=radius_2*sin(fi_1)
+				end_point_y1=radius_1-radius_2*cos(fi_1)
+				win_point_x1=radius_4*sin(fi_1)
+				win_point_y1=radius_1-radius_4*cos(fi_1)
+				bot_point_x1=radius_3*sin(fi_1)
+				bot_point_y1=radius_1-radius_3*cos(fi_1)
+
+				beg_point_x2=radius_1*sin(fi_2)
+				beg_point_y2=radius_1-ac_wall_radius*cos(fi_2)
+				end_point_x2=radius_2*sin(fi_2)
+				end_point_y2=radius_1-radius_2*cos(fi_2)
+				win_point_x2=radius_4*sin(fi_2)
+				win_point_y2=radius_1-radius_4*cos(fi_2)
+				bot_point_x2=radius_3*sin(fi_2)
+				bot_point_y2=radius_1-radius_3*cos(fi_2)
+
+				arc2 0, radius_1, radius_1, (wd_hole[i][1]*360/(2*radius_1*pi))-90, (wd_hole[i][3]*360/(2*radius_1*pi))-90
+
+				if show_bot=1 then
+					arc2 0, radius_1, radius_4, (wd_hole[i][1]*(radius_4/radius_1)*360/(2*radius_4*pi))-90, (wd_hole[i][3]*(radius_4/radius_1)*360/(2*radius_4*pi))-90
+					if win_bot>prw then
+						line2 end_point_x1,end_point_y1,win_point_x1, win_point_y1
+						line2 end_point_x2,end_point_y2,win_point_x2, win_point_y2
+						pen gs_cont_pen
+						hotspot2 win_point_x1, win_point_y1
+						hotspot2 win_point_x2, win_point_y2
+					endif
+
+					fill gs_fill_type
+					poly2_b 7, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+							win_point_x1, win_point_y1, 1,
+							bot_point_x1, bot_point_y1, 1,
+							0, radius_1, 901,
+							bot_point_x2, bot_point_y2, 3001,
+							win_point_x2, win_point_y2, 1,
+							0, radius_1, 901,
+							win_point_x1, win_point_y1, 3001
+
+					pen gs_cont_pen
+					arc2 0, radius_1, radius_3, (wd_hole[i][1]*(radius_3/radius_1)*360/(2*radius_3*pi))-90, (wd_hole[i][3]*(radius_3/radius_1)*360/(2*radius_3*pi))-90
+					pen cont_pen_w
+				else
+					arc2 0, radius_1, radius_2, (wd_hole[i][1]*(radius_2/radius_1)*360/(2*radius_2*pi))-90, (wd_hole[i][3]*(radius_2/radius_1)*360/(2*radius_2*pi))-90
+				endif
+
+				fill gs_fill_type
+				poly2_b 7, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+						beg_point_x1, beg_point_y1, 1,
+						win_point_x1, win_point_y1, 1,
+						0, radius_1, 901,
+						win_point_x2, win_point_y2, 3001,
+						beg_point_x2, beg_point_y2, 1,
+						0, radius_1, 901,
+						beg_point_x1, beg_point_y1, 3001
+			else
+				if wd_hole[i][3]>=ac_wall_length-epszilon then
+
+					fi_1b=(wd_hole[i][1])*360/(2*radius_1*pi)
+					fi_2b=fi_1b
+					fi_3b=fi_1b
+
+					beg_point_x1=radius_1*sin(fi_1b)
+					beg_point_y1=radius_1-radius_1*cos(fi_1b)
+					end_point_x1=radius_2*sin(fi_1b)
+					end_point_y1=radius_1-radius_2*cos(fi_1b)
+					win_point_x1=radius_4*sin(fi_1b)
+					win_point_y1=radius_1-radius_4*cos(fi_1b)
+					bot_point_x1=(radius_3)*sin(fi_2b)
+					bot_point_y1=radius_1-(radius_3)*cos(fi_2b)
+
+					if win_bot>prw then
+						line2 end_point_x1,end_point_y1,win_point_x1,win_point_y1
+						hotspot2 win_point_x1,win_point_y1
+					endif
+
+					if show_bot=1 then   ! and wd_hole[i][3]<0.001
+						line2 win_point_x1,win_point_y1,bot_point_x1,bot_point_y1
+					endif
+
+					if abs(ac_angles[sg_num][2]-90)>eps then
+						fi_1e=ac_wall_length*360/(2*radius_1*pi)
+						beg_point_x2=radius_1*sin(fi_1e)
+						beg_point_y2=radius_1-radius_1*cos(fi_1e)
+
+						hotspot2 beg_point_x2,beg_point_y2
+
+						rad=radius_1
+						rad_act=radius_4
+						if ac_refside=0 then
+							kappa=ac_angles[sg_num][2]
+						else
+							kappa=180-ac_angles[sg_num][2]
+						endif
+
+						gosub 100
+
+						fi_2e=fi_1e+atn(sec_x/(radius_1-sec_y))
+						win_point_x2=(radius_4)*sin(fi_2e)
+						win_point_y2=radius_1-(radius_4)*cos(fi_2e)
+
+						line2 beg_point_x2,beg_point_y2,win_point_x2,win_point_y2
+						hotspot2 win_point_x2,win_point_y2
+
+						rad=radius_1
+						rad_act=radius_3
+						! Kappa
+
+						gosub 100
+
+						fi_3e=fi_1e+atn(sec_x/(radius_1-sec_y))
+
+						bot_point_x2=(radius_3)*sin(fi_3e)
+						bot_point_y2=radius_1-(radius_3)*cos(fi_3e)
+
+						pen gs_cont_pen
+						if show_bot=1 then !  and wd_hole[i][3]<0.001
+							line2 win_point_x2,win_point_y2,bot_point_x2,bot_point_y2
+							hotspot2 bot_point_x2,bot_point_y2
+						endif
+					else
+						fi_1e=(ac_wall_length)*360/(2*radius_1*pi)
+						fi_2e=fi_1e
+						fi_3e=fi_1e
+
+						beg_point_x2=radius_1*sin(fi_1e)
+						beg_point_y2=radius_1-radius_1*cos(fi_1e)
+						win_point_x2=radius_4*sin(fi_2e)
+						win_point_y2=radius_1-radius_4*cos(fi_2e)
+						bot_point_x2=(radius_3)*sin(fi_2e)
+						bot_point_y2=radius_1-(radius_3)*cos(fi_2e)
+
+						line2 beg_point_x2,beg_point_y2,end_point_x2,end_point_y2
+
+						pen gs_cont_pen
+						if show_bot=1 then !  and wd_hole[i][3]<0.001
+							line2 win_point_x2,win_point_y2,bot_point_x2,bot_point_y2
+						endif
+					endif
+
+					pen cont_pen_w
+
+					long_1=(wd_hole[i][1]*360/(2*radius_1*pi))-90
+					long_2=(ac_wall_length*360/(2*radius_1*pi))-90
+
+					arc2 0, radius_1, radius_1, long_1, long_2
+
+					sort_1=fi_2b-90
+					sort_2=fi_2e-90
+
+					if sort_2>sort_1 then
+						arc2 0, radius_1, radius_4, sort_1, sort_2
+					endif
+
+					sort_3=fi_3b-90
+					sort_4=fi_3e-90
+
+					pen gs_cont_pen
+					if show_bot=1 and sort_4>sort_3 then
+						arc2 0, radius_1, radius_3, sort_3, sort_4
+					endif
+
+					if show_bot=1 then
+						fill gs_fill_type
+						poly2_b 7, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+								win_point_x1, win_point_y1, 1,
+								bot_point_x1, bot_point_y1, 1,
+								0, radius_1, 901,
+								bot_point_x2, bot_point_y2, 3001,
+								win_point_x2, win_point_y2, 1,
+								0, radius_1, 901,
+								win_point_x1, win_point_y1, 3001
+					endif
+
+					fill gs_fill_type
+					poly2_b 7, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+							beg_point_x1, beg_point_y1, 1,
+							win_point_x1, win_point_y1, 1,
+							0, radius_1, 901,
+							win_point_x2, win_point_y2, 3001,
+							beg_point_x2, beg_point_y2, 1,
+							0, radius_1, 901,
+							beg_point_x1, beg_point_y1, 3001
+				endif
+
+				if wd_hole[i][1]<=0+epszilon then
+
+					fi_1e=wd_hole[i][3]*360/(2*radius_1*pi)
+					fi_2e=fi_1e
+					fi_3e=fi_1e
+
+					beg_point_x2=radius_1*sin(fi_1e)
+					beg_point_y2=radius_1-radius_1*cos(fi_1e)
+					end_point_x2=radius_2*sin(fi_1e)
+					end_point_y2=radius_1-radius_2*cos(fi_1e)
+					win_point_x2=radius_4*sin(fi_1e)
+					win_point_y2=radius_1-radius_4*cos(fi_1e)
+					bot_point_x2=radius_3*sin(fi_2e)
+					bot_point_y2=radius_1-radius_3*cos(fi_2e)
+
+					if win_bot>prw then
+						line2 end_point_x2,end_point_y2,win_point_x2,win_point_y2
+						hotspot2 win_point_x2,win_point_y2
+					endif
+
+					if show_bot=1 then !  and wd_hole[i][3]<0.001
+						line2 win_point_x2,win_point_y2,bot_point_x2,bot_point_y2
+					endif
+
+					if abs(ac_angles[1][1]-90)>eps then
+						fi_1b=(0)*360/(2*radius_1*pi)
+						beg_point_x1=radius_1*sin(fi_1b)
+						beg_point_y1=radius_1-radius_1*cos(fi_1b)
+
+						hotspot2 beg_point_x1,beg_point_y1
+
+						rad=radius_1
+						rad_act=radius_4
+						if ac_refside=0 then
+							kappa=ac_angles[1][1]
+						else
+							kappa=180-ac_angles[1][1]
+						endif
+
+						gosub 100
+
+						fi_2b=fi_1b+atn(sec_x/(radius_1-sec_y))
+!                print "fi_1b=",fi_1b," fi_2b=",fi_2b
+
+						win_point_x1=(radius_4)*sin(fi_2b)
+						win_point_y1=radius_1-(radius_4)*cos(fi_2b)
+
+						line2 beg_point_x1,beg_point_y1,win_point_x1,win_point_y1
+						hotspot2 win_point_x1,win_point_y1
+
+						rad=radius_1
+						rad_act=radius_3
+						! Kappa
+
+						gosub 100
+
+						fi_3b=fi_1b+atn(sec_x/(radius_1-sec_y))
+
+						bot_point_x1=(radius_3)*sin(fi_3b)
+						bot_point_y1=radius_1-(radius_3)*cos(fi_3b)
+
+						pen gs_cont_pen
+						if show_bot=1 then !  and wd_hole[i][3]>0.001
+							line2 win_point_x1,win_point_y1,bot_point_x1,bot_point_y1
+							hotspot2 bot_point_x1,bot_point_y1
+						endif
+					else
+						fi_1b=(0)*360/(2*radius_1*pi)
+						fi_2b=fi_1b
+						fi_3b=fi_1b
+
+						beg_point_x1=radius_1*sin(fi_1b)
+						beg_point_y1=radius_1-radius_1*cos(fi_1b)
+						end_point_x1=radius_1*sin(fi_1b)
+						end_point_y1=radius_1-radius_2*cos(fi_1b)
+						win_point_x1=radius_4*sin(fi_2b)
+						win_point_y1=radius_1-radius_4*cos(fi_2b)
+						bot_point_x1=radius_3*sin(fi_3b)
+						bot_point_y1=radius_1-radius_3*cos(fi_3b)
+
+						line2 beg_point_x1,beg_point_y1,end_point_x1,end_point_y1
+
+						pen gs_cont_pen
+						if show_bot=1 then !  and wd_hole[i][3]>0.001
+							line2 win_point_x1,win_point_y1,bot_point_x1,bot_point_y1
+						endif
+					endif
+
+					pen cont_pen_w
+
+					long_1=fi_1b-90
+					long_2=fi_1e-90
+!
+					print "long_1=",long_1,"long_2=",long_2
+
+					arc2 0, radius_1, radius_1, long_1, long_2
+
+					sort_1=fi_2b-90
+					sort_2=fi_2e-90
+!
+!                    print "sort_1=",sort_1,"sort_2=",sort_2
+
+					if sort_2>sort_1 then
+						arc2 0, radius_1, radius_4, sort_1, sort_2
+					endif
+
+					sort_3=fi_3b-90
+					sort_4=fi_3e-90
+
+!                    print "sort_3=",sort_3,"sort_4=",sort_4
+
+					pen gs_cont_pen
+					if show_bot=1 and sort_4>sort_3 then
+						arc2 0, radius_1, radius_3, sort_3, sort_4
+					endif
+
+					if show_bot=1 then
+						fill gs_fill_type
+						poly2_b 7, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+								win_point_x1, win_point_y1, 1,
+								bot_point_x1, bot_point_y1, 1,
+								0, radius_1, 901,
+								bot_point_x2, bot_point_y2, 3001,
+								win_point_x2, win_point_y2, 1,
+								0, radius_1, 901,
+								win_point_x1, win_point_y1, 3001
+					endif
+
+					fill gs_fill_type
+					poly2_b 7, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+							beg_point_x1, beg_point_y1, 1,
+							win_point_x1, win_point_y1, 1,
+							0, radius_1, 901,
+							win_point_x2, win_point_y2, 3001,
+							beg_point_x2, beg_point_y2, 1,
+							0, radius_1, 901,
+							beg_point_x1, beg_point_y1, 3001
+				endif
+
+			endif
+		endif
+	next i
+else
+	!---------------
+	! Straight Model
+	!---------------
+	if ac_refSide=1 then mul2 1,-1
+
+	!! Editable Hotspots for Angle Editing
+
+	hsp_pos=prw/2
+
+	j=1
+	k=1
+	hotspot2 0,0,unID,ac_angles[j][k],6+512*ac_refside : unID = unID+1
+	hotspot2 1,0,unID,ac_angles[j][k],4+128 : unID = unID+1
+	hotspot2 hsp_pos/tan(ac_angles[j][k]),hsp_pos,unID,ac_angles[j][k],5 : unID = unID+1
+
+	j=vardim1(ac_angles)
+	k=2
+	hotspot2 ac_wall_length,0,unID,ac_angles[j][k],6+512*ac_refside : unID = unID+1
+	hotspot2 ac_wall_length+1,0,unID,ac_angles[j][k],4+128 : unID = unID+1
+	hotspot2 ac_wall_length+hsp_pos/tan(ac_angles[j][k]),hsp_pos,unID,ac_angles[j][k],5 : unID = unID+1
+
+	j=1
+	k=2
+	for i=1 to sp_num
+		k=2
+		hotspot2 ac_side_poly[i][1],0,unID,ac_angles[j][k],6+512*ac_refside : unID = unID+1
+		hotspot2 ac_side_poly[i][1]+1,0,unID,ac_angles[j][k],4+128 : unID = unID+1
+		hotspot2 ac_side_poly[i][1]+hsp_pos/tan(ac_angles[j][k]),hsp_pos,unID,ac_angles[j][k],5 : unID = unID+1
+
+		j=j+1
+		k=1
+
+		hotspot2 ac_side_poly[i][3],0,unID,ac_angles[j][k],6+512*ac_refside : unID = unID+1
+		hotspot2 ac_side_poly[i][3]+1,0,unID,ac_angles[j][k],4+128 : unID = unID+1
+		hotspot2 ac_side_poly[i][3]+hsp_pos/tan(ac_angles[j][k]),hsp_pos,unID,ac_angles[j][k],5 : unID = unID+1
+	next i
+
+	!! End Of Editable Hotspots
+
+	i=1
+	j=1
+	for i=1 to td_num/2
+
+		line2 td_symbol[j][1],0,td_symbol[j+1][1],0
+
+		if td_symbol[j][2]<>90 then
+			if td_symbol[j][2]>90 then
+				alfa=180-td_symbol[j][2]
+				dir_x=-1
+			else
+				alfa=td_symbol[j][2]
+				dir_x=1
+			endif
+			beg_x=prw/tan(alfa)*dir_x
+			line2 td_symbol[j][1],0,td_symbol[j][1]+beg_x,prw
+
+			bot_begx=xl/tan(alfa)*dir_x
+			if show_bot=1 and td_symbol[j][3]<0.001 then
+				line2 td_symbol[j][1]+beg_x,prw,td_symbol[j][1]+bot_begx,xl
+			endif
+		else
+			line2 td_symbol[j][1],0,td_symbol[j][1],prw
+
+			if show_bot=1 and td_symbol[j][3]<0.001 then
+				line2 td_symbol[j][1],prw,td_symbol[j][1],xl
+			endif
+			beg_x=0
+			bot_begx=0
+		endif
+
+		if td_symbol[j+1][2]<>90 then
+			if td_symbol[j+1][2]>90 then
+				beta=180-td_symbol[j+1][2]
+				dir_x=-1
+			else
+				beta=td_symbol[j+1][2]
+				dir_x=1
+			endif
+			end_x=prw/tan(beta)*dir_x
+			line2 td_symbol[j+1][1],0,td_symbol[j+1][1]+end_x,prw
+
+			bot_endx=xl/tan(beta)*dir_x
+			if show_bot=1 and td_symbol[j+1][3]<0.001 then
+				line2 td_symbol[j+1][1]+end_x,prw,td_symbol[j+1][1]+bot_endx,xl
+			endif
+		else
+			line2 td_symbol[j+1][1],0,td_symbol[j+1][1],prw
+
+			if show_bot=1 and td_symbol[j+1][3]<0.001 then
+				line2 td_symbol[j+1][1],prw,td_symbol[j+1][1],xl
+			endif
+			end_x=0
+			bot_endx=0
+		endif
+
+		line2 td_symbol[j][1]+beg_x,prw,td_symbol[j+1][1]+end_x,prw
+		if show_bot=1 then ! and (td_symbol[j+1][3]<0.001 or td_symbol[j][3]<0.001) then
+			line2 td_symbol[j][1]+bot_begx,xl,td_symbol[j+1][1]+bot_endx,xl
+		endif
+
+		! ---------------
+		! Do the hotspots
+		! ---------------
+
+		hotspot2 td_symbol[j][1],0
+		hotspot2 td_symbol[j][1]+beg_x,prw
+		hotspot2 td_symbol[j+1][1]+end_x,prw
+		hotspot2 td_symbol[j+1][1],0
+
+		if show_bot=1 and td_symbol[j][3]<0.001 then
+			hotspot2 td_symbol[j][1]+bot_begx,xl
+		endif
+		if show_bot=1 and td_symbol[j+1][3]<0.001 then
+			hotspot2 td_symbol[j+1][1]+bot_endx,xl
+		endif
+
+		if abs(td_symbol[j][1]-td_symbol[j+1][1])>epszilon or abs((td_symbol[j+1][1]+end_x)-(td_symbol[j][1]+beg_x))>epszilon then ! New
+			fill gs_fill_type
+			poly2_b 4, 2+4, gs_fill_pen, gs_back_pen,
+					td_symbol[j][1], 0, 1,
+					td_symbol[j][1]+beg_x, prw, 1,
+					td_symbol[j+1][1]+end_x, prw, 1,
+					td_symbol[j+1][1], 0, 1
+		endif
+
+		if show_bot=1 then
+			if abs((td_symbol[j][1]+beg_x)-(td_symbol[j+1][1]+end_x))>epszilon or abs((td_symbol[j+1][1]+bot_endx)-(td_symbol[j][1]+bot_begx))>epszilon then ! New
+				poly2_b 4, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+						td_symbol[j][1]+beg_x, prw, 1,
+						td_symbol[j][1]+bot_begx, xl, 1,
+						td_symbol[j+1][1]+bot_endx, xl, 1,
+						td_symbol[j+1][1]+end_x, prw, 1
+			endif
+		endif
+
+		j=j+2
+	next i
+
+	!---------------------------------------------
+	! Do the lines and the fills around the window
+	!---------------------------------------------
+
+	for i=1 to wd_num
+		pen cont_pen_w
+		if wd_hole[i][2]>epszilon then
+
+			win_bot=xl-((xl-xh)*(wd_hole[i][2]+bot_ext))/ac_wall_height   !height
+			if win_bot<prw or show_bot=0 then win_bot=prw
+
+			if wd_hole[i][3]<ac_wall_length-epszilon and wd_hole[i][1]>0+epszilon then ! New
+
+!                print "belso ablak"
+
+				line2 wd_hole[i][1],0,wd_hole[i][3],0
+				if show_bot=1 then
+					line2 wd_hole[i][1],win_bot,wd_hole[i][3],win_bot
+					if win_bot>prw then
+						line2 wd_hole[i][1],prw,wd_hole[i][1],win_bot
+						line2 wd_hole[i][3],prw,wd_hole[i][3],win_bot
+						pen gs_cont_pen
+						hotspot2 wd_hole[i][1],win_bot
+						hotspot2 wd_hole[i][3],win_bot
+					endif
+					line2 wd_hole[i][1],xl,wd_hole[i][3],xl
+					pen cont_pen_w
+
+					fill gs_fill_type
+					poly2_b 4, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+							wd_hole[i][1], win_bot, 1,
+							wd_hole[i][1], xl, 1,
+							wd_hole[i][3], xl, 1,
+							wd_hole[i][3], win_bot, 1
+
+				else
+					line2 wd_hole[i][1],prw,wd_hole[i][3],prw
+				endif
+
+				fill gs_fill_type
+				poly2_b 4, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+						wd_hole[i][1], 0, 1,
+						wd_hole[i][1], win_bot, 1,
+						wd_hole[i][3], win_bot, 1,
+						wd_hole[i][3], 0, 1
+			else
+				if wd_hole[i][1]<=0+epszilon then
+
+					if ac_angles[1][1]>90 then
+						beta=180-ac_angles[1][1]
+						dir_x=-1
+					else
+						beta=ac_angles[1][1]
+						dir_x=1
+					endif
+					beg_x=win_bot/tan(beta)*dir_x
+!                    line2 0,0,beg_x,win_bot
+
+					bot_begx=xl/tan(beta)*dir_x
+					if win_bot>prw then
+						pen gs_cont_pen
+						line2 beg_x,win_bot,bot_begx,xl
+						line2 bot_begx,xl,wd_hole[i][3],xl
+						hotspot2 wd_hole[i][3],win_bot
+						hotspot2 bot_begx,xl
+					endif
+
+					hotspot2 beg_x,win_bot
+					hotspot2 0,0
+
+					pen cont_pen_w
+					line2 0,0,wd_hole[i][3],0
+					line2 beg_x,win_bot,wd_hole[i][3],win_bot
+					line2 wd_hole[i][3],prw,wd_hole[i][3],win_bot
+
+					fill gs_fill_type
+					poly2_b 4, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+							0, 0, 1,
+							beg_x, win_bot, 1,
+							wd_hole[i][3], win_bot, 1,
+							wd_hole[i][3], 0, 1
+
+					if show_bot=1 then
+						fill gs_fill_type
+						poly2_b 4, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+								beg_x, win_bot, 1,
+								bot_begx, xl, 1,
+								wd_hole[i][3], xl, 1,
+								wd_hole[i][3], win_bot, 1
+					endif
+				endif
+
+				if wd_hole[i][3]>=ac_wall_length-epszilon then
+
+					if ac_angles[sg_num][2]>90 then
+						beta=180-ac_angles[sg_num][2]
+						dir_x=-1
+					else
+						beta=ac_angles[sg_num][2]
+						dir_x=1
+					endif
+					end_x=win_bot/tan(beta)*dir_x
+!                    line2 ac_wall_length,0,ac_wall_length+end_x,win_bot
+
+					bot_endx=xl/tan(beta)*dir_x
+					if win_bot>prw then
+						pen gs_cont_pen
+						line2 ac_wall_length+end_x,win_bot,ac_wall_length+bot_endx,xl
+						line2 wd_hole[i][1],xl,ac_wall_length+bot_endx,xl
+						hotspot2 wd_hole[i][1],win_bot
+						hotspot2 ac_wall_length+bot_endx,xl
+					endif
+
+					hotspot2 ac_wall_length+end_x,win_bot
+					hotspot2 ac_wall_length,0
+
+					pen cont_pen_w
+					line2 wd_hole[i][1],0,ac_wall_length,0
+					line2 wd_hole[i][1],win_bot,ac_wall_length+end_x,win_bot
+					line2 wd_hole[i][1],prw,wd_hole[i][1],win_bot
+
+					fill gs_fill_type
+					poly2_b 4, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+							wd_hole[i][1], 0, 1,
+							wd_hole[i][1], win_bot, 1,
+							ac_wall_length+end_x, win_bot, 1,
+							ac_wall_length, 0, 1
+
+					if show_bot=1 then
+						fill gs_fill_type
+						poly2_b 4, 2+4, gs_wallhole_penFg, gs_wallhole_penBg,
+								wd_hole[i][1], win_bot, 1,
+								wd_hole[i][1], xl, 1,
+								ac_wall_length+bot_endx, xl, 1,
+								ac_wall_length+end_x, win_bot, 1
+					endif
+				endif
+
+			endif ! New
+
+		endif
+	next i
+
+	if ac_refSide=1 then del 1
+
+endif
+
+td_symbol=empty !! Empty the Array
+
+end
+
+100:
+! Center point            (u,v)=(0,rad)
+! Radius                  rad_act
+! Equation of the circle  (sec_x_beg-u)^2+(sec_y_beg-v)^2=r^2
+! Slope of the line       kappa
+! Equation of the line    sec_y_beg=tan(kappa)*sec_x_beg
+! Equation with two unkn. (1+(tan(kappa))^2)*sec_x_beg^2-2*rad*tan(kappa)*sec_x_beg+rad^2-rad_act^2
+
+!--------------------------
+! Section point calculation
+!--------------------------
+
+a_value=(1+(tan(kappa))^2)
+b_value=-2*rad*tan(kappa)
+c_value=rad^2-rad_act^2
+
+!print "kappa=",kappa
+!print "a_value=",a_value
+!print "b_value=",b_value
+!print "c_value=",c_value
+
+if kappa<=90 then
+	if b_value^2-4*a_value*c_value>=0 then
+		sec_x=(-b_value-sqr(b_value^2-4*a_value*c_value))/(2*a_value)
+		sec_y=sec_x*tan(kappa)
+	else
+		sec_x=rad_act*cos(kappa)*sin(kappa)
+		sec_y=rad-rad_act*cos(kappa)*cos(kappa)
+	endif
+else
+	if b_value^2-4*a_value*c_value>=0 then
+		sec_x=(-b_value+sqr(b_value^2-4*a_value*c_value))/(2*a_value)
+		sec_y=sec_x*tan(kappa)
+	else
+		sec_x=rad_act*cos(kappa)*sin(kappa)
+		sec_y=rad-rad_act*cos(kappa)*cos(kappa)
+	endif
+endif
+
+!print "sec_x=",sec_x,"sec_y=",sec_y
+
+return
+
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+!dim th[]
+!th[1]=0.1
+!th[2]=0.3
+!th[3]=0.1
+eps=0.00001
+epszilon=0.0015
+if GLOB_CONTEXT=1 or GLOB_CONTEXT=5 then
+	if cust_bega<0 then parameters cust_bega=0
+	if cust_enda<0 then parameters cust_enda=0
+	if rHeight<0 then parameters rHeight=0
+	if wain_thk<0 then parameters wain_thk=0
+	if wain_thk_b<0 then parameters wain_thk_b=0
+	if wain_thk_t<0 then parameters wain_thk_t=0
+	if bat_angle<0 then parameters bat_angle=0
+endif
+
+dim empty[1][1]
+	empty[1][1] = 0
+
+! --------------------------------
+! Calculate the section dimensions
+! --------------------------------
+
+yl=bot_ext
+yh=ac_wall_height-top_ext
+
+if rHeight>0 then
+	xh=wain_thk_b-((wain_thk_b-wain_thk)/(rHeight))*yh-((wain_thk_b-wain_thk)/(rHeight))*bot_ext
+	height=rHeight+bot_ext
+	parameters wain_thk_t=xh
+	lock "wain_thk_t"
+else
+	xh=wain_thk_t
+	height=ac_wall_height+bot_ext+top_ext
+endif
+
+if rHeight<eps then
+	lock "wain_thk"
+endif
+
+if abs(bat_angle)<epszilon then
+	xl=wain_thk_b
+else
+	if rHeight>0 then
+		xl=xh+(rHeight+bot_ext)*sin(bat_angle)
+	else
+		xl=xh+(ac_wall_height+top_ext+bot_ext)*sin(bat_angle)
+	endif
+	parameters wain_thk_b=xl
+	lock "wain_thk_b"
+endif
+
+if wain_thk_t<0 then
+	parameters uwtp=0
+	lock "uwtp"
+	uwtp=0
+endif
+
+! --------------------------------
+! Scan the arrays for the last row
+! --------------------------------
+
+dim gs_bot_poly[][]
+if uwbp=0 then
+	gs_bot_poly[1][1]=0 : gs_bot_poly[1][2]=0
+	gs_bot_poly[2][1]=ac_wall_length : gs_bot_poly[2][2]=0
+
+	ac_bot_poly=gs_bot_poly
+
+endif
+bot_num=vardim1(ac_bot_poly)
+
+dim gs_top_poly[][]
+if uwtp=0 then
+	gs_top_poly[1][1]=0 : gs_top_poly[1][2]=ac_wall_height
+	gs_top_poly[2][1]=ac_wall_length : gs_top_poly[2][2]=ac_wall_height
+
+	ac_top_poly=gs_top_poly
+endif
+top_num=vardim1(ac_top_poly)
+
+sg_num=vardim1(ac_angles)
+if vardim2(ac_side_poly)<=2 then
+	sp_num=0
+else
+	sp_num=vardim1(ac_side_poly)
+endif
+if vardim2(ac_wd_poly)<=2 then
+	wd_num=0
+else
+	wd_num=vardim1(ac_wd_poly)
+endif
+
+! ---------------------------
+! Refill the ac_angles array
+! ---------------------------
+
+if abs(cust_bega)>eps then ac_angles[1][1]=cust_bega
+if abs(cust_enda)>eps then ac_angles[sg_num][2]=cust_enda
+
+! -----------------------------------------
+! Calculate the oversize for the revolution
+! -----------------------------------------
+
+! Center point            (u,v)=(0,ac_wall_radius)
+! Radius                  r=ac_wall_radius-xl
+! Equation of the circle  (sec_x_beg-u)^2+(sec_y_beg-v)^2=r^2
+! Slope of the line       kappa=180-ac_angles[1][1]
+! Equation of the line    sec_y_beg=tan(kappa)*sec_x_beg
+! Equation with two unkn. (1+(tan(kappa))^2)*sec_x_beg^2-2*ac_wall_radius*tan(kappa)*sec_x_beg+2*ac_wall_radius*xl-xl^2
+
+ref_thickness=max(xl,xh)
+cutting_thk=ref_thickness+0.20
+if ac_wall_radius<eps then	!! Staight Wall
+	if ac_angles[1][1]>90 then
+		over_beg=ref_thickness/tan(180-ac_angles[1][1])+0.05
+	else
+		over_beg=0.05
+	endif
+	if ac_angles[vardim1(ac_angles)][2]<90 then
+		over_end=ref_thickness/tan(ac_angles[vardim1(ac_angles)][2])+0.05
+	else
+		over_end=0.05
+	endif
+
+	over_cut_end=over_end+0.05
+	over_cut_beg=over_beg+0.05
+else						!! Curved Wall
+	if ac_angles[1][1]<=90 then
+		kappa=ac_angles[1][1]
+
+		a_beg=(1+(tan(kappa))^2)
+		b_beg=-2*ac_wall_radius*tan(kappa)
+		c_beg=2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+		if b_beg^2-4*a_beg*c_beg>=0 then
+			sec_x_beg=(-b_beg-sqr(b_beg^2-4*a_beg*c_beg))/(2*a_beg)
+			sec_y_beg=sec_x_beg*tan(kappa)
+		else
+			sec_x_beg=ac_wall_radius*cos(kappa)*sin(kappa)
+			sec_y_beg=ac_wall_radius-ac_wall_radius*cos(kappa)*cos(kappa)
+		endif
+
+		overang_1=0
+	else
+		kappa=180-ac_angles[1][1]
+
+		a_beg=(1+(tan(kappa))^2)
+		b_beg=-2*ac_wall_radius*tan(kappa)
+		c_beg=2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+		if b_beg^2-4*a_beg*c_beg>=0 then
+			sec_x_beg=-(-b_beg-sqr(b_beg^2-4*a_beg*c_beg))/(2*a_beg)
+			sec_y_beg=-sec_x_beg*tan(kappa)
+			overang_1=asn(-sec_x_beg/(ac_wall_radius-ref_thickness))  ! Iaccuray
+		else
+			sec_x_beg=-ac_wall_radius*cos(kappa)*sin(kappa)
+			sec_y_beg=ac_wall_radius-ac_wall_radius*cos(kappa)*cos(kappa)
+			overang_1=kappa
+		endif
+	endif
+
+	if ac_angles[sg_num][2]>=90 then
+		lambda=180-ac_angles[sg_num][2]
+
+		a_end=(1+(tan(lambda))^2)
+		b_end=-2*ac_wall_radius*tan(lambda)
+		c_end=2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+		if b_end^2-4*a_end*c_end>=0 then
+			sec_x_end=-(-b_end-sqr(b_end^2-4*a_end*c_end))/(2*a_end)
+			sec_y_end=-sec_x_end*tan(lambda)
+		else
+			sec_x_end=-ac_wall_radius*cos(lambda)*sin(lambda)
+			sec_y_end=ac_wall_radius-ac_wall_radius*cos(lambda)*cos(lambda)
+		endif
+
+		overang_2=0
+	else
+		lambda=ac_angles[sg_num][2]
+
+		a_end=(1+(tan(lambda))^2)
+		b_end=-2*ac_wall_radius*tan(lambda)
+		c_end=2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+		if b_end^2-4*a_end*c_end>=0 then
+			sec_x_end=(-b_end-sqr(b_end^2-4*a_end*c_end))/(2*a_end)
+			sec_y_end=sec_x_end*tan(lambda)
+			overang_2=asn(sec_x_end/(ac_wall_radius-ref_thickness))
+		else
+			sec_x_end=ac_wall_radius*cos(lambda)*sin(lambda)
+			sec_y_end=ac_wall_radius-ac_wall_radius*cos(lambda)*cos(lambda)
+			overang_2=lambda
+		endif
+	endif
+
+	over_cut_beg=sin(overang_1)*ac_wall_radius+0.05
+	over_cut_end=sin(overang_2)*ac_wall_radius+0.05
+endif
+
+! -----------------------------------------------
+! Scan the window door polygons for the hole size
+! -----------------------------------------------
+
+dim wd_hole_poly[][]
+if wd_num<>0 then
+	for i=1 to wd_num
+		for j=2 to int((ac_wd_poly[i][1]+1/32")/1")*2 step 2
+			put ac_wd_poly[i][j]
+		next j
+
+		wd_hole_poly[i][1]=min(use(nsp))
+		wd_hole_poly[i][3]=max(get(nsp))
+
+		for j=3 to int((ac_wd_poly[i][1]+1/32")/1")*2 step 2
+			put ac_wd_poly[i][j]
+		next j
+
+		wd_hole_poly[i][2]=min(use(nsp))
+		wd_hole_poly[i][4]=max(get(nsp))
+	next i
+
+	! ----------------------------------------
+	! Organize the holes into cumulative order
+	! ----------------------------------------
+
+	dim wd_hole[][]
+	dim temp[][]
+
+	temp=wd_hole_poly
+
+	for z=1 to wd_num
+		i=1
+		p=1
+		repeat
+			if temp[i][1]<=temp[p][1] then
+				p=p+1
+			else
+				p=i
+				i=i+1
+			endif
+		until p>wd_num
+
+		wd_hole[z]=temp[i]
+
+		temp[i][1]=ac_wall_length
+		temp[i][2]=0
+		temp[i][3]=0
+		temp[i][4]=0
+	next z
+endif
+
+!!----------------!!
+!! Debug Function !!
+!!----------------!!
+
+if gs_gdl_debug then
+	print "- GDL Debug --- GDL Debug --- GDL Debug --- GDL Debug -"
+	print "ac_wall_height=",ac_wall_height
+	print "ac_wall_radius=",ac_wall_radius
+	print "ac_wall_length=",ac_wall_length
+	print "ac_refside=",ac_refside
+	print "ac_angles"
+	for i=1 to vardim1(ac_angles)
+		print ac_angles[i]
+	next i
+	print "ac_side_poly"
+	for i=1 to vardim1(ac_side_poly)
+		print ac_side_poly[i]
+	next i
+	print "ac_top_poly"
+	for i=1 to top_num
+		print ac_top_poly[i]
+	next i
+
+	print "ac_bot_poly"
+	for i=1 to bot_num
+		print ac_bot_poly[i]
+	next i
+
+	print "ac_wd_poly"
+	for i=1 to wd_num
+		print ac_wd_poly[i]
+	next i
+endif
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+ui_dialog `Параметры стены с уклоном`,444,266
+
+ui_page 1
+
+arrangement=3
+!! 1.Geometry - Figure - General Settings
+!! 2.General Settings - Figure - Geometry
+!! 3.General Settings - Geometry - Figure
+
+!!----------!!!----------!!!----------!!
+!! Geometry !!! Geometry !!! Geometry !!
+!!----------!!!----------!!!----------!!
+
+row=25
+
+col_1=95
+col_2=50
+col_3=20
+
+if arrangement=1 then
+	pos_x=0
+	pos_y=5
+else
+	if arrangement=2 then
+		pos_x=444-(col_1+col_2+col_3)
+		pos_y=5
+	else
+		pos_x=190
+		pos_y=5
+	endif
+endif
+
+ui_style 2,1
+ui_outfield `Геометрия:`,pos_x,pos_y,150,15
+ui_style 1,0
+
+par_id=0
+pos_y=pos_y+row : par_id=par_id+1 : top_thk_id=par_id
+ui_outfield `Толщ. вверху:`,pos_x,pos_y,col_1,15
+ui_infield "wain_thk_t",pos_x+col_1,pos_y-1,col_2,15
+ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+col_2+5,pos_y,col_3,15
+
+pos_y=pos_y+row : par_id=par_id+1 : top_ext_id=par_id
+ui_outfield `Выступ вверху:`,pos_x,pos_y,col_1,15
+ui_infield "top_ext",pos_x+col_1,pos_y-1,col_2,15
+ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+col_2+5,pos_y,col_3,15
+
+pos_y=pos_y+row : par_id=par_id+1 : ref_hgt_id=par_id
+ui_outfield `Базисная высота:`,pos_x,pos_y,col_1,15
+ui_infield "rHeight",pos_x+col_1,pos_y-1,col_2,15
+ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+col_2+5,pos_y,col_3,15
+
+if rHeight>0 then
+	pos_y=pos_y+row : par_id=par_id+1 : ref_thk_id=par_id
+	ui_outfield `Базисная толщ.:`,pos_x,pos_y,col_1,15
+	ui_infield "wain_thk",pos_x+col_1,pos_y-1,col_2,15
+	ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+col_2+5,pos_y,col_3,15
+endif
+
+pos_y=pos_y+row : par_id=par_id+1
+ui_outfield `Угол наклона:`,pos_x,pos_y,col_1,15
+ui_infield "bat_angle",pos_x+col_1,pos_y-1,col_2,15
+ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+col_2+5,pos_y,col_3,15
+
+pos_y=pos_y+row : par_id=par_id+1 : bot_ext_id=par_id
+ui_outfield `Выступ внизу:`,pos_x,pos_y,col_1,15
+ui_infield "bot_ext",pos_x+col_1,pos_y-1,col_2,15
+ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+col_2+5,pos_y,col_3,15
+
+pos_y=pos_y+row : par_id=par_id+1 : bot_thk_id=par_id
+ui_outfield `Толщ. внизу:`,pos_x,pos_y,col_1,15
+ui_infield "wain_thk_b",pos_x+col_1,pos_y-1,col_2,15
+ui_outfield "("+str(par_id,1,0)+")",pos_x+col_1+col_2+5,pos_y,col_3,15
+
+if wain_thk_t<0 or wain_thk<0 or wain_thk_b<0 then
+	pos_y=pos_y+row
+	ui_style 2,1
+	ui_outfield `Внимание: Неправильные параметры!!!`,pos_x,pos_y,175,15
+	ui_style 1,0
+endif
+
+!!--------!!!--------!!!--------!!
+!! Figure !!! Figure !!! Figure !!
+!!--------!!!--------!!!--------!!
+
+if arrangement=1 then
+	pos_x=180
+	pos_y=55
+else
+	if arrangement=2 then
+		pos_x=195
+		pos_y=55
+	else
+		pos_x=365
+		pos_y=55
+	endif
+endif
+
+ui_pict "BattWallSec",pos_x,pos_y, 32, 137, 1
+ui_pict "WallSecUI",pos_x+31,pos_y
+
+top_pix=0
+if abs(top_ext)>eps then
+	if top_ext<0 then
+		ui_pict "BattWallTopOver",pos_x,pos_y-27, 32, 30, 1
+		call "ui_arrow_02" parameters	dir=0, pixel=26, x=pos_x+65, y=pos_y-26, type=3,
+									auto_type=1, num=top_ext_id, num_pos=6, sec_pos=6
+		call "ui_arrow_02" parameters	dir=1, pixel=17, x=pos_x+15, y=pos_y-38, type=3,
+									auto_type=1, num=top_thk_id, num_pos=2, sec_pos=2
+	else
+		ui_pict "BattWallTopOverMin",pos_x,pos_y, 32, 28, 1
+		call "ui_arrow_02" parameters	dir=0, pixel=26, x=pos_x+65, y=pos_y+1, type=3,
+									auto_type=1, num=top_ext_id, num_pos=6, sec_pos=6
+		call "ui_arrow_02" parameters	dir=1, pixel=20, x=pos_x+11, y=pos_y+16, type=3,
+									auto_type=1, num=top_thk_id, num_pos=2, sec_pos=2
+	endif
+else
+	call "ui_arrow_02" parameters	dir=0, pixel=0, x=pos_x+65, y=pos_y, type=3,
+								auto_type=1, num=top_ext_id, num_pos=6, sec_pos=6
+	call "ui_arrow_02" parameters	dir=1, pixel=19, x=pos_x+13, y=pos_y-12, type=3,
+								auto_type=1, num=top_thk_id, num_pos=2, sec_pos=2
+endif
+
+bot_pix=0
+if abs(bot_ext)>eps then
+	if bot_ext>0 then
+		ui_pict "BattWallBotOver",pos_x,pos_y+109, 32, 30, 1
+		call "ui_arrow_02" parameters	dir=0, pixel=26, x=pos_x+65, y=pos_y+110, type=3,
+									auto_type=1, num=bot_ext_id, num_pos=6, sec_pos=6
+		call "ui_arrow_02" parameters	dir=1, pixel=27, x=pos_x+4, y=pos_y+121, type=3,
+									auto_type=1, num=bot_thk_id, num_pos=8, sec_pos=8
+	else
+		ui_pict "BattWallBotOverMin",pos_x,pos_y+136, 32, 30, 1
+		call "ui_arrow_02" parameters	dir=0, pixel=28, x=pos_x+65, y=pos_y+137, type=3,
+									auto_type=1, num=bot_ext_id, num_pos=6, sec_pos=6
+		call "ui_arrow_02" parameters	dir=1, pixel=32, x=pos_x, y=pos_y+177, type=3,
+									auto_type=1, num=bot_thk_id, num_pos=8, sec_pos=8
+	endif
+else
+	call "ui_arrow_02" parameters	dir=0, pixel=0, x=pos_x+65, y=pos_y+137, type=3,
+								auto_type=1, num=bot_ext_id, num_pos=6, sec_pos=6
+	call "ui_arrow_02" parameters	dir=1, pixel=30, x=pos_x+2, y=pos_y+148, type=3,
+								auto_type=1, num=bot_thk_id, num_pos=8, sec_pos=8
+endif
+
+if rHeight>0 then
+	call "ui_arrow_02" parameters	dir=0, pixel=85, x=pos_x+65, y=pos_y+50, type=3,
+								auto_type=1, num=ref_hgt_id, num_pos=6, sec_pos=6
+	call "ui_arrow_02" parameters	dir=1, pixel=21, x=pos_x+10, y=pos_y+50, type=3,
+								auto_type=1, num=ref_thk_id, num_pos=2, sec_pos=2
+endif
+
+!!------------------!!!------------------!!!------------------!!
+!! General Settings !!! General Settings !!! General Settings !!
+!!------------------!!!------------------!!!------------------!!
+
+col_1=95
+col_2=20
+col_3=60
+
+if arrangement=1 then
+	pos_x=444-(col_1+col_2+col_3)
+	pos_y=5
+else
+	if arrangement=2 then
+		pos_x=0
+		pos_y=5
+	else
+		pos_x=0
+		pos_y=5
+	endif
+endif
+
+ui_style 2,1
+ui_outfield `Общие параметры:`,pos_x,pos_y,col_1+col_2+col_3,15
+ui_style 1,0
+
+!! Pictures
+pos_y=pos_y+row
+if uwbp=0 and uwtp=0 then ui_pict "FollowNone",pos_x+col_1+col_2,pos_y-1, 60, 40, 1
+if uwbp=1 and uwtp=0 then ui_pict "FollowBottom",pos_x+col_1+col_2,pos_y-1, 60, 40, 1
+if uwbp=0 and uwtp=1 then ui_pict "FollowTop",pos_x+col_1+col_2,pos_y-1, 60, 40, 1
+if uwbp=1 and uwtp=1 then ui_pict "FollowBoth",pos_x+col_1+col_2,pos_y-1, 60, 40, 1
+
+ui_outfield `Срез вверху:`,pos_x,pos_y,col_1,15
+ui_infield "uwtp",pos_x+col_1,pos_y-1,col_2,15
+
+pos_y=pos_y+row
+ui_outfield `Срез внизу:`,pos_x,pos_y,col_1,15
+ui_infield "uwbp",pos_x+col_1,pos_y-1,col_2,15
+
+pos_y=pos_y+row+10
+ui_style 2,1
+ui_outfield `Спец. углы:`,pos_x,pos_y,col_1+col_2,15
+ui_style 1,0
+
+pos_y=pos_y+row
+ui_outfield `Угол в начале:`,pos_x,pos_y,col_1,15
+ui_outfield "(1)",pos_x+col_1,pos_y,col_2,15
+ui_infield "cust_bega",pos_x+col_1+col_2,pos_y-1,col_3,15
+
+pos_y=pos_y+row
+ui_outfield `Угол в конце:`,pos_x,pos_y,col_1,15
+ui_outfield "(2)",pos_x+col_1,pos_y,col_2,15
+ui_infield "cust_enda",pos_x+col_1+col_2,pos_y-1,col_3,15
+
+pos_y=pos_y+row
+if show_bot then
+	ui_pict "batWallplanBot",pos_x,pos_y, 175, 40, 1
+else
+	ui_pict "batWallplan",pos_x,pos_y, 175, 40, 1
+endif
+pos_y=pos_y+25
+
+pos_y=pos_y+row
+ui_outfield `Толщ. внизу в 2D:`,pos_x,pos_y,col_1+col_2+5+col_3-15,15
+ui_infield "show_bot",pos_x+col_1+col_2-15+col_3,pos_y-1,17,15
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+call "FM_types_Accessories" parameters
+
+if not(ac_accessory_debug) then hideparameter "gs_wall_addon"
+
+if rHeight<0 then parameters rHeight=0
+
+values "gs_detlevel_2D" `Детальный`,`Простой`
+values "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_UIDefault/>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Размер Z"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Показыв. 2D-узл.т. в 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Уровень внизу"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Уровень вверху"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="gs_detlevel_2D">
+			<Description><![CDATA["Уровень 2D-деталей"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["Детальный"]]></Value>
+		</String>
+		<String Name="gs_detlevel_3D">
+			<Description><![CDATA["Уровень 3D-деталей"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["Детальный"]]></Value>
+		</String>
+		<Boolean Name="uwbp">
+			<Description><![CDATA["Срез внизу стены"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="uwtp">
+			<Description><![CDATA["Срез вверху стены"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="nsloi">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Integer>
+		<FillPattern Name="mat">
+			<Description><![CDATA[""]]></Description>
+			<ArrayValues FirstDimension="6" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+				<AVal Row="5">0</AVal>
+				<AVal Row="6">0</AVal>
+			</ArrayValues>
+		</FillPattern>
+		<Length Name="thk">
+			<Description><![CDATA[""]]></Description>
+			<ArrayValues FirstDimension="6" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+				<AVal Row="5">0</AVal>
+				<AVal Row="6">0</AVal>
+			</ArrayValues>
+		</Length>
+
+		<!-- gs_structural_dim: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_structural_dim">
+			<Description><![CDATA["Конструктивн. размеры"]]></Description>
+		</Title>
+		<RealNum Name="cust_bega">
+			<Description><![CDATA["Спец. угол в начале"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="cust_enda">
+			<Description><![CDATA["Спец угол в конце"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<Length Name="wain_thk_t">
+			<Description><![CDATA["Толщина вверху"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.15</Value>
+		</Length>
+		<Length Name="top_ext">
+			<Description><![CDATA["Выступ вверху:"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="rHeight">
+			<Description><![CDATA["Базисная высота"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="wain_thk">
+			<Description><![CDATA["Толщ.на базисной высоте"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.05</Value>
+		</Length>
+		<Angle Name="bat_angle">
+			<Description><![CDATA["Угол наклона"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Length Name="bot_ext">
+			<Description><![CDATA["Выступ внизу"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="wain_thk_b">
+			<Description><![CDATA["Толщ.внизу,если угол 0"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.15</Value>
+		</Length>
+
+		<!-- gs_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_material">
+			<Description><![CDATA["Покрытие"]]></Description>
+		</Title>
+		<Material Name="gs_mat">
+			<Description><![CDATA["Покрытие стены"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>66</Value>
+		</Material>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D-представление"]]></Description>
+			<Fix/>
+		</Title>
+		<Boolean Name="show_bot">
+			<Description><![CDATA["Толщина внизу в 2D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<PenColor Name="cont_pen_w">
+			<Description><![CDATA["Перо окна"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>63</Value>
+		</PenColor>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Перо контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>27</Value>
+		</PenColor>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Перо штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>118</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Перо фона штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>119</Value>
+		</PenColor>
+		<PenColor Name="gs_wallhole_penFg">
+			<Description><![CDATA["Перо штриховки проема в стене"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="gs_wallhole_penBg">
+			<Description><![CDATA["Перо фона штрих. проема в стене"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Образец штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+
+		<!-- gs_wall_addon: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_wall_addon">
+			<Description><![CDATA["Парам. расшир.аксессуаров"]]></Description>
+			<Fix/>
+		</Title>
+		<Boolean Name="ac_accessory_debug">
+			<Description><![CDATA["Ф-ция отладки аксессуара"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_wall_height">
+			<Description><![CDATA["Высота стены"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2.7</Value>
+		</Length>
+		<Length Name="ac_wall_radius">
+			<Description><![CDATA["Радиус стены"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_wall_length">
+			<Description><![CDATA["Длина стены"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>4.5</Value>
+		</Length>
+		<Length Name="ac_wall_thk1">
+			<Description><![CDATA["Толщ. стены - начало"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_wall_thk2">
+			<Description><![CDATA["Толщ. стены - конец"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="ac_wall_resol">
+			<Description><![CDATA["Аппроксим. стены"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>36</Value>
+		</Integer>
+		<Boolean Name="ac_refside">
+			<Description><![CDATA["Построить с правой стороны"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Angle Name="ac_angles">
+			<Description><![CDATA["Углы проема"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="2">
+				<AVal Column="1" Row="1">90</AVal>
+				<AVal Column="2" Row="1">90</AVal>
+			</ArrayValues>
+		</Angle>
+		<Length Name="ac_side_poly">
+			<Description><![CDATA["Многоугольник сбоку"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="2">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="ac_top_poly">
+			<Description><![CDATA["Срез вверху (x,y) стены"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="3" SecondDimension="2">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">2.7</AVal>
+				<AVal Column="1" Row="2">3</AVal>
+				<AVal Column="2" Row="2">2.7</AVal>
+				<AVal Column="1" Row="3">4.5</AVal>
+				<AVal Column="2" Row="3">1.7</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="ac_bot_poly">
+			<Description><![CDATA["Срез внизу (x,y) стены"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="3" SecondDimension="2">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">1</AVal>
+				<AVal Column="1" Row="2">1.5</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+				<AVal Column="1" Row="3">4.5</AVal>
+				<AVal Column="2" Row="3">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="ac_wd_poly">
+			<Description><![CDATA["Многоуг. окна-двери"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="9">
+				<AVal Column="1" Row="1">0.1016</AVal>
+				<AVal Column="2" Row="1">1</AVal>
+				<AVal Column="3" Row="1">0.9</AVal>
+				<AVal Column="4" Row="1">1</AVal>
+				<AVal Column="5" Row="1">2.1</AVal>
+				<AVal Column="6" Row="1">2</AVal>
+				<AVal Column="7" Row="1">2.1</AVal>
+				<AVal Column="8" Row="1">2</AVal>
+				<AVal Column="9" Row="1">0.9</AVal>
+				<AVal Column="1" Row="2">0.1016</AVal>
+				<AVal Column="2" Row="2">2.5</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="4" Row="2">2.5</AVal>
+				<AVal Column="5" Row="2">2.1</AVal>
+				<AVal Column="6" Row="2">3.5</AVal>
+				<AVal Column="7" Row="2">2.1</AVal>
+				<AVal Column="8" Row="2">3.5</AVal>
+				<AVal Column="9" Row="2">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Boolean Name="ac_curved_wall">
+			<Description><![CDATA["Кривол. стена ( Нет- прямая )"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Material Name="ac_left_mat">
+			<Description><![CDATA["Покр. левой стороны"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Material>
+		<Material Name="ac_right_mat">
+			<Description><![CDATA["Покр. правой стороны"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Material>
+		<Material Name="ac_edge_mat">
+			<Description><![CDATA["Покрытие торца"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Material>
+		<PenColor Name="ac_cont_pen">
+			<Description><![CDATA["Перо контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<PenColor Name="ac_back_pen">
+			<Description><![CDATA["Перо фона"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<PenColor Name="ac_fill_pen">
+			<Description><![CDATA["Перо штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<FillPattern Name="ac_fill_type">
+			<Description><![CDATA["Образец штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</FillPattern>
+		<LineType Name="ac_line_type">
+			<Description><![CDATA["Тип линии"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</LineType>
+		<Boolean Name="gs_gdl_debug">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_list: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_list">
+			<Description><![CDATA["Параметры сметы"]]></Description>
+			<Fix/>
+		</Title>
+		<RealNum Name="gs_list_cost">
+			<Description><![CDATA["Цена"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_manufacturer">
+			<Description><![CDATA["Изготовитель"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_note">
+			<Description><![CDATA["Примечания"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_location">
+			<Description><![CDATA["Расположение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_accessories">
+			<Description><![CDATA["Аксессуары"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_Type">
+			<Description><![CDATA["Тип группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Другой"]]></Value>
+		</String>
+		<String Name="FM_InventoryNumber">
+			<Description><![CDATA["Инвентарный номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_SerialNumber">
+			<Description><![CDATA["Серийный номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductionYear">
+			<Description><![CDATA["Год производства"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ObjectWeight">
+			<Description><![CDATA["Вес изделия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ObjectWeightUnit">
+			<Description><![CDATA["Единица веса"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["кг"]]></Value>
+		</String>
+		<String Name="gs_list_custom1">
+			<Description><![CDATA["Задается пользов. 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom2">
+			<Description><![CDATA["Задается пользов. 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom3">
+			<Description><![CDATA["Задается пользов. 3"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom4">
+			<Description><![CDATA["Задается пользов. 4"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom5">
+			<Description><![CDATA["Задается пользов. 5"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="2013" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D494844520000007F0000
+	007F0803000000F163ED210000006F504C5445FFFFFFC1BE9EC2C09FC3C0A0BC
+	B99A605E4E626151EDEDE9E0DECEA9A68A5C5B4BA09E83939179A9A790908E76
+	BBBAA8DBDACBE8E8DB9D9A80D4D2BC87867ACDCAB0D0CEB678766284826C7371
+	5E716F5C807E6961604F9B9A90ACACA4E0DFD7D7D7D3F0F0EEB1AE90CDCCC400
+	000066A8508E0000071F49444154785ECD9AD972F2BC1245B3BBE579609EC9F8
+	9DF77FC6234B806C50231B88F3EF98548A9BD5AB5B08959DB7FF4A92AF5551AD
+	3EFF8CAF7EB27993C934F9133E8089AA7401E5BC9A4CFF840F102B65DA5056EB
+	E42FF8135680AA4C0DD9E46BBC1A129810749827306D28B36AF53522DF861511
+	299AD85164A55E91A3F2413650FACA8A625E16BA0DE3F2617E083A4A554D09E5
+	C7EA37DB30433B160F106CD44F56EA6114AB5F5B919F1D3AA9933F31036C6BA8
+	E64DAAD5EC37F869974F74F16780B9E113ABEAD7F6C8B46B4F38F9131BBAB9CC
+	9FA68652B761FA9BFE70FE04B021BB499CF6C8C90BF7C84577FCCE9F5AFEE66A
+	32615515768F9CBE9EDF50457FD639BDF7636A28AB577C30D75D3EEEFA13B1F9
+	8321ACC827F940C01F38AF47C679146E8F7C9E4FAAE54F37FE6CFC4F15D1046C
+	0F2FC5FCE7E1367097DFDBDF9669DB90D9363C5483AFFDB23FB7FDE95CDCF983
+	5954FF66CFF1A106F85BB6C9A4757899264FF9535F7FB6FE3A6022366DB02B72
+	C8715A5DF1819EFEECFCDDFBC481E374E8EB570DF067E76F7F9F37083D8ABEC7
+	E904DD103DE3CFA07325A7E3F4CFBF64181F2D7F1AECCFB603C4ACD88EA2283D
+	C769998F8E3F0DF667D2E1E665422ACBCAE2CE717A26F8EB3CEA6FC364F82050
+	A64AF1389D8AFE79B42DF080FF6D4E7BA4F7383D7564770432FA7993245D0FF5
+	170265CF91F56495DCF337783AF39B15329B320FF01703366DD0B3584E64FE19
+	5F58BE4D325B3DEB4F6CA3D4268E97DEE38F2BE0C26FB5CAB421E84F08F039CB
+	A3C8F1D75E7FBAF2BFB46111F4E75003B2A8C397FC33C7EF2499DE9F3F82FCB8
+	977F6DF99E3CE8CF5EFF95DF9F4EFCC4C77F70FD7BE70FF80AD0D989FE7CD71F
+	013E2D6399EFFCA9B4FC807FB6CDAEFC39E45F1EC3FEB833FF04CE1F5B5DE366
+	C243FCCB28EC4FC02E92F8E4FC7999EBBCBF7DDB0FA6BD86F0134805EC7AF91F
+	1AFE877DFF736DFC4303D884F8217F377F606BFC3B7B2485F8C73EFEB48BA23C
+	F2F2DDFA67EC9DBFDB235FE1AFF94D3CFC2939FF86FFBFC8F25DBE9394999FF3
+	4724F15372FEAC87143BFF56927EFEA9E87F14F95D7F9DC2CB970A88DBFCE903
+	FEE8FAE75EFF54E4473DFD75FCF347CB3F6FF2FE623E0840C38F7DFCF5C51F50
+	F993FE53099F1D9BC43EFE65FE0C34CB5FE00B05A80E7FEDF7276AF871ECE583
+	AC3F8C7F9C0FE367613E018E2FFB33A0C4F9AF43FCB07FECE733DC1D89D2CEFF
+	D57C80CAE33E3AFAF9ECFCB381FEA4F9C7369F057FCD8F84FEE3E20FCC257F79
+	FE65C79F49F217E78F8B3FDFF107247EC75FA013B4FF3E347F6029FA83BCB9F6
+	07647FFFFC93B67F2DF9CBFC3AEAE34F3BA9FF497BFE1BD19F043E75FC13499F
+	7666F907FC79B03FF1A10F1F74D078FDE3E1531FFF44ECFFAE973F76D2FE3303
+	39FF8DE02FF2897AF99BF9EF8F7B0F3F6DCF3F12FD257CD77F26F2355DEF807B
+	E1F8F584FFBECD4F21651FC7FBF871FF99C447D48BAFFD357E1FF497F8A9E81F
+	F5F46F12C7EF37B74F172D7F958B7C7A8E9FED9BE5AF0BD8C445B784F5C51F80
+	E5BF3FECBF90F7DFFAB03B6C0EDBCD76B9DD2E27D3E425FE003AFCB5C827202B
+	EAC376596FEBBAACEBF9F961DF1A2D7F91BF10EC51F4E3E3546D96954DE63A45
+	691EADACD99D7F8B81FEE8ED0F82E1DB1A8A795164F34C5F45C5ECFC2B71FECC
+	ECD517FC8502E85C83AA2C5EFF620CF697FB7F17DF7A220E82529989BAF5FF08
+	FABB487CD9DFD6C1AC58A94AFB335DD6BFECCF927FFD88BF0E58473154EB4E17
+	6A910F48FC47FD4D0FD8D471F15FCA7C12D2E52B88F1F85383EFEB8F1EFCD930
+	7F10B89F7F42C2FAC3BECD4F30C89FC13DFD13D1FF20F3C3FE7CE5BF17F9E2E7
+	6FF73A7F60F3B87F78FE2AEC2FF3C5FBB0519B3FBDEB4F8FF83B310EF3D3BB7C
+	04FDA33CD2F8E8969F82184FF211F267441AAF5F1E3E01F4527FF2FA471A3FC4
+	1FE8F0D703FCE9DAFFDC7FAF3F9BFA6F3384DFC3DF34C0E3BFF03F8A028AD7F9
+	337EF2C6BEDB7F27E61B005EEA5FD8F1FBF8CC0C0AFA330FF0A76B7FFEB1E3CF
+	07F877F9B3C573FE7963EFF3671D5F01A81DDFE47B36959B10F22FC4F5C7ECF7
+	27C7EF3ED57EC4DFC808FE08F87B9E6A73C89FBAFE869FFBD71F06F8BB512C68
+	A87F2EF843F23F487C9B2465A29EFE8C796E1A70CB4FD8FADF1620F0853604FC
+	37D2FA4F4EFE2C1C7F1C5FA8215D90C79FBAFEBC91D65F42C69FC3FE72662985
+	FC05BEEC0FEC05BED8863BFEF7F824F84736F55BCF7C7FA70FF8A700B1AF0044
+	017FFF8A4C89C833FF48E41301DE0528F04315E851A4B7FE277C3EF1F873D87F
+	680DE6A976CB1FA2FFA7E01FE287339BB6FCE3288EF415CBF307DA70E059BEFB
+	3F0B06AB48D3F338FEF8F27DFD7AFC8142E00F6FC38A5169FCF223F108A4CC08
+	F83F9D6406777376347F39617F02EA71F800CEFE9D02C6E37BFD8946F767FC09
+	FF6FE79FB0E4BF1BC79F9D7FA7001CC6E19FBE2AC6F1970F507CE58FB1FCDD1E
+	B9EEFAEF47E4BB36B80644E3F2DD010A681D7FF6F37F6F63E73B65EB5F7F7C3A
+	C0D86D28D2E40CF83F675296F2ED7B890F0000000049454E44AE426082
+	]]>
+</Picture>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["Wall Cutting Body"]]></MName>
+		<MainGUID>8CBA413D-111D-4363-9309-3D03589EAA45</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["ui_arrow_02"]]></MName>
+		<MainGUID>A5F4B302-59A7-49A0-BB20-B81F9C85B76B</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["FM_types_Accessories"]]></MName>
+		<MainGUID>23793CBC-F997-4EDA-9334-CFC48102E97E</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+tip_el = "30"
+rz = ";"
+str_out = ""
+for i = 1 to nsloi
+		n=REQUEST ("Name_of_fill", mat[i], mat_txt)
+		pos_obozn = max(STRSTR(mat_txt,"ГОСТ"), STRSTR(mat_txt,"ТУ"))
+		if pos_obozn > 0 then
+			naen = STRSUB(mat_txt, 1, pos_obozn-1)
+			obozn = STRSUB(mat_txt, pos_obozn, strlen(mat_txt))
+		else
+			naen = mat_txt
+			obozn = " "
+		endif
+	str_out = tip_el + rz !Тип элемента
+	str_out = str_out + " " + rz !Позиция
+	str_out = str_out + obozn + rz !Обозначение
+	str_out = str_out + naen+" толщиной "+ rz !Наименование
+	str_out = str_out + "-" !Вес
+	COMPONENT str_out, SURFACE3D()/2, "кв.м."
+next i
+]]>
+</Script_PR>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_BWM>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+</Symbol>

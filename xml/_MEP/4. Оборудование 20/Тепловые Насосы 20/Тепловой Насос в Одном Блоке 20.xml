@@ -1,0 +1,2130 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="FE5FB4ED-5CC8-4B29-9D99-6D6975A9F355" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>9BCE6139-F733-4E13-B439-AAF1AF232B89</MainGUID>
+	<MainGUID>30E58E66-1DA9-4D20-9341-700170100E12</MainGUID>
+	<MainGUID>D39DF9D9-2191-4C4D-B004-2E8C1B298D7C</MainGUID>
+	<MainGUID>0D6515ED-B372-41C6-8291-C527CE94BA43</MainGUID>
+	<MainGUID>815312A0-BFC2-4AF3-922D-1B96D67B686D</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Single Package Heat Pump
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+IF useSysMat THEN MainBoxMaterial = sMat
+MATERIAL MainBoxMaterial
+PEN gs_cont_pen
+
+
+unID = 1
+IF mbShow THEN
+
+					! --- HOTSPOTS --- !
+
+	HOTSPOT A/2, 	B/2, 	0, unID: unID=unID+1
+	HOTSPOT A/2, 	-B/2, 0, unID: unID=unID+1
+	HOTSPOT -A/2, -B/2, 0, unID: unID=unID+1
+	HOTSPOT -A/2, B/2, 	0, unID: unID=unID+1
+	HOTSPOT A/2, 	B/2, 	ZZYZX-grillHeight, unID: unID=unID+1
+	HOTSPOT A/2, 	-B/2, ZZYZX-grillHeight, unID: unID=unID+1
+	HOTSPOT -A/2, -B/2, ZZYZX-grillHeight, unID: unID=unID+1
+	HOTSPOT -A/2, B/2, 	ZZYZX-grillHeight, unID: unID=unID+1
+
+
+					! --- MAIN BOX --- !
+
+	ADD -A/2, -B/2, 0
+		BLOCK A, B, ZZYZX-grillHeight
+	DEL 1
+
+
+					! --- GRILL --- !
+
+	dist = MIN(A/2, B/2)
+	dist2 = MAX(A, B)
+
+	ww = 0: dd = 0
+	IF (dist2-A)<EPS THEN ww = 1
+	IF (dist2-B)<EPS THEN dd = 1
+
+	FOR k=1 TO 1+((dist2-dist*2)>grillDia*1.05)
+		ADD -A/2+dist+(dist2-dist*2)*(k-1)*ww, B/2-dist-(dist2-dist*2)*(k-1)*dd, ZZYZX-grillHeight
+
+		IF gs_detlevel_3D_m = 2 THEN
+			GOSUB 500
+		ELSE
+			ADD -grillDia/2, -grillDia/2, 0
+			BLOCK grillDia, grillDia, grillHeight
+			DEL 1
+		ENDIF
+
+		DEL 1
+	NEXT k
+ENDIF
+
+RESOL res
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	ui_current_con = ui_current_con,
+	MEP_NumberConnections = MEP_NumberConnections,
+	MEP_NumConnectionData = gs_Connections,
+	gs_AddConnections = gs_AddConnections,
+	cShow3D = 1,
+	gs_ConMat = MainBoxMaterial,
+	MEP_InsShow = 0,
+	MEP_cline_show_3D = 0,
+	gs_cont_pen = gs_cont_pen,
+	ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 17,
+	ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = 17
+END
+
+
+500:
+	 SegmetAng = 360/SegmentsNum
+	 SegmetHalfAng = SegmetAng/2
+	 TotalInsideRad = Rad-HalfThick/TAN(SegmetHalfAng)-Thick
+	 DivisionInsideDist = (TotalInsideRad-Thick*(DivisionNum-1))/DivisionNum
+
+	ADDz grillHeight
+	ROTz SegmetHalfAng
+
+	PUT 0, 0, 901
+	PUT Rad, 360, 4001
+
+	alpha = 0
+	FOR i = 1 TO SegmentsNum
+		InsideDist = DivisionInsideDist
+		CenterPointPosX = (HalfThick/SIN(SegmetHalfAng))*COS(alpha)
+		CenterPointPosY = (HalfThick/SIN(SegmetHalfAng))*SIN(alpha)
+		FOR j = 1 TO DivisionNum
+			InsideDist = InsideDist+Thick*(j>1)
+			PointOnArcEndPosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)-(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+			PointOnArcEnd2PosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)+(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+			PointOnArcEndPosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)+(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+			PointOnArcEnd2PosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)-(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+
+			IF j = 1 THEN
+				PUT CenterPointPosX, CenterPointPosY, 1
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, 1
+				PUT 0, 0, 901
+				PUT PointOnArcEnd2PosX, PointOnArcEnd2PosY, 3001
+				PUT CenterPointPosX, CenterPointPosY, -1
+			ELSE
+				InsideDist = InsideDist+DivisionInsideDist
+				OPointOnArcEndPosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)-(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+				OPointOnArcEnd2PosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)+(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+				OPointOnArcEndPosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)+(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+				OPointOnArcEnd2PosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)-(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, 1
+				PUT 0, 0, 901
+				PUT PointOnArcEnd2PosX, PointOnArcEnd2PosY, 3001
+				PUT OPointOnArcEnd2PosX, OPointOnArcEnd2PosY, 1
+				PUT 0, 0, 901
+				PUT OPointOnArcEndPosX, OPointOnArcEndPosY, 3001
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, -1
+			ENDIF
+		NEXT j
+		 alpha = alpha+SegmetAng
+	NEXT i
+
+
+	POLY_ NSP/3,
+
+		GET(NSP)
+
+	DEL 2
+
+	FOR i = 1 TO SegmentsNum/2
+		ROTz (360/SegmentsNum)*i
+		ROTx 90
+		PUT grillDia/2, 0, 1
+		PUT grillDia/2, grillHeight-0.001, 1
+		PUT -grillDia/2, grillHeight-0.001, 1
+		PUT -grillDia/2, 0, 1
+		PUT -grillDia/2+Thick, 0, 1
+		PUT -grillDia/2+Thick, grillHeight-0.001-Thick, 1
+		PUT grillDia/2-Thick, grillHeight-0.001-Thick, 1
+		PUT grillDia/2-Thick, 0, 1
+
+		POLY_ NSP/3,
+
+			GET(NSP)
+		DEL 2
+	NEXT i
+RETURN
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Single Package Heat Pump
+
+
+
+PEN gs_cont_pen
+SET FILL gs_fill_type
+
+unID = 1
+HOTSPOT2 0, 0, unID: unID=unID+1
+
+DrawingNum = 1
+IF DrawingNum = 1 THEN	! Top
+
+
+				! --- MAIN BOX --- !
+
+	HOTSPOT2 A/2, B/2, unID: unID=unID+1
+	HOTSPOT2 A/2, -B/2, unID: unID=unID+1
+	HOTSPOT2 -A/2, -B/2, unID: unID=unID+1
+	HOTSPOT2 -A/2, B/2, unID: unID=unID+1
+
+	PUT A/2, B/2, 1,
+		A/2, -B/2, 1,
+		-A/2, -B/2, 1,
+		-A/2, B/2, 1
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+
+
+				! --- GRILL --- !
+
+	dist = MIN(A/2, B/2)
+	dist2 = MAX(A, B)
+
+	ww = 0: dd = 0
+	IF (dist2-A)<EPS THEN ww = 1
+	IF (dist2-B)<EPS THEN dd = 1
+
+	FOR k=1 TO 1+((dist2-dist*2)>grillDia*1.05)
+		ADD2 -A/2+dist+(dist2-dist*2)*(k-1)*ww, B/2-dist-(dist2-dist*2)*(k-1)*dd
+			GOSUB 500
+		DEL 1
+	NEXT k
+
+	SET FILL gs_fill_type
+
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN PEN gs_fill_pen
+	PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0, PARAMETERS gs_detlevel_3D_m = 1, mbShow = 0
+	PEN gs_cont_pen
+	PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0, PARAMETERS gs_detlevel_3D_m = 1, mbShow = 0
+ENDIF
+
+
+				! --- OTHER VIEWS --- !
+
+ROT2 -SYMB_ROTANGLE * (DrawingNum > 1 AND NOT(SYMB_MIRRORED))+SYMB_ROTANGLE * (DrawingNum > 1 AND SYMB_MIRRORED)
+
+IF DrawingNum = 2 THEN PROJECT2 -3, 90, 2	! Bottom
+IF DrawingNum = 3 THEN PROJECT2 4, 270, 2	! Front
+IF DrawingNum = 4 THEN PROJECT2 4, 90, 2	! Back
+IF DrawingNum = 5 THEN PROJECT2 4, 180*(SYMB_MIRRORED), 2		! Right
+IF DrawingNum = 6 THEN PROJECT2 4, 180*NOT(SYMB_MIRRORED), 2	! Left
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	ui_current_con = ui_current_con,
+	MEP_NumberConnections = MEP_NumberConnections,
+	MEP_NumConnectionData = gs_Connections,
+	gs_AddConnections = gs_AddConnections,
+	DrawingNum = DrawingNum,
+	MEP_InsShow = 0,
+	MEP_cline_show = 0,
+	gs_cont_pen = gs_cont_pen,
+	gs_fill_type=gs_fill_type,
+	gs_fill_pen=gs_fill_pen,
+	gs_back_pen=gs_back_pen,
+	ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConLength_1=ConLength_1, ConShow_1 = 0, ConEdit_1 = 13,
+	ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConLength_2=ConLength_2, ConShow_2 = 0, ConEdit_2 = 13
+DEL 1
+
+END
+
+
+500:
+	 SegmetAng = 360/SegmentsNum
+	 SegmetHalfAng = SegmetAng/2
+	 TotalInsideRad = Rad-HalfThick/TAN(SegmetHalfAng)-Thick
+	 DivisionInsideDist = (TotalInsideRad-Thick*(DivisionNum-1))/DivisionNum
+
+	ROT2 SegmetHalfAng
+
+	PUT 0, 0, 901
+	PUT Rad, 360, 4001
+
+	alpha = 0
+	FOR i = 1 TO SegmentsNum
+		InsideDist = DivisionInsideDist
+		CenterPointPosX = (HalfThick/SIN(SegmetHalfAng))*COS(alpha)
+		CenterPointPosY = (HalfThick/SIN(SegmetHalfAng))*SIN(alpha)
+		FOR j = 1 TO DivisionNum
+			InsideDist = InsideDist+Thick*(j>1)
+			PointOnArcEndPosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)-(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+			PointOnArcEnd2PosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)+(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+			PointOnArcEndPosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)+(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+			PointOnArcEnd2PosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)-(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+
+			IF j = 1 THEN
+				PUT CenterPointPosX, CenterPointPosY, 1
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, 1
+				PUT 0, 0, 901
+				PUT PointOnArcEnd2PosX, PointOnArcEnd2PosY, 3001
+				PUT CenterPointPosX, CenterPointPosY, -1
+			ELSE
+				InsideDist = InsideDist+DivisionInsideDist
+				OPointOnArcEndPosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)-(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+				OPointOnArcEnd2PosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)+(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+				OPointOnArcEndPosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)+(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+				OPointOnArcEnd2PosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)-(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, 1
+				PUT 0, 0, 901
+				PUT PointOnArcEnd2PosX, PointOnArcEnd2PosY, 3001
+				PUT OPointOnArcEnd2PosX, OPointOnArcEnd2PosY, 1
+				PUT 0, 0, 901
+				PUT OPointOnArcEndPosX, OPointOnArcEndPosY, 3001
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, -1
+			ENDIF
+		NEXT j
+		 alpha = alpha+SegmetAng
+	NEXT i
+
+
+	POLY2_ NSP/3, 1,
+
+		GET(NSP)
+
+	DEL 1
+RETURN
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Single Package Heat Pump
+
+
+EPS = 0.0001
+
+
+					! --- HARDCODED AND DERIVED VARIABLES --- !
+
+grillDia = MIN(0.72, A-0.065, B-0.065)
+grillHeight = 0.03
+Rad = grillDia/2-0.03
+Thick = 0.01
+HalfThick = Thick/2
+SegmentsNum = 8
+DivisionNum = 4
+
+
+z = 0
+
+PARAMETERS ac_toplevel 		= z
+PARAMETERS ac_bottomlevel 	= z
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Single Package Heat Pump
+
+
+UI_DIALOG `Специальные Параметры MEP`
+
+DIM ui_vis_attr[4][4]
+	FOR i = 1 TO 4
+		FOR j = 1 TO 4
+			ui_vis_attr[i][j] = 0
+		NEXT j
+	NEXT i
+	ui_vis_attr[1][1] = 2
+	ui_vis_attr[1][2] = 1
+	ui_vis_attr[1][3] = 7
+
+	ui_vis_attr[2][1] = 1
+	ui_vis_attr[2][2] = 237
+	ui_vis_attr[2][3] = 68
+	ui_vis_attr[2][4] = 14
+
+DIM ui_con_type[2]
+	ui_con_type[1] = 0
+	ui_con_type[2] = 0
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS ALL ui_vis_attr = ui_vis_attr,
+											ui_centerline_vars = 0,
+											ui_con_type = ui_con_type,
+											ui_system_var_pos = 2,
+											bUIConnectionStatusCheckbox = 1
+
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! Single Package Heat Pump
+
+
+call "FM_types_MEP" parameters
+DIM shape_typ_to_validation[3]
+	shape_typ_to_validation[1] = 0		! Rectangle
+	shape_typ_to_validation[2] = 1		! Circle
+	shape_typ_to_validation[3] = 0		! Oval
+
+IF GLOB_MODPAR_NAME = "gs_detlevel_3D" OR gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+	PARAMETERS gs_detlevel_3D_m = gs_detlevel_3D_m
+ELSE
+	IF gs_detlevel_3D_m = 0 THEN gs_detlevel_3D = `Откл.`
+	IF gs_detlevel_3D_m = 1 THEN gs_detlevel_3D = `Простой`
+	IF gs_detlevel_3D_m = 2 THEN gs_detlevel_3D = `Детальный`
+	PARAMETERS gs_detlevel_3D = gs_detlevel_3D
+ENDIF
+
+VALUES "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+VALUES "gs_detlevel_3D_m" 2, 1, 0
+
+
+					! --- MAIN PARAMETERS --- !
+
+IF NOT(SetProgram) THEN
+	IF A < 0.20 THEN A = 0.20
+	VALUES "A" RANGE [0.20, ]
+	IF B < 0.20 THEN B = 0.20
+	VALUES "B" RANGE [0.20, ]
+	IF ZZYZX < ConWidth_1+ConWidth_2+grillHeight THEN ZZYZX = ConWidth_1+ConWidth_2+grillHeight
+	VALUES "ZZYZX" RANGE [ConWidth_1+ConWidth_2+grillHeight, ]
+ENDIF
+
+
+					! --- CONNECTIONS --- !
+
+PARAMETERS MEP_NumberConnections = 2
+
+
+					! --- 1st CONNECTION --- !
+
+ConID = 1
+ConName = `Соединение Трубы #1`
+
+ConDVecX = -1
+ConDVecY = 0
+ConDVecZ = 0
+
+ConWVecX = 0
+ConWVecY = -1
+ConWVecZ = 0
+
+IF NOT(SetProgram) THEN
+	VALUES "ConWidth_1" RANGE (0, MIN(B/2, (ZZYZX-grillHeight)/2)]
+	PARAMETERS ConDepth_1 = ConWidth_1
+	HIDEPARAMETER "ConDepth_1"
+	VALUES "ConLength_1" RANGE [0, ]
+
+
+	PARAMETERS ConPosX_1 = -A/2
+	VALUES "ConPosY_1" RANGE [-B/2+ConWidth_1/2, B/2-ConWidth_1/2]
+	VALUES "ConPosZ_1" RANGE [ConWidth_1/2, ZZYZX-grillHeight-ConWidth_1/2]
+ENDIF
+
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	gs_Connections = gs_Connections,
+	MEP_NumConnectionData = MEP_NumConnectionData,
+	MEP_StrConnectionData = MEP_StrConnectionData,
+	MEP_NumberConnections = MEP_NumberConnections,
+	gs_AddConnections = gs_AddConnections,
+	ConName = ConName,
+	ConID = ConID,
+	ConPosX = ConPosX_1,
+	ConPosY = ConPosY_1,
+	ConPosZ = ConPosZ_1,
+	ConDVecX = ConDVecX,
+	ConDVecY = ConDVecY,
+	ConDVecZ = ConDVecZ,
+	ConWVecX = ConWVecX,
+	ConWVecY = ConWVecY,
+	ConWVecZ = ConWVecZ,
+
+	ConNominalWidth = ConNominalWidth_1,
+	ConNominalDepth = ConNominalDepth_1,
+	ConWidth = ConWidth_1,
+	ConDepth = ConDepth_1,
+	ConLength = ConLength_1,
+	ConWallThickness = ConWallThickness_1,
+	ConConnectorWidth = ConConnectorWidth_1,
+	ConConnectorDepth = ConConnectorDepth_1,
+	ConConnectorWidth2 = ConConnectorWidth2_1,
+	ConToolType = ConToolType_1,
+	ConStatus = ConStatus_1,
+	ConType_1 = ConType_1,
+	ConConnectorType_1 = ConConnectorType_1,
+	ConSystem_1 = ConSystem_1,
+	ui_page_idx = ui_page_idx,
+	ui_current_con = ui_current_con,
+	shape_typ_to_validation = shape_typ_to_validation,
+	MEP_enabled_geometry_mod = 1,
+	bUIConnectionStatusCheckbox = 1
+
+PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_1, 1, 0)
+PARAMETERS MEP_ConInfo[ConID][2] = ConName
+PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+					! --- 2nd CONNECTION --- !
+
+ConID = 2
+ConName = `Соединение Трубы #2`
+
+ConDVecX = -1
+ConDVecY = 0
+ConDVecZ = 0
+
+ConWVecX = 0
+ConWVecY = -1
+ConWVecZ = 0
+
+IF NOT(SetProgram) THEN
+	VALUES "ConWidth_2" RANGE (0, MIN(B/2, (ZZYZX-grillHeight)/2)]
+	PARAMETERS ConDepth_2 = ConWidth_2
+	HIDEPARAMETER "ConDepth_2"
+	VALUES "ConLength_2" RANGE [0, ]
+
+
+	PARAMETERS ConPosX_2 = -A/2
+	VALUES "ConPosY_2" RANGE [-B/2+ConWidth_2/2, B/2-ConWidth_2/2]
+	VALUES "ConPosZ_2" RANGE [ConWidth_2/2, ZZYZX-grillHeight-ConWidth_2/2]
+ENDIF
+
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	gs_Connections = gs_Connections,
+	MEP_NumConnectionData = MEP_NumConnectionData,
+	MEP_StrConnectionData = MEP_StrConnectionData,
+	MEP_NumberConnections = MEP_NumberConnections,
+	gs_AddConnections = gs_AddConnections,
+	ConName = ConName,
+	ConID = ConID,
+	ConPosX = ConPosX_2,
+	ConPosY = ConPosY_2,
+	ConPosZ = ConPosZ_2,
+	ConDVecX = ConDVecX,
+	ConDVecY = ConDVecY,
+	ConDVecZ = ConDVecZ,
+	ConWVecX = ConWVecX,
+	ConWVecY = ConWVecY,
+	ConWVecZ = ConWVecZ,
+
+	ConNominalWidth = ConNominalWidth_2,
+	ConNominalDepth = ConNominalDepth_2,
+	ConWidth = ConWidth_2,
+	ConDepth = ConDepth_2,
+	ConLength = ConLength_2,
+	ConWallThickness = ConWallThickness_2,
+	ConConnectorWidth = ConConnectorWidth_2,
+	ConConnectorDepth = ConConnectorDepth_2,
+	ConConnectorWidth2 = ConConnectorWidth2_2,
+	ConToolType = ConToolType_2,
+	ConStatus = ConStatus_2,
+	ConType_2 = ConType_2,
+	ConConnectorType_2 = ConConnectorType_2,
+	ConSystem_2 = ConSystem_2,
+	shape_typ_to_validation = shape_typ_to_validation,
+	MEP_enabled_geometry_mod = 1,
+	bUIConnectionStatusCheckbox = 1
+
+PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_2, 1, 0)
+PARAMETERS MEP_ConInfo[ConID][2] = ConName
+PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+IF setProgram THEN
+	SetProgram = 0
+	PARAMETERS SetProgram = SetProgram
+ENDIF
+
+values "FM_HeatOutput_unit" `З`, `БТЕ/час`
+values "FM_RefrigeratingOutput_unit" `З`, `БТЕ/час`
+
+
+if FM_HeatOutput_unit = `БТЕ/час` then
+	hideparameter "FM_HeatOutput"
+else
+	hideparameter "FM_HeatOutput_btu"
+endif
+
+if FM_RefrigeratingOutput_unit = `БТЕ/час` then
+	hideparameter "FM_RefrigeratingOutput"
+else
+	hideparameter "FM_RefrigeratingOutput_btu"
+endif
+
+
+!1000 W = 3414,426 Btu/hour
+if GLOB_MODPAR_NAME = "FM_HeatOutput_btu" then
+	FM_HeatOutput = FM_HeatOutput_btu / 3.414426
+	parameters FM_HeatOutput = FM_HeatOutput
+else
+	FM_HeatOutput_btu = FM_HeatOutput * 3.414426
+	parameters FM_HeatOutput_btu = FM_HeatOutput_btu
+endif
+
+!1000 W = 3414,426 Btu/hour
+if GLOB_MODPAR_NAME = "FM_RefrigeratingOutput_btu" then
+	FM_RefrigeratingOutput = FM_RefrigeratingOutput_btu / 3.414426
+	parameters FM_RefrigeratingOutput = FM_RefrigeratingOutput
+else
+	FM_RefrigeratingOutput_btu = FM_RefrigeratingOutput * 3.414426
+	parameters FM_RefrigeratingOutput_btu = FM_RefrigeratingOutput_btu
+endif
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[сварной, фланцевый]]>
+</Keywords>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_UIDefault/>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Ширина"]]></Description>
+			<Fix/>
+			<Value>0.8</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Длина"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Высота"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Показ Узловых 2D Точек в 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Отметка Низа"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Отметка Верха"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="SetProgram">
+			<Description><![CDATA["Установка Программы"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- Connections: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="Connections">
+			<Description><![CDATA["Соединения"]]></Description>
+		</Title>
+		<Boolean Name="ConStatus_1">
+			<Description><![CDATA["Соединение Трубы #1"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="ConToolType_1">
+			<Description><![CDATA["Тип Инструмента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="ConSystem_1">
+			<Description><![CDATA["Система MEP"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Не определен"]]></Value>
+		</String>
+		<String Name="ConType_1">
+			<Description><![CDATA["Тип Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value><![CDATA["Окружность"]]></Value>
+		</String>
+		<String Name="ConConnectorType_1">
+			<Description><![CDATA["Тип Соединения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="ConNominalWidth_1">
+			<Description><![CDATA["Номинальный Размер"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Length Name="ConNominalDepth_1">
+			<Description><![CDATA["Номинальная Глубина"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ConWidth_1">
+			<Description><![CDATA["Внешний Диаметр"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Length Name="ConDepth_1">
+			<Description><![CDATA["Внешняя Глубина"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Length Name="ConWallThickness_1">
+			<Description><![CDATA["Толщина Стенки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.002</Value>
+		</Length>
+		<Length Name="ConLength_1">
+			<Description><![CDATA["Длина Соединения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+		<Length Name="ConConnectorWidth_1">
+			<Description><![CDATA["Диаметр Фланца"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.04</Value>
+		</Length>
+		<Length Name="ConConnectorDepth_1">
+			<Description><![CDATA["Глубина Фланца"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ConConnectorWidth2_1">
+			<Description><![CDATA["Ширина Фланца"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.005</Value>
+		</Length>
+		<Length Name="ConPosX_1">
+			<Description><![CDATA["Расположение Соединения по Х"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>-0.4</Value>
+		</Length>
+		<Length Name="ConPosY_1">
+			<Description><![CDATA["Расположение Соединения по Y"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>-0.4</Value>
+		</Length>
+		<Length Name="ConPosZ_1">
+			<Description><![CDATA["Расположение Соединения по Z"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.2</Value>
+		</Length>
+		<Boolean Name="ConStatus_2">
+			<Description><![CDATA["Соединение Трубы #2"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="ConToolType_2">
+			<Description><![CDATA["Тип Инструмента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<String Name="ConSystem_2">
+			<Description><![CDATA["Система MEP"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Не определен"]]></Value>
+		</String>
+		<String Name="ConType_2">
+			<Description><![CDATA["Тип Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Unique/>
+			</Flags>
+			<Value><![CDATA["Окружность"]]></Value>
+		</String>
+		<String Name="ConConnectorType_2">
+			<Description><![CDATA["Тип Соединения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="ConNominalWidth_2">
+			<Description><![CDATA["Номинальный Размер"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Length Name="ConNominalDepth_2">
+			<Description><![CDATA["Номинальная Глубина"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ConWidth_2">
+			<Description><![CDATA["Внешний Диаметр"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Length Name="ConDepth_2">
+			<Description><![CDATA["Внешняя Глубина"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Length Name="ConWallThickness_2">
+			<Description><![CDATA["Толщина Стенки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.003</Value>
+		</Length>
+		<Length Name="ConLength_2">
+			<Description><![CDATA["Длина Соединения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+		<Length Name="ConConnectorWidth_2">
+			<Description><![CDATA["Диаметр Фланца"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.04</Value>
+		</Length>
+		<Length Name="ConConnectorDepth_2">
+			<Description><![CDATA["Глубина Фланца"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="ConConnectorWidth2_2">
+			<Description><![CDATA["Ширина Фланца"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.005</Value>
+		</Length>
+		<Length Name="ConPosX_2">
+			<Description><![CDATA["Расположение Соединения по Х"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>-0.4</Value>
+		</Length>
+		<Length Name="ConPosY_2">
+			<Description><![CDATA["Расположение Соединения по Y"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>-0.4</Value>
+		</Length>
+		<Length Name="ConPosZ_2">
+			<Description><![CDATA["Расположение Соединения по Z"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D-отображение"]]></Description>
+			<Fix/>
+		</Title>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Перо Контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>15</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Тип Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Перо Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Перо Фона Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D-отображение"]]></Description>
+			<Fix/>
+		</Title>
+		<String Name="gs_detlevel_3D">
+			<Description><![CDATA["3D-детализация"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Детальный"]]></Value>
+		</String>
+		<Integer Name="gs_detlevel_3D_m">
+			<Description><![CDATA["3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>-1</Value>
+		</Integer>
+		<Boolean Name="mbShow">
+			<Description><![CDATA["Показать Основной Корпус"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Material Name="MainBoxMaterial">
+			<Description><![CDATA["Покрытие"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>13</Value>
+		</Material>
+		<Boolean Name="useSysMat">
+			<Description><![CDATA["Использовать Покрытие Системы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Material Name="sMat">
+			<Description><![CDATA["Покрытие Системы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>78</Value>
+		</Material>
+		<Integer Name="ifc_subtype">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>29</Value>
+		</Integer>
+		<Integer Name="ifc_predefinedtype">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>5</Value>
+		</Integer>
+		<Integer Name="ui_current_con">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="gs_ui_current_page">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="ui_page_idx">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="0">
+				<AVal Row="1">2</AVal>
+				<AVal Row="2">3</AVal>
+			</ArrayValues>
+		</Integer>
+		<Integer Name="MEP_version">
+			<Description><![CDATA["Версия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>4</Value>
+		</Integer>
+		<String Name="MEP_ConInfo">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="3">
+				<AVal Column="1" Row="1"><![CDATA["2"]]></AVal>
+				<AVal Column="2" Row="1"><![CDATA["Соединение Трубы #1"]]></AVal>
+				<AVal Column="3" Row="1"><![CDATA["0"]]></AVal>
+				<AVal Column="1" Row="2"><![CDATA["2"]]></AVal>
+				<AVal Column="2" Row="2"><![CDATA["Соединение Трубы #2"]]></AVal>
+				<AVal Column="3" Row="2"><![CDATA["0"]]></AVal>
+			</ArrayValues>
+		</String>
+		<Length Name="gs_Connections">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="26">
+				<AVal Column="1" Row="1">-0.4</AVal>
+				<AVal Column="2" Row="1">-0.4</AVal>
+				<AVal Column="3" Row="1">0.2</AVal>
+				<AVal Column="4" Row="1">-1</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">-1</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0.03</AVal>
+				<AVal Column="13" Row="1">0.03</AVal>
+				<AVal Column="14" Row="1">0.002</AVal>
+				<AVal Column="15" Row="1">0.04</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0.005</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">2</AVal>
+				<AVal Column="20" Row="1">0</AVal>
+				<AVal Column="21" Row="1">2</AVal>
+				<AVal Column="22" Row="1">1</AVal>
+				<AVal Column="23" Row="1">0.02</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="26" Row="1">0</AVal>
+				<AVal Column="1" Row="2">-0.4</AVal>
+				<AVal Column="2" Row="2">-0.4</AVal>
+				<AVal Column="3" Row="2">0.1</AVal>
+				<AVal Column="4" Row="2">-1</AVal>
+				<AVal Column="5" Row="2">0</AVal>
+				<AVal Column="6" Row="2">0</AVal>
+				<AVal Column="7" Row="2">0</AVal>
+				<AVal Column="8" Row="2">-1</AVal>
+				<AVal Column="9" Row="2">0</AVal>
+				<AVal Column="10" Row="2">0</AVal>
+				<AVal Column="11" Row="2">0</AVal>
+				<AVal Column="12" Row="2">0.03</AVal>
+				<AVal Column="13" Row="2">0.03</AVal>
+				<AVal Column="14" Row="2">0.0033782</AVal>
+				<AVal Column="15" Row="2">0.04</AVal>
+				<AVal Column="16" Row="2">0</AVal>
+				<AVal Column="17" Row="2">0.005</AVal>
+				<AVal Column="18" Row="2">0</AVal>
+				<AVal Column="19" Row="2">2</AVal>
+				<AVal Column="20" Row="2">0</AVal>
+				<AVal Column="21" Row="2">2</AVal>
+				<AVal Column="22" Row="2">1</AVal>
+				<AVal Column="23" Row="2">0.02</AVal>
+				<AVal Column="24" Row="2">0</AVal>
+				<AVal Column="25" Row="2">0</AVal>
+				<AVal Column="26" Row="2">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Integer Name="MEP_NumberConnections">
+			<Description><![CDATA["Количество Соединений"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Length Name="MEP_NumConnectionData">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="26">
+				<AVal Column="1" Row="1">-0.42</AVal>
+				<AVal Column="2" Row="1">-0.4</AVal>
+				<AVal Column="3" Row="1">0.2</AVal>
+				<AVal Column="4" Row="1">-1</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">-1</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0.03</AVal>
+				<AVal Column="13" Row="1">0.03</AVal>
+				<AVal Column="14" Row="1">0.002</AVal>
+				<AVal Column="15" Row="1">0.04</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0.005</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">2</AVal>
+				<AVal Column="20" Row="1">0</AVal>
+				<AVal Column="21" Row="1">2</AVal>
+				<AVal Column="22" Row="1">1</AVal>
+				<AVal Column="23" Row="1">0.02</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="26" Row="1">0</AVal>
+				<AVal Column="1" Row="2">-0.42</AVal>
+				<AVal Column="2" Row="2">-0.4</AVal>
+				<AVal Column="3" Row="2">0.1</AVal>
+				<AVal Column="4" Row="2">-1</AVal>
+				<AVal Column="5" Row="2">0</AVal>
+				<AVal Column="6" Row="2">0</AVal>
+				<AVal Column="7" Row="2">0</AVal>
+				<AVal Column="8" Row="2">-1</AVal>
+				<AVal Column="9" Row="2">0</AVal>
+				<AVal Column="10" Row="2">0</AVal>
+				<AVal Column="11" Row="2">0</AVal>
+				<AVal Column="12" Row="2">0.03</AVal>
+				<AVal Column="13" Row="2">0.03</AVal>
+				<AVal Column="14" Row="2">0.0033782</AVal>
+				<AVal Column="15" Row="2">0.04</AVal>
+				<AVal Column="16" Row="2">0</AVal>
+				<AVal Column="17" Row="2">0.005</AVal>
+				<AVal Column="18" Row="2">0</AVal>
+				<AVal Column="19" Row="2">2</AVal>
+				<AVal Column="20" Row="2">0</AVal>
+				<AVal Column="21" Row="2">2</AVal>
+				<AVal Column="22" Row="2">1</AVal>
+				<AVal Column="23" Row="2">0.02</AVal>
+				<AVal Column="24" Row="2">0</AVal>
+				<AVal Column="25" Row="2">0</AVal>
+				<AVal Column="26" Row="2">0</AVal>
+			</ArrayValues>
+		</Length>
+		<String Name="MEP_StrConnectionData">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="4">
+				<AVal Column="1" Row="1"><![CDATA["{B58525F9-A8D8-454D-A768-BF66DE95BC32}"]]></AVal>
+				<AVal Column="2" Row="1"><![CDATA["0"]]></AVal>
+				<AVal Column="3" Row="1"><![CDATA["Соединение Трубы #1"]]></AVal>
+				<AVal Column="4" Row="1"><![CDATA[""]]></AVal>
+				<AVal Column="1" Row="2"><![CDATA["{B58525F9-A8D8-454D-A768-BF66DE95BC32}"]]></AVal>
+				<AVal Column="2" Row="2"><![CDATA["0"]]></AVal>
+				<AVal Column="3" Row="2"><![CDATA["Соединение Трубы #2"]]></AVal>
+				<AVal Column="4" Row="2"><![CDATA[""]]></AVal>
+			</ArrayValues>
+		</String>
+		<Length Name="gs_AddConnections">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="2">
+				<AVal Column="1" Row="1">1</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="1" Row="2">1</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="MEP_NumConnectedConnectionData">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="26">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">0</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">0</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0</AVal>
+				<AVal Column="13" Row="1">0</AVal>
+				<AVal Column="14" Row="1">0</AVal>
+				<AVal Column="15" Row="1">0</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">0</AVal>
+				<AVal Column="20" Row="1">0</AVal>
+				<AVal Column="21" Row="1">0</AVal>
+				<AVal Column="22" Row="1">0</AVal>
+				<AVal Column="23" Row="1">0</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="26" Row="1">0</AVal>
+			</ArrayValues>
+		</Length>
+		<String Name="LibraryLangCode">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["RUS"]]></Value>
+		</String>
+		<String Name="ED_X_AxisUnit">
+			<Description><![CDATA["Единицы Оси X"]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="ED_Y_AxisUnit">
+			<Description><![CDATA["Единицы Оси Y"]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="ED_Characteristics">
+			<Description><![CDATA["Характеристики"]]></Description>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="2">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+			</ArrayValues>
+		</RealNum>
+
+		<!-- gs_list: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_list">
+			<Description><![CDATA["Параметры Спецификаций"]]></Description>
+			<Fix/>
+		</Title>
+		<RealNum Name="gs_list_cost">
+			<Description><![CDATA["Цена"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_manufacturer">
+			<Description><![CDATA["Производитель"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_note">
+			<Description><![CDATA["Примечания"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_location">
+			<Description><![CDATA["Расположение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_accessories">
+			<Description><![CDATA["Аксессуары"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="gs_list_volts">
+			<Description><![CDATA["Напряжение"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_Type">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Механическое Оборудование"]]></Value>
+		</String>
+		<Integer Name="iFMType">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>12</Value>
+		</Integer>
+		<String Name="FM_SystemName">
+			<Description><![CDATA["Название Системы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductName">
+			<Description><![CDATA["Идентификатор Изделия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_GUID">
+			<Description><![CDATA["ID Продукта"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_material">
+			<Description><![CDATA["Покрытие"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_gauge">
+			<Description><![CDATA["Тип Датчика"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="gs_list_area">
+			<Description><![CDATA["Площадь"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="gs_list_volume">
+			<Description><![CDATA["Объем"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_InventoryNumber">
+			<Description><![CDATA["Инвентарный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_SerialNumber">
+			<Description><![CDATA["Серийный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_BarCode">
+			<Description><![CDATA["Штрих-код"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductionYear">
+			<Description><![CDATA["Год Производства"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="FM_ERPCode">
+			<Description><![CDATA["Код ERP"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="FM_OrderNumber">
+			<Description><![CDATA["Номер Заказа"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="FM_Condition">
+			<Description><![CDATA["Условие"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_Servicer">
+			<Description><![CDATA["Сервис-центр"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ObjectWeight">
+			<Description><![CDATA["Вес Изделия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ObjectWeightUnit">
+			<Description><![CDATA["Единица Веса"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_HeatOutput_unit">
+			<Description><![CDATA["Единицы Измерения Тепловыделения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["З"]]></Value>
+		</String>
+		<RealNum Name="FM_HeatOutput">
+			<Description><![CDATA["Максимальное Тепловыделение"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7000</Value>
+		</RealNum>
+		<RealNum Name="FM_HeatOutput_btu">
+			<Description><![CDATA["Максимальное Тепловыделение"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>23900.982</Value>
+		</RealNum>
+		<String Name="FM_RefrigeratingOutput_unit">
+			<Description><![CDATA["Единицы Измерения Холодоотдачи"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["З"]]></Value>
+		</String>
+		<RealNum Name="FM_RefrigeratingOutput">
+			<Description><![CDATA["Максимальная Холодоотдача"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7000</Value>
+		</RealNum>
+		<RealNum Name="FM_RefrigeratingOutput_btu">
+			<Description><![CDATA["Максимальная Холодоотдача"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>23900.982</Value>
+		</RealNum>
+		<RealNum Name="FM_PowerConsumption">
+			<Description><![CDATA["Потребляемая Мощность"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1700</Value>
+		</RealNum>
+		<Boolean Name="FM_FatStops">
+			<Description><![CDATA["Ограничитель Смазки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="FM_ElectricConnection">
+			<Description><![CDATA["Подключение к Электросети"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="FM_PhaseNumber">
+			<Description><![CDATA["Количество Фаз"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<RealNum Name="FM_Voltage">
+			<Description><![CDATA["Напряжение"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_VoltageUnit">
+			<Description><![CDATA["Единицы Измерения Напряжения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ElectroPerformance">
+			<Description><![CDATA["Электрическая Производительность"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ElectroPerformanceUnit">
+			<Description><![CDATA["Единицы Измерения Производительности"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_IPProtection">
+			<Description><![CDATA["Влагозащита"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom1">
+			<Description><![CDATA["Пользовательское Значение 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom2">
+			<Description><![CDATA["Пользовательское Значение 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom3">
+			<Description><![CDATA["Пользовательское Значение 3"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom4">
+			<Description><![CDATA["Пользовательское Значение 4"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom5">
+			<Description><![CDATA["Пользовательское Значение 5"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+
+		<!-- gs_onorm_Title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_onorm_Title">
+			<Description><![CDATA["Дополнительные Параметры Спецификаций"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<String Name="gs_onorm_dimensions">
+			<Description><![CDATA["Размеры Ш/Г/В"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_manufacturer">
+			<Description><![CDATA["Дополнительный Производитель"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_baseheight_value">
+			<Description><![CDATA["Значение Высоты Основания"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_baseheight">
+			<Description><![CDATA["Дополнительная Высота Основания"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_assemblydate">
+			<Description><![CDATA["Дата Сборки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_customtext1">
+			<Description><![CDATA["Дополнительная Информация 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_customtext2">
+			<Description><![CDATA["Дополнительная Информация 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_aks">
+			<Description><![CDATA["Номер AKS"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_product">
+			<Description><![CDATA["Название Изделия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_leistungbuch">
+			<Description><![CDATA["Коллекция ID Спецификаций"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_description">
+			<Description><![CDATA["Дополнительное Описание"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_number">
+			<Description><![CDATA["Дополнительный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_id">
+			<Description><![CDATA["Номер ID"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_admission">
+			<Description><![CDATA["Дата Приема"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_modification">
+			<Description><![CDATA["Дата Изменения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_tozonenumber">
+			<Description><![CDATA["Номер Зоны"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+
+		<!-- mep_par_h: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="mep_par_h">
+			<Description><![CDATA["Скрытые параметры"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<Boolean Name="show_el">
+			<Description><![CDATA["Показ элемента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="syst_name">
+			<Description><![CDATA["Имя системы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["!!!"]]></Value>
+		</String>
+		<Boolean Name="mun_elev">
+			<Description><![CDATA["Ручной этаж"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="n_elev">
+			<Description><![CDATA["Номер этажа"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="otm_elem">
+			<Description><![CDATA["Отметка оси элемента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="otm_elem_abs">
+			<Description><![CDATA["Отметка оси элемента абсолютная"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="spec_add_param">
+			<Description><![CDATA["Доп.параметры в смету"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["!!!"]]></Value>
+		</String>
+
+		<!-- mep_par_spec: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="mep_par_spec">
+			<Description><![CDATA["Спецификация"]]></Description>
+		</Title>
+		<String Name="subpos">
+			<Description><![CDATA["Входит в сборку"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="naen">
+			<Description><![CDATA["Наименование"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="obozn">
+			<Description><![CDATA["Обозначение"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="eq_code">
+			<Description><![CDATA["Код"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="eq_plant">
+			<Description><![CDATA["Завод-изготовитель"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="komment">
+			<Description><![CDATA["Единица измерения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="kol_vo_spec">
+			<Description><![CDATA["Кол-во"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="ves">
+			<Description><![CDATA["Масса ед., кг."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="mep_vol">
+			<Description><![CDATA["Внутренний объём, куб.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="mep_l">
+			<Description><![CDATA["Длина, м"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="mep_razm">
+			<Description><![CDATA["Размер сечения (BxH), мм"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="mep_razm_abs">
+			<Description><![CDATA["Размер сечения (MAXxMIN), мм"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="mep_s_el">
+			<Description><![CDATA["Наружная площадь, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="mep_s_ins">
+			<Description><![CDATA["Площадь изоляции, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="mep_s_pokr">
+			<Description><![CDATA["Площадь покрытия, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="mep_s_in">
+			<Description><![CDATA["Площадь сечения, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<Material Name="mep_m_ins">
+			<Description><![CDATA["Материал изоляции"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Material>
+		<Material Name="mep_m_pokr">
+			<Description><![CDATA["Материал покрытия"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Material>
+		<RealNum Name="mep_ra">
+			<Description><![CDATA["Расход"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+	</Parameters>
+</ParamSection>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="1386" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000780000
+	007808030000000EBAC6E000000033504C5445FFFFFFE7E7E7ADADADB9B9B996
+	9696999999A3A3A3B3B3B3C2C2C2868686DCDCDC7575758A8A8AD5D5D5CBCBCB
+	EBEBEB7B7B7BD744C4D2000004E849444154785EEC95EB6A5C310C84CB8C6E3E
+	7B49DFFF694B647164B685AE0B3DFDD10C04146FD88FD148CAB7FF565FFAD297
+	3E9E3C3EFE05979F7A1E57730F962EB6FDE4A2E7C785F1BEE8B82ADE56DBBE9A
+	DB3AAE8BB7D583763DB7F6EB8278AFB3DDDC8B6D3FF9B68EABB8FBFBB57F35AE
+	B4FD1AAF5D67FB604B55275E54FEF2A075BC626AE468EF9A0FF48DFDDA8F1786
+	C2838BA046DBB0BD1BAFC18B04110355B4707015DB382B1B5C900C8FD3F6ED8C
+	DBC0AA7E437EFC49BCB8BB56B3C9707252227F4CAA0D2C45D3BAC6639FCB3083
+	8CF4160511A8AA1540252AF92645D7413A12BC1B6FB934E0F436AABFF0C5ED58
+	8DAE7224788F1BD5585A98DCC0A95186BC065C1336A2A96DDB1D80EF80CF2D0A
+	169D43C518A4C29429BBA7E791786B6AE30164ABF7E22D77849631D3EF20B2CA
+	B798E4740E2DE08277388004EF5D8D020B1995A5700C0C829CAE159FF41B08C9
+	D7C2C6196FA28FBD782BE2E0AD2F969E370CDF15842859ABAD6C3537D18FFD7F
+	0AFDBD460D86402DCC14A0246005AFBD0E07B0D7EAE73A200018C45D192357C9
+	48E39D72AF0E143D5E1DFB44D670BD196FB0042A4509E94D55E43B9183366385
+	D5E7D16B04A0D18FB7AF46A141C1C2B420E12232040C52149690D99B9FE3F56A
+	F6E3DDB16AF69A245558AA82D09B55A94B4298DA182E73AE62E48DE825B53E56
+	A6B31498CD848B5A5CEF5EBF0156552CC3D9378277F87CC9BF50D1EE2CE4B6FC
+	C6EA6FF7FA4DB0AAF9A4963012680A7B59B34E160ACFA9EA78F7864BA7ACEC15
+	7E206B573D831C2415279E8455B9CA775A5D82B3650A7A595342C504DD5DA0E7
+	AA9ADB86B3D800A7ED0E9A26838BC2E434BBC68B5F1AC6B1032EDBC5BE9302D5
+	668C99ECF912AFD7AA0D6FB4DADAB69F29D648535555F40699D09617083D5FFB
+	19AFECE0AF64EDB5E25DB51A86EF801B6D92B6E365BF7BA2522B085EF5BEE366
+	171E6C35AD7BE135CDADC5F03E7815BC50ADC6FF68BF0C561B886120DABAED28
+	149AFEFFDFF6D47DC8C342BC92738A0E819C1EA31949DE942A8CBEA6D8DAAE01
+	2BFF0458AAE4B10E2AB2FD630128F6227A5D3158E8C8CEB10A9295A355F798A4
+	0D6EB66DAB8C8D6B9BEBBC340EBDC832C9D0571563B2D738B867C9825E4BB5F0
+	5CFFDB3406B27C98F0F91258FE0734B266C1500B8ACF4A003C5AF87C192C1A9C
+	E72BF3624E16F4BAE23CD6C2554C068803558FBDD55E44AB71574F6B4C9A5E1A
+	00E97EB5D50897294621ABA447B1CE461B912698B015C09FB094CED6A12E127D
+	DA2B51DCD5AE5B962BAFFACAF4BF528AD02438E8F525B013E59BCB0577840BA6
+	870BA80BA6BA3617876A4E2FC5376AD45B2D733EC09D0BEEBF4E921F050F7974
+	B45A395F3202BF98D0AF98CD855C17AC1175B06F2E7A9D0583FEE095D9EA3145
+	416D5920AE5DC84D1EDB65FE6D01932E9D194CC8E1B6860B6CF2385FE61B802A
+	5807D886D80A6E19CC695622A0376800F636B73A4CB4D9DB07160B0412AEC20F
+	ECED53AC34C7E0E9B4D9DBBC327D72B9C2CD60E6784A56AA783740DFE69ABF13
+	03DD37B85B520D132CF63ECB63D866EFBEEB8464A677A162B1D5984AC15DAAFB
+	AAC7912407F62ED77BAC786C92E1EE932D7BEB61EF4ED9BCAB6937DCEBE8FB83
+	8A4918F616EB1E8FCC310577B36C616E2C1C857AD0B470F35B8326D23C6E7077
+	CB26D5F6D6D82D5BFEA9B05D36A95EB7B73E5F2AC4AA345F8A82BD15D92A6CAB
+	52D054B0B7143405DCA7CA16F63EB798DE57BDEA557F62887219E2CEAC5C0000
+	000049454E44AE426082
+	]]>
+</Picture>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["MEP_m_ConnectionsMEP_4"]]></MName>
+		<MainGUID>9784BCC8-1D53-4197-B6A9-F588AA5459D3</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["FM_types_MEP"]]></MName>
+		<MainGUID>CC18BF60-65E8-405A-A194-08B65E804D05</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_BWM>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

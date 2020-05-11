@@ -1,0 +1,1431 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="true" IsPlaceable="true" MainGUID="BF4DEE93-4994-4CA1-BED9-40B562BA9A79" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+if gs_detlevel_3D_m = DETLEVEL3D_OFF then end
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+!gs_2D_projection_type:
+!	0 - Normal 3D
+!	1 - View Edges
+!	2 - View Polygons
+!	3 - Overhead Edges
+!	4 - Cut Lines
+!	5 - Cut Polygons
+!	6 - Bottom Range Cut Lines
+!	7 - Top Range Cut Lines
+
+nProjectionCut = 0
+if gs_2D_projection then
+	if AC_symb_show_projection_to = PROJECTION_FLOOR_PLAN_RANGE | (AC_symb_show_projection_to = PROJECTION_DISPLAY_LIMIT & gs_bottom_range_height < gs_cutplane_height) then
+		addz gs_bottom_range_height
+		cutplane{2} 180, 2
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+	if gs_2D_projection_type <> 6 then
+		addz gs_cutplane_height
+		cutplane{2} 180 * (gs_2D_projection_type = 3), 1
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+	if AC_symb_show_projection_to <> 3 then
+		addz gs_top_range_height
+		cutplane{2} 0, 2
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+endif
+
+IF gs_shadow=0 THEN SHADOW OFF
+IF gs_shadow=1 THEN SHADOW ON
+
+_eaveOverhang = crh / sin(ang)
+_A = tieBeamLength + _eaveOverhang*2
+
+unID=1
+gosub 1000
+
+pen gs_pen_3d
+addy crd
+!!!------------------------------------------------
+
+
+dx = (_A/2 - (crh/2)/sin(ang)) / n
+dy11 = zzyzx - (dx*tan(ang))
+
+dy1= dy11  - (crh)/cos(ang) + (crh/2)*tan(ang)
+dx1 = (dx*(n+1)) - (crh/2)/sin(ang)
+dx12 = (crh/2)/sin(ang)
+bet = atn(dy1 / ((dx*(n+1)) - crh/2 - (crh/2)/sin(ang)))
+dy = dy1 - (dx - (crh/2))*tan(bet)
+!!!------------------------------------------------
+dr1 = crh/sin(ang - bet)
+dx21 = dr1*cos(ang) + (crh)/sin(ang)
+dy21 = dr1*sin(ang)
+!!!------------------------------------------------
+dy31 = crh/cos(ang)
+!!!------------------------------------------------
+dy41 = crh/cos(bet)
+dx41 = (dy41/2)/tan(bet)
+!!!------------------------------------------------
+dr2 = crh/cos(90 - ang - bet)
+dy51 = dr2*sin(ang)
+dx51 = dr2*cos(ang)
+!!!------------------------------------------------
+
+
+material gs_truss_mat
+addx -_eaveOverhang
+rotx 90
+
+for u=1 to 2
+	! Rafter
+	if ced then
+		put	_eaveOverhang,	_eaveOverhang*tan(ang),	15,
+			_A/2,			zzyzx,					15,
+			_A/2,			zzyzx - dy31,			15,
+			_eaveOverhang,	0,						15
+	else
+		put	0,				0,				15,
+			_A/2,			zzyzx,			15,
+			_A/2,			zzyzx - dy31,	15,
+			_eaveOverhang,	0,				15
+	endif
+
+	prism_ nsp/3, crd,
+		get(nsp)
+
+	! Lower Beam
+	put	_eaveOverhang,	0,			15,
+		dx21,			dy21,		15,
+		_A/2,			dy + dy41,	15,
+		_A/2,			dy,			15
+
+	prism_ nsp/3, crd,
+		get(nsp)
+
+	addx _A
+	mulx -1
+next u
+del 4
+
+
+if (gs_detlevel_3D_m = DETLEVEL3D_DETAILED) then
+
+	for u=1 to 2
+
+		material gs_truss_mat
+		put	(crh/2)/sin(ang)+(n-1)*dx + crh/2,			dy1,			15,
+			(crh/2)/sin(ang)+(n-1)*dx + crh/2 + dx51,	dy1 + dy51,		15,
+			_A/2,										dy + dy41,		15,
+			_A/2 - dx41,								dy  +(dy41/2),	15
+
+		prism_ nsp/3, crd,
+			get(nsp)
+
+		for i=1 to n-1
+
+			! Web beams
+			!!------------------------------------------
+			dy61=((i)*dx-((crh/2)/sin(ang)))*tan(bet)+crh/cos(bet)
+			dy62=((i)*dx-((crh/2)/sin(ang)))*tan(ang)
+			!!------------------------------------------
+			dy71=((i+1)*dx-((crh/2)/sin(ang)))*tan(bet)+crh/cos(bet)-(crh/2)*tan(bet)
+			dy72=((i)*dx-((crh/2)/sin(ang)))*tan(ang)+(crh/2)*tan(ang)
+			dxr=dx-crh
+			dyr=dy72-dy71
+			gams1=90-atn(dyr/dxr)
+			drs=sqr((dxr*dxr)+(dyr*dyr))
+			gams2=asn(crh/drs)
+
+			if gams1-gams2 < 90 then
+				gam=90-(gams1-gams2)
+			else
+				gam=- (gams1-gams2-90)
+			endif
+
+			dr3=crh/sin(gam+ang)
+			dr4=crh/sin(gam+bet)
+			!!-------------------------------------------
+			material gs_truss_mat
+			prism_ 4,crd,
+				dx12+dx*i+crh/2,dy61+(crh/2)*tan(bet),15,
+				dx12+dx*i-crh/2,dy61-(crh/2)*tan(bet),15,
+				dx12+dx*i-crh/2,dy62-(crh/2)*tan(ang),15,
+				dx12+dx*i+crh/2,dy62+(crh/2)*tan(ang),15
+
+			if i < n-1 then
+				prism_ 4,crd,
+					dx12+dx*i+crh/2,dy72,15,
+					dx12+dx*i+crh/2+dr3*cos(ang),dy62+(crh/2)*tan(ang)+dr3*sin(ang),15,
+					dx12+dx*(i+1)-crh/2,dy71,15,
+					dx12+dx*(i+1)-crh/2-dr4*cos(bet),dy71-dr4*sin(bet),15
+			endif
+
+			! Steel plates
+			if stp then
+				material mat2
+				addz -0.005
+				prism_ 4,0.005,
+					 dx12+dx*i-crh/2,dy62-(crh/2)*tan(ang),15,
+					 dx12+dx*i+crh/2+dr3*cos(ang),dy62-(crh/2)*tan(ang),15,
+					 dx12+dx*i+crh/2+dr3*cos(ang),dy62+(crh/2)*tan(ang)+dr3*sin(ang)+crh/cos(ang),15,
+					 dx12+dx*i-crh/2,dy62-(crh/2)*tan(ang)+crh/cos(ang),15
+				prism_ 4,0.005,
+					 dx12+dx*i-crh/2,dy61-(crh/2)*tan(bet)-crh/cos(bet),15,
+					 dx12+dx*i-crh/2,dy61-(crh/2)*tan(bet)+crh/cos(bet) ,15,
+					 dx12+dx*i+crh/2,dy61-(crh/2)*tan(bet)+crh/cos(bet) ,15,
+					 dx12+dx*i+crh/2,dy61+(crh/2)*tan(bet)-crh/cos(bet),15
+				!!------------------------------------------------------------------------------
+				addz 0.005+crd
+				prism_ 4,0.005,
+					 dx12+dx*i-crh/2,dy62-(crh/2)*tan(ang),15,
+					 dx12+dx*i+crh/2+dr3*cos(ang),dy62-(crh/2)*tan(ang),15,
+					 dx12+dx*i+crh/2+dr3*cos(ang),dy62+(crh/2)*tan(ang)+dr3*sin(ang)+crh/cos(ang),15,
+					 dx12+dx*i-crh/2,dy62-(crh/2)*tan(ang)+crh/cos(ang),15
+				prism_ 4,0.005,
+					 dx12+dx*i-crh/2,dy61-(crh/2)*tan(bet)-crh/cos(bet),15,
+					 dx12+dx*i-crh/2,dy61-(crh/2)*tan(bet)+crh/cos(bet) ,15,
+					 dx12+dx*i+crh/2,dy61-(crh/2)*tan(bet)+crh/cos(bet) ,15,
+					 dx12+dx*i+crh/2,dy61+(crh/2)*tan(bet)-crh/cos(bet),15
+				del 2
+			endif
+
+		next i
+		addx _A
+		mulx -1
+	next u
+
+	del 4
+
+	! Steel plates
+	if stp then
+		addz -0.005
+		prism_ 5,0.005,
+			_A/2,zzyzx,15,
+			_A/2+2*crh*cos(ang),zzyzx-2*crh*sin(ang),15,
+			_A/2+2*crh*cos(ang)-crh*sin(ang),zzyzx-2*crh*sin(ang)-crh*cos(ang),15,
+			_A/2-2*crh*cos(ang)+crh*sin(ang),zzyzx-2*crh*sin(ang)-crh*cos(ang),15,
+			_A/2-2*crh*cos(ang),zzyzx-2*crh*sin(ang),15
+		prism_ 4,0.005,
+			_A/2-dx41,dy-dx41*tan(bet),15,
+			_A/2-dx41,dy+dx41*tan(bet)+dy41,15,
+			_A/2+dx41,dy+dx41*tan(bet)+dy41,15,
+			_A/2+dx41,dy-dx41*tan(bet),15
+		prism_ 4,0.005,
+			crh/sin(ang),0,15,
+			crh/sin(ang),(crh/sin(ang))*tan(ang),15,
+			dx21,dx21*tan(ang),15,
+			dx21,(dx21-crh/sin(ang))*tan(bet),15
+		prism_ 4,0.005,
+			_A-crh/sin(ang),0,15,
+			_A-crh/sin(ang),(crh/sin(ang))*tan(ang),15,
+			_A-dx21,dx21*tan(ang),15,
+			_A-dx21,(dx21-crh/sin(ang))*tan(bet),15
+		!!--------------------------------------------------------------
+		  addz 0.005+crd
+		prism_ 5,0.005,
+			_A/2,zzyzx,15,
+			_A/2+2*crh*cos(ang),zzyzx-2*crh*sin(ang),15,
+			_A/2+2*crh*cos(ang)-crh*sin(ang),zzyzx-2*crh*sin(ang)-crh*cos(ang),15,
+			_A/2-2*crh*cos(ang)+crh*sin(ang),zzyzx-2*crh*sin(ang)-crh*cos(ang),15,
+			_A/2-2*crh*cos(ang),zzyzx-2*crh*sin(ang),15
+		prism_ 4,0.005,
+			_A/2-dx41,dy-dx41*tan(bet),15,
+			_A/2-dx41,dy+dx41*tan(bet)+dy41,15,
+			_A/2+dx41,dy+dx41*tan(bet)+dy41,15,
+			_A/2+dx41,dy-dx41*tan(bet),15
+		prism_ 4,0.005,
+			crh/sin(ang),0,15,
+			crh/sin(ang),(crh/sin(ang))*tan(ang),15,
+			dx21,dx21*tan(ang),15,
+			dx21,(dx21-crh/sin(ang))*tan(bet),15
+		prism_ 4,0.005,
+			_A-crh/sin(ang),0,15,
+			_A-crh/sin(ang),(crh/sin(ang))*tan(ang),15,
+			_A-dx21,dx21*tan(ang),15,
+			_A-dx21,(dx21-crh/sin(ang))*tan(bet),15
+		!!--------------------------------------------------------------
+		  del 2
+
+	endif
+
+endif
+
+del 2
+
+for i = 1 to nProjectionCut
+	cutend
+next i
+
+del top
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ==============================================================================
+
+1000:
+	!!---- Hotspot Editing
+	hotspot 0,				B/2, 0,unID, tieBeamLength, 1+256	: unID=unID+1
+	hotspot -1,				B/2, 0,unID, tieBeamLength, 3		: unID=unID+1
+	hotspot tieBeamLength,	B/2, 0,unID, tieBeamLength, 2		: unID=unID+1
+
+	hotspot -eaveOverhang,	0,	0, unID, B, 1+256	: unID=unID+1
+	hotspot -eaveOverhang,	-1,	0, unID, B, 3		: unID=unID+1
+	hotspot -eaveOverhang,	B,	0, unID, B, 2		: unID=unID+1
+
+	hotspot tieBeamLength + eaveOverhang,	0,	0, unID, B, 1+256	: unID=unID+1
+	hotspot tieBeamLength + eaveOverhang,	-1,	0, unID, B, 3		: unID=unID+1
+	hotspot tieBeamLength + eaveOverhang,	B,	0, unID, B, 2		: unID=unID+1
+
+	if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+		hotspot tieBeamLength/2, B/2, 0,		unID, zzyzx, 1+128	:unID=unID+1
+		hotspot tieBeamLength/2, B/2, -1,		unID, zzyzx, 3		:unID=unID+1
+		hotspot tieBeamLength/2, B/2, zzyzx,	unID, zzyzx, 2		:unID=unID+1
+	endif
+
+	if iDimensionSetMode = DIM_WIDTH_ANGLE | iDimensionSetMode = DIM_WIDTH_PROPORTION then
+		hotspot tieBeamLength/2, B/2, zzyzx, unID : unID=unID+1
+	endif
+
+	if iDimensionSetMode = DIM_WIDTH_ANGLE then
+		rafterLength = sqr((tieBeamLength/2)^2 + (zzyzx - crh/cos(ang))^2)
+
+		hotspot rafterLength/2,				0,	0,							unID, ang, 4+128	: unID=unID+1
+		hotspot 0,							0,	0,							unID, ang, 6 		: unID=unID+1
+		hotspot (rafterLength/2)*cos(ang),	0,	(rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		hotspot 0,							-1,	0,							unID, ang, 7		: unID=unID+1
+
+		hotspot rafterLength/2,				B,		0,							unID, ang, 4+128	: unID=unID+1
+		hotspot 0,							B,		0,							unID, ang, 6 		: unID=unID+1
+		hotspot (rafterLength/2)*cos(ang),	B,		(rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		hotspot 0,							B - 1,	0,							unID, ang, 7		: unID=unID+1
+
+		hotspot tieBeamLength - rafterLength/2,				0,	0,							unID, ang, 4+128	: unID=unID+1
+		hotspot tieBeamLength,								0,	0,							unID, ang, 6 		: unID=unID+1
+		hotspot tieBeamLength - (rafterLength/2)*cos(ang),	0,	(rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		hotspot tieBeamLength,								1,	0,							unID, ang, 7		: unID=unID+1
+
+		hotspot tieBeamLength - rafterLength/2,				B,		0,							unID, ang, 4+128	: unID=unID+1
+		hotspot tieBeamLength,								B,		0,							unID, ang, 6 		: unID=unID+1
+		hotspot tieBeamLength - (rafterLength/2)*cos(ang),	B,		(rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		hotspot tieBeamLength,								B + 1,	0,							unID, ang, 7		: unID=unID+1
+	endif
+
+return
+
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! Floor Plan View
+! ==============================================================================
+! ----- Display with floorplan cutplane ------------------------------------
+gs_cutplane_height	= GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[1]
+gs_top_range_height	= GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[2]
+if AC_symb_show_projection_to = PROJECTION_FLOOR_PLAN_RANGE then
+	gs_bottom_range_height = GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[3]	! To Floor Plan Range
+else
+	gs_bottom_range_height = GLOB_CUTPLANES_INFO[4]	! Absolute Display Limit
+endif
+
+doCutplane = (ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_OVERHEAD_PROJ)
+
+! ==============================================================================
+! Hotspots
+! ==============================================================================
+hLineID = 1000
+unID = 1
+
+hotline2 -eaveOverhang,	0,	tieBeamLength,	0, hLineID : hLineID = hLineID + 1
+hotline2 tieBeamLength,	0,	tieBeamLength,	B, hLineID : hLineID = hLineID + 1
+hotline2 tieBeamLength,	B,	-eaveOverhang,	B, hLineID : hLineID = hLineID + 1
+hotline2 -eaveOverhang,	B,	-eaveOverhang,	0, hLineID : hLineID = hLineID + 1
+
+hotspot2 0,				B/2, unID, tieBeamLength, 1+256	: unID=unID+1
+hotspot2 -1,			B/2, unID, tieBeamLength, 3		: unID=unID+1
+hotspot2 tieBeamLength,	B/2, unID, tieBeamLength, 2		: unID=unID+1
+
+hotspot2 -eaveOverhang,	0,	unID, B, 1+256	: unID=unID+1
+hotspot2 -eaveOverhang,	-1,	unID, B, 3		: unID=unID+1
+hotspot2 -eaveOverhang,	B,	unID, B, 2		: unID=unID+1
+
+hotspot2 tieBeamLength + eaveOverhang,	0,	unID, B, 1+256	: unID=unID+1
+hotspot2 tieBeamLength + eaveOverhang,	-1,	unID, B, 3		: unID=unID+1
+hotspot2 tieBeamLength + eaveOverhang,	B,	unID, B, 2		: unID=unID+1
+
+_eaveOverhang = crh / sin(ang)
+
+dx = ((tieBeamLength + _eaveOverhang)/2-(crh/2)/sin(ang))/n
+for i=1 to 2*n-1
+	hotspot2 -_eaveOverhang + (crh/2)/tan(ang/2)+dx*i, crd/2, unID: unID=unID+1
+next i
+
+
+! ==============================================================================
+! Axis
+! ==============================================================================
+if ac_symb_display_option <> DISPLAY_OUTLINES & gs_axis = 1 then
+	line_type gs_axis_line
+	pen gs_axis_line_pen
+
+	line2 -eaveOverhang, B/2, tieBeamLength + eaveOverhang, B/2
+	hotline2 -eaveOverhang, B/2, tieBeamLength + eaveOverhang, B/2, hLineID : hLineID = hLineID + 1
+else
+	hLineID = hLineID + 1
+endif
+
+! ==============================================================================
+! Floor Plan View
+! ==============================================================================
+pen gs_cont_pen
+line_type gs_cont_line
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC then
+
+	rect2 -eaveOverhang, 0, tieBeamLength + eaveOverhang, B
+
+	fill gs_fill_type
+	poly2_b 5, 2+64, gs_fill_pen, gs_back_pen,
+			-eaveOverhang,					0, 0,
+			-eaveOverhang,					B, 1,
+			tieBeamLength + eaveOverhang,	B, 1,
+			tieBeamLength + eaveOverhang,	0, 1,
+			-eaveOverhang,					0, -1
+	
+	if std then
+		add2 0, crd
+		project2{3} 4, 270, 2, 4+8, 0, 0, 0, 0, parameters gs_detlevel_3D_m = DETLEVEL3D_DETAILED
+		del 1
+
+		if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+			hotspot2 tieBeamLength/2,	B,			unID, zzyzx, 1+128	:unID=unID+1
+			hotspot2 tieBeamLength/2,	-1,			unID, zzyzx, 3		:unID=unID+1
+			hotspot2 tieBeamLength/2,	zzyzx + B,	unID, zzyzx, 2		:unID=unID+1
+		endif
+
+		if iDimensionSetMode = DIM_WIDTH_ANGLE then
+			rafterLength = sqr((tieBeamLength/2)^2 + (zzyzx - crh/cos(ang))^2)
+
+			hotspot2 rafterLength/2,			B,								unID, ang, 4+128	: unID=unID+1
+			hotspot2 0,							B,								unID, ang, 6		: unID=unID+1
+			hotspot2 (rafterLength/2)*cos(ang),	(rafterLength/2)*sin(ang) + B,	unID, ang, 5		: unID=unID+1
+
+			hotspot2 tieBeamLength - rafterLength/2,			B,								unID, ang, 4+128	: unID=unID+1
+			hotspot2 tieBeamLength,								B,								unID, ang, 6		: unID=unID+1
+			hotspot2 tieBeamLength - (rafterLength/2)*cos(ang),	(rafterLength/2)*sin(ang) + B,	unID, ang, 5		: unID=unID+1
+		endif
+
+		if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+			hotspot2 tieBeamLength/2, zzyzx + B, unID : unID=unID+1
+		endif
+	endif
+else
+
+	! ----- View Edges ---------------------------------------------------------
+	pen gs_cont_pen
+	line_type gs_cont_line
+
+	if ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+		pen gs_overhead_pen
+		line_type gs_overhead_linetype
+	endif
+
+	project2{3} 3,270,2 + 32 * (ac_symb_display_option = DISPLAY_OVERHEAD_ALL | not(gs_use_3D_view_attributes)), 8,
+		parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+					gs_2D_projection		= doCutplane,
+					gs_2D_projection_type	= 1,
+					gs_cutplane_height		= gs_cutplane_height,
+					gs_top_range_height		= gs_top_range_height,
+					gs_bottom_range_height	= gs_bottom_range_height
+
+
+	if ac_symb_display_option <> DISPLAY_OVERHEAD_ALL then
+		! ----- View Polygons --------------------------------------------------
+		pen gs_fill_pen
+		fill gs_fill_type
+
+		project2{3} 3,270,3+32+1024+2048, 4,
+						gs_back_pen,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= doCutplane,
+						gs_2D_projection_type	= 2,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+
+
+	if ac_symb_display_option = DISPLAY_OVERHEAD_PROJ then
+
+		! ----- Overhead View -----------------------------------------------------
+		pen gs_overhead_pen
+		line_type gs_overhead_linetype
+
+		project2{3} 3,270,2+32, 2+8,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= doCutplane,
+						gs_2D_projection_type	= 3,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+
+	if doCutplane then
+
+		! ----- Cut Lines ---------------------------------------------------------
+		pen gs_cut_pen
+		line_type gs_cut_linetype
+		line_property 2
+
+		project2{3} 3,270,2+16+32+256+4096, 2,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= 1,
+						gs_2D_projection_type	= 4,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+
+
+		! ----- Cut Polygons ------------------------------------------------------
+		pen gs_cut_fill_pen
+		fill gs_cut_fill_type
+
+		project2{3} 3,270,3+32+512, 1,
+						gs_cut_back_pen,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= 1,
+						gs_2D_projection_type	= 5,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+endif
+
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+!iTrussType
+TRUSS_BOWSTRING 		= 1
+TRUSS_PITCHED_COMPLEX 	= 2
+TRUSS_FLAT_HOWE 		= 3
+TRUSS_FLAT_PRATT 		= 4
+TRUSS_PITCHED_HOWE 		= 5
+TRUSS_PITCHED_PRATT		= 6
+TRUSS_SAWTOOTH 			= 7
+TRUSS_SCISSORS 			= 8
+TRUSS_WARREN	 		= 9
+TRUSS_PITCHED_FINK		= 10
+
+! ==============================================================================
+! Definitions
+! ==============================================================================
+
+!ac_symb_display_option
+	DISPLAY_PROJECTED			= 1
+	DISPLAY_OVERHEAD_PROJ		= 2
+	DISPLAY_SYMBOLIC			= 3
+	DISPLAY_OUTLINES			= 4
+	DISPLAY_OVERHEAD_ALL		= 5
+
+!ac_symb_show_projection_to
+	PROJECTION_FLOOR_PLAN_RANGE	= 1
+	PROJECTION_DISPLAY_LIMIT	= 2
+	PROJECTION_ENTIRE_ELEMENT	= 3
+	
+! const values for parameter: iDimensionSetMode
+	DIM_WIDTH_HEIGHT     = 1
+	DIM_WIDTH_ANGLE      = 2
+	DIM_WIDTH_PROPORTION = 3
+
+! ==============================================================================
+! Localization
+! ==============================================================================
+dim stDisplayOptions[5]
+	stDisplayOptions[1]		= `Сечение и Низ`
+	stDisplayOptions[2]		= `Сечение и Верх`
+	stDisplayOptions[3]		= `Символический Вид`
+	stDisplayOptions[4]		= `Только Контуры`
+	stDisplayOptions[5]		= `Вся Проекция`
+
+dim stProjectionTypes[3]
+	stProjectionTypes[1]	= `Согласно Диапазону Плана Этажа`
+	stProjectionTypes[2]	= `Согласно Абсолютному Диапазону`
+	stProjectionTypes[3]	= `Весь Элемент`
+
+DETLEVEL3D_OFF = 0
+DETLEVEL3D_SIMPLE = 1
+DETLEVEL3D_DETAILED = 2
+
+dim st3dDetLevelValues[3]
+	st3dDetLevelValues[1] = `Детальный`
+	st3dDetLevelValues[2] = `Простой`
+	st3dDetLevelValues[3] = `Откл.`
+
+n = wn/2
+crd = b
+
+
+! ==============================================================================
+! Parameter linking
+! ==============================================================================
+
+if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+	pA = (tieBeamLength/2)^2 + zzyzx^2
+	pB = tieBeamLength * crh
+	pC = crh^2 - zzyzx^2
+
+	ang	= max(asn( (-pB + sqr(pB^2 - (4 * pA * pC))) / (2*pA) ), asn( (-pB - sqr(pB^2 - (4 * pA * pC))) / (2*pA) ))
+	rp	= tan(ang) * 12'
+endif
+
+if iDimensionSetMode = DIM_WIDTH_ANGLE then
+	rp = tan(ang) * 12'
+	zzyzx = tan(ang)*(tieBeamLength/2 + crh/sin(ang))
+endif
+
+if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+	ang = atn(rp/12')
+	zzyzx = tan(ang)*(tieBeamLength/2 + crh/sin(ang))
+endif
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+hideparameter all "A", "B", "ZZYZX"
+
+call "FM_types" parameters all
+
+values{2} "gs_detlevel_3D_m" DETLEVEL3D_DETAILED, st3dDetLevelValues[1],
+							DETLEVEL3D_SIMPLE, st3dDetLevelValues[2],
+							DETLEVEL3D_OFF, st3dDetLevelValues[3]
+
+values{2} "iDimensionSetMode" 	DIM_WIDTH_HEIGHT, `Ширина + Высота`,
+								DIM_WIDTH_ANGLE, `Ширина + Угол`,
+								DIM_WIDTH_PROPORTION, `Ширина + Пропорция`
+
+_angLowerLimit = 10
+_angUpperLimit = 90
+
+if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+	lock "ang", "rp"
+	parameters	ang = ang,
+				rp	= rp
+
+	values "zzyzx" range[max(crh*2 + crh/cos(ang), (A/2)*tan(_angLowerLimit)), )
+endif
+if iDimensionSetMode = DIM_WIDTH_ANGLE then
+	lock "zzyzx", "rp"
+	parameters	zzyzx	= zzyzx,
+				rp		= rp
+
+	values "ang" range[_angLowerLimit, _angUpperLimit)
+endif
+if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+	lock "zzyzx", "ang"
+	parameters	zzyzx	= zzyzx,
+				ang		= ang
+
+	values "rp" range[tan(_angLowerLimit) * 12', tan(_angUpperLimit) * 12')
+endif
+
+parameters ac_bottomlevel = 0,
+		   ac_toplevel	  = ZZYZX
+
+if ced then
+	eaveOverhang = 0
+else
+	eaveOverhang = crh / sin(ang)
+endif
+parameters	A				= tieBeamLength + eaveOverhang*2,
+			eaveOverhang	= eaveOverhang
+
+lock "A", "eaveOverhang"
+
+values "crh" RANGE (0,)
+
+values "wn" range (4,20] step 4, 2
+
+if stp=0 then
+	lock "mat2"
+endif
+
+if not(gs_axis) then
+	lock "gs_axis_line", "gs_axis_line_pen"
+endif
+
+if gs_cont_pen= 0 then parameters gs_cont_pen=2
+IF gs_fill_pen=0 then parameters gs_fill_pen=91
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+values{2} "ac_symb_display_option" 	DISPLAY_PROJECTED,		stDisplayOptions[1],
+									DISPLAY_OVERHEAD_PROJ,	stDisplayOptions[2],
+									DISPLAY_SYMBOLIC,		stDisplayOptions[3],
+									DISPLAY_OUTLINES,		stDisplayOptions[4],
+									DISPLAY_OVERHEAD_ALL,	stDisplayOptions[5]
+									
+values{2} "ac_symb_show_projection_to"	PROJECTION_FLOOR_PLAN_RANGE,	stProjectionTypes[1],
+										PROJECTION_DISPLAY_LIMIT,		stProjectionTypes[2],
+										PROJECTION_ENTIRE_ELEMENT,		stProjectionTypes[3]
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"gs_use_3D_view_attributes"
+	lock			"gs_use_3D_view_attributes"
+endif
+
+if gs_use_3D_view_attributes then
+	hideparameter	"gs_cont_pen"
+	lock			"gs_cont_pen"
+endif
+
+if not(ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_OVERHEAD_PROJ) then
+	hideparameter	"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OUTLINES | ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"ac_symb_show_projection_to"
+	lock			"ac_symb_show_projection_to"
+
+	hideparameter	"gs_cut_linetype",
+					"gs_cut_pen",
+					"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+
+	lock			"gs_cut_linetype",
+					"gs_cut_pen",
+					"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OUTLINES then
+	hideparameter	"gs_overhead_linetype", "gs_overhead_pen"
+	lock			"gs_overhead_linetype", "gs_overhead_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"gs_fill_type", "gs_fill_pen", "gs_back_pen", "gs_cont_pen", "gs_cont_line"
+	lock			"gs_fill_type", "gs_fill_pen", "gs_back_pen", "gs_cont_pen", "gs_cont_line"
+endif
+
+if ac_symb_display_option # DISPLAY_SYMBOLIC then
+	hideparameter "std"
+	lock "std"
+endif
+
+if ac_symb_display_option = DISPLAY_OUTLINES then
+	hideparameter "gs_axis"
+	lock "gs_axis"
+endif
+
+! ==============================================================================
+! 3D Display Options
+! ==============================================================================
+
+if gs_detlevel_3D_m = DETLEVEL3D_OFF then
+	lock "gs_pen_3d", "gs_shadow"
+endif
+]]>
+</Script_VL>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_UIDefault/>
+			<STBit_FixSize/>
+			<STBit_UIUseHierarchicalPages/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Длина"]]></Description>
+			<Fix/>
+			<Value>12.461</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Ширина"]]></Description>
+			<Fix/>
+			<Value>0.05</Value>
+		</Length>
+		<Length Name="zzyzx">
+			<Description><![CDATA["Общая Высота"]]></Description>
+			<Fix/>
+			<Value>3</Value>
+		</Length>
+		<Integer Name="gs_detlevel_3D_m">
+			<Description><![CDATA["3D-детализация"]]></Description>
+			<Value>2</Value>
+		</Integer>
+		<Integer Name="gs_ui_current_page">
+			<Description><![CDATA[""]]></Description>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="tieBeamLength">
+			<Description><![CDATA["Длина Затяжки"]]></Description>
+			<Value>12</Value>
+		</Length>
+
+		<!-- iDimensionSetMode: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Integer Name="iDimensionSetMode">
+			<Description><![CDATA["Способ Настройки Размеров"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Angle Name="ang">
+			<Description><![CDATA["Угол"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>25.71</Value>
+		</Angle>
+		<Length Name="rp">
+			<Description><![CDATA["Скат Крыши ( x : 12')"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1.761</Value>
+		</Length>
+
+		<!-- gs_accessories: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_accessories">
+			<Description><![CDATA["Аксессуары"]]></Description>
+		</Title>
+		<Length Name="crh">
+			<Description><![CDATA["Высота Профиля"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Integer Name="wn">
+			<Description><![CDATA["Количество Секций"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</Integer>
+		<Boolean Name="ced">
+			<Description><![CDATA["Срезанные Концы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="eaveOverhang">
+			<Description><![CDATA["Величина Свеса"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D-отображение"]]></Description>
+		</Title>
+		<Boolean Name="stp">
+			<Description><![CDATA["Стальные Пластины"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_shadow">
+			<Description><![CDATA["Отбрасывание Теней"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<PenColor Name="gs_pen_3d">
+			<Description><![CDATA["Перо в 3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</PenColor>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Показ Узловых 2D Точек в 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Отметка Низа"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Отметка Верха"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D-отображение"]]></Description>
+			<Fix/>
+		</Title>
+		<Integer Name="ac_symb_display_option">
+			<Description><![CDATA["Показ на Плане Этажа"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Integer Name="ac_symb_show_projection_to">
+			<Description><![CDATA["Показать Проекцию"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Boolean Name="std">
+			<Description><![CDATA["Показать Фасад в 2D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_axis">
+			<Description><![CDATA["Показать Ось"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<LineType Name="gs_axis_line">
+			<Description><![CDATA["Тип Линии Оси"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</LineType>
+		<PenColor Name="gs_axis_line_pen">
+			<Description><![CDATA["Перо Линии Оси"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<LineType Name="gs_cont_line">
+			<Description><![CDATA["Тип Линии Видимого Контура"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Перо Линии Видимого Контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Тип Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Перо Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Перо Фона Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<LineType Name="gs_cut_linetype">
+			<Description><![CDATA["Линии Сечений"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="gs_cut_pen">
+			<Description><![CDATA["Перо Линии Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>24</Value>
+		</PenColor>
+		<FillPattern Name="gs_cut_fill_type">
+			<Description><![CDATA["Тип Штриховки Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_cut_fill_pen">
+			<Description><![CDATA["Перо Штриховки Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="gs_cut_back_pen">
+			<Description><![CDATA["Перо Фона Штриховки Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<LineType Name="gs_overhead_linetype">
+			<Description><![CDATA["Линии Проекции"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>21</Value>
+		</LineType>
+		<PenColor Name="gs_overhead_pen">
+			<Description><![CDATA["Перо Линии Проекции"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</PenColor>
+		<Boolean Name="gs_2D_projection">
+			<Description><![CDATA["2D-символ"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="gs_use_3D_view_attributes">
+			<Description><![CDATA["Использовать Реквизиты 3D-вида"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="gs_2D_projection_type">
+			<Description><![CDATA["Тип 2D-проекции"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="gs_cutplane_height">
+			<Description><![CDATA["Высота Плоскости Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_top_range_height">
+			<Description><![CDATA["Высота Верхней Плоскости Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="gs_bottom_range_height">
+			<Description><![CDATA["Высота Нижней Плоскости Сечения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- gs_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_material">
+			<Description><![CDATA["Покрытия"]]></Description>
+		</Title>
+		<Material Name="gs_truss_mat">
+			<Description><![CDATA["Основание"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>14</Value>
+		</Material>
+		<Material Name="mat2">
+			<Description><![CDATA["Стальные Пластины"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>13</Value>
+		</Material>
+
+		<!-- gs_list: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_list">
+			<Description><![CDATA["Параметры Спецификаций"]]></Description>
+			<Fix/>
+		</Title>
+		<RealNum Name="gs_list_cost">
+			<Description><![CDATA["Цена"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_manufacturer">
+			<Description><![CDATA["Производитель"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_note">
+			<Description><![CDATA["Примечания"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_location">
+			<Description><![CDATA["Расположение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_accessories">
+			<Description><![CDATA["Аксессуары"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_Type">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Другой"]]></Value>
+		</String>
+		<Integer Name="iFMType">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>25</Value>
+		</Integer>
+		<String Name="FM_InventoryNumber">
+			<Description><![CDATA["Инвентарный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_SerialNumber">
+			<Description><![CDATA["Серийный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductionYear">
+			<Description><![CDATA["Год Производства"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ObjectWeight">
+			<Description><![CDATA["Вес Изделия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ObjectWeightUnit">
+			<Description><![CDATA["Единица Веса"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["кг"]]></Value>
+		</String>
+		<String Name="gs_list_custom1">
+			<Description><![CDATA["Пользовательское Значение 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom2">
+			<Description><![CDATA["Пользовательское Значение 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom3">
+			<Description><![CDATA["Пользовательское Значение 3"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom4">
+			<Description><![CDATA["Пользовательское Значение 4"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom5">
+			<Description><![CDATA["Пользовательское Значение 5"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="LibraryLangCode">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["RUS"]]></Value>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="2836" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000800000
+	008008020000004C5CF69C00000AD14944415478DAED9BF97713F51AC6EFFF79
+	8F88DD29055AB414A45241BCC0111194AB886895A3144468B3276DD3256DD33D
+	E992EECD3A7B6692C94C324B6649EF9B73EFB57241506F5B44DEE7F4A7E69C69
+	CE7CE6FBBECFFBBCD3BFEDA05EAA10000240002804800050080001A010000240
+	2100048042000800850010000A012000140240002804800050080001A0100002
+	402100048042000800850010000A012000140240002804800050080001A01000
+	0240210004807A3D00D83B3B253E5E2267762A16023850A9C57C6E6B841ABD9C
+	713591BD6FE6C2570C318E00F65DA66114C8456AEA76CA7D9CF434E7666E68CC
+	9C4ACDB1C17769678DBCF653C55411C0DEAB028FBC48F22B0E62F0BD8CB3811B
+	3957DC729B2566B716192569E547D255C70DBDABB31104B067D255594C4E50A1
+	8F32CE263A70525CEC2EF3AB15DBDC7996CAF9EDECC465D279B8B070C7520504
+	F0C7659A66818E3173DD69DF492835C2D4359518B775E9C567A56215E30394F7
+	28DBDFA6126308E00F941A4A58756706CEA51DB56CF04C71D36116E9DF7B1D43
+	A6733337C9BE43B9C9ABA644208017ABAC970AE96966F29F197733E53B919FBF
+	ADB30B15ABFCFF5C5321A69881B7296F5371D3B963E908E099A5C692D84D267A
+	9F183893E97B8BF2B79692C31553DBB34141970AB17B94AB363BDA55E66308E0
+	17A546E2F8353F113C9F763511AE7A76F8BD6CE83CE139CA4E5C9513434629BB
+	979D9C5FE5421728678DB474D7D6C4D71A8051560B99593AFC59DAD54C7A5BC4
+	C86D8D9967873AE110C083AF10613E7C957437C247DCF4CD12396BEFD169A858
+	86BCE9A13D4D6CFF49950CBF76002C7B47CE6EB3D19E8CBF9D703765C72F29C9
+	E0CF4E910B7DC0447ED8852411D27A1F50C9386AE9818EFCCA4F7A21BD37F865
+	4A98BE41F4BD21CEDCB08AD46B0140937961A39F18BA9876D433831DD2EA4343
+	4C3E59A72D76F43C13F9FEA967B6AC71CBF9E81DCA7F8C70D673E357E4E488A9
+	E6F7E02BB151AABFBDDA6F12FD3052FC350198654D22E699C9CFD3EE16D2DD94
+	9BF94CA3679FDD5D01C0C879661E003C5B969A2BA586AB1396AB81F41DE7E76E
+	2BCCA2FD7B0C9269D986AE6A725664360A441442A498AB2BF9F810E9785398BA
+	6AE436FF3A00A0D4148534B7F42813E8205C0DD9D085E2B6CF2CB1CF752A1637
+	BA0BE039320A4938404C10AE5CCF0C77491B4E5D22FE271C5595A22A0B2521C1
+	27A685CD20BFF48018BB911EBC40F69F49BA5A528E46CADB420F9CCA8E7D988F
+	7C252EDEA57D2DB4F788B472DF368AAF36005D1185ED5172EC5AC6DD420DB4CB
+	EBBDE66F2CB20060F704BC58B66D97A80833FE49AAAF96F29FC84E7DCAAF79D9
+	A53E6EFE5B22F471DCFD4EC6DB0ADF21ED3A4207DAB8E14E7EF2AAB8F80D7C1F
+	251D02276ACA945D96772A76F552A6CA0C9EA287DFA70327B8E0298D9A79F500
+	984659A296D8B96E6AF02CE1788B72BE493A6B13FE4E36D253488C8AA9E902B5
+	ACCB9CA99720C8FC158362C309A836E1A76455C035950D552AE5D222B92CC643
+	DCE24F44F8361DBE19F775267AEB186F23E569865E9D79F477987B13AE6362EC
+	81464D9773EB801F6EF4F347394BCBD3FE13FC7608A8F0131F518E4362E49655
+	625F0100D54D488EE0971F130367C1BC83B74B3B1B99C8FD5272505CBE07159F
+	1DE982870B3E4AF6D5A73DC788404722D0498D5FCFC51E66577D85F4AC26A6B5
+	226FE84AC5B6B9D04572F6AEAE296A812E5031662DC8AFBA99D9EE78FFC5CC40
+	27117827E56882DC9FF21D0753C48D5E80EB43F2AC66C6F56CCC9032463E5E88
+	3D80DC22E968644297E5C4B0F9DBCC3E00806BF25B23FF4E916006A4FDC719FF
+	B15232081EE04F0A40570AF9788818BE947234D081B7C5C5EF0C310109F0E6A3
+	DA3C9378221633155BCB59725A67A34A62A010EBE1C29F9030F1BA8E40A40C26
+	042C69CA7F9A1AFD071D6885029DF6B767BCC7537D0D19F75136D8911DBB989B
+	FB5C8AF594120108FDE1AF980A5F31945F7D26CA458D9C12A6AE539E2384FB08
+	377903366556B9F47C00A4F718BF39BC7BA0151E7A03E9382C842FC186E74F04
+	C0340D99596166BFC978DBC08D0813575462E2E7DB618A5B9B0F6B4466F71B1B
+	56C530C07A48221BAF568FE4389C0FE887C94027E169A63D8DD59928D0CA0D9F
+	ADDEE8C86DE8AEA5B85FAD568F4D4BE1AB7EA962FFC1AA5864E42D2F37FA7EC6
+	5143054EE616BED784CD8A6D3D1B80E7280078DAA732C133B4AB4E5E7B54B1B4
+	970900EE8102F1E49A8B1CEA821B07694169DB6BABC22F43055DD78BE970FC71
+	EDC658776E7B34BBF43013BABEED3B4B064EA7DCC7E2BD7584AB11CE0A3B740E
+	52E5C2E27770775472BA2CAC1B326903C27D52C5D2853571E15B68C584AB8E19
+	392F6DF98D12FFD409687912C0EE8607CA1AF4B3EA86875B78090074D8BA2627
+	298827BDAD84EF642EFA9D4247558955A46C91DB008747CDF7B0B37788914B71
+	6F3BE169013F07651A6C09A43A102788D1AFE5F5C755E321AC419E6CEB859735
+	F2402B5689B030F5098C23D5DB3DFB85C2446D53AF323215CAB75B829E962E6C
+	66431F50B0E1897E0D73FB4100B02CBB98DDE216EEC3F20FE64FC6539F7436AF
+	38CFD09337A158A73C6D101713EE6612FAE1E0697EE2527EFE56D5E111D00F57
+	4C99A81A0FDBD8F9B36937E1E86587C0ADD550FD1DE25A5F89598456944B4CBC
+	60C3B31D00AFC5044EA8E951F8C5BE00A880071012D9E547E4D0F9746F0DD1FB
+	06ED6E003FC0F4BF03390158E9FCFC17D2EA8F4A6A18627AE887F038541DDE2B
+	28A84C1AB7948FDC01EF9F76D6C34C4784BF90E8654D2420A035CA5AE5D9D3B8
+	909BBF4539DFCA4D5F33A5CCDE03B06C0BBC4D2EF2153CD1D57E98086A4CA42C
+	262D45A876DABFA22C4D54D2A3C2F475B04CA9DE43A4F778D2DB9E1E3807292C
+	8C3574A427BF152CD24BB0AED08B825DD9811F8559E046BAD881B6E2960B40E2
+	8B597B2338D0D0AEC05FD09E06DA5D9372D481A5CEF85A99E0BBA4BF2DD1D798
+	741DA587BAD24397C8A93B99F097A4FF04E5AE13C63F2C679711C09EC936358D
+	5D1017BAC940FBD6C3C3495F476ED5A5B28B466E43A5A6A0CF416DC88E5F66E1
+	040C9E6602AD94AB8EF63649B11FC05F2080BD144C213036F2135748D71118BC
+	734B3D5A2EF1CB1602E615C66F8D5DE4C31F918E43DCE029959C44007B2F1809
+	0B4BDFD3FE3618E8E8A1F7A40D8F517C22269262F7361DADD4D8C7B073CECF7E
+	06E91302D87B41C201F37935E17037659C8D5CF87A293369E97215C0F2DD7577
+	A75EB660930A9C68CF91D2B66FC73210C0BE08B61AC52D1F24E784A396F49FCC
+	C71E08E12B1B9E7386FD1F4F958F76937D6FF0631FC0860701EC9B2A155DD810
+	97EE56FBB0E370D2D9925FF71A0AFFDFD72F56E0BD55CA5523C7EEC1D14100FB
+	284B2F2899F1DCCCA7A4A78980446FF673858E542A3B2079CB47799AA039C366
+	02011C44C2216F38E1C187C80FE299EA3B1C12591653F9B95B8CB7A110FD126A
+	1702D877410206F5271FFD1AD2BDEA0BF4E16B527234BBF890F0B56583A794D4
+	1018580470108229A1941AA98E08DE66C836B6BDA7E11534CADD909BBE6E1612
+	08E0E0641452C58DC7B01702F34AB81A28573DD3DF2A6FF442B686000E4EB0DA
+	8358134A133B708A74D5C29B487CE80224CA08E0A0652A7C313108AB2ACADD08
+	FE558C7C65951804F012C688726E1B969DDCF0397EFC438D9E43002F73920087
+	0A4C1000FE8B1202402100048042000800850010000A01200014024000280480
+	0050080001A0100002402100048042000800850010000A012000140240002804
+	800050080001A0100002402100048042000800850010000A012000D4EFD0BF00
+	B4CE4BDD430DAEA90000000049454E44AE426082
+	]]>
+</Picture>
+
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>784EAEA1-5041-4AA6-B6F4-EF263A891EE7</MainGUID>
+	<MainGUID>37669729-B714-4F9B-B074-6C4DE055DAE0</MainGUID>
+	<MainGUID>1B26FA10-98B0-4711-96AC-1DD93324A33A</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! Scissors Truss
+! ==============================================================================
+
+ui_dialog `Параметры Стропильной Фермы с Подкосами`
+
+call "ui_wood_truss" parameters all	iTrussType		= TRUSS_SCISSORS 
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[Двускатная деревянная ферма с дополнительными стойками и срезом в конце.]]>
+</Comment>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["ui_wood_truss"]]></MName>
+		<MainGUID>C4610C02-71A0-4E2A-A604-FD7C71DDEBDC</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["FM_types"]]></MName>
+		<MainGUID>2759D2DF-AA8E-44D1-AD1D-261581266B34</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_BWM>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+</Symbol>

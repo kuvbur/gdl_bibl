@@ -1,0 +1,1509 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="144C9546-2193-4BAE-8186-80D06A6D6A72" MigrationValue="Normal" Owner="0" Signature="1465080141" Version="38">
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+!text2 0, 0, SYMB_MIRRORED
+
+rot2 -90
+
+if GLOB_STRUCTURE_DISPLAY <> STRUCTURE_ENTIRE_STRUCTURE then end
+! ==============================================================================
+! THE WALL AREA
+! ==============================================================================
+drawindex 30
+if WALL_COMPS_NAME = "" or WALL_SKINS_NUMBER < EPS then
+
+! ===== SIMPLE WALL =====
+
+	pen WALL_SECT_PEN
+
+	! --- draw contours ---
+	startY = yWallStart
+	endY = yWallEnd
+	call "SkinRect" PARAMETERS startX = 0, startY = startY,
+			endX = length, endY = endY,
+			innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+			incAngle = wallIncl, trapType = 1,
+
+			startLinePen = WALL_SECT_PEN,
+			startLineLineType = WALL_LINETYPE,
+			startLineCont = 1,
+
+			topLinePen = WALL_SECT_PEN,
+			topLineLineType = WALL_LINETYPE,
+			topLineCont = 1,
+
+			bottomLinePen = WALL_SECT_PEN,
+			bottomLineLineType = WALL_LINETYPE,
+			bottomLineCont = 1
+
+	! --- cut contours (if skin type: 2 - above cutplane) ---
+	startSkin  = 0
+	if WALL_SKINS_NUMBER > EPS then
+		for i = 1 to WALL_SKINS_NUMBER
+			startSkin = endSkin
+			endSkin = startSkin + WALL_SKINS_PARAMS[i][SKIN_THICKNESS]
+			if abs(WALL_SKINS_PARAMS[i][SKIN_TYPE] - 2) < EPS then
+				call "SkinRect" PARAMETERS startX = 0, startY = startSkin,
+						endX = length, endY = endSkin,
+						innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+						incAngle = wallIncl, trapType = trapType,
+						fillType = 1
+			endif
+		next i
+	endif
+
+else
+
+! ===== COMPOSITE WALL =====
+
+	! --- index of the last core skin (which goes trapeze) ---
+	trapezoidCoreSkin = 0
+	for j = 1 to WALL_SKINS_NUMBER
+		if abs(WALL_SKINS_PARAMS [j][SKIN_THICKEN_TRAPEZOID] - 1) < EPS then
+			trapezoidCoreSkin = j
+		endif
+	next j
+
+	! --- composite wall`s parameters---
+	currBeg = 0
+	for i = 1 to WALL_SKINS_NUMBER
+		if (i >= trapezoidCoreSkin and SYMB_MIRRORED) or (i <= trapezoidCoreSkin and not(SYMB_MIRRORED)) or abs(wallIncl) < EPS then
+			skinThickness = WALL_SKINS_PARAMS[i][SKIN_THICKNESS]
+		else
+			skinThickness = WALL_SKINS_PARAMS[i][SKIN_THICKNESS] / cos(wallIncl)
+		endif
+		startSkin = currBeg
+		endSkin = currBeg + skinThickness
+
+		if (i > trapezoidCoreSkin and SYMB_MIRRORED) or (i < trapezoidCoreSkin and not(SYMB_MIRRORED)) then
+			trapType = 0
+		else
+			if trapezoidCoreSkin = i then
+
+				compositeThickness = 0
+				for j = 1 to WALL_SKINS_NUMBER
+					if (j >= trapezoidCoreSkin and SYMB_MIRRORED) or (j <= trapezoidCoreSkin and not(SYMB_MIRRORED)) or abs(wallIncl) < EPS then
+						compositeThickness = compositeThickness + WALL_SKINS_PARAMS[j][SKIN_THICKNESS]
+					else
+						compositeThickness = compositeThickness + WALL_SKINS_PARAMS[j][SKIN_THICKNESS] / cos(wallIncl)
+					endif
+				next j
+				if (WALL_END_THICKNESS <= WALL_START_THICKNESS) then
+					modifier = WALL_END_THICKNESS - compositeThickness
+				else
+					modifier = WALL_START_THICKNESS - compositeThickness
+				endif
+
+				if onWallBeg then
+					if WALL_THICKNESS > WALL_END_THICKNESS then
+						modifier = modifier + WALL_THICKNESS - WALL_END_THICKNESS
+					endif
+				else
+					if WALL_THICKNESS > WALL_START_THICKNESS then
+						modifier = modifier + (WALL_THICKNESS - WALL_START_THICKNESS)
+					endif
+				endif
+				endSkin = endSkin + modifier
+				currBeg = currBeg + modifier
+				trapType = 1
+			else
+				trapType = 2
+			endif
+		endif
+
+		! --- draw contours (if skin type: 0 - cut) ---
+		if ((endSkin > EPS and startSkin < endSkin) or trapezoidCoreSkin = i) and abs(WALL_SKINS_PARAMS[i][SKIN_TYPE]) < EPS then
+			if i = iLeftMost then
+				topLinePen = WALL_SKINS_PARAMS[i][SKIN_UPPER_LINE_PEN]
+			else
+				topLinePen = 0
+			endif
+			if i = iRightMost then
+				bottomLinePen = WALL_SKINS_PARAMS[i][SKIN_LOWER_LINE_PEN]
+			else
+				bottomLinePen = 0
+			endif
+
+			call "SkinRect" PARAMETERS startX = 0, startY = startSkin,
+					endX = length, endY = endSkin,
+					innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+					incAngle = wallIncl, trapType = trapType,
+
+					startLinePen = WALL_SKINS_PARAMS[i][SKIN_END_FACE_PEN],
+					startLineLineType = WALL_SKINS_PARAMS[i][SKIN_END_LINE_TYPE],
+					startLineCont = 1,
+
+					bottomLinePen = bottomLinePen,
+					bottomLineLineType = WALL_SKINS_PARAMS[i][SKIN_END_LINE_TYPE],
+					bottomLineCont = 1,
+
+					topLinePen = topLinePen,
+					topLineLineType = WALL_SKINS_PARAMS[i][SKIN_END_LINE_TYPE],
+					topLineCont = 1
+		else
+		! --- cut contours (if skin type: 2 - above cutplane) ---
+			if abs(WALL_SKINS_PARAMS[i][SKIN_TYPE] - 2) < EPS then
+				call "SkinRect" PARAMETERS startX = 0, startY = startSkin,
+						endX = length, endY = endSkin,
+						innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+						incAngle = wallIncl, trapType = trapType,
+						fillType = 1
+			endif
+		endif
+
+		currBeg = currBeg + skinThickness
+
+	next i
+
+endif
+
+if 0 then
+	wallline2 0, 0, 1, 0
+endif
+
+! ==============================================================================
+! THE END-CAP
+! ==============================================================================
+drawindex 20
+line_type 1
+fill gs_fill_type
+
+call "SkinRect" PARAMETERS startX = -thickCap, startY = yWallStart-thickFirst,
+		endX = length, endY = yWallStart,
+		innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+		incAngle = wallIncl, trapType = trapFirst,
+		fillPen = gs_fill_pen, fillBGPen = gs_back_pen,
+		startLinePen = gs_cont_pen, startLineCont = 1,
+		endLinePen = gs_cont_pen, endLineCont = 1,
+		bottomLinePen = 0, topLinePen = gs_cont_pen, topLineCont = 1
+call "SkinRect" PARAMETERS startX = -thickCap, startY = yWallEnd,
+		endX = length, endY = yWallEnd + thickSecond,
+		innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+		incAngle = wallIncl, trapType = trapSecond,
+		fillPen = gs_fill_pen, fillBGPen = gs_back_pen,
+		startLinePen = gs_cont_pen, startLineCont = 1,
+		endLinePen = gs_cont_pen, endLineCont = 1,
+		bottomLinePen = gs_cont_pen, bottomLineCont = 1, topLinePen = 0
+call "SkinRect" PARAMETERS startX = -thickCap, startY = yWallStart,
+		endX = 0, endY = yWallEnd,
+		innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+		incAngle = wallIncl, trapType = 1,
+		fillPen = gs_fill_pen, fillBGPen = gs_back_pen,
+		startLinePen = gs_cont_pen, startLineCont = 1
+
+
+! ==============================================================================
+! HOTSPOTS
+! ==============================================================================
+
+unID = 1
+
+! --- editable side hotspots ---
+xMidHotspot = (length - thickCap) / 2
+addition1First = 0
+addition1Second = 0
+addition3First = 0
+addition3Second = 0
+if SYMB_MIRRORED then
+	addition1First = xMidHotspot * tan(wallIncl)
+	addition3First = length * tan(wallIncl)
+else
+	addition1Second = xMidHotspot * tan(wallIncl)
+	addition3Second = length * tan(wallIncl)
+endif
+
+xMoveTo = xMidHotspot
+gosub 1
+
+if SYMB_MIRRORED then
+	HOTSPOT2 0, addition1First + yWallStart, unID, thickOtherSide, 1+128				! base
+	unID = unID + 1
+	HOTSPOT2 0, addition1First+0.1 + yWallStart, unID, thickOtherSide, 3				! reference
+	unID = unID + 1
+	HOTSPOT2 0, addition1First-thickOtherSide + yWallStart, unID, thickOtherSide, 2	! moving
+	unID = unID + 1
+
+	HOTSPOT2 0, addition1Second + yWallEnd, unID, thickRefSide, 1+128			! base
+	unID = unID + 1
+	HOTSPOT2 0, addition1Second + yWallEnd-0.1, unID, thickRefSide, 3			! reference
+	unID = unID + 1
+	HOTSPOT2 0, addition1Second + yWallEnd+thickRefSide, unID, thickRefSide, 2	! moving
+	unID = unID + 1
+else
+	HOTSPOT2 0, addition1First + yWallStart, unID, thickRefSide, 1+128				! base
+	unID = unID + 1
+	HOTSPOT2 0, addition1First+0.1 + yWallStart, unID, thickRefSide, 3				! reference
+	unID = unID + 1
+	HOTSPOT2 0, addition1First-thickRefSide + yWallStart, unID, thickRefSide, 2		! moving
+	unID = unID + 1
+
+	HOTSPOT2 0, addition1Second + yWallEnd, unID, thickOtherSide, 1+128			! base
+	unID = unID + 1
+	HOTSPOT2 0, addition1Second + yWallEnd-0.1, unID, thickOtherSide, 3			! reference
+	unID = unID + 1
+	HOTSPOT2 0, addition1Second + yWallEnd+thickOtherSide, unID, thickOtherSide, 2	! moving
+	unID = unID + 1
+endif
+
+del moveStepNum
+
+! --- fix hotspots ---
+
+xMoveTo = length
+gosub 1
+HOTSPOT2 0, additionIfMirr+yWallStart-thickFirst, unID	! fix
+unID = unID + 1
+HOTSPOT2 0, additionNotMirr+yWallEnd+thickSecond, unID	! fix
+unID = unID + 1
+del moveStepNum
+
+xMoveTo = -thickCap
+gosub 1
+HOTSPOT2 0, additionIfMirr+yWallStart-thickFirst, unID	! fix
+unID = unID + 1
+HOTSPOT2 0, additionNotMirr+yWallEnd+thickSecond, unID	! fix
+unID = unID + 1
+del moveStepNum
+
+! --- editable hotspot on the main side ---
+
+yMainSideHotspot = (-thickFirst + yWallStart + thickSecond + yWallEnd) / 2
+if r0 < EPS then
+
+	HOTSPOT2 0, yMainSideHotspot, unID, thickCap, 1+128		! base
+	unID = unID + 1
+	HOTSPOT2 0.1, yMainSideHotspot, unID, thickCap, 3		! reference
+	unID = unID + 1
+	HOTSPOT2 -thickCap, yMainSideHotspot, unID, thickCap, 2	! moving
+	unID = unID + 1
+
+
+else
+
+	revAngleExtra = 0
+	if onWallBeg then
+		revAngleExtra = 512
+	endif
+	HOTSPOT2 0, yMainSideHotspot, unID, thickCapAngle, 4+128	! base
+	unID = unID + 1
+	xMoveTo = 0.1
+	gosub 1
+	HOTSPOT2 0, yMainSideHotspot, unID, thickCapAngle, 7		! reference
+	unID = unID + 1
+	del moveStepNum
+	xMoveTo = -thickCap
+	gosub 1
+	HOTSPOT2 0, yMainSideHotspot, unID, thickCapAngle, 5, thickCap		! moving - display param: thickCap
+	unID = unID + 1
+	del moveStepNum
+	if onWallBeg then
+		HOTSPOT2 0, r0+WALL_THICKNESS, unID, thickCapAngle, 6+revAngleExtra	! centerpoint
+	else
+		HOTSPOT2 0, -r0, unID, thickCapAngle, 6+revAngleExtra				! centerpoint
+	endif
+	unID = unID + 1
+
+endif
+
+! --- replace AC hotspots at the ends ---
+call "Resize Wall End" PARAMETERS GS_HotspotUnIDBegin = 20000,
+		cutWidthAngle = cutWidthAngle, AC_CutWidth = AC_CutWidth,
+		r0 = r0, wallIncl = wallIncl, onWallBeg = onWallBeg
+
+
+! --- draw view and overhead skins ---
+drawindex 10
+currBeg = 0
+firstStart = 0
+
+for i = 1 to WALL_SKINS_NUMBER
+	skinThickness = WALL_SKINS_PARAMS[i][SKIN_THICKNESS]
+	startSkin = currBeg
+	endSkin = currBeg + skinThickness
+
+	if (i < iLeftmost or i > iRightmost) and (endSkin > EPS and startSkin + EPS < endSkin) then
+
+		startLinePen	= WALL_SKINS_PARAMS[i][SKIN_END_FACE_PEN]
+		if i + 1 = iLeftMost then
+			bottomLinePen	= 0
+		else
+			bottomLinePen	= WALL_SKINS_PARAMS[i][SKIN_LOWER_LINE_PEN]
+		endif
+		if i - 1 = iRightmost then
+			topLinePen		= 0
+		else
+			topLinePen		= WALL_SKINS_PARAMS[i][SKIN_UPPER_LINE_PEN]
+		endif
+
+		pen startLinePen
+		line_type WALL_SKINS_PARAMS[i][SKIN_END_LINE_TYPE]
+		line_property 0
+
+		! Overhead view
+		! ----------------------------------------------------------------------
+		if round_int(WALL_SKINS_PARAMS[i][SKIN_TYPE]) = 2 then
+			if i < iLeftmost then
+				firstStart = 0
+				if i = iLeftmost - 1 then line2 length, endSkin, length, firstStart
+			endif
+			if i > iRightmost then
+				if firstStart = 0 then firstStart = startSkin
+				if i = WALL_SKINS_NUMBER then line2 length, endSkin, length, firstStart
+			endif
+		else
+		! Uncut view
+		! ----------------------------------------------------------------------
+			if i > iLeftmost then
+				line2 length, endSkin, length, startSkin
+			endif
+			if i < iRightmost then
+				line2 length, endSkin, length, startSkin
+			endif
+		endif
+
+		line_type 1
+		if abs(WALL_SKINS_PARAMS[i][SKIN_TYPE] - 1) < EPS then
+			fillPattern = WALL_SKINS_PARAMS[i][SKIN_FILL]
+		else
+			fillPattern = 0
+		endif
+		if GLOB_CONTEXT = 5 then lengthOver = length else lengthOver = 0
+		call "SkinRect" PARAMETERS startX = -thickCap, startY = startSkin,
+				endX = lengthOver, endY = endSkin,
+				innerRadius = r0, incAngle = wallIncl,
+				trapType = 0,
+				fillPattern = fillPattern, fillPen = WALL_SKINS_PARAMS[i][SKIN_FILL_PEN], fillBGPen = WALL_SKINS_PARAMS[i][SKIN_FILL_BACK_PEN],
+				fillType = 2,
+				bLocalFill = WALL_SKINS_PARAMS[i][SKIN_FILL_ORIENTATION], bCoverFill = 1,
+				startLinePen	= startLinePen,		startLineLineType	= WALL_SKINS_PARAMS[i][SKIN_END_LINE_TYPE],	startLineCont	= 0,
+				bottomLinePen	= bottomLinePen,	bottomLineLineType	= WALL_SKINS_PARAMS[i][SKIN_LOWER_LINE_TYPE],	bottomLineCont	= 0,
+				topLinePen		= topLinePen,		topLineLineType		= WALL_SKINS_PARAMS[i][SKIN_UPPER_LINE_TYPE],	topLineCont		= 0
+	endif
+
+	currBeg = currBeg + skinThickness
+
+next i
+
+end
+
+
+! =============================================================================
+! === SUBROUTINES
+! =============================================================================
+
+! =============================================================================
+!		Move the coorinate system to a given X coordinate
+! -----------------------------------------------------------------------------
+! Input Parameters:
+!	r0:			inner radius of the curved wall (0 otherwise)
+!	wallIncl:	signed inclination of trapeze wall (0 otherwise)
+!	alpha:		angle of the object in curved wall
+!	length:		full length of the object
+!	xMoveTo:	the X coordinate to move to
+! Output:
+!	additionIfMirr:		Y addition at the current X position if SYMB_MIRRORED = 1
+!	additionNotMirr:	Y addition at the current X position if SYMB_MIRRORED = 0
+!	moveStepNum:		number of the transformation added by the subroutine
+! Remark:
+!	The macro moves the coordinate system to the desired X coordinate,
+!	after the place operation write a 'del moveStepNum' command
+! =============================================================================
+
+1:
+
+additionIfMirr = 0
+additionNotMirr = 0
+if r0 > EPS then
+
+	if onWallBeg then
+		add2 0, r0+WALL_THICKNESS
+		rot2 alpha * xMoveTo / length
+		add2 0, -r0-WALL_THICKNESS
+	else
+		add2 0, -r0
+		rot2 -alpha * xMoveTo / length
+		add2 0, r0
+	endif
+
+	moveStepNum = 3
+
+else
+
+	if SYMB_MIRRORED then
+		additionIfMirr = xMoveTo * tan(wallIncl)
+	else
+		additionNotMirr = xMoveTo * tan(wallIncl)
+	endif
+
+	add2 xMoveTo, 0
+	moveStepNum = 1
+
+endif
+
+return
+
+
+]]>
+</Script_2D>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>true</AutoHotspots>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>0</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.32</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.3</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Высота"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Integer Name="AC_Hole_Hotspot_Control">
+			<Description><![CDATA["Узловые Точки 0-Нет,1-2D, 2-3D, 3-Все"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Показ Узловых 2D Точек в 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Отметка Низа"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Отметка Верха"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="AC_HoleSideMaterial">
+			<Description><![CDATA["Покрытия Отверстия по Параметрам Стены"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="AC_HoleMaterialCurved">
+			<Description><![CDATA["Стык Покрытий в Проеме Искривлен в Криволинейных Стенах"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="AC_WALL_INTID">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Angle Name="cutWidthAngle">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>118.542992096</Value>
+		</Angle>
+		<Length Name="AC_CutWidth">
+			<Description><![CDATA["Ширина Сечения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.3</Value>
+		</Length>
+		<Boolean Name="AC_fit_to_wall_height">
+			<Description><![CDATA["По Высоте Стены"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+
+		<!-- tThickness: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="tThickness">
+			<Description><![CDATA["Толщина"]]></Description>
+		</Title>
+		<Angle Name="thickCapAngle">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Length Name="thickCap">
+			<Description><![CDATA["В конце"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+		<Length Name="thickRefSide">
+			<Description><![CDATA["Внешняя Грань"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+		<Length Name="thickOtherSide">
+			<Description><![CDATA["Внутренняя Грань"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D-отображение"]]></Description>
+			<Fix/>
+		</Title>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Перо Контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Тип Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>108</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Перо Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Перо Фона Штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>70</Value>
+		</PenColor>
+		<Boolean Name="alwaysLine">
+			<Description><![CDATA["Линия между Одинаковыми Слоями"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D-отображение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+
+		<!-- b3DRepresentation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="b3DRepresentation">
+			<Description><![CDATA["3D-отображение"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<PenColor Name="gs_wallEndPen_3D">
+			<Description><![CDATA["Перо Контура в 3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</PenColor>
+		<Material Name="matCap">
+			<Description><![CDATA["Покрытие Окончания Стены"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>90</Value>
+		</Material>
+		<Angle Name="ac_wall_slant_angle1">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+		<Angle Name="ac_wall_slant_angle2">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Angle>
+
+		<!-- gs_list: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_list">
+			<Description><![CDATA["Параметры Спецификаций"]]></Description>
+			<Fix/>
+		</Title>
+		<RealNum Name="gs_list_cost">
+			<Description><![CDATA["Цена"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_manufacturer">
+			<Description><![CDATA["Производитель"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_note">
+			<Description><![CDATA["Примечания"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_location">
+			<Description><![CDATA["Расположение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_accessories">
+			<Description><![CDATA["Аксессуары"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_Type">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Другой"]]></Value>
+		</String>
+		<Integer Name="iFMType">
+			<Description><![CDATA["Тип Группы"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>25</Value>
+		</Integer>
+		<String Name="FM_InventoryNumber">
+			<Description><![CDATA["Инвентарный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_SerialNumber">
+			<Description><![CDATA["Серийный Номер"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductionYear">
+			<Description><![CDATA["Год Производства"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ObjectWeight">
+			<Description><![CDATA["Вес Изделия"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ObjectWeightUnit">
+			<Description><![CDATA["Единица Веса"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["кг"]]></Value>
+		</String>
+		<String Name="gs_list_custom1">
+			<Description><![CDATA["Пользовательское Значение 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom2">
+			<Description><![CDATA["Пользовательское Значение 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom3">
+			<Description><![CDATA["Пользовательское Значение 3"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom4">
+			<Description><![CDATA["Пользовательское Значение 4"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom5">
+			<Description><![CDATA["Пользовательское Значение 5"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>784EAEA1-5041-4AA6-B6F4-EF263A891EE7</MainGUID>
+	<MainGUID>0F059DC2-6053-11D7-9084-000393ABEA8E</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+!<TZs>
+
+
+if  b3DRepresentation & (GLOB_STRUCTURE_DISPLAY = STRUCTURE_ENTIRE_STRUCTURE) then
+	elevation = 0
+	if AC_fit_to_wall_height then
+	ZZYZX = WALL_HEIGHT
+	elevation = -GLOB_ELEVATION / sin (ac_wall_slant_angle1)
+	endif
+
+	rotz -90
+	addz elevation
+	pen gs_wallEndPen_3D
+
+	! bottom arm
+	if thickFirst > eps then
+	! bottom corner
+	if thickCap > eps then
+		if length > eps then
+			mask2 = 0
+			mask3 = 0
+		else
+			mask2 = 1 + 2
+			mask3 = 2
+		endif
+			call "SkinRect" PARAMETERS numTrafo = 0, gs_useWallMat = 0,
+				startX = -thickCap, startY = -thickFirst,
+				endX = 0, endY = 0,
+				innerRadius = r0, incAngle = wallIncl, trapType = trapFirst,
+				ac_wall_slant_angle1 = ac_wall_slant_angle1, ac_wall_slant_angle2 = ac_wall_slant_angle2,
+				bDoCut = 0, height = ZZYZX,
+				edge1 = 1 + 2 + 8, edge2 = 4 + 8 + mask2, edge3 = 1 + 8 + mask3, edge4 = 1 + 2 + 8,
+				matLeft = matCap, matRight = matCap, matVert = matCap, matHoriz = matCap
+		mask1 = 0
+		mask4 = 0
+	else
+		mask1 = 2
+		mask4 = 1 + 2 + 4
+	endif
+
+	! bottom arm
+	if length > eps then
+			call "SkinRect" PARAMETERS numTrafo = 0, gs_useWallMat = 0,
+				startX = 0, startY = -thickFirst,
+				endX = length, endY = 0,
+				innerRadius = r0, incAngle = wallIncl, trapType = trapFirst,
+				ac_wall_slant_angle1 = ac_wall_slant_angle1, ac_wall_slant_angle2 = ac_wall_slant_angle2,
+				bDoCut = 0, height = ZZYZX,
+				edge1 = 1 + 4 + 8 + mask1, edge2 = 1 + 2 + 4 + 8, edge3 = 1 + 2 + 4 + 8, edge4 = 8 + mask4,
+				matLeft = matCap, matRight = matCap, matVert = matCap, matHoriz = matCap
+	endif
+
+	endif
+
+	! upper arm
+	if thickSecond > eps then
+	! upper corner
+	if thickCap > eps then
+		if length > eps then
+			mask2 = 0
+			mask3 = 0
+		else
+			mask2 = 2 + 4
+			mask3 = 2
+		endif
+			call "SkinRect" PARAMETERS numTrafo = 0, gs_useWallMat = 0,
+				startX = -thickCap, startY = WALL_THICKNESS,
+				endX = 0, endY = WALL_THICKNESS + thickSecond,
+				innerRadius = r0, incAngle = wallIncl, trapType = trapSecond,
+				ac_wall_slant_angle1 = ac_wall_slant_angle1, ac_wall_slant_angle2 = ac_wall_slant_angle2,
+				bDoCut = 0, height = ZZYZX,
+				edge1 = 6 + 8, edge2 = 1 + 8 + mask2, edge3 = 4 + 8 + mask3, edge4 = 6 + 8,
+				matLeft = matCap, matRight = matCap, matVert = matCap, matHoriz = matCap
+		mask1 = 0
+		mask4 = 0
+	else
+		mask1 = 2
+		mask4 = 1 + 2 + 4
+	endif
+
+	! upper arm
+	if length > eps then
+			call "SkinRect" PARAMETERS numTrafo = 0, gs_useWallMat = 0,
+				startX = 0, startY = WALL_THICKNESS,
+				endX = length, endY = WALL_THICKNESS + thickSecond,
+				innerRadius = r0, incAngle = wallIncl, trapType = trapSecond,
+				ac_wall_slant_angle1 = ac_wall_slant_angle1, ac_wall_slant_angle2 = ac_wall_slant_angle2,
+				bDoCut = 0, height = ZZYZX,
+				edge1 = 1 + 4 + 8 + mask1, edge2 = 1 + 2 + 4 + 8, edge3 = 1 + 2 + 4 + 8, edge4 = 8 + mask4,
+				matLeft = matCap, matRight = matCap, matVert = matCap, matHoriz = matCap
+	endif
+	endif
+
+	! middle part
+	if thickCap > eps then
+	mask = 0
+	if thickFirst < eps then
+		mask = mask + 1
+	endif
+	if thickSecond < eps then
+		mask = mask + 4
+	endif
+		call "SkinRect" PARAMETERS numTrafo = 0, gs_useWallMat = 0,
+			startX = -thickCap, startY = 0,
+			endX = 0, endY = WALL_THICKNESS,
+			innerRadius = r0, incAngle = wallIncl, trapType = 1,
+			ac_wall_slant_angle1 = ac_wall_slant_angle1, ac_wall_slant_angle2 = ac_wall_slant_angle2,
+			bDoCut = 0, height = ZZYZX,
+			edge1 = 2 + 8 + mask, edge2 = 2 + 8 + mask, edge3 = 2 + 8 + mask, edge4 = 2 + 8 + mask,
+			matLeft = matCap, matRight = matCap, matVert = matCap, matHoriz = matCap
+	endif
+
+	! ===== Hotspots =====
+
+	! --- replace AC hotspots at the ends ---
+	call "Resize Wall End" PARAMETERS ZZYZX = ZZYZX,
+		GS_HotspotUnIDBegin = 20000,
+		cutWidthAngle = cutWidthAngle, AC_CutWidth = AC_CutWidth,
+		r0 = r0, wallIncl = wallIncl, onWallBeg = onWallBeg
+
+	! --- bounding hotspots ---
+
+	! - side thickness -
+	xMoveTo = AC_CutWidth
+	gosub 1
+
+	unID = 1
+
+	for i = 1 to 2
+	if SYMB_MIRRORED then
+		hotspot 0, 0, 0, unID, thickOtherSide, 1+128						! base
+		unID = unID + 1
+		hotspot 0, 0.1, 0, unID, thickOtherSide, 3							! reference
+		unID = unID + 1
+		hotspot 0, additionIfMirr - thickOtherSide, 0, unID, thickOtherSide, 2	! moving
+		unID = unID + 1
+
+		hotspot 0, WALL_THICKNESS, 0, unID, thickRefSide, 1+128				! base
+		unID = unID + 1
+		hotspot 0, 0, 0, unID, thickRefSide, 3								! reference
+		unID = unID + 1
+		hotspot 0, WALL_THICKNESS + additionNotMirr + thickRefSide, 0, unID, thickRefSide, 2	! moving
+		unID = unID + 1
+	else
+		hotspot 0, 0, 0, unID, thickRefSide, 1+128							! base
+		unID = unID + 1
+		hotspot 0, 0.1, 0, unID, thickRefSide, 3							! reference
+		unID = unID + 1
+		hotspot 0, additionIfMirr - thickRefSide, 0, unID, thickRefSide, 2	! moving
+		unID = unID + 1
+
+		hotspot 0, WALL_THICKNESS, 0, unID, thickOtherSide, 1+128			! base
+		unID = unID + 1
+		hotspot 0, 0, 0, unID, thickOtherSide, 3							! reference
+		unID = unID + 1
+		hotspot 0, WALL_THICKNESS + additionNotMirr + thickOtherSide, 0, unID, thickOtherSide, 2	! moving
+		unID = unID + 1
+	endif
+
+	addz ZZYZX
+	next i
+	del 2
+
+	del moveStepNum
+
+	! - end thickness -
+	if r0 < EPS then
+
+	xMoveTo = -thickCap
+	gosub 1
+
+	for i = 1 to 2
+		hotspot thickCap, additionIfMirr - thickFirst, 0, unID, thickCap, 1+128	! base
+		unID = unID + 1
+		hotspot thickCap + 0.1, additionIfMirr - thickFirst, 0, unID, thickCap, 3	! reference
+		unID = unID + 1
+		hotspot 0, additionIfMirr - thickFirst, 0, unID, thickCap, 2			! moving
+		unID = unID + 1
+
+		hotspot thickCap, WALL_THICKNESS + additionNotMirr + thickSecond, 0, unID, thickCap, 1+128	! base
+		unID = unID + 1
+		hotspot thickCap + 0.1, WALL_THICKNESS + additionNotMirr + thickSecond, 0, unID, thickCap, 3	! reference
+		unID = unID + 1
+		hotspot 0, WALL_THICKNESS + additionNotMirr + thickSecond, 0, unID, thickCap, 2			! moving
+		unID = unID + 1
+
+		addz ZZYZX
+	next i
+	del 2
+
+	del moveStepNum
+
+	else
+
+	for i = 1 to 2
+		hotspot 0, -thickFirst, 0, unID, thickCapAngle, 4+128				! base
+		unID = unID + 1
+		xMoveTo = -thickCap
+		gosub 1
+		hotspot 0, -thickFirst, 0, unID, thickCapAngle, 5, thickCap			! moving - display param: thickCap
+		del moveStepNum
+		unID = unID + 1
+		if onWallBeg then
+			hotspot 0, r0 + WALL_THICKNESS, 0, unID, thickCapAngle, 6	! centerpoint
+			unID = unID + 1
+			hotspot 0, r0 + WALL_THICKNESS, -1, unID, thickCapAngle, 7	! reference
+			unID = unID + 1
+		else
+			hotspot 0, -r0, 0, unID, thickCapAngle, 6					! centerpoint
+			unID = unID + 1
+			hotspot 0, -r0, 1, unID, thickCapAngle, 7					! reference
+			unID = unID + 1
+		endif
+
+		hotspot 0, WALL_THICKNESS + thickSecond, 0, unID, thickCapAngle, 4+128		! base
+		unID = unID + 1
+		xMoveTo = -thickCap
+		gosub 1
+		hotspot 0, WALL_THICKNESS + thickSecond, 0, unID, thickCapAngle, 5, thickCap	! moving - display param: thickCap
+		del moveStepNum
+		unID = unID + 1
+		if onWallBeg then
+			hotspot 0, r0 + WALL_THICKNESS, 0, unID, thickCapAngle, 6	! centerpoint
+			unID = unID + 1
+			hotspot 0, r0 + WALL_THICKNESS, -1, unID, thickCapAngle, 7	! reference
+			unID = unID + 1
+		else
+			hotspot 0, -r0, 0, unID, thickCapAngle, 6					! centerpoint
+			unID = unID + 1
+			hotspot 0, -r0, 1, unID, thickCapAngle, 7					! reference
+			unID = unID + 1
+		endif
+
+		addz ZZYZX
+	next i
+	del 2
+
+	endif
+
+	del 2
+
+endif
+
+end
+
+
+! =============================================================================
+! === SUBROUTINES
+! =============================================================================
+
+! =============================================================================
+!		Move the coorinate system to a given X coordinate
+! -----------------------------------------------------------------------------
+! Input Parameters:
+!	r0:			inner radius of the curved wall (0 otherwise)
+!	wallIncl:	signed inclination of trapeze wall (0 otherwise)
+!	alpha:		angle of the object in curved wall
+!	length:		full length of the object
+!	xMoveTo:	the X coordinate to move to
+! Output:
+!	additionIfMirr:		Y addition at the current X position if SYMB_MIRRORED = 1
+!	additionNotMirr:	Y addition at the current X position if SYMB_MIRRORED = 0
+!	moveStepNum:		number of the transformation added by the subroutine
+! Remark:
+!	The macro moves the coordinate system to the desired X coordinate,
+!	after the place operation write a 'del moveStepNum' command
+! =============================================================================
+
+1:
+
+additionIfMirr = 0
+additionNotMirr = 0
+if r0 > EPS then
+
+	if onWallBeg then
+		addy r0+WALL_THICKNESS
+		rotz (xMoveTo / (r0 + WALL_THICKNESS/2)) / PI * 180
+		addy -r0-WALL_THICKNESS
+	else
+		addy -r0
+		rotz -(xMoveTo / (r0 + WALL_THICKNESS/2)) / PI * 180
+		addy r0
+	endif
+
+	moveStepNum = 3
+
+else
+
+	if SYMB_MIRRORED then
+		additionIfMirr = xMoveTo * tan(wallIncl)
+	else
+		additionNotMirr = xMoveTo * tan(wallIncl)
+	endif
+
+	addx xMoveTo
+	moveStepNum = 1
+
+endif
+
+return
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+EPS = 0.0001
+
+SKIN_FILL				=  1
+SKIN_THICKNESS			=  2
+SKIN_CONT_PEN			=  3	! Obsolete (old contour pen)
+SKIN_FILL_PEN			=  4
+SKIN_FILL_BACK_PEN		=  5
+SKIN_CORE_STATUS		=  6
+SKIN_UPPER_LINE_PEN		=  7
+SKIN_UPPER_LINE_TYPE	=  8
+SKIN_LOWER_LINE_PEN		=  9
+SKIN_LOWER_LINE_TYPE	= 10
+SKIN_END_FACE_PEN		= 11
+SKIN_FILL_ORIENTATION	= 12	! 0 - global, 1 - local
+SKIN_TYPE				= 13	! 0 - cut, 1 - below cutplane, 2 - above cutplane (all skin types are 0 for simple walls)
+!	For D/W in complex walls on the floor plan this variable contains the data of all cut skins, for wall ends on the floor plan the data of all skins.
+!	For D/W and wall ends in the 3D window contains the data of the skins actually cut by the D/W or wall end
+SKIN_END_LINE_TYPE		= 14
+SKIN_FINISH_STATUS		= 15
+SKIN_FILL_FIT_TO_SKIN	= 16
+SKIN_THICKEN_TRAPEZOID	= 17
+
+if round_int(ac_wall_slant_angle2) = 0 and round_int(ac_wall_slant_angle1) = 0 then
+	ac_wall_slant_angle1 = 90
+	ac_wall_slant_angle2 = 90
+endif
+! --- wall geometry ---
+
+length = AC_CutWidth
+
+isComposite = 0
+if 	(WALL_COMPS_NAME <> "" and WALL_SKINS_NUMBER > 1) | \
+	(GLOB_SCRIPT_TYPE = 2 & ((abs(ac_wall_slant_angle1 - 90) > eps) | (abs(ac_wall_slant_angle2 - 90) > eps))) then
+	isComposite = 1
+endif
+
+yWallStart = 0
+yWallEnd = WALL_THICKNESS
+
+iOnlyCutSkin = 0
+iLeftmost = 1
+iRightmost = WALL_SKINS_NUMBER
+if isComposite then
+	nSkins = WALL_SKINS_NUMBER
+	bBefore = 1
+	for i = 1 to WALL_SKINS_NUMBER
+		if WALL_SKINS_PARAMS[i][SKIN_TYPE] < 1 then
+			iOnlyCutSkin = i
+			bBefore = 0
+		else
+			nSkins = nSkins - 1
+		endif
+		if bBefore then
+			yWallStart = yWallStart + WALL_SKINS_PARAMS[i][SKIN_THICKNESS]
+			iLeftmost = iLeftmost + 1
+		endif
+	next i
+
+	if iOnlyCutSkin = 0 then end	! No cut skins found
+
+	if nSkins <= 1 then
+		isComposite = false
+		yWallEnd = yWallStart + WALL_SKINS_PARAMS[iOnlyCutSkin][SKIN_THICKNESS]
+		WALL_FILL = WALL_SKINS_PARAMS[iOnlyCutSkin][SKIN_FILL]
+		iRightmost = iOnlyCutSkin
+	else
+		bBefore = 1
+		for i = 0 to WALL_SKINS_NUMBER-1
+			if WALL_SKINS_PARAMS[WALL_SKINS_NUMBER-i][SKIN_TYPE] < 1 then
+				bBefore = 0
+			endif
+			if bBefore then
+				yWallEnd = yWallEnd - WALL_SKINS_PARAMS[WALL_SKINS_NUMBER-i][SKIN_THICKNESS]
+				iRightmost = iRightmost - 1
+			endif
+		next i
+	endif
+endif
+
+onWallBeg = (abs(WIDO_POSITION) < EPS)
+
+wallIncl = WALL_INCL
+maxWallThickness = WALL_START_THICKNESS
+if maxWallThickness < WALL_END_THICKNESS then maxWallThickness = WALL_END_THICKNESS
+
+if abs(maxWallThickness - WALL_END_THICKNESS) < EPS then
+	if (abs(maxWallThickness - WALL_THICKNESS) < EPS & not(SYMB_MIRRORED)) | \
+		(abs(maxWallThickness - WALL_THICKNESS) > EPS & SYMB_MIRRORED) then
+		wallIncl = -WALL_INCL
+	endif
+else
+	if (abs(maxWallThickness - WALL_THICKNESS) < EPS & SYMB_MIRRORED) | \
+		(abs(maxWallThickness - WALL_THICKNESS) > EPS & not(SYMB_MIRRORED)) then
+		wallIncl = -WALL_INCL
+	endif
+endif
+
+isCurved = 0
+r0 = 0
+alpha  = 0
+if abs(WIDO_ORIG_DIST) > EPS then
+	isCurved = 1
+	if WIDO_ORIG_DIST > 0 then
+		r0 = abs(WIDO_ORIG_DIST) + yWallStart - WALL_THICKNESS
+	else
+		r0 = abs(WIDO_ORIG_DIST) - yWallStart
+	endif
+	alpha = (length / (r0 + WALL_THICKNESS/2)) / PI * 180
+endif
+
+! --- end cap shape ---
+
+if SYMB_MIRRORED then
+	thickFirst = thickOtherSide
+	thickSecond = thickRefSide
+else
+	thickFirst = thickRefSide
+	thickSecond = thickOtherSide
+endif
+
+trapFirst = 0
+trapSecond = 0
+if SYMB_MIRRORED then
+	trapFirst = 2
+else
+	trapSecond = 2
+endif
+
+! ==============================================================================
+! Partial Stucture Display related calculations
+! ==============================================================================
+
+! Partial Stucture Display defines:
+STRUCTURE_ENTIRE_STRUCTURE	= 0
+STRUCTURE_CORE_ONLY			= 1
+STRUCTURE_WITHOUT_FINISHES	= 2
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+ui_dialog `Толщина`,444,266
+
+UI_OUTFIELD `В Конце (1):`, 5, 55, 140, 35
+UI_INFIELD "thickCap", 150, 50, 75, 20
+
+UI_OUTFIELD `На Наружной Поверхности (2):`, 5, 93, 140, 35
+UI_INFIELD "thickRefSide", 150, 88, 75, 20
+
+UI_OUTFIELD `На Внутренней Поверхности (3):`, 5, 130, 140, 35
+UI_INFIELD "thickOtherSide", 150, 125, 75, 20
+
+UI_PICT 1, 250, 5
+]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+call "FM_types" parameters all
+
+if GLOB_MODPAR_NAME = "cutWidthAngle" then
+	PARAMETERS AC_CutWidth = cutWidthAngle * (r0 + WALL_THICKNESS/2) * PI / 180
+else
+	if GLOB_MODPAR_NAME <> "" then
+		PARAMETERS cutWidthAngle = (length / (r0 + WALL_THICKNESS/2)) / PI * 180
+	endif
+endif
+
+if WIDO_ORIG_DIST < -EPS then
+	if not(SYMB_MIRRORED) then
+		values "thickRefSide" range [0, r0)
+	else
+		values "thickOtherSide" range [0, r0)
+	endif
+else
+	if not(SYMB_MIRRORED) then
+		values "thickRefSide" range [0, )
+	else
+		values "thickOtherSide" range [0, )
+	endif
+endif
+if WIDO_ORIG_DIST > EPS then
+	if not(SYMB_MIRRORED) then
+		values "thickOtherSide" range [0, r0)
+	else
+		values "thickRefSide" range [0, r0)
+	endif
+else
+	if not(SYMB_MIRRORED) then
+		values "thickOtherSide" range [0, )
+	else
+		values "thickRefSide" range [0, )
+	endif
+endif
+values "thickCap" range [0, )
+values "AC_CutWidth" range [0, )
+
+if GLOB_MODPAR_NAME = "thickCapAngle" then
+	if alpha > eps then
+		thickCap = length * thickCapAngle / alpha
+	else
+		thickCap = 0
+	endif
+	parameters thickCap = thickCap
+else
+	if GLOB_MODPAR_NAME <> "" then
+		if length > eps then
+			thickCapAngle = alpha * thickCap / length
+		else
+			thickCapAngle = 0
+		endif
+		parameters thickCapAngle = thickCapAngle
+	endif
+endif
+
+if gs_cont_pen < 1 then
+	PARAMETERS gs_cont_pen = 1
+endif
+
+if gs_fill_pen < 1 then
+	PARAMETERS gs_fill_pen = 1
+endif
+
+maxSideThick = thickRefSide
+if thickOtherSide > maxSideThick then
+	maxSideThick = thickOtherSide
+endif
+
+if not(b3DRepresentation) then
+	hideparameter "gs_wallEndPen_3D", "matCap"
+endif
+
+PARAMETERS A = WALL_THICKNESS + 2 * maxSideThick
+PARAMETERS B = AC_CutWidth + thickCap
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[Отделка торца стены.]]>
+</Comment>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["SkinRect"]]></MName>
+		<MainGUID>2B0688E1-BE95-4F94-AC6A-DD76D21592D3</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["Resize Wall End"]]></MName>
+		<MainGUID>6CDF8E46-3A45-4DAC-87BD-87BDC1034F6D</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["FM_types"]]></MName>
+		<MainGUID>2759D2DF-AA8E-44D1-AD1D-261581266B34</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<GDLPict MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="1" length_in_bytes="552" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000BF0000
+	00880203000000CBFBD28000000009504C5445FFFFFF828282000000A15F81CC
+	000001D049444154785EED98B18ADB401884473F3E63B6F2A53A52A534FB1422
+	A44A15029767C8636C2081B4575CBF86189679CA3446BF8CB45E4D409C211E37
+	6A868FCFC3DAACF0E6B1042D4CEB10EE052D241AB9C700ECD62DECD0698503EC
+	B75428B02215489675094FAAC30EB6DE0EF7C2BD70FB09BC4C810D4F0B0BE714
+	20A6B9C2A7CB7C3F178C40CE7385C7CB1CCE852D93A54921D409F880B9429E12
+	BC004B53E36B04044C0BF91AE13053608D10D823FB5495BC38C1084BCDC24F27
+	A0C0981711CC3797089EB01F12C8FD28EFDC619CB01912F86733CAB642E88604
+	76E35885D00FF99CFB713E361DDEFB63D3C1D37638769E250E60728B250E08D9
+	2D963800D41C8078D41C8C4973A0E8108BB64360B7780717101CE2E9B99A6F33
+	04E3EB95C22CE147273A945E7340F41596ED60453D0F51730082E880203A403F
+	D38DA5954285805ACE4B0B85F5096FF62D7D41E5537378A8A5B6740D80AFFF4C
+	B87D078A04507440A048003507209E34825174E049738845DB21505BDA98B5F3
+	101DD02238407288BF3402AC407270449BE0086D07C415CEB4F4CB2715D6FF7F
+	F86F09D2A5694C2800B370CB32C2D241BB4F033385ABB75DE445042FC4AC128A
+	46D01C027B2FB408FEB58A2F4298C5572DB799BF3A44222AA557F62700000000
+	49454E44AE426082
+	]]>
+</GDLPict>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="942" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000800000
+	00800806000000C33E61CB000000097048597300000B1300000B1301009A9C18
+	0000001974455874536F6674776172650041646F626520496D61676552656164
+	7971C9653C000003314944415478DAECDDBF8A13511480F1C9A236BBA4546C6C
+	226E67152D82958D8FE062935D14C1C2C617F00D6C2C047149EC7C0AB14AB329
+	C42E601A1B2B1B715BC79B2591256EFE18E6267333BF0F42C2DDB3903BE7DB3B
+	E7CC9D646B799E67A82E3B0E0101400010000400014000100004000140001000
+	04000140001000040001400010000400014000A4CCA5AA4E7CBFD9FA1A9E1A5B
+	34A5E1A0DFBB6905589E86F954780598F0FCE9E3E4E7F0FAEDB11A0004000140
+	006CB6080CED55373CB5AB5040AD9BFADE6ED67E746005A82A3F7F9D967F0518
+	F47B871F6E343E85979DF0383AF836EC4E7E16C60F8DAF36FEF2EAB54E123580
+	A4451B4FA60894B408E3C90810265093B478E349B5819256EEE4471540D2CA9F
+	FC6802485A94F1340490345D80A4E902244D172069BA0049D30548A62EC0B82E
+	4032750192A90B904C5D80715D80715D80F1F27401B5A2FF69D4C3BBCDFCF3EF
+	2B19E270D147D92677360FFABDDAC6578090FCF7D2940E51EE0A0E4F870E6DB1
+	EC375B51FEBF9FCF05541C021000048022B0C06265D4C3B61D5A2B00AADC067E
+	7C757BF47C7665EBFE8B2FDD45BF277E8BDA40C98C129FC6294032A3C5275303
+	486684F8580214BE19A40B884BE93783A00B38EB0246AFAF3FBBF37709FBFEE6
+	A43B6B6C82F8D9F1B1BA80C24F01D39C9FD0F91A61FA60889F1F3F11A0E85340
+	7401A62699CD3B18E267C7C712400D507176D6F8D77F347E74C663E257882F7D
+	11B84491938D27992D5914894F71059855CD8E5FFF63BAF8F9F1C95C085AD4FA
+	A8F6578BAF9F5CEE24D10584379EABDE8B8F0F02B81288046A8060754DF51E25
+	3E9D22705121335D23885F2A3EAD2E40F55E6C7C525D80EADD5E80EADD5E002A
+	D905A8DEED05CCBD22E8DAFEEAF149AD005B508DBFCBEC05149BFC84AAF17BE1
+	31AAB68E43FC9332BCFF94F60296EE634B5E8DCF4CFE26DE4FACBD80C205B8F5
+	A095D77EA8AE6351FA363024DF77042584EF084A04DF11848C0028FF29C06703
+	AD0088447D6F571158745175515B6505000140001000DBCE5A6E092B7311B84D
+	B825ECFF189A4F85570058014000108000200008000280002000080002800020
+	0008000280002000080002800020000800028000489D3F020C0029785C2E41E6
+	BBB20000000049454E44AE426082
+	]]>
+</Picture>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+<MigrationTable SectVersion="1" SectionFlags="0" SubIdent="0">
+	<MigrationTableElement>
+		<MainGUID>6F3B45E1-AEFC-4F36-9874-AC799CDDF31A</MainGUID>
+		<Version>18</Version>
+		<Name><![CDATA[""]]></Name>
+		<AutoMigration>true</AutoMigration>
+	</MigrationTableElement>
+</MigrationTable>
+
+</Symbol>

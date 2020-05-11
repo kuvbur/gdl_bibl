@@ -1,0 +1,1183 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="B2CEAF0B-C816-4CB1-8EE5-0EBAF0B5572B" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>B2970E4C-8680-4061-8670-2F4B638F3953</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! MEP_m_Pipe_Bend
+! Zsolt Feke/2007
+
+
+RESOL res
+PEN gs_cont_pen
+
+IF gs_detlevel_3D = `Откл.` THEN END
+
+HptsUnIDBeginForConnEnds = 30000
+
+hceID_1 = HptsUnIDBeginForConnEnds+100
+hceID_2 = HptsUnIDBeginForConnEnds+200
+
+operatedMode = 0
+addStatus1 = 0
+addStatus2 = 0
+addStatus3 = 0
+IF GLOB_CONTEXT > 40 AND GLOB_CONTEXT < 50 THEN
+	operatedMode = 1
+	addStatus1 = 1
+	addStatus2 = 2
+	addStatus3 = 3
+ENDIF
+
+XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+		MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+		MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+
+bendAngle = ABS(MEP_BendAngle)
+alpha_Res = 90/(INT(res/3))
+cRes = INT(bendAngle/alpha_Res)+1*(((bendAngle/alpha_Res)-INT(bendAngle/alpha_Res))>=0.5)
+IF NOT(cRes) THEN cRes = 1
+IF res < 9 THEN
+	IF bendAngle > 46 THEN
+		cRes = 2
+	ELSE
+		cRes = 1
+	ENDIF
+ENDIF
+
+IF MEP_cline_show_3D AND operatedMode < EPS THEN		! -----> center line <----- !
+	RESOL INT(360/(bendAngle/cRes))
+
+	IF NOT(cutbackCLA) THEN LIN_ 0, 0, 0, connectorWidthA, 0, 0
+
+	IF NOT(cutbackCLB) AND connectorWidthB THEN
+		ADDx connectorWidthA
+		LIN_ MEP_BendRadius*SIN(bendAngle), MEP_BendRadius*(1-COS(bendAngle)), 0, MEP_BendRadius*SIN(bendAngle)+connectorWidthB*COS(bendAngle), MEP_BendRadius*(1-COS(bendAngle))+connectorWidthB*SIN(bendAngle), 0
+		DEL 1
+	ENDIF
+
+	MODEL WIRE
+	MULy -1
+	ADD connectorWidthA, -MEP_BendRadius, 0
+		ARC MEP_BendRadius, 90-bendAngle, 90
+	DEL 2
+	MODEL SOLID
+
+	RESOL res
+ENDIF
+
+IF pipe_show THEN
+
+	IF showHtps THEN
+		HOTSPOT 0, 0, 0, hceID_1
+		HOTSPOT connectorWidthA+MEP_BendRadius*SIN(bendAngle)+connectorWidthB*COS(bendAngle), MEP_BendRadius*(1-COS(bendAngle))+connectorWidthB*SIN(bendAngle), 0, hceID_2
+		HOTSPOT connectorWidthA+MEP_BendRadius*(TAN(bendAngle/2)), 0, 0, HptsUnIDBeginForConnEnds
+	ENDIF
+
+	MATERIAL gs_PipeMat
+
+	IF ABS(pipeDiameterA-pipeDiameterB) < EPS THEN			! -----> pipe bend <----- !
+
+		 pipeDiameter = pipeDiameterA
+		 alpha_i = bendAngle/cRes
+
+		PUT -MEP_BendRadius*SIN(alpha_i), MEP_BendRadius-MEP_BendRadius*COS(alpha_i), 0, 0
+		FOR i = 1 TO cRes+1
+			PUT MEP_BendRadius*SIN(alpha_i*(i-1)), MEP_BendRadius-MEP_BendRadius*COS(alpha_i*(i-1)), 0, 0
+		NEXT i
+		PUT MEP_BendRadius*SIN(alpha_i*(cRes+1)), MEP_BendRadius-MEP_BendRadius*COS(alpha_i*(cRes+1)), 0, 0
+
+		rr = (pipeDiameter/2)*COS(alpha_i/2)
+		ADDx connectorWidthA
+		MULz (pipeDiameter/2)/rr
+
+		TUBE 2, NSP/4, addStatus3+16*(NOT(extendA) AND gs_EdgeOnEnds[1])+32*(NOT(extendB) AND gs_EdgeOnEnds[2]),
+			0, 0, 901,
+			rr, 360, 4001,
+
+			GET(NSP)
+
+		DEL 2
+
+		BASE
+		VERT    connectorWidthA,    MEP_BendRadius,    0
+		VERT    MEP_BendRadius*2,    MEP_BendRadius,    0
+		VERT    0,    MEP_BendRadius+1,	0
+		VERT    0,    MEP_BendRadius,    1
+		COOR    4,    -1,   -2,    -3,    -4
+
+		BODY -1
+	ELSE
+		ADDx connectorWidthA
+
+		MEP_BendRadius_temp = MEP_BendRadius
+		dRStart = pipeDiameterA/2
+		dREnd = pipeDiameterB/2
+
+		ADDy MEP_BendRadius
+		ROTz -90
+		ROTx -90
+
+		 alpha_i = bendAngle/cRes
+		 alphaSec_i = 360/res
+		 rr = dRStart
+
+		inA = MEP_BendRadius-dRStart
+		IF ABS(bendAngle-90) < EPS THEN
+			inB = MEP_BendRadius-dREnd
+		ELSE
+			inB = MEP_BendRadius-dREnd
+			iX = inB*COS(bendAngle)
+			iY = inB*SIN(bendAngle)
+			inB = SQR(ABS((iY^2)/(1-(iX/inA)^2)))
+		ENDIF
+
+		IF ABS(inA) < EPS THEN inA = EPS
+		IF ABS(inB) < EPS THEN inB = EPS
+
+		outA = MEP_BendRadius+dRStart
+		IF ABS(bendAngle-90) < EPS THEN
+			outB = MEP_BendRadius+dREnd
+		ELSE
+			outB = MEP_BendRadius+dREnd
+			oX = outB*COS(bendAngle)
+			oY = outB*SIN(bendAngle)
+			outB = SQR(ABS((oY^2)/(1-(oX/outA)^2)))
+		ENDIF
+
+		IF ABS(outA) < EPS THEN outA = EPS
+		IF ABS(outB) < EPS THEN outB = EPS
+
+		FOR k = 1 TO cRes
+				FOR i = 1 TO res
+					PUT MEP_BendRadius+rr*COS(alphaSec_i*(i-1)), rr*SIN(alphaSec_i*(i-1)), 1
+				NEXT i
+
+				inX = SQR(1/(1/(inA^2)+((TAN(alpha_i*k))/inB)^2))
+				inY = inX*TAN(alpha_i*k)
+
+				outX = SQR(1/(1/(outA^2)+((TAN(alpha_i*k))/outB)^2))
+				outY = outX*TAN(alpha_i*k)
+
+				dia2 = SQR((outX-inX)^2+(outY-inY)^2)
+				rr = dia2/2
+
+				MEP_BendRadius = SQR(inX^2+inY^2)
+				MEP_BendRadius = MEP_BendRadius+rr
+
+				FOR i = 1 TO res
+					 dX = MEP_BendRadius+rr*COS(alphaSec_i*(i-1))
+					PUT dX*COS(alpha_i), rr*SIN(alphaSec_i*(i-1)), dX*SIN(alpha_i)
+				NEXT i
+
+
+			RULED NSP/6, addStatus3+4+16*(k = 1)+32*(k=cRes),
+
+				GET(NSP)
+
+			ROTy -alpha_i
+		NEXT k
+
+		DEL k+3
+		MEP_BendRadius = MEP_BendRadius_temp
+
+		BASE
+		VERT    connectorWidthA,    MEP_BendRadius,    0
+		VERT    MEP_BendRadius*2,    MEP_BendRadius,    0
+		VERT    0,    MEP_BendRadius+1,	0
+		VERT    0,    MEP_BendRadius,    1
+		COOR    4,    -1,   -2,    -3,    -4
+
+		BODY -1
+	ENDIF
+
+	IF flangeA THEN
+		ROTy 90
+		EXTRUDE 2, 0, 0, connectorWidthA, 1+addStatus2+16+32,
+			0, 0, 901,
+			connectorDiameterA/2, 360, 4001
+
+		IF connectorDiameterA-pipeDiameterA > EPS AND operatedMode < EPS THEN
+			ADDz connectorWidthA
+			POLY_ 4,
+				0, 0, 901,
+				connectorDiameterA/2, 360, 4001,
+				0, 0, 901,
+				pipeDiameterA/2, 360, 4001
+			DEL 1
+		ENDIF
+
+		BASE
+		VERT    0,    0,    0
+		VERT    connectorDiameterA/2,    0,    0
+		VERT    0,    1,	0
+		VERT    0,    0,    1
+		COOR    3,    -1,   -2,    -3,    -4
+
+		BODY -1
+		DEL 1
+	ENDIF
+
+	IF extendA THEN
+		ROTy 90
+		EXTRUDE 2, 0, 0, connectorWidthA, addStatus3+16,
+			0, 0, 901,
+			pipeDiameterA/2, 360, 4001
+
+		BASE
+		VERT    0,    0,    0
+		VERT    pipeDiameterA/2,    0,    0
+		VERT    0,    1,	0
+		VERT    0,    0,    1
+		COOR    3,    -1,   -2,    -3,    -4
+
+		BODY -1
+		DEL 1
+	ENDIF
+
+	IF flangeB THEN
+		ADD connectorWidthA+MEP_BendRadius*SIN(bendAngle), MEP_BendRadius-MEP_BendRadius*COS(bendAngle), 0
+		ROTz bendAngle
+		ROTy 90
+
+		EXTRUDE 2, 0, 0, connectorWidthB, addStatus1+2+16+32,
+			0, 0, 901,
+			connectorDiameterB/2, 360, 4001
+
+		IF connectorDiameterB-pipeDiameterB > EPS AND operatedMode < EPS THEN
+			POLY_ 4,
+				0, 0, 901,
+				connectorDiameterB/2, 360, 4001,
+				0, 0, 901,
+				pipeDiameterB/2, 360, 4001
+		ENDIF
+
+		BASE
+		VERT    0,    0,    0
+		VERT    connectorDiameterB/2,    0,    0
+		VERT    0,    1,	0
+		VERT    0,    0,    1
+		COOR    3,    -1,   -2,    -3,    -4
+
+		BODY -1
+		DEL 3
+	ENDIF
+
+	IF extendB THEN
+		ADD connectorWidthA+MEP_BendRadius*SIN(bendAngle), MEP_BendRadius-MEP_BendRadius*COS(bendAngle), 0
+		ROTz bendAngle
+		ROTy 90
+		EXTRUDE 2, 0, 0, connectorWidthB, addStatus3+32,
+			0, 0, 901,
+			pipeDiameterB/2, 360, 4001
+
+		BASE
+		VERT    0,    0,    0
+		VERT    pipeDiameterB/2,    0,    0
+		VERT    0,    1,	0
+		VERT    0,    0,    1
+		COOR    3,    -1,   -2,    -3,    -4
+
+		BODY -1
+		DEL 3
+	ENDIF
+ENDIF
+
+
+IF MEP_InsShow THEN			! -----> insulation <----- !
+	MATERIAL gs_InsMat
+
+	IF ABS(pipeDiameterA-pipeDiameterB) < EPS THEN
+		 pipeDiameter = pipeDiameterA
+		 alpha_i = bendAngle/cRes
+
+		PUT -MEP_BendRadius*SIN(alpha_i), MEP_BendRadius-MEP_BendRadius*COS(alpha_i), 0, 0
+		FOR i = 1 TO cRes+1
+			PUT MEP_BendRadius*SIN(alpha_i*(i-1)), MEP_BendRadius-MEP_BendRadius*COS(alpha_i*(i-1)), 0, 0
+		NEXT i
+		PUT MEP_BendRadius*SIN(alpha_i*(cRes+1)), MEP_BendRadius-MEP_BendRadius*COS(alpha_i*(cRes+1)), 0, 0
+
+		rr = (pipeDiameter/2+MEP_InsThickness)*COS(alpha_i/2)
+		ADDx connectorWidthA
+		MULz (pipeDiameter/2+MEP_InsThickness)/rr
+
+		TUBE 2, NSP/4, addStatus3+16*(NOT(flangeA) AND gs_EdgeOnEnds[1])+32*(NOT(flangeB) AND gs_EdgeOnEnds[2]),
+			0, 0, 901,
+			rr, 360, 4001,
+
+			GET(NSP)
+
+		DEL 2
+		pipeDiameterB = pipeDiameterA
+
+		BASE
+		VERT    connectorWidthA,    MEP_BendRadius,    0
+		VERT    MEP_BendRadius*2,    MEP_BendRadius,    0
+		VERT    0,    MEP_BendRadius+1,	0
+		VERT    0,    MEP_BendRadius,    1
+		COOR    4,    -1,   -2,    -3,    -4
+
+		BODY -1
+	ELSE
+		ADDx connectorWidthA
+
+		MEP_BendRadius_temp = MEP_BendRadius
+		dRStart = pipeDiameterA/2+MEP_InsThickness
+		dREnd = pipeDiameterB/2+MEP_InsThickness
+
+		ADDy MEP_BendRadius
+		ROTz -90
+		ROTx -90
+
+		 alpha_i = bendAngle/cRes
+		 alphaSec_i = 360/res
+		 rr = dRStart
+
+		inA = MEP_BendRadius-dRStart
+		IF ABS(bendAngle-90) < EPS THEN
+			inB = MEP_BendRadius-dREnd
+		ELSE
+			inB = MEP_BendRadius-dREnd
+			iX = inB*COS(bendAngle)
+			iY = inB*SIN(bendAngle)
+			inB = SQR(ABS((iY^2)/(1-(iX/inA)^2)))
+		ENDIF
+
+		outA = MEP_BendRadius+dRStart
+		IF ABS(bendAngle-90) < EPS THEN
+			outB = MEP_BendRadius+dREnd
+		ELSE
+			outB = MEP_BendRadius+dREnd
+			oX = outB*COS(bendAngle)
+			oY = outB*SIN(bendAngle)
+			outB = SQR(ABS((oY^2)/(1-(oX/outA)^2)))
+		ENDIF
+
+		FOR k = 1 TO cRes
+				FOR i = 1 TO res
+					PUT MEP_BendRadius+rr*COS(alphaSec_i*(i-1)), rr*SIN(alphaSec_i*(i-1)), 1
+				NEXT i
+
+				inX = SQR(1/(1/(inA^2)+((TAN(alpha_i*k))/inB)^2))
+				inY = inX*TAN(alpha_i*k)
+
+				outX = SQR(1/(1/(outA^2)+((TAN(alpha_i*k))/outB)^2))
+				outY = outX*TAN(alpha_i*k)
+
+				dia2 = SQR((outX-inX)^2+(outY-inY)^2)
+				rr = dia2/2
+
+				MEP_BendRadius = SQR(inX^2+inY^2)
+				MEP_BendRadius = MEP_BendRadius+rr
+
+				FOR i = 1 TO res
+					 dX = MEP_BendRadius+rr*COS(alphaSec_i*(i-1))
+					PUT dX*COS(alpha_i), rr*SIN(alphaSec_i*(i-1)), dX*SIN(alpha_i)
+				NEXT i
+
+			RULED NSP/6, addStatus3+4+16*(k = 1 AND NOT(flangeA))+32*(k=cRes AND NOT(flangeB)),
+
+				GET(NSP)
+
+			ROTy -alpha_i
+		NEXT k
+
+		DEL k+3
+		MEP_BendRadius = MEP_BendRadius_temp
+
+		BASE
+		VERT    connectorWidthA,    MEP_BendRadius,    0
+		VERT    MEP_BendRadius*2,    MEP_BendRadius,    0
+		VERT    0,    MEP_BendRadius+1,	0
+		VERT    0,    MEP_BendRadius,    1
+		COOR    4,    -1,   -2,    -3,    -4
+
+		BODY -1
+	ENDIF
+
+	IF flangeA THEN
+		ROTy 90
+		EXTRUDE 2, 0, 0, connectorWidthA, addStatus3+16,
+			0, 0, 901,
+			pipeDiameterA/2+MEP_InsThickness, 360, 4001
+
+		BASE
+		VERT    0,    0,    0
+		VERT    pipeDiameterA/2+MEP_InsThickness,    0,    0
+		VERT    0,    1,	0
+		VERT    0,    0,    1
+		COOR    3,    -1,   -2,    -3,    -4
+
+		BODY -1
+		DEL 1
+	ENDIF
+
+	IF flangeB THEN
+		ADD connectorWidthA+MEP_BendRadius*SIN(bendAngle), MEP_BendRadius-MEP_BendRadius*COS(bendAngle), 0
+		ROTz bendAngle
+		ROTy 90
+		EXTRUDE 2, 0, 0, connectorWidthB, addStatus3+32,
+			0, 0, 901,
+			pipeDiameterB/2+MEP_InsThickness, 360, 4001
+
+		BASE
+		VERT    0,    0,    0
+		VERT    pipeDiameterB/2+MEP_InsThickness,    0,    0
+		VERT    0,    1,	0
+		VERT    0,    0,    1
+		COOR    3,    -1,   -2,    -3,    -4
+
+		BODY -1
+		DEL 3
+	ENDIF
+ENDIF
+
+DEL 1
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! MEP_m_Pipe_Bend
+! Zsolt Feke/2007
+
+
+PEN gs_cont_pen
+IF gs_fill_pen THEN SET FILL gs_fill_type
+
+HptsUnIDBeginForConnEnds = 30000
+
+hceID_1 = HptsUnIDBeginForConnEnds+100
+hceID_2 = HptsUnIDBeginForConnEnds+200
+
+HOTSPOT2 MEP_Position[1][1]+outCoords[1][1], MEP_Position[1][2]+outCoords[1][2], hceID_1
+HOTSPOT2 MEP_Position[1][1]+outCoords[2][1], MEP_Position[1][2]+outCoords[2][2], HptsUnIDBeginForConnEnds
+HOTSPOT2 MEP_Position[1][1]+outCoords[3][1], MEP_Position[1][2]+outCoords[3][2], hceID_2
+
+
+IF MEP_cline_show THEN		! -----> center line <----- !
+	PEN MEP_cline_pen
+	SET LINE_TYPE MEP_cline_type
+
+	ADD2 MEP_Position[1][1], MEP_Position[1][2]
+
+	dX = MEP_Position[2][1]
+	dY = MEP_Position[2][2]
+
+	length = SQR((dX)^2+(dY)^2)
+	IF length THEN
+		arc_val = dX/length
+		IF arc_val > 1-EPS THEN arc_val = 1
+		IF arc_val < -1+EPS THEN arc_val = -1
+		alpha = ACS(arc_val)
+	ELSE
+		dX = outCoords[coordinates][1]
+		dY = outCoords[coordinates][2]
+
+		length = SQR((dX)^2+(dY)^2)
+
+		arc_val = dX/length
+		IF arc_val > 1-EPS THEN arc_val = 1
+		IF arc_val < -1+EPS THEN arc_val = -1
+		alpha = ACS(arc_val)
+	ENDIF
+
+	IF SGN(dY) = -1 THEN alpha = 360-alpha
+
+	alphaS = alpha
+
+	dX = outCoords[coordinates][1]
+	dY = outCoords[coordinates][2]
+
+	length = SQR((dX)^2+(dY)^2)
+	IF length THEN
+		arc_val = dX/length
+		IF arc_val > 1-EPS THEN arc_val = 1
+		IF arc_val < -1+EPS THEN arc_val = -1
+		alpha = ACS(arc_val)
+	ELSE
+		dX = MEP_Position[2][1]
+		dY = MEP_Position[2][2]
+
+		length = SQR((dX)^2+(dY)^2)
+
+		arc_val = dX/length
+		IF arc_val > 1-EPS THEN arc_val = 1
+		IF arc_val < -1+EPS THEN arc_val = -1
+		alpha = ACS(arc_val)
+	ENDIF
+
+	IF SGN(dY) = -1 THEN alpha = 360-alpha
+
+	alphaE = alpha
+	alpha_i = (alphaE-alphaS)/(pnum-1)
+	alpha = alphaS
+
+	PUT outCoords[1][1], outCoords[1][2], alpha
+	FOR i = 1 TO pnum
+		PUT outCoords[3+i][1], outCoords[3+i][2], alpha
+		IF i < pnum THEN alpha = alpha + alpha_i
+	NEXT i
+	PUT outCoords[3][1], outCoords[3][2], alpha
+
+	SPLINE2 NSP/3, 2,
+			GET(NSP)
+
+	DEL 1
+
+	PEN gs_cont_pen
+	SET LINE_TYPE SYMB_LINETYPE
+ENDIF
+
+IF ABS(MEP_Position[2][3]) < EPS AND ABS(MEP_Position[3][3]) < EPS AND ABS(pipeDiameterA-pipeDiameterB) < EPS THEN
+
+	 aa = MEP_Position[2][1]
+	 bb = MEP_Position[2][2]
+
+	 arCosVal = aa/1
+	IF ABS(arCosVal) > 1 AND SGN(arCosVal) = -1 THEN arCosVal = -1
+	IF ABS(arCosVal) > 1 AND SGN(arCosVal) = 1 THEN arCosVal = 1
+	alpha = ACS(arCosVal)
+	IF SGN(bb) = -1 THEN alpha = 360-alpha
+
+	GOSUB 10 						! --- analizing of arc-direction
+
+	ADD2 MEP_Position[1][1], MEP_Position[1][2]
+
+	ROT2 alpha
+	ADD2 connectorWidthA, 0
+	MUL2 1, SGN(outCoords[1][2])
+
+	pipeRadiusA = pipeDiameterA/2
+	connectorRadiusA = connectorDiameterA/2
+	pipeHalfWidthX = pipeRadiusA*SIN(bendAngle)
+	pipeHalfWidthY = pipeRadiusA*COS(bendAngle)
+
+		IF extendA THEN
+			PUT -connectorWidthA, -pipeRadiusA, 1
+			PUT -connectorWidthA, pipeRadiusA, 1
+		ENDIF
+		PUT 0, pipeRadiusA, 1
+		IF ABS(MEP_BendRadius-pipeRadiusA) > EPS THEN PUT 0, MEP_BendRadius, 901
+		IF ABS(MEP_BendRadius-pipeRadiusA) > EPS THEN PUT MEP_BendRadius*SIN(bendAngle)-pipeHalfWidthX, MEP_BendRadius*(1-COS(bendAngle))+pipeHalfWidthY, 3001
+		IF extendB THEN
+			PUT MEP_BendRadius*SIN(bendAngle)-pipeHalfWidthX+connectorWidthB*COS(bendAngle), MEP_BendRadius*(1-COS(bendAngle))+pipeHalfWidthY+connectorWidthB*SIN(bendAngle), 1
+			PUT MEP_BendRadius*SIN(bendAngle)+pipeHalfWidthX+connectorWidthB*COS(bendAngle), MEP_BendRadius*(1-COS(bendAngle))-pipeHalfWidthY+connectorWidthB*SIN(bendAngle), 1
+		ENDIF
+		PUT MEP_BendRadius*SIN(bendAngle)+pipeHalfWidthX, MEP_BendRadius*(1-COS(bendAngle))-pipeHalfWidthY, 1
+		PUT 0, MEP_BendRadius, 901
+		PUT 0, -pipeRadiusA, 3001
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+
+	IF flangeA THEN
+			PUT 0, -connectorRadiusA, 1
+			PUT -connectorWidthA, -connectorRadiusA, 1
+			PUT -connectorWidthA, connectorRadiusA, 1
+			PUT 0, connectorRadiusA, 1
+
+		POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+			GET (NSP)
+	ENDIF
+
+	IF flangeB THEN
+		 connectorRadiusB = connectorDiameterB/2
+		 connectorHalfWidthBX = connectorRadiusB*SIN(bendAngle)
+		 connectorHalfWidthBY = connectorRadiusB*COS(bendAngle)
+		 connectorWidthBX = connectorWidthB*COS(bendAngle)
+		 connectorWidthBY = connectorWidthB*SIN(bendAngle)
+
+		PUT MEP_BendRadius*SIN(bendAngle)-connectorHalfWidthBX, MEP_BendRadius*(1-COS(bendAngle))+connectorHalfWidthBY, 1
+		PUT MEP_BendRadius*SIN(bendAngle)+connectorWidthB*COS(bendAngle)-connectorHalfWidthBX, MEP_BendRadius*(1-COS(bendAngle))+connectorWidthB*SIN(bendAngle)+connectorHalfWidthBY, 1
+		PUT MEP_BendRadius*SIN(bendAngle)+connectorWidthB*COS(bendAngle)+connectorHalfWidthBX, MEP_BendRadius*(1-COS(bendAngle))+connectorWidthB*SIN(bendAngle)-connectorHalfWidthBY, 1
+		PUT MEP_BendRadius*SIN(bendAngle)+connectorHalfWidthBX, MEP_BendRadius*(1-COS(bendAngle))-connectorHalfWidthBY, 1
+
+		POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+			GET (NSP)
+	ENDIF
+
+	IF MEP_InsShow THEN			! -----> insulation <----- !
+
+		pipeInsHalfWidthA = pipeRadiusA+MEP_InsThickness
+		pipeInsHalfWidthBX = pipeInsHalfWidthA*SIN(bendAngle)
+		pipeInsHalfWidthBY = pipeInsHalfWidthA*COS(bendAngle)
+
+		IF NOT(cutbackIA) THEN
+			PUT -connectorWidthA, -pipeInsHalfWidthA, 1
+			PUT -connectorWidthA, pipeInsHalfWidthA, 1
+		ENDIF
+
+		PUT 0, pipeInsHalfWidthA, 1
+		PUT 0, MEP_BendRadius, 901
+		PUT MEP_BendRadius*SIN(bendAngle)-pipeInsHalfWidthBX, MEP_BendRadius*(1-COS(bendAngle))+pipeInsHalfWidthBY, 3001
+
+		IF NOT(cutbackIB) THEN
+			PUT MEP_BendRadius*SIN(bendAngle)+connectorWidthB*COS(bendAngle)-pipeInsHalfWidthBX, MEP_BendRadius*(1-COS(bendAngle))+connectorWidthB*SIN(bendAngle)+pipeInsHalfWidthBY, 1
+			PUT MEP_BendRadius*SIN(bendAngle)+connectorWidthB*COS(bendAngle)+pipeInsHalfWidthBX, MEP_BendRadius*(1-COS(bendAngle))+connectorWidthB*SIN(bendAngle)-pipeInsHalfWidthBY, 1
+		ENDIF
+
+		PUT MEP_BendRadius*SIN(bendAngle)+pipeInsHalfWidthBX, MEP_BendRadius*(1-COS(bendAngle))-pipeInsHalfWidthBY, 1
+		PUT 0, MEP_BendRadius, 901
+		PUT 0, -pipeInsHalfWidthA, 3001
+
+		IF NOT(cutbackIA) THEN
+			PUT -connectorWidthA, -pipeInsHalfWidthA, 1
+		ELSE
+			PUT 0, pipeInsHalfWidthA, 1
+		ENDIF
+
+		POLY2_ NSP/3, 1,
+
+			GET (NSP)
+	ENDIF
+
+	DEL 4
+ELSE
+	SET FILL gs_fill_type
+
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN PEN gs_fill_pen
+	PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0, PARAMETERS pipe_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0, gs_detlevel_3D = `Детальный`
+	PEN gs_cont_pen
+	PROJECT2{3} 3, 270, 2, 2+8, 0, 0, 0, 0, PARAMETERS pipe_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0, gs_detlevel_3D = `Детальный`
+
+	IF MEP_InsShow THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS pipe_show = 0, MEP_InsShow = 1, MEP_cline_show_3D = 0, gs_detlevel_3D = `Детальный`
+ENDIF
+
+
+END
+
+10:
+		DIM MatrixT[2][2]
+
+		MatrixT[1][1] = MEP_Position[2][1]
+		MatrixT[1][2] = -MEP_Position[2][2]
+
+		MatrixT[2][1] = -COS(alpha+90)
+		MatrixT[2][2] = SIN(alpha+90)
+
+		! --- Input Coordinates
+
+		Coordinates = 1
+
+		DIM inCoords[10][2]
+
+			inCoords[1][1] = MEP_Position[3][1]
+			inCoords[1][2] = MEP_Position[3][2]
+
+		! --- the Matrix Operation, what makes the Output-Coordinates
+
+		DIM outCoords[10][2]
+		cnum = 1
+		outCoords[cnum][1] = inCoords[cnum][1]*MatrixT[1][1]+inCoords[cnum][2]*MatrixT[2][1]
+		outCoords[cnum][2] = inCoords[cnum][1]*MatrixT[1][2]+inCoords[cnum][2]*MatrixT[2][2]
+RETURN
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! MEP_m_Pipe_Bend
+! Zsolt Feke/2007
+
+
+EPS = 0.00001
+
+IF gs_detlevel_3D = `Детальный` THEN res = 24
+IF gs_detlevel_3D = `Простой` THEN res = 8
+IF gs_detlevel_3D = `Откл.` THEN res = 24
+
+bendAngle = ABS(MEP_BendAngle)
+
+pipeDiameterA		= MEP_NumConnectionData[1][12]
+connectorDiameterA	= MEP_NumConnectionData[1][15]
+IF connectorDiameterA < pipeDiameterA THEN connectorDiameterA = pipeDiameterA
+connectorWidthA		= MEP_NumConnectionData[1][17]
+connectedA			= MEP_NumConnectionData[1][18]
+connectionSexA		= MEP_NumConnectionData[1][20]
+connectionStyleA	= gs_AddConnections[1][1]
+
+!!connectorWidthA		= 0
+
+!!connectedA = 0
+!!connectionStyleA	= 1
+!!connectionSexA		= 2
+
+
+pipeDiameterB		= MEP_NumConnectionData[2][12]
+connectorDiameterB	= MEP_NumConnectionData[2][15]
+IF connectorDiameterB < pipeDiameterB THEN connectorDiameterB = pipeDiameterB
+connectorWidthB		= MEP_NumConnectionData[2][17]
+connectedB			= MEP_NumConnectionData[2][18]
+connectionSexB		= MEP_NumConnectionData[2][20]
+connectionStyleB	= gs_AddConnections[2][1]
+
+!!connectedB = 0
+!!connectionStyleB	= 2
+!!connectionSexB		= 2
+
+flangeA = 1
+IF connectorWidthA < EPS OR ABS(gs_AddConnections[1][1] - 1) < EPS THEN
+	flangeA = 0
+	connectorWidthA = 0
+ENDIF
+cutbackA = connectorWidthA
+cutbackCLA = connectorWidthA*(ABS(connectionStyleA-3) < EPS AND ABS(connectionSexA-2) < EPS AND ABS(connectedA-1) < EPS)
+cutbackIA = connectorWidthA*(ABS(connectionStyleA-3) < EPS AND ABS(connectionSexA-1) < EPS)
+IF ABS(connectionStyleA-3) < EPS AND ABS(connectionSexA-1) < EPS THEN
+	flangeA = 0
+
+	IF GLOB_CONTEXT = 5 OR ABS(connectedA) < EPS THEN
+		cutbackA = 0
+		extendA = 1
+	ENDIF
+ENDIF
+edgeVisibleA = 1
+IF flangeA THEN
+	edgeVisibleA = 0
+	cutbackA = 0
+ENDIF
+
+flangeB = 1
+IF connectorWidthB < EPS OR ABS(gs_AddConnections[2][1] - 1) < EPS THEN
+	flangeB = 0
+	connectorWidthB = 0
+ENDIF
+cutbackB = connectorWidthB
+cutbackCLB = connectorWidthB*(ABS(connectionStyleB-3) < EPS AND ABS(connectionSexB-2) < EPS AND ABS(connectedB-1) < EPS)
+cutbackIB = connectorWidthB*(ABS(connectionStyleB-3) < EPS AND ABS(connectionSexB-1) < EPS)
+IF ABS(connectionStyleB-3) < EPS AND ABS(connectionSexB-1) < EPS THEN
+	flangeB = 0
+	IF GLOB_CONTEXT = 5 OR ABS(connectedB) < EPS THEN
+		cutbackB = 0
+		extendB = 1
+	ENDIF
+ENDIF
+edgeVisibleB = 1
+IF flangeB THEN
+	edgeVisibleB = 0
+	cutbackB = 0
+ENDIF
+
+
+						! ---------------- !
+						! --- Z vector --- !
+						! ---------------- !
+
+dZx = -MEP_Position[3][2]*MEP_Position[2][3]+MEP_Position[3][3]*MEP_Position[2][2]
+dZy = -MEP_Position[3][3]*MEP_Position[2][1]+MEP_Position[3][1]*MEP_Position[2][3]
+dZz = -MEP_Position[3][1]*MEP_Position[2][2]+MEP_Position[3][2]*MEP_Position[2][1]
+
+
+						! ------------------------ !
+						! --- 2 points of pipe --- !
+						! ------------------------ !
+
+! --- x,y,z coordinates of 1st point ---
+
+PointAX = cutbackCLA
+PointAY = 0
+PointAZ = 0
+
+! --- x,y,z coordinates of middle point ---
+
+PointMX = connectorWidthA+MEP_BendRadius*(TAN(bendAngle/2))
+PointMY = 0
+PointMZ = 0
+
+! --- x,y,z coordinates of 2nd point ---
+
+PointBX = connectorWidthA+MEP_BendRadius*SIN(bendAngle)+(connectorWidthB-cutbackCLB)*COS(bendAngle)
+PointBY = MEP_BendRadius-MEP_BendRadius*COS(bendAngle)+(connectorWidthB-cutbackCLB)*SIN(bendAngle)
+PointBZ = 0
+
+vectorX = COS(bendAngle)
+vectorY = SIN(bendAngle)
+vectorZ = 0
+
+
+						! ------------------- !
+						! --- coordinates --- !
+						! ------------------- !
+
+! --- Building of Transformational Matrix
+
+DIM MatrixT[3][3]
+
+MatrixT[1][1] = MEP_Position[2][1]
+MatrixT[1][2] = MEP_Position[2][2]
+MatrixT[1][3] = MEP_Position[2][3]
+
+MatrixT[2][1] = MEP_Position[3][1]
+MatrixT[2][2] = MEP_Position[3][2]
+MatrixT[2][3] = MEP_Position[3][3]
+
+MatrixT[3][1] = dZx
+MatrixT[3][2] = dZy
+MatrixT[3][3] = dZz
+
+
+! --- Input Coordinates
+
+pnum = 10
+
+PUT PointAX, PointAY, PointAZ
+PUT PointMX, PointMY, PointMZ
+PUT PointBX, PointBY, PointBZ
+alpha = 0: alpha_i = bendAngle/(pnum-1)
+FOR i = 1 TO pnum
+	PUT connectorWidthA+MEP_BendRadius*SIN(alpha), MEP_BendRadius-MEP_BendRadius*COS(alpha), 0
+	alpha = alpha + alpha_i
+NEXT i
+PUT vectorX, vectorY, vectorZ
+
+Coordinates = NSP/3
+
+DIM inCoords[20][3]
+
+FOR cnum = 1 TO Coordinates
+	inCoords[cnum][1] = GET(1)
+	inCoords[cnum][2] = GET(1)
+	inCoords[cnum][3] = GET(1)
+NEXT cnum
+
+
+! --- the Matrix Operation, what makes the Output-Coordinates
+
+DIM outCoords[20][3]
+
+FOR cnum = 1 TO Coordinates
+	outCoords[cnum][1] = inCoords[cnum][1]*MatrixT[1][1]+inCoords[cnum][2]*MatrixT[2][1]+inCoords[cnum][3]*MatrixT[3][1]
+	outCoords[cnum][2] = inCoords[cnum][1]*MatrixT[1][2]+inCoords[cnum][2]*MatrixT[2][2]+inCoords[cnum][3]*MatrixT[3][2]
+	outCoords[cnum][3] = inCoords[cnum][1]*MatrixT[1][3]+inCoords[cnum][2]*MatrixT[2][3]+inCoords[cnum][3]*MatrixT[3][3]
+NEXT cnum
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! MEP_m_Pipe_Bend
+! Zsolt Feke/2007
+
+
+VALUES "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Show 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="MEP_BendRadius">
+			<Description><![CDATA["Bend Radius"]]></Description>
+			<Value>0.3</Value>
+		</Length>
+		<Angle Name="MEP_BendAngle">
+			<Description><![CDATA["Bend Angle"]]></Description>
+			<Value>90</Value>
+		</Angle>
+		<Boolean Name="MEP_InsShow">
+			<Description><![CDATA["Show Insulation"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="MEP_InsThickness">
+			<Description><![CDATA["Insulation Thickness"]]></Description>
+			<Value>0.1</Value>
+		</Length>
+		<Boolean Name="showHtps">
+			<Description><![CDATA["Show Hotspots"]]></Description>
+			<Value>1</Value>
+		</Boolean>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D Representation"]]></Description>
+		</Title>
+		<Boolean Name="MEP_cline_show">
+			<Description><![CDATA["Show Centerline"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<LineType Name="MEP_cline_type">
+			<Description><![CDATA["Centerline Line Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="MEP_cline_pen">
+			<Description><![CDATA["Centerline Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</PenColor>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Contour Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>7</Value>
+		</PenColor>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>91</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Fill Background Pen"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>91</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Fill Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>64</Value>
+		</FillPattern>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+		</Title>
+		<String Name="gs_detlevel_3D">
+			<Description><![CDATA["3D model"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Детальный"]]></Value>
+		</String>
+		<Boolean Name="pipe_show">
+			<Description><![CDATA["Show Pipe"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="MEP_cline_show_3D">
+			<Description><![CDATA["Show Centerline in 3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Material Name="gs_PipeMat">
+			<Description><![CDATA["Pipe Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>11</Value>
+		</Material>
+		<Material Name="gs_InsMat">
+			<Description><![CDATA["Insulation Surface"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>6</Value>
+		</Material>
+		<Length Name="MEP_Position">
+			<Description><![CDATA["Position"]]></Description>
+			<ArrayValues FirstDimension="3" SecondDimension="3">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="1" Row="2">1</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="1" Row="3">0</AVal>
+				<AVal Column="2" Row="3">1</AVal>
+				<AVal Column="3" Row="3">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="MEP_NumConnectionData">
+			<Description><![CDATA[""]]></Description>
+			<ArrayValues FirstDimension="2" SecondDimension="25">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">0</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">0</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0.3</AVal>
+				<AVal Column="13" Row="1">0</AVal>
+				<AVal Column="14" Row="1">0</AVal>
+				<AVal Column="15" Row="1">0.45</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0.15</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">0</AVal>
+				<AVal Column="20" Row="1">2</AVal>
+				<AVal Column="21" Row="1">0</AVal>
+				<AVal Column="22" Row="1">0</AVal>
+				<AVal Column="23" Row="1">0</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="1" Row="2">0</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="4" Row="2">0</AVal>
+				<AVal Column="5" Row="2">0</AVal>
+				<AVal Column="6" Row="2">0</AVal>
+				<AVal Column="7" Row="2">0</AVal>
+				<AVal Column="8" Row="2">0</AVal>
+				<AVal Column="9" Row="2">0</AVal>
+				<AVal Column="10" Row="2">0</AVal>
+				<AVal Column="11" Row="2">0</AVal>
+				<AVal Column="12" Row="2">0.3</AVal>
+				<AVal Column="13" Row="2">0</AVal>
+				<AVal Column="14" Row="2">0</AVal>
+				<AVal Column="15" Row="2">0.35</AVal>
+				<AVal Column="16" Row="2">0</AVal>
+				<AVal Column="17" Row="2">0.15</AVal>
+				<AVal Column="18" Row="2">0</AVal>
+				<AVal Column="19" Row="2">0</AVal>
+				<AVal Column="20" Row="2">2</AVal>
+				<AVal Column="21" Row="2">0</AVal>
+				<AVal Column="22" Row="2">0</AVal>
+				<AVal Column="23" Row="2">0</AVal>
+				<AVal Column="24" Row="2">0</AVal>
+				<AVal Column="25" Row="2">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="gs_AddConnections">
+			<Description><![CDATA[""]]></Description>
+			<ArrayValues FirstDimension="2" SecondDimension="2">
+				<AVal Column="1" Row="1">2</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="1" Row="2">2</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Boolean Name="gs_EdgeOnEnds">
+			<Description><![CDATA["Edge on Ends"]]></Description>
+			<ArrayValues FirstDimension="2" SecondDimension="0">
+				<AVal Row="1">1</AVal>
+				<AVal Row="2">1</AVal>
+			</ArrayValues>
+		</Boolean>
+	</Parameters>
+</ParamSection>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+</CalledMacros>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

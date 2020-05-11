@@ -1,0 +1,4188 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="6C39062C-7C01-48D2-BB3E-AB635C1720BD" MigrationValue="Normal" Owner="1196638531" Signature="776753997" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>B176ABF1-5813-478F-926B-28EE7C5DC1F7</MainGUID>
+	<MainGUID>4FD10D67-2F29-4844-A65A-6597589B0CB5</MainGUID>
+	<MainGUID>BDB8C3EE-4019-46C8-91D0-7A8DE0A5EC6D</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! Functions:
+! - Offered Tools: all
+! - Content: All
+! - Size: paper size
+! ==============================================================================
+_isPreview = (GLOB_CONTEXT = 5)
+_paperToModel = GLOB_SCALE/1000
+
+! resizing paper size parameters values to model length
+widthTextBoxPrefix_mm	= widthTextBoxPrefix_mm * _paperToModel
+widthTextBoxContent_mm	= widthTextBoxContent_mm * _paperToModel
+
+gosub "install_label_position"
+
+gosub "collect_content"
+
+gosub "position_and_draw_table"
+
+! ==============================================================================
+END	!END	!END	!END	!END	!END	!END	!END	!END	!END	!END
+! ==============================================================================
+
+! ==============================================================================
+"install_label_position":
+! ------------------------------------------------------------------------------
+! Label positioning - global behavior for Table form Labels
+! - origin is where AC gives, the table begins with top left anchor 
+! - orientation is rotated with the parent structure by default
+! - without AC Arrow
+! 		- the origin is at the arrow peak
+! 		- rotating with parent elem direction
+! 		- Reference Point is cordinated by user
+! - with AC Arrow
+!		- the origin is at the boundary
+!		- handling of rotation is belongs to AC (AC_CustomReadabilty OFF)
+!		- Reference Point is cordinated at Pointer tabpage
+!
+! LABEL_POSITION 	- position of the label
+! 					- array[3][2] containing the coordinates of the 3 points defining the label position 
+!
+! - the other transformations live in the label_form_macro
+! ==============================================================================
+
+	nTrans = 0
+
+	if LABEL_CUSTOM_ARROW then
+
+		add2 	LABEL_POSITION [2][1]	+	LABEL_POSITION [3][1],
+				LABEL_POSITION [2][2]	+	LABEL_POSITION [3][2]
+
+	endif
+
+return
+
+! ==============================================================================
+"collect_content":
+! ------------------------------------------------------------------------------
+! ==============================================================================
+	nTrans = 0
+
+	_nRowLabel = 0
+	dim _sRowsOfLabel[][]
+		_sRowsOfLabel[1][1] = ""
+	dim _sNameOfRow[]
+		_sNameOfRow[1] = ""
+	dim _sPrefixStrings[]
+		_sPrefixStrings[1] = ""
+	dim _sContentStrings[][]
+		_sContentStrings[1][1] = ""
+
+	dim _iUnitLocal[]
+	dim _iSelectedContent[]
+	dim _sContentTypeNames[]
+		for iIni = 1 to _maxContentValues
+			_iUnitLocal[iIni] 			= 0	! None
+			_iSelectedContent[iIni] 	= 0	! None
+			_sContentTypeNames[iIni] 	= ""
+		next iIni
+
+	_iUnitLocal[CONTENT_ELEV] 	= iWorkUnitLinear
+	_iUnitLocal[CONTENT_DIM] 	= iWorkUnitLinear
+	_iUnitLocal[CONTENT_SURF] 	= iWorkUnitArea
+	_iUnitLocal[CONTENT_AREA] 	= iWorkUnitArea
+	_iUnitLocal[CONTENT_VOL] 	= iWorkUnitVolume
+	_iUnitLocal[CONTENT_SKIN] 	= iWorkUnitLinear
+
+	_sContentTypeNames[CONTENT_DIM] 			= sDescriptionDimension
+	_sContentTypeNames[CONTENT_VOL] 			= sDescriptionVolume
+	_sContentTypeNames[CONTENT_SURF] 			= sDescriptionSurfaceArea
+	_sContentTypeNames[CONTENT_ID] 				= sDescriptionID
+	_sContentTypeNames[CONTENT_ELEMENT_NAME] 	= sDescriptionElementName
+	_sContentTypeNames[CONTENT_STRUCT_NAME] 	= sDescriptionStructuralName
+	_sContentTypeNames[CONTENT_CUSTOM] 			= sDescriptionCustomText
+	_sContentTypeNames[CONTENT_ELEV] 			= sDescriptionElevation
+	_sContentTypeNames[CONTENT_SKIN] 			= sDescriptionSkinList
+	_sContentTypeNames[CONTENT_MATERIAL] 		= sDescriptionSurface
+	_sContentTypeNames[CONTENT_AREA] 			= sDescriptionProjectedArea
+
+
+	iRow2D = 1
+	for iRow = 1 to vardim1(functionOrder)
+		if _iDisplayContentGroup2D[functionOrder[iRow]]  = VALID then
+			_iSelectedContent[iRow2D] = functionOrder[iRow]
+			iRow2D = iRow2D + 1
+		endif
+	next iRow
+
+
+	gosub "call_general_label_macro"	! returned text array, _nRowLabel, _sRowsOfLabel
+	_sPrefixStrings = _sNameOfRow
+	_sContentStrings = _sRowsOfLabel
+	if _nRowLabel = 0 then
+		_sContentStrings[1][1] = `<нет содержимого>`
+	endif
+return
+
+! ==============================================================================
+"position_and_draw_table":
+! ------------------------------------------------------------------------------
+! Text Style tabpage:
+! LABEL_CUSTOM_ARROW 		- use symbol arrow option
+!								- on/off 1 if the Use symbol arrow checkbox is checked, 0 otherwise
+! LABEL_ARROW_LINETYPE 		- line type of the line of the arrow
+! LABEL_ARROW_PEN 			- pen of the arrow
+! LABEL_FONT_NAME 			- font name
+! LABEL_TEXT_SIZE			- text size
+! LABEL_TEXT_PEN 			- pen of the text
+! LABEL_TEXT_BG_PEN			- text box background pen
+! 								- 0 if opaque is off, the background pen otherwise
+! LABEL_FONT_STYLE2 		- font style in the settings dialog box
+!								- 0 - normal, otherwise j1 + 2*j2 + 4*j3 + 32*j6 + 64*j7 + 128*j8, j1 - bold, j2 - italic, j3 - underline, j6 - superscript, j7 - subscript, j8 - strikethrough 
+!								- there is strikethrough and this global works well with define style{2} !
+! LABEL_FRAME_ON			- label frame on/off 1 if the label frame is checked, 0 otherwise
+! LABEL_ROTANGLE 			- rotation angle using by AC (this rotation is not from GDL)
+! LABEL_TEXT_ALIGN			- text alignment for full table
+!								- 1 - left aligned, 2 - center aligned, 3 - right aligned, 4 - full justified
+! LABEL_TEXT_LEADING 		- line spacing factor
+! LABEL_TEXT_WIDTH_FACT 	- width factor
+! LABEL_TEXT_CHARSPACE_FACT - spacing factor
+! ==============================================================================
+
+	_angleParentDirection = 0
+	if not(_isPreview) then
+		_angleParentDirection = LABEL_ASSOC_ELEM_ORIENTATION
+	endif
+
+	call "label_table_form" parameters AC_CustomReadability = AC_CustomReadability,
+		bUseBuiltinPointer			= not(LABEL_CUSTOM_ARROW),
+		bAlwaysReadable				= LABEL_ALWAYS_READABLE,
+
+		anglePosition 				= LABEL_ROTANGLE,
+		angleParentPosition			= _angleParentDirection,
+		bUsePrefixColumn			= bUsePrefixColumn,
+		bUseContentColumn			= 1,
+		sPrefixStrings				= _sPrefixStrings,
+		sContentStrings				= _sContentStrings,
+		bWrapText					= LABEL_TEXT_WRAP,
+		widthTextBoxPrefix_mm		= widthTextBoxPrefix_mm,
+		widthTextBoxContent_mm		= widthTextBoxContent_mm,
+		bEnableCustomHeaderStyle 	= 0,
+		bUseCustomHeaderStyle		= 0,
+		xFirstIndentParagraph		= 0,
+		xLeftIndentParagraph		= 0,
+		xRightIndentParagraph		= 0,
+		xTabPositionParagraph		= 0,
+		widthFactorTextBlock		= LABEL_TEXT_WIDTH_FACT,
+		charspaceFactorTextBlock	= LABEL_TEXT_CHARSPACE_FACT,
+		iFixedHeightTextBlock		= 0,		! fixed_height 	1: the placed TEXTBLOCK will be scale-independent and all specified length type parameters will mean millimeters, !
+				 											!0: the placed TEXTBLOCK will be scale-dependent and all specified length type parameters will mean meters in model space
+		penTextBody					= LABEL_TEXT_PEN,
+		sTypeFontBody				= LABEL_FONT_NAME,
+		iStyleFontBody				= LABEL_FONT_STYLE2,
+		sizeFontBody				= LABEL_TEXT_SIZE,
+		iAlignmentTableColumns		= LABEL_TEXT_ALIGN,			! 0: custom, 1: left aligned, 2: center aligned, 3: right aligned, 4: full justified
+		sizeLeadingBody				= LABEL_TEXT_LEADING,
+		widthTextBoxOffset			= LABEL_FRAME_OFFSET * _paperToModel,
+
+		bShowFill					= 1,
+		filltype					= filltypeBackground,
+		penForeground				= LABEL_TEXT_BG_PEN,
+		penBackground				= LABEL_TEXT_BG_PEN,
+		bShowFrame					= LABEL_FRAME_ON,
+		penFrame					= LABEL_ARROW_PEN,
+		lineTypeFrame				= LABEL_ARROW_LINETYPE,
+		iFrameStyle					= iFrameStyle,
+		iReferencePoint				= iReferencePoint,
+		iLabelOrientation 			= iLabelOrientation
+
+return
+! ==============================================================================
+"call_general_label_macro":
+! ------------------------------------------------------------------------------
+! input: 
+!	TODO
+!	
+! input variable
+!	TODO
+!
+! output variable:
+!	TODO
+! ==============================================================================
+	_nRowLabel = 0
+	dim tempsRowsOfLabel[]
+		tempsRowsOfLabel[1] = ""
+
+	call "label_content_macro" parameters iSelectedContent 	= _iSelectedContent,
+			iContentOrderDim		= iContentOrderDim,
+			iUnitLocal				= _iUnitLocal,
+			bDecimalOptions			= 1,
+			iWorkUnitLinearDecimal	= iWorkUnitLinearDecimal,
+			iWorkUnitAreaDecimal	= iWorkUnitAreaDecimal,
+			iWorkUnitVolumeDecimal	= iWorkUnitVolumeDecimal,
+
+			bUsePrefixColumn		= bUsePrefixColumn,
+			sContentTypeNames		= _sContentTypeNames,
+			bUseInSingleRank		= 0,
+
+			bShow2D = 0,
+
+			! for quantity_formatter_macro
+			bShowSuperScript		= 1,
+			bShowUnit 				= bShowUnit,
+
+			! for Content ID
+			iIDText					= iIDText,
+			sIDTextCustom			= sIDTextCustom,
+			sPrefixID				= "",
+			sSuffixID				= "",
+
+			! for Custom Text
+			sTextDataCustom			= sCustomText,
+
+			! for Skin List
+			bShowSkinThickness		= 1,
+			bChangeSkinDirection	= bChangeSkinDirection,
+			iTypeSkinContent		= iTypeSkinContent,
+			dataCustomSkinRow		= dataCustomSkinRow,
+			bCustomListContent		= bCustomListContent,
+
+			! for Element Name
+			sPrefixName				= "",
+			sSuffixName				= "",
+
+			! for Elevation
+			bShowElevTop			= bShowElevTop,
+			bShowElevBottom			= bShowElevBottom,
+			strPrefixElevTop		= strPrefixElevTop,
+			strSuffixElevTop		= strSuffixElevTop,
+			strPrefixElevBottom		= strPrefixElevBottom,
+			strSuffixElevBottom		= strSuffixElevBottom,
+			iElevationTopMeasuredTo	= iElevationTopMeasuredTo,
+			iElevationBottomMeasuredTo	= iElevationBottomMeasuredTo,
+			iRefStory				= iRefStory,
+
+			! for Content Dimension
+			bShowWidth				= bShowWidth,
+			bShowThickness			= bShowThickness,
+			bShowLength				= bShowLength,
+			bShowHeight				= bShowHeight,
+			strSeparator			= sSeparator,
+
+			! for Content Surface
+			bAddBottomSurface		= bAddBottomSurface,
+			bAddEdgeSurface			= bAddEdgeSurface,
+			bAddTopSurface			= bAddTopSurface,
+			bAddSideSurface			= bAddSideSurface,
+			bAddOppSideSurface		= bAddOppSideSurface,
+			bAddRefSideSurface		= bAddRefSideSurface,
+			bMorphSurfacePlacehold	= bMorphSurfacePlacehold,
+
+			! for Surface Material
+			iSurfaceToDisplay		= iSurfaceToDisplay,
+			sPrefixSurface			= sPrefixSurface,
+			sSuffixSurface			= sSuffixSurface,
+			sCustomSurface			= sCustomSurface,
+
+		 returned_parameters _nRowLabel, tempsRowsOfLabel
+
+		! making from one dimensioned array to two dimensioned
+
+		dim _sRowsOfLabel[][]
+			_sRowsOfLabel[1][1] = ""
+		dim _sNameOfRow[]
+			_sNameOfRow[1] = ""
+
+		if bUsePrefixColumn then
+			dim _temp[]
+			_temp = tempsRowsOfLabel
+			_numTemp = vardim1(tempsRowsOfLabel)
+			for i = 1 to _nRowLabel
+				_sNameOfRow[i] = _temp[i]
+			next i
+			dim tempsRowsOfLabel[]
+			idx = 1
+			for i = _nRowLabel+1 to _numTemp
+				tempsRowsOfLabel[idx] = _temp[i]
+				idx = idx + 1
+			next i			
+		endif
+		idx = 0
+		for i = 1 to _nRowLabel
+			for j = 1 to 30
+				_sRowsOfLabel[i][j] = tempsRowsOfLabel[idx + j]
+			next j
+			idx = idx + 30
+		next i
+
+
+return
+
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+EPS = 0.0001
+
+dim _stLabelOrientation[4]
+	_stLabelOrientation[1] = `Параллельно`
+	_stLabelOrientation[2] = `Перпендикулярно`
+	_stLabelOrientation[3] = `Горизонтально`
+	_stLabelOrientation[4] = `Вертикально`
+
+ORIENTATION_PARALLEL			= 1
+ORIENTATION_PERPENDICULAR		= 2
+ORIENTATION_HORIZONTAL			= 3
+ORIENTATION_VERTICAL			= 4
+
+
+dim _stRefPoint[9]
+	_stRefPoint[1] = `Верхняя Левая`
+	_stRefPoint[2] = `Верх Центр`
+	_stRefPoint[3] = `Верхняя Правая`
+	_stRefPoint[4] = `Средняя Левая`
+	_stRefPoint[5] = `Середина Центр`
+	_stRefPoint[6] = `Средняя Правая`
+	_stRefPoint[7] = `Нижняя Левая`
+	_stRefPoint[8] = `Низ Центр`
+	_stRefPoint[9] = `Нижняя Правая`
+
+dim _valuesRefPoint[9]
+for i = 1 to 9
+	_valuesRefPoint[i] = i
+next i
+
+dim _stValueSumSurface[2]
+	_stValueSumSurface[1] = `Площадь Всех Поверхностей`
+	_stValueSumSurface[2] = `Сумма Выбранных Поверхностей`
+
+SUMSURFACE_ALL = 1
+SUMSURFACE_SELECTED = 2
+
+dim stUnitFormats[6]
+	stUnitFormats[1] = `мм`
+	stUnitFormats[2] = `см`
+	stUnitFormats[3] = `дм`
+	stUnitFormats[4] = `м`
+	stUnitFormats[5] = `дюйм`
+	stUnitFormats[6] = `по Параметрам Проекта`
+
+dim stUnitFormatsVol[9]
+	stUnitFormatsVol[1] = `куб м`
+	stUnitFormatsVol[2] = `литр`
+	stUnitFormatsVol[3] = `куб см`
+	stUnitFormatsVol[4] = `куб мм`
+	stUnitFormatsVol[5] = `куб фут`
+	stUnitFormatsVol[6] = `куб дюйм`
+	stUnitFormatsVol[7] = `куб ярд`
+	stUnitFormatsVol[8] = `галлон`
+	stUnitFormatsVol[9] = `по Параметрам Проекта`
+
+dim stUnitFormatsArea[6]
+	stUnitFormatsArea[1] = `кв м`
+	stUnitFormatsArea[2] = `кв см`
+	stUnitFormatsArea[3] = `кв мм`
+	stUnitFormatsArea[4] = `кв фут`
+	stUnitFormatsArea[5] = `кв дюйм`
+	stUnitFormatsArea[6] = `по Параметрам Проекта`
+
+dim _stRefStory[2]
+	_stRefStory[1] = `Текущий Этаж`
+	_stRefStory[2] = `Начало Проекта`
+
+! ---- Values for iRefStory
+REF_STORY_CURR		= 1
+REF_STORY_PROJECT	= 2
+
+
+dim _sElevationMeasuredTo[]
+	_sElevationMeasuredTo[1] = `Отделки`
+	_sElevationMeasuredTo[2] = `Ядра`
+
+ELEV_MESURED_FINISH = 1
+ELEV_MESURED_CORE	= 2
+
+dim sIDTextValues [4]
+	sIDTextValues[1] = `Компактный ID Элемента`
+	sIDTextValues[2] = `Специальный`
+	sIDTextValues[3] = `Полный ID Элемента`
+	sIDTextValues[4] = `Основной ID`
+
+IDVALUE_IDNUMBER	= 1
+IDVALUE_CUSTOMTEXT	= 2
+IDVALUE_FULLIDNUM	= 3
+IDVALUE_MASTERID	= 4
+
+dim _stTypeSkinContentValues[5]
+	_stTypeSkinContentValues[1] = `Название Строительного Материала`
+	_stTypeSkinContentValues[2] = `Название Штриховки Сечения`
+	_stTypeSkinContentValues[3] = `ID Строительного Материала`
+	_stTypeSkinContentValues[4] = `Производитель Строительного Материала`
+	_stTypeSkinContentValues[5] = `Описание Строительного Материала`
+
+! iTypeSkinContent
+CONTENT_BUILDING_MATERIAL		= 1
+CONTENT_CUT_FILL				= 2
+CONTENT_BUILDING_ID				= 3
+CONTENT_BUILDING_MANUFACTURER	= 4
+CONTENT_BUILDING_DESCRIPTION	= 5
+
+! --------------------------------------------------------------------------
+! For Content Dimension
+! --------------------------------------------------------------------------
+
+! iContentOrderDim
+DIM_WDT	= 1
+DIM_LGT	= 2
+DIM_THK	= 3
+DIM_HGT	= 4
+
+_maxDimensionNum = 4
+
+dim	_stDimContentDescription[4]
+	_stDimContentDescription[1] = `Ширина`
+	_stDimContentDescription[2] = `Ширина`
+	_stDimContentDescription[3] = `Толщина`
+	_stDimContentDescription[4] = `Высота`
+
+! ------------------------------------------------------------------------------
+! Unit Types - values for iUnitLocal parameter - label_content_macro
+! ------------------------------------------------------------------------------
+
+DIMUNIT_MM			= 11  
+DIMUNIT_CM			= 12
+DIMUNIT_METER		= 13
+DIMUNIT_INCH		= 14
+DIMUNIT_DM			= 15
+DIMUNIT_PROJECT		= 10
+
+SURFUNIT_SQM		= 21
+SURFUNIT_SQCM		= 22
+SURFUNIT_SQMM		= 23
+SURFUNIT_SQFT		= 24
+SURFUNIT_SQINCH		= 25
+SURFUNIT_PROJECT	= 20
+
+VOLUNIT_CM			= 31
+VOLUNIT_L			= 32
+VOLUNIT_CCM			= 33
+VOLUNIT_CMM			= 34
+VOLUNIT_CFEET		= 35
+VOLUNIT_CINCH		= 36
+VOLUNIT_CYARD		= 37
+VOLUNIT_GAL			= 38
+VOLUNIT_PROJECT		= 30
+
+! ------------------------------------------------------------------------------
+! Content Types - label_content_macro
+! ------------------------------------------------------------------------------
+
+CONTENT_NONE		= 1
+CONTENT_DIM 		= 2			
+CONTENT_VOL			= 3
+CONTENT_SURF		= 4
+CONTENT_ID			= 5
+CONTENT_ELEMENT_NAME= 6
+CONTENT_STRUCT_NAME	= 7
+CONTENT_CUSTOM		= 8
+CONTENT_ELEV		= 9
+CONTENT_SKIN		= 10
+CONTENT_MATERIAL	= 11
+CONTENT_AREA		= 12
+
+_maxContentValues = 12
+_maxFunctionOrder = 11
+
+dim _stContentDescription[12]
+	_stContentDescription[1] = `Нет`
+	_stContentDescription[2] = `Размер`
+	_stContentDescription[3] = `Объем`
+	_stContentDescription[4] = `Площадь Поверхности`
+	_stContentDescription[5] = `ID`
+	_stContentDescription[6] = `Имя`
+	_stContentDescription[7] = `Состав/Профиль/Материал`
+	_stContentDescription[8] = `Специальный Текст`
+	_stContentDescription[9] = `Возвышение`
+	_stContentDescription[10] = `Данные Слоев`
+	_stContentDescription[11] = `Покрытие`
+	_stContentDescription[12] = `Площадь Проекции`
+
+dim _bShowContent[12]
+	_bShowContent[CONTENT_NONE] 			= 0
+	_bShowContent[CONTENT_DIM] 				= bShowLinearDimension
+	_bShowContent[CONTENT_VOL] 				= bShowVolume
+	_bShowContent[CONTENT_SURF] 			= bShowSurfaceArea
+	_bShowContent[CONTENT_ID] 				= bShowID
+	_bShowContent[CONTENT_ELEMENT_NAME] 	= bShowElementName
+	_bShowContent[CONTENT_STRUCT_NAME] 		= bShowStructuralName
+	_bShowContent[CONTENT_CUSTOM] 			= bShowCustomText
+	_bShowContent[CONTENT_ELEV] 			= bShowElevation
+	_bShowContent[CONTENT_SKIN] 			= bShowSkinList
+	_bShowContent[CONTENT_MATERIAL] 		= bShowSurface
+	_bShowContent[CONTENT_AREA] 			= bShowProjectedArea
+
+! ==============================================================================
+! values for GLOB_ELEM_TYPE
+! ==============================================================================
+ELEM_TYPE_LABEL		= 0
+ELEM_TYPE_OBJECT	= 1
+ELEM_TYPE_LAMP		= 2
+ELEM_TYPE_WINDOW	= 3
+ELEM_TYPE_DOOR		= 4
+ELEM_TYPE_WALL		= 5
+ELEM_TYPE_COLUMN	= 6
+ELEM_TYPE_SLAB		= 7
+ELEM_TYPE_ROOF		= 8
+ELEM_TYPE_FILL		= 9
+ELEM_TYPE_MESH		= 10
+ELEM_TYPE_ZONE		= 11
+ELEM_TYPE_BEAM		= 12
+ELEM_TYPE_CW		= 13
+ELEM_TYPE_CWFRAME	= 14
+ELEM_TYPE_CWPANEL	= 15
+ELEM_TYPE_CWJUNCT	= 16
+ELEM_TYPE_CWACC		= 17
+ELEM_TYPE_SHELL		= 18
+ELEM_TYPE_SKYLIGHT	= 19
+ELEM_TYPE_MORPH		= 20
+
+! ==============================================================================
+! Content by tools
+! ==============================================================================
+
+! ------------------------------------------------------------------------------
+! Initializing Enabling bools
+! ------------------------------------------------------------------------------
+
+
+ID_SHOW				= 1
+NAME_SHOW			= 2
+ELEV_SHOW			= 3
+ELEV_TOP			= 4
+ELEV_BOTT			= 5
+DIM_SHOW			= 6
+DIM_WIDTH			= 7
+DIM_LENGTH			= 8
+DIM_HEIGHT			= 9
+DIM_THICK			= 10
+SURF_SHOW			= 11
+SURF_TOP			= 12
+SURF_BOTTOM			= 13
+SURF_SIDE			= 14
+SURF_EDGE			= 15
+SURF_REFSIDE		= 16
+SURF_OPSIDE			= 17
+AREA_SHOW			= 18
+VOLUME_SHOW			= 19
+SKIN_SHOW			= 20
+STRUCT_NAME_SHOW	= 21
+MATERIAL_SHOW		= 22
+CUSTOM_SHOW			= 23
+
+_iParentTool = GLOB_ELEM_TYPE + 1	! because Label tool num is zero
+_numTool	= 21
+_numContentParameter = 23
+
+dim _iEnabledContentGroup[21][12]
+! - contents after label_content_macro (1 - > 12)
+	for iTool = 1 to _numTool
+		for iParam = 1 to _maxContentValues
+			_iEnabledContentGroup[iTool][iParam] = 0
+		next iParam
+	next iTool
+
+dim _iEnabledContentParameter[21][23]
+	for iTool = 1 to _numTool
+		for iParam = 1 to _numContentParameter
+			_iEnabledContentParameter[iTool][iParam] = 0
+		next iParam
+	next iTool
+
+dim _bToolFilter[]
+_bToolFilter[ELEM_TYPE_LABEL	+1]		= bUseWithLabel
+_bToolFilter[ELEM_TYPE_OBJECT	+1]		= bUseWithObject
+_bToolFilter[ELEM_TYPE_LAMP		+1]		= bUseWithLamp
+_bToolFilter[ELEM_TYPE_WINDOW	+1]		= bUseWithWindow
+_bToolFilter[ELEM_TYPE_DOOR		+1]		= bUseWithDoor
+_bToolFilter[ELEM_TYPE_WALL		+1]		= bUseWithWall
+_bToolFilter[ELEM_TYPE_COLUMN	+1]		= bUseWithColumn
+_bToolFilter[ELEM_TYPE_SLAB		+1]		= bUseWithSlab
+_bToolFilter[ELEM_TYPE_ROOF		+1]		= bUseWithRoof
+_bToolFilter[ELEM_TYPE_FILL		+1]		= bUseWithFill
+_bToolFilter[ELEM_TYPE_MESH		+1]		= bUseWithMesh
+_bToolFilter[ELEM_TYPE_ZONE		+1]		= 0
+_bToolFilter[ELEM_TYPE_BEAM		+1]		= bUseWithBeam
+_bToolFilter[ELEM_TYPE_CW		+1]		= bUseWithCW
+_bToolFilter[ELEM_TYPE_CWFRAME	+1]		= bUseWithCWMembers
+_bToolFilter[ELEM_TYPE_CWPANEL	+1]		= bUseWithCWMembers
+_bToolFilter[ELEM_TYPE_CWJUNCT	+1]		= bUseWithCWMembers
+_bToolFilter[ELEM_TYPE_CWACC	+1]		= bUseWithCWMembers
+_bToolFilter[ELEM_TYPE_SHELL	+1]		= bUseWithShell
+_bToolFilter[ELEM_TYPE_SKYLIGHT+1]		= bUseWithSkylight
+_bToolFilter[ELEM_TYPE_MORPH	+1]		= bUseWithMorph
+
+INVALID		= 0
+VALID		= 1	! valid
+RELATIVE	= 2 ! valid only at UI  but there is another invalid tool (need relativ complement sign to display)
+
+
+for iTool = 1 to _numTool
+
+	! ID ------------------------------------------------------------------------------
+
+	_iEnabledContentGroup[iTool][CONTENT_ID]			= VALID
+	_iEnabledContentParameter[iTool][ID_SHOW]			= VALID
+
+	! Element Name --------------------------------------------------------------------
+
+	_iEnabledContentGroup[iTool][CONTENT_ELEMENT_NAME]	= VALID
+	_iEnabledContentParameter[iTool][NAME_SHOW]			= VALID
+
+	! Elevation -----------------------------------------------------------------------
+
+	if iTool = (ELEM_TYPE_OBJECT	+1) |\
+		iTool = (ELEM_TYPE_LAMP		+1) |\
+		iTool = (ELEM_TYPE_WINDOW	+1) |\
+		iTool = (ELEM_TYPE_DOOR		+1) |\
+		iTool = (ELEM_TYPE_WALL		+1) |\
+		iTool = (ELEM_TYPE_COLUMN	+1) |\
+		iTool = (ELEM_TYPE_SLAB		+1) |\
+		iTool = (ELEM_TYPE_BEAM		+1) |\
+		iTool = (ELEM_TYPE_CW		+1) then
+		_iEnabledContentGroup[iTool][CONTENT_ELEV]		= VALID
+		_iEnabledContentParameter[iTool][ELEV_SHOW]		= VALID
+		_iEnabledContentParameter[iTool][ELEV_TOP]		= VALID
+		_iEnabledContentParameter[iTool][ELEV_BOTT]		= VALID
+	endif
+
+	! Dimensions ----------------------------------------------------------------------
+
+	if 	iTool <> (ELEM_TYPE_LABEL	+1) &\
+		iTool <> (ELEM_TYPE_MORPH	+1) &\
+		iTool <> (ELEM_TYPE_FILL	+1) then
+		_iEnabledContentGroup[iTool][CONTENT_DIM]		= VALID
+		_iEnabledContentParameter[iTool][DIM_SHOW]		= VALID
+	endif
+
+	if	iTool = (ELEM_TYPE_OBJECT	+1) |\
+		iTool = (ELEM_TYPE_LAMP		+1) |\
+		iTool = (ELEM_TYPE_COLUMN	+1) |\
+		iTool = (ELEM_TYPE_BEAM		+1) |\
+		iTool = (ELEM_TYPE_CWFRAME	+1) |\
+		iTool = (ELEM_TYPE_CWPANEL	+1) |\
+		iTool = (ELEM_TYPE_CWJUNCT	+1) |\
+		iTool = (ELEM_TYPE_CWACC	+1) then
+
+		_iEnabledContentParameter[iTool][DIM_WIDTH]		= VALID
+		_iEnabledContentParameter[iTool][DIM_LENGTH]	= VALID
+		_iEnabledContentParameter[iTool][DIM_HEIGHT]	= VALID
+	endif
+
+	if	iTool = (ELEM_TYPE_WINDOW	+1) |\
+		iTool = (ELEM_TYPE_DOOR		+1) |\
+		iTool = (ELEM_TYPE_SKYLIGHT	+1) then
+		_iEnabledContentParameter[iTool][DIM_WIDTH]		= VALID
+		_iEnabledContentParameter[iTool][DIM_HEIGHT]	= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_WALL	+1) |\
+		iTool = (ELEM_TYPE_CW	+1)  then
+		_iEnabledContentParameter[iTool][DIM_LENGTH]	= VALID
+		_iEnabledContentParameter[iTool][DIM_HEIGHT]	= VALID
+		_iEnabledContentParameter[iTool][DIM_THICK]		= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_SLAB		+1) |\
+		iTool = (ELEM_TYPE_ROOF		+1) |\
+		iTool = (ELEM_TYPE_SHELL	+1) then
+		_iEnabledContentParameter[iTool][DIM_THICK]		= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_MESH		+1) then
+		_iEnabledContentParameter[iTool][DIM_HEIGHT]	= VALID
+	endif
+
+	! Surface Area ----------------------------------------------------------------------
+
+	if iTool = (ELEM_TYPE_WALL		+1)  |\
+		iTool = (ELEM_TYPE_COLUMN	+1)  |\ 
+		iTool = (ELEM_TYPE_SLAB		+1)  |\
+		iTool = (ELEM_TYPE_ROOF		+1)  |\
+		iTool = (ELEM_TYPE_MESH		+1)  |\
+		iTool = (ELEM_TYPE_BEAM		+1)  |\
+		iTool = (ELEM_TYPE_SHELL	+1)  |\
+		iTool = (ELEM_TYPE_MORPH	+1)  |\
+		iTool = (ELEM_TYPE_FILL		+1) then
+		_iEnabledContentGroup[iTool][CONTENT_SURF]		= VALID
+		_iEnabledContentParameter[iTool][SURF_SHOW]		= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_WALL		+1)  |\
+		iTool = (ELEM_TYPE_SHELL	+1)  then
+		_iEnabledContentParameter[iTool][SURF_EDGE]		= VALID
+		_iEnabledContentParameter[iTool][SURF_REFSIDE]	= VALID
+		_iEnabledContentParameter[iTool][SURF_OPSIDE]	= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_COLUMN	+1)  then
+		_iEnabledContentParameter[iTool][SURF_TOP]		= VALID
+		_iEnabledContentParameter[iTool][SURF_BOTTOM]	= VALID
+		_iEnabledContentParameter[iTool][SURF_SIDE]		= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_SLAB		+1)  |\
+		iTool = (ELEM_TYPE_ROOF		+1)  then
+		_iEnabledContentParameter[iTool][SURF_TOP]		= VALID
+		_iEnabledContentParameter[iTool][SURF_BOTTOM]	= VALID
+		_iEnabledContentParameter[iTool][SURF_EDGE]		= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_FILL		+1)  then
+		_iEnabledContentParameter[iTool][SURF_TOP]		= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_BEAM 		+1) then
+		_iEnabledContentParameter[iTool][SURF_TOP]		= VALID
+		_iEnabledContentParameter[iTool][SURF_BOTTOM]	= VALID
+		_iEnabledContentParameter[iTool][SURF_EDGE]		= VALID
+		_iEnabledContentParameter[iTool][SURF_REFSIDE]	= VALID
+		_iEnabledContentParameter[iTool][SURF_OPSIDE]	= VALID
+	endif
+
+	if iTool = (ELEM_TYPE_MESH		+1) then
+		_iEnabledContentParameter[iTool][SURF_TOP]		= VALID
+		_iEnabledContentParameter[iTool][SURF_BOTTOM]	= VALID
+		_iEnabledContentParameter[iTool][SURF_EDGE]		= VALID
+	endif
+
+	! Projected Area ----------------------------------------------------------------------
+
+	if iTool = (ELEM_TYPE_WALL		+1) then
+		_iEnabledContentGroup[iTool][CONTENT_AREA]		= VALID
+		_iEnabledContentParameter[iTool][AREA_SHOW]		= VALID
+	endif
+
+	! Volume ----------------------------------------------------------------------
+
+	if iTool = (ELEM_TYPE_WALL		+1)  |\
+		iTool = (ELEM_TYPE_COLUMN	+1)  |\ 
+		iTool = (ELEM_TYPE_SLAB		+1)  |\
+		iTool = (ELEM_TYPE_ROOF		+1)  |\
+		iTool = (ELEM_TYPE_MESH		+1)  |\
+		iTool = (ELEM_TYPE_BEAM		+1)  |\
+		iTool = (ELEM_TYPE_SHELL	+1)  |\
+		iTool = (ELEM_TYPE_MORPH	+1)  then
+		_iEnabledContentGroup[iTool][CONTENT_VOL]		= VALID
+		_iEnabledContentParameter[iTool][VOLUME_SHOW]	= VALID
+	endif
+
+	! Skin List -----------------------------------------------------------------------
+
+	if iTool = (ELEM_TYPE_LABEL		+1) |\
+		iTool = (ELEM_TYPE_WALL		+1) |\
+		iTool = (ELEM_TYPE_SLAB 	+1) |\
+		iTool = (ELEM_TYPE_ROOF		+1) |\
+		iTool = (ELEM_TYPE_SHELL	+1) |\
+		iTool = (ELEM_TYPE_FILL		+1)  then
+		_iEnabledContentGroup[iTool][CONTENT_SKIN]		= VALID
+		_iEnabledContentParameter[iTool][SKIN_SHOW]		= VALID
+	endif
+
+	! Structure Name ------------------------------------------------------------------
+
+	if 	iTool = (ELEM_TYPE_WALL		+1) |\
+		iTool = (ELEM_TYPE_SLAB		+1) |\
+		iTool = (ELEM_TYPE_ROOF		+1) |\
+		iTool = (ELEM_TYPE_SHELL	+1) |\
+		iTool = (ELEM_TYPE_COLUMN	+1) |\ 
+		iTool = (ELEM_TYPE_BEAM		+1) |\
+		iTool = (ELEM_TYPE_MESH		+1) |\ 
+		iTool = (ELEM_TYPE_MORPH	+1) |\
+		iTool = (ELEM_TYPE_FILL		+1) then
+		_iEnabledContentGroup[iTool][CONTENT_STRUCT_NAME]	= VALID
+		_iEnabledContentParameter[iTool][STRUCT_NAME_SHOW] = VALID
+	endif
+
+	! Surface / Material ------------------------------------------------------------------
+
+	if 	iTool = (ELEM_TYPE_WALL		+1) |\
+		iTool = (ELEM_TYPE_SLAB		+1) |\
+		iTool = (ELEM_TYPE_ROOF		+1) |\
+		iTool = (ELEM_TYPE_SHELL	+1) |\
+		iTool = (ELEM_TYPE_COLUMN	+1) |\ 
+		iTool = (ELEM_TYPE_BEAM		+1) |\
+		iTool = (ELEM_TYPE_MESH		+1) |\ 
+		iTool = (ELEM_TYPE_MORPH	+1) then 
+		_iEnabledContentGroup[iTool][CONTENT_MATERIAL]		= VALID
+		_iEnabledContentParameter[iTool][MATERIAL_SHOW]		= VALID
+	endif
+
+	! Custom Text ---------------------------------------------------------------------
+
+	_iEnabledContentGroup[iTool][CONTENT_CUSTOM]		= VALID
+	_iEnabledContentParameter[iTool][CUSTOM_SHOW]		= VALID
+
+next iTool
+
+
+! ==============================================================================
+! UI Display and Ordering
+! ==============================================================================
+
+EMPTY		= -1
+INVALID		= 0
+VALID		= 1	! valid
+RELATIVE	= 2 ! valid only at UI  but there is another invalid tool (need relativ complement sign to display)
+
+
+dim _iDisplayContentGroupUI[]
+dim _iDisplayContentGroup2D[]
+	for iIni = 1 to _maxContentValues
+		_iDisplayContentGroupUI[iIni] = EMPTY
+		_iDisplayContentGroup2D[iIni] = EMPTY
+	next iIni
+
+for iTool = 1 to _numTool
+	if _bToolFilter[iTool] then
+		for iContent = 1 to _maxContentValues
+			if _iEnabledContentGroup[iTool][iContent] then
+				if _iDisplayContentGroupUI[iContent] = EMPTY then _iDisplayContentGroupUI[iContent] = VALID
+				if _iDisplayContentGroupUI[iContent] = INVALID then _iDisplayContentGroupUI[iContent] = RELATIVE
+			else
+				if _iDisplayContentGroupUI[iContent] = EMPTY then _iDisplayContentGroupUI[iContent] = INVALID
+				if _iDisplayContentGroupUI[iContent] = VALID then _iDisplayContentGroupUI[iContent] = RELATIVE
+			endif
+		next iContent
+	endif
+next iTool
+
+! numbers of UI valid content groups
+_numShownContentGroupUI = 0
+for iContent = 1 to _maxContentValues
+	if _iDisplayContentGroupUI[iContent] > INVALID and _bShowContent[iContent] then
+		_numShownContentGroupUI = _numShownContentGroupUI + 1
+	endif
+next iContent
+
+! numbers of 2D valid content groups depend on parent tool
+for iContent = 1 to _maxContentValues
+	if _iEnabledContentGroup[_iParentTool][iContent] = VALID &\
+		_iDisplayContentGroupUI[iContent] > INVALID &\
+		 _bShowContent[iContent] then
+
+		_iDisplayContentGroup2D[iContent] = VALID
+
+	else
+		_iDisplayContentGroup2D[iContent] = INVALID
+	endif
+next iContent
+
+dim _iDisplayContentParametersUI[]
+dim _iDisplayContentParameters2D[]
+	for iIni = 1 to _numContentParameter
+		_iDisplayContentParametersUI[iIni] = EMPTY
+		_iDisplayContentParameters2D[iIni] = EMPTY
+	next iIni
+
+for iTool = 1 to _numTool
+	if _bToolFilter[iTool] then
+		for iContentParams = 1 to _numContentParameter
+			if _iEnabledContentParameter[iTool][iContentParams] then
+				if _iDisplayContentParametersUI[iContentParams] = EMPTY then _iDisplayContentParametersUI[iContentParams] = VALID
+				if _iDisplayContentParametersUI[iContentParams] = INVALID then _iDisplayContentParametersUI[iContentParams] = RELATIVE
+			else
+				if _iDisplayContentParametersUI[iContentParams] = EMPTY then _iDisplayContentParametersUI[iContentParams] = INVALID
+				if _iDisplayContentParametersUI[iContentParams] = VALID then _iDisplayContentParametersUI[iContentParams] = RELATIVE
+			endif
+		next iContentParams
+	endif
+next iTool
+
+for iContentParams = 1 to _numContentParameter
+	if _iEnabledContentParameter[_iParentTool][iContentParams] and _iDisplayContentParametersUI[iContentParams] > INVALID then
+		_iDisplayContentParameters2D[iContentParams] = VALID
+	else
+		_iDisplayContentParameters2D[iContentParams] = INVALID
+	endif
+next iContentParams
+
+! for function ordering tablap
+dim _iDisplayOrderingGroupUI[]
+for iContent = 1 to _maxContentValues
+	if _iDisplayContentGroupUI[iContent] > INVALID and _bShowContent[iContent] then
+		_iDisplayOrderingGroupUI[iContent] = VALID
+	else
+		_iDisplayOrderingGroupUI[iContent] = INVALID
+	endif
+next iContent
+
+
+! Surface Specialization
+! =============================================================================
+
+bMorphSurfacePlacehold = 0
+
+if iValueSumSurface = SUMSURFACE_ALL then
+	bAddTopSurface = 1
+	bAddBottomSurface = 1
+	bAddSideSurface = 1
+	bAddEdgeSurface = 1
+	bAddRefSideSurface = 1
+	bAddOppSideSurface = 1
+else
+	if GLOB_ELEM_TYPE = ELEM_TYPE_MORPH then
+		bMorphSurfacePlacehold = 1
+	endif
+endif
+
+_bLockLinearUnitDecimal	= (iWorkUnitLinear = DIMUNIT_INCH | iWorkUnitLinear = DIMUNIT_PROJECT)
+_bLockAreaUnitDecimal	= (iWorkUnitArea = SURFUNIT_SQFT | iWorkUnitArea = SURFUNIT_SQINCH | iWorkUnitArea = SURFUNIT_PROJECT)
+_bLockVolumeUnitDecimal	= (iWorkUnitVolume = VOLUNIT_PROJECT)
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! Tabpage IDs, Titles and Icons
+! ==============================================================================
+
+PAGE_ID_CONTENT		= 1
+PAGE_ID_DISPORDER	= 2
+PAGE_ID_GENERAL		= 3
+
+dim tabTitles[3]
+	tabTitles[1] = `Настройка Данных`
+	tabTitles[2] = `Порядок Показа`
+	tabTitles[3] = `Общие Параметры`
+
+dim tabIcons[3]
+	tabIcons[1] = "uiTab_MarkerLabelContent_flat(1)"
+	tabIcons[2] = "uiTab_ContentOrder_flat(1)"
+	tabIcons[3] = "uiTab_areaContent_flat(1)"
+
+
+file_dependence "uiTab_MarkerLabelContent_flat(1)"
+file_dependence "uiTab_ContentOrder_flat(1)"
+file_dependence "uiTab_areaContent_flat(1)"
+file_dependence "ui_InfoIcon_flat(1)"
+file_dependence "ui_warningIcon_flat(1)"
+file_dependence "ui_list_contentSetup_flat(1)"
+
+file_dependence "ui_toolpict_wall_flat(1)"	
+file_dependence "ui_toolpict_door_flat(1)"	
+file_dependence "ui_toolpict_window_flat(1)"	
+file_dependence "ui_toolpict_column_flat(1)"	
+file_dependence "ui_toolpict_beam_flat(1)"	
+file_dependence "ui_toolpict_slab_flat(1)"	
+file_dependence "ui_toolpict_roof_flat(1)"	
+file_dependence "ui_toolpict_fill_flat(1)"	
+file_dependence "ui_toolpict_shell_flat(1)"	
+file_dependence "ui_toolpict_skylight_flat(1)"
+file_dependence "ui_toolpict_cw_flat(1)"		
+file_dependence "ui_toolpict_morph_flat(1)"	
+file_dependence "ui_toolpict_object_flat(1)"	
+file_dependence "ui_toolpict_lamp_flat(1)"	
+file_dependence "ui_toolpict_mesh_flat(1)"	
+file_dependence "ui_toolpict_cwMember_flat(1)"
+file_dependence "ui_toolpict_independent_flat(1)"
+
+ui_current_page gs_ui_current_page
+ui_page gs_ui_current_page
+
+! ==============================================================================
+! Call tabpage selector
+! ==============================================================================
+call "ui_tab_popup" parameters 	nTabs 				= vardim1(tabTitles),
+								gs_ui_current_page 	= gs_ui_current_page,
+								tabTitles			= tabTitles,
+								tabIcons			= tabIcons
+
+
+! ==============================================================================
+! Tabpages
+! ==============================================================================
+
+ui_page PAGE_ID_CONTENT
+	gosub "ContentSettingsPage"
+
+ui_page PAGE_ID_DISPORDER
+	gosub "OrderSettingsPage"
+
+ui_page PAGE_ID_GENERAL
+	gosub "TableSettingsPage"
+
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! en
+! ==============================================================================
+
+
+! ==============================================================================
+"ContentSettingsPage":
+! ------------------------------------------------------------------------------
+
+	inFieldHeight = 19
+	outFieldHeight = 15
+
+	endx = 440
+
+	inFieldWidth1 = 160
+	inFieldWidth2 = 50
+	inFieldWidth3 = 70
+
+	x1 = 1
+	x2 = 85
+	x3 = 140
+	x4 = 375
+
+	yCurr = 33
+
+	dy = 24
+
+	ui_style 0,1
+	ui_outfield `Показ параметров следующих Инструментов` + ":", x1, yCurr, x4-x2, outFieldHeight
+	ui_style 0,0
+
+	yCurr = yCurr + outFieldHeight + 1
+
+	buttonWidth = 22
+	buttonHeight = 22
+	xPos = x1
+	xdiff = 8 + buttonWidth
+
+	dim _bParamTool[17]
+	dim _pictParamTool[17]
+	dim _pictToolTip[17]
+		_bParamTool[1]	= "bUseWithWall"		: _pictParamTool[1]		= "ui_toolpict_wall_flat(1).png"		:_pictToolTip[1]		= `Стена`
+		_bParamTool[2]	= "bUseWithDoor"		: _pictParamTool[2]		= "ui_toolpict_door_flat(1).png"		:_pictToolTip[2]		= `Дверь`
+		_bParamTool[3]	= "bUseWithWindow"		: _pictParamTool[3]		= "ui_toolpict_window_flat(1).png"		:_pictToolTip[3]		= `Окно, Угловое Окно`
+		_bParamTool[4]	= "bUseWithColumn"		: _pictParamTool[4]		= "ui_toolpict_column_flat(1).png"		:_pictToolTip[4]		= `Колонна`
+		_bParamTool[5]	= "bUseWithBeam"		: _pictParamTool[5]		= "ui_toolpict_beam_flat(1).png"		:_pictToolTip[5]		= `Балка`
+		_bParamTool[6]	= "bUseWithSlab"		: _pictParamTool[6]		= "ui_toolpict_slab_flat(1).png"		:_pictToolTip[6]		= `Перекрытие`
+		_bParamTool[7]	= "bUseWithRoof"		: _pictParamTool[7]		= "ui_toolpict_roof_flat(1).png"		:_pictToolTip[7]		= `Крыша`
+		_bParamTool[8]	= "bUseWithFill"		: _pictParamTool[8]		= "ui_toolpict_fill_flat(1).png"		:_pictToolTip[8]		= `Штриховка`
+		_bParamTool[9]	= "bUseWithLabel"		: _pictParamTool[9]		= "ui_toolpict_independent_flat(1).png"	:_pictToolTip[9]		= `Независимая Выноска`
+		_bParamTool[10]	= "bUseWithShell"		: _pictParamTool[10]	= "ui_toolpict_shell_flat(1).png"		:_pictToolTip[10]		= `Оболочка`
+		_bParamTool[11]	= "bUseWithSkylight"	: _pictParamTool[11]	= "ui_toolpict_skylight_flat(1).png"	:_pictToolTip[11]		= `Световой Люк`
+		_bParamTool[12]	= "bUseWithCW"			: _pictParamTool[12]	= "ui_toolpict_cw_flat(1).png"			:_pictToolTip[12]		= `Навесная Стена`
+		_bParamTool[13]	= "bUseWithMorph"		: _pictParamTool[13]	= "ui_toolpict_morph_flat(1).png"		:_pictToolTip[13]		= `Морф`
+		_bParamTool[14]	= "bUseWithObject"		: _pictParamTool[14]	= "ui_toolpict_object_flat(1).png"		:_pictToolTip[14]		= `Объект, Лестница`
+		_bParamTool[15]	= "bUseWithLamp"		: _pictParamTool[15]	= "ui_toolpict_lamp_flat(1).png"		:_pictToolTip[15]		= `Источник Света`
+		_bParamTool[16]	= "bUseWithMesh"		: _pictParamTool[16]	= "ui_toolpict_mesh_flat(1).png"		:_pictToolTip[16]		= `3D-сетка`
+		_bParamTool[17]	= "bUseWithCWMembers"	: _pictParamTool[17]	= "ui_toolpict_cwMember_flat(1).png"	:_pictToolTip[17]		= `Элементы Навесной Стены`
+
+	for iIcon = 1 to vardim1(_bParamTool)
+		ui_infield{4} _bParamTool[iIcon], xPos, yCurr, buttonWidth, buttonHeight,
+			6, "",
+			2,
+			1, 18, 18, 18, 18,
+			_pictParamTool[iIcon], "", 0,
+			_pictParamTool[iIcon], "", 1\
+			ui_tooltip _pictToolTip[iIcon]
+		xPos = xPos + xdiff
+
+		if iIcon = 9 then
+			ui_button UI_FUNCTION, `Выбрать Все`, endx-135, yCurr, 135, buttonHeight, 1000
+
+			xPos = x1
+			yCurr = yCurr + buttonHeight + 6
+		endif
+		if iIcon = 17 then
+			ui_button UI_FUNCTION, `Отмена Выбора`, endx-135, yCurr, 135, buttonHeight, 2000
+		endif
+	next iIcon
+	yCurr = yCurr + buttonHeight + 5
+
+
+	ui_style 0,1
+	ui_outfield `Настройка Данных Выносной Надписи` + ":", x1, yCurr, x4-x2, outFieldHeight
+	ui_style 0,0
+	yCurr = yCurr + outFieldHeight + 1
+
+	iParam = 1
+	dim paramNames[]
+	dim imageRelative[]
+	dim paramtitle[]
+
+		if _iDisplayContentGroupUI[CONTENT_ID] > INVALID then
+			paramNames[iParam] 		= "bShowID"
+			if _iDisplayContentParametersUI[ID_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowID then
+				paramNames[iParam] 		= "sDescriptionID"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1	
+
+				paramNames[iParam] 		= "iIDText"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				if iIDText = IDVALUE_CUSTOMTEXT then
+					paramNames[iParam] 		= "sIDTextCustom"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_ELEMENT_NAME] > INVALID then
+			paramNames[iParam] 		= "bShowElementName"
+			if _iDisplayContentParametersUI[NAME_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowElementName then
+				paramNames[iParam] 		= "sDescriptionElementName"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_ELEV] > INVALID then
+
+			paramNames[iParam] 		= "bShowElevation"
+			if _iDisplayContentParametersUI[ELEV_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowElevation then
+				paramNames[iParam] 		= "sDescriptionElevation"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				paramNames[iParam] 		= "iRefStory"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1	
+
+				paramNames[iParam] 		= "bShowElevTop"
+				if _iDisplayContentParametersUI[ELEV_TOP] = RELATIVE then
+					imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+				else
+					imageRelative[iParam]	= ""
+				endif
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				if bShowElevTop then
+					paramNames[iParam] 		= "iElevationTopMeasuredTo"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+
+					paramNames[iParam] 		= "strPrefixElevTop"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+
+					paramNames[iParam] 		= "strSuffixElevTop"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+
+				paramNames[iParam] 		= "bShowElevBottom"
+				if _iDisplayContentParametersUI[ELEV_BOTT] = RELATIVE then
+					imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+				else
+					imageRelative[iParam]	= ""
+				endif
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				if bShowElevBottom then
+					paramNames[iParam] 		= "iElevationBottomMeasuredTo"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+
+					paramNames[iParam] 		= "strPrefixElevBottom"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+
+					paramNames[iParam] 		= "strSuffixElevBottom"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_DIM] > INVALID then
+
+			paramNames[iParam] 		= "bShowLinearDimension"
+			if _iDisplayContentParametersUI[DIM_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowLinearDimension then
+				paramNames[iParam] 		= "sDescriptionDimension"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1	
+
+				if _iDisplayContentParametersUI[DIM_WIDTH] > INVALID then
+					paramNames[iParam] 		= "bShowWidth"
+					if _iDisplayContentParametersUI[DIM_WIDTH] = RELATIVE then
+						imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+					else
+						imageRelative[iParam]	= ""
+					endif
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+
+				if _iDisplayContentParametersUI[DIM_LENGTH] > INVALID then
+					paramNames[iParam] 		= "bShowLength"
+					if _iDisplayContentParametersUI[DIM_LENGTH] = RELATIVE then
+						imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+					else
+						imageRelative[iParam]	= ""
+					endif
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+
+				if _iDisplayContentParametersUI[DIM_HEIGHT] > INVALID then
+					paramNames[iParam] 		= "bShowHeight"
+					if _iDisplayContentParametersUI[DIM_HEIGHT] = RELATIVE then
+						imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+					else
+						imageRelative[iParam]	= ""
+					endif
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+
+				if _iDisplayContentParametersUI[DIM_THICK] > INVALID then
+					paramNames[iParam] 		= "bShowThickness"
+					if _iDisplayContentParametersUI[DIM_THICK] = RELATIVE then
+						imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+					else
+						imageRelative[iParam]	= ""
+					endif
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+
+				paramNames[iParam] 		= "sSeparator"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_SURF] > INVALID then
+
+			paramNames[iParam] 		= "bShowSurfaceArea"
+			if _iDisplayContentParametersUI[SURF_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowSurfaceArea then
+				paramNames[iParam] 		= "sDescriptionSurfaceArea"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				paramNames[iParam] 		= "iValueSumSurface"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1	
+
+				if iValueSumSurface <> SUMSURFACE_ALL then
+					if _iDisplayContentParametersUI[SURF_TOP] > INVALID then
+						paramNames[iParam] 		= "bAddTopSurface"
+						if _iDisplayContentParametersUI[SURF_TOP] = RELATIVE then
+							imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+						else
+							imageRelative[iParam]	= ""
+						endif
+						paramtitle[iParam] = 1
+						iParam = iParam + 1
+					endif
+
+					if _iDisplayContentParametersUI[SURF_BOTTOM] > INVALID then
+						paramNames[iParam] 		= "bAddBottomSurface"
+						if _iDisplayContentParametersUI[SURF_BOTTOM] = RELATIVE then
+							imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+						else
+							imageRelative[iParam]	= ""
+						endif
+						paramtitle[iParam] = 1
+						iParam = iParam + 1
+					endif
+
+					if _iDisplayContentParametersUI[SURF_SIDE] > INVALID then
+						paramNames[iParam] 		= "bAddSideSurface"
+						if _iDisplayContentParametersUI[SURF_SIDE] = RELATIVE then
+							imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+						else
+							imageRelative[iParam]	= ""
+						endif
+						paramtitle[iParam] = 1
+						iParam = iParam + 1
+					endif
+
+					if _iDisplayContentParametersUI[SURF_EDGE] > INVALID then
+						paramNames[iParam] 		= "bAddEdgeSurface"
+						if _iDisplayContentParametersUI[SURF_EDGE] = RELATIVE then
+							imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+						else
+							imageRelative[iParam]	= ""
+						endif
+						paramtitle[iParam] = 1
+						iParam = iParam + 1
+					endif
+
+					if _iDisplayContentParametersUI[SURF_REFSIDE] > INVALID then
+						paramNames[iParam] 		= "bAddRefSideSurface"
+						if _iDisplayContentParametersUI[SURF_REFSIDE] = RELATIVE then
+							imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+						else
+							imageRelative[iParam]	= ""
+						endif
+						paramtitle[iParam] = 1
+						iParam = iParam + 1
+					endif
+
+					if _iDisplayContentParametersUI[SURF_OPSIDE] > INVALID then
+						paramNames[iParam] 		= "bAddOppSideSurface"
+						if _iDisplayContentParametersUI[SURF_OPSIDE] = RELATIVE then
+							imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+						else
+							imageRelative[iParam]	= ""
+						endif
+						paramtitle[iParam] = 1
+						iParam = iParam + 1
+					endif
+				endif
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_AREA] > INVALID then
+
+			paramNames[iParam] 		= "bShowProjectedArea"
+			if _iDisplayContentParametersUI[AREA_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowProjectedArea then
+				paramNames[iParam] 		= "sDescriptionProjectedArea"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_VOL] > INVALID then
+
+			paramNames[iParam] 		= "bShowVolume"
+			if _iDisplayContentParametersUI[VOLUME_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowVolume then
+				paramNames[iParam] 		= "sDescriptionVolume"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+			endif
+
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_SKIN] > INVALID then
+
+			paramNames[iParam] 		= "bShowSkinList"
+			if _iDisplayContentParametersUI[SKIN_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowSkinList then
+				paramNames[iParam] 		= "sDescriptionSkinList"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1	
+
+				paramNames[iParam] 		= "iTypeSkinContent"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				paramNames[iParam] 		= "bChangeSkinDirection"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				paramNames[iParam] 		= "bCustomListContent"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				if bCustomListContent then
+					paramNames[iParam] 		= "dataCustomSkinRow"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_STRUCT_NAME] > INVALID then
+
+			paramNames[iParam] 		= "bShowStructuralName"
+			if _iDisplayContentParametersUI[STRUCT_NAME_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowStructuralName then
+				paramNames[iParam] 		= "sDescriptionStructuralName"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_MATERIAL] > INVALID then
+			paramNames[iParam] 		= "bShowSurface"
+			if _iDisplayContentParametersUI[MATERIAL_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowSurface then
+				paramNames[iParam] 		= "sDescriptionSurface"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				paramNames[iParam] 		= "iSurfaceToDisplay"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				if iSurfaceToDisplay = 99 then
+					paramNames[iParam] 		= "sCustomSurface"
+					imageRelative[iParam]	= ""
+					paramtitle[iParam] = 1
+					iParam = iParam + 1
+				endif
+
+				paramNames[iParam] 		= "sPrefixSurface"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				paramNames[iParam] 		= "sSuffixSurface"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+			endif
+		endif
+
+		if _iDisplayContentGroupUI[CONTENT_CUSTOM] > INVALID then
+
+			paramNames[iParam] 		= "bShowCustomText"
+			if _iDisplayContentParametersUI[CUSTOM_SHOW] = RELATIVE then
+				imageRelative[iParam]	= "ui_list_contentSetup_flat(1).png"
+			else
+				imageRelative[iParam]	= ""
+			endif
+			paramtitle[iParam] = 0
+			iParam = iParam + 1
+
+			if bShowCustomText then
+				paramNames[iParam] 		= "sDescriptionCustomText"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+
+				paramNames[iParam] 		= "sCustomText"
+				imageRelative[iParam]	= ""
+				paramtitle[iParam] = 1
+				iParam = iParam + 1
+			endif
+		endif
+
+	! List with header without icon column
+	UIGroup = 2
+	ui_listfield UIGroup, x1, yCurr, endx-x1, 266-yCurr-outFieldHeight*1.2, 1
+
+	itemID = 10
+	for i = 1 to vardim1(paramNames)
+		ui_listitem itemID, UIGroup, paramNames[i], paramtitle[i], imageRelative[i], ""
+		itemID = itemID + 1
+	next i
+
+	yCurr = 266-outFieldHeight
+	if iParam = 1 then ! empty listfield
+		ui_pict "ui_warningIcon_flat(1)", x1, yCurr, 14, 14, 1
+		ui_outfield `Инструмент не выбран.`, x1+15, yCurr, endx-x1-15, outFieldHeight
+	else
+		! if there is any relative content then note
+		for i = 1 to vardim1(paramNames)
+			if imageRelative[i] <> "" then
+				ui_pict "ui_InfoIcon_flat(1)", x1, yCurr, 14, 14, 1
+				ui_pict "ui_contentSetup_flat(1)", x1+15, yCurr, 14, 15, 1
+				ui_outfield `Помеченные типы Данных недоступны для выбранных Инструментов.`, x1+2*15, yCurr, endx-x1-2*15-2, outFieldHeight
+				i = vardim1(paramNames)
+			endif
+		next i
+	endif
+
+return
+
+
+! ==============================================================================
+"OrderSettingsPage":
+! ------------------------------------------------------------------------------
+
+	dy = 21
+	yCurr = 33
+	outFieldWidth1 = 160
+	outFieldHeight = 15
+
+	buttonX	= 13
+	buttonY = 13
+	buttonOffsetY = 2
+	x1	= 10
+	x2	= x1 + buttonX + buttonOffsetY
+	x3	= x2 + buttonX + buttonOffsetY + 15
+	endx = 222 + x3 + outFieldWidth1
+
+	if _numShownContentGroupUI > EPS then
+
+		ui_style 0, 1
+		ui_outfield `Порядок Данных`, x1, yCurr, endx-x1, outFieldHeight
+		yCurr = yCurr + dy
+
+		ui_style 0, 0
+		for iRow = 1 to vardim1(functionOrder)
+			if iRow = 7 then
+				x1	= 232
+				x2	= x1 + buttonX + buttonOffsetY
+				x3	= x2 + buttonX + buttonOffsetY + 15
+
+				yCurr = 33 + dy
+			endif
+
+			! Down
+			if (iRow <> vardim1(functionOrder)) then
+				ui_pict_button ui_function, "", "ui_arrow_down_flat(1)", x1, yCurr+buttonOffsetY, buttonX, buttonY, 1000 + iRow ui_tooltip `Переместить Ниже`
+			endif
+
+			if iRow <> 1 then
+				ui_pict_button ui_function, "", "ui_arrow_up_flat(1)", x2, yCurr+buttonOffsetY,	buttonX, buttonY, 2000 + iRow ui_tooltip `Переместить Выше`
+			endif
+
+			ui_outfield _stContentDescription[functionOrder[iRow]] , x3, yCurr, outFieldWidth1, outFieldHeight
+			yCurr = yCurr + dy
+
+		next iRow
+	endif
+
+	! --------------------------------------------------------------------------
+	ui_separator 0, 184,	444, 184
+	! --------------------------------------------------------------------------
+
+	buttonX	= 27
+	buttonY = 13
+	buttonOffset = 2
+	x1	= 10
+
+	outFieldWidth2 = 83
+	yCurr = 199
+
+	xOffset	= buttonOffset + buttonX
+	diffX	= outFieldWidth2 + 2 * buttonOffset + buttonX
+
+	xCurr = 11
+
+	ui_style 0, 1
+	ui_outfield `Порядок Размеров`, x1, yCurr, endx-x1, outFieldHeight
+	yCurr = yCurr + dy
+
+	ui_style 0, 0
+	for iCol = 1 to vardim1(iContentOrderDim)
+
+		if iCol <> 1 then
+			ui_pict_button ui_function, "", "ui_arrow_swap_flat(1)", xCurr-xOffset, yCurr+1, buttonX, buttonY, 3000 + iCol ui_tooltip `Изменить Порядок`
+		endif
+
+		_fieldFlag = 2
+		if iCol = 1 then _fieldFlag = 0
+		if iCol = vardim1(iContentOrderDim) then _fieldFlag = 1
+
+		ui_outfield _stDimContentDescription[iContentOrderDim[iCol]] , xCurr, yCurr, outFieldWidth2, outFieldHeight, _fieldFlag
+		xCurr = xCurr + diffX
+	next iCol
+
+	ui_pict "ui_InfoIcon_flat(1)", x1, 250, 14, 14, 1
+	ui_outfield `Добавить/удалить Данные можно на вкладке 'Настройки Данных'`, x1+15, 250, endx-x1-15, outFieldHeight
+
+return
+
+
+! ==============================================================================
+"TableSettingsPage":
+! ------------------------------------------------------------------------------
+	_yBottomPosGeneral = 160
+
+	call "label_table_form" parameters AC_CustomReadability = AC_CustomReadability,
+		bUseBuiltinPointer			= not(LABEL_CUSTOM_ARROW),
+		anglePosition 				= LABEL_ROTANGLE,
+		bUsePrefixColumn			= bUsePrefixColumn,
+		bUseContentColumn			= 1,
+
+		bWrapText					= LABEL_TEXT_WRAP,
+		widthTextBoxPrefix_mm		= widthTextBoxPrefix_mm,
+		widthTextBoxPrefix_pt		= widthTextBoxPrefix_pt,
+		widthTextBoxContent_mm		= widthTextBoxContent_mm,
+		widthTextBoxContent_pt		= widthTextBoxContent_pt,
+
+		bShowFrame					= LABEL_FRAME_ON,
+		penFrame					= LABEL_ARROW_PEN,
+		lineTypeFrame				= LABEL_ARROW_LINETYPE,
+		iFrameStyle					= iFrameStyle,
+		iReferencePoint				= iReferencePoint,
+		iLabelOrientation 			= iLabelOrientation,
+		idTab_HeaderStyle			= 0,
+		idTab_FrameStyle			= 3,
+		yBottomPosGeneral			= _yBottomPosGeneral,
+		gs_ui_current_page			= gs_ui_current_page
+
+	yCurr = _yBottomPosGeneral + 10
+	ui_separator 1, _yBottomPosGeneral+6, 444, _yBottomPosGeneral+6
+
+	dy = 21
+	inFieldWidth1 = 135
+	inFieldWidth2 = 90
+	inFieldWidth3 = 150
+	inFieldWidth4 = 95
+	inFieldWidth5 = 50
+
+	x1 = 1
+	x2 = x1 + inFieldWidth1
+	x3 = x2 + inFieldWidth2
+	x4 = x2 + inFieldWidth3
+	x5 = x4 + 5
+	x6 = x5 + inFieldWidth4 
+
+	ui_style 0,1
+	ui_infield{3} "bUsePrefixColumn", x1, yCurr, endx-x1, outFieldHeight,
+			7, "", 2, 1, 0, 0, 0, 0,
+			1, `Показать Столбец Названий Параметров`, 0,
+			2, `Показать Столбец Названий Параметров`, 1
+	ui_style 0,0
+	yCurr = yCurr + dy-4
+
+
+	ui_infield{3} "bShowUnit", x1, yCurr,	x3, outFieldHeight,
+			7, "", 2, 1, 0, 0, 0, 0,
+			1, `Единицы Измерения`, 0,
+			2, `Единицы Измерения`, 1
+	yCurr = yCurr + dy
+
+	ui_outfield `Линейные`, x1, yCurr, x2-x1-1, outFieldHeight
+	ui_infield{3} "iWorkUnitLinear", x2, yCurr-4, x4-x2-1, inFieldHeight,
+			8, "", 0, 0, 0, 0, 0, 0,
+			"", stUnitFormats[1], DIMUNIT_MM,
+			"", stUnitFormats[2], DIMUNIT_CM,
+			"", stUnitFormats[3], DIMUNIT_DM,
+			"", stUnitFormats[4], DIMUNIT_METER,
+			"", stUnitFormats[5], DIMUNIT_INCH,
+			"", stUnitFormats[6], DIMUNIT_PROJECT
+
+	ui_outfield `Десятичные`,  x5, yCurr,	inFieldWidth4, outFieldHeight, 4 * _bLockLinearUnitDecimal
+	ui_infield{3} "iWorkUnitLinearDecimal", x6, yCurr-4,	inFieldWidth5, inFieldHeight,
+			8, "", 3, 1, 0, 0, 0, 0,
+			"", '0', 0,
+			"", '1', 1,
+			"", '2', 2,
+			"", '3', 3,
+			"", '4', 4
+	yCurr = yCurr + dy
+
+	ui_outfield `Площадь`, x1, yCurr, x2-x1-1, outFieldHeight
+	ui_infield{3} "iWorkUnitArea", x2, yCurr-4, x4-x2-1, inFieldHeight,
+			8, "", 0, 0, 0, 0, 0, 0,
+			"", stUnitFormatsArea[1], SURFUNIT_SQM,
+			"", stUnitFormatsArea[2], SURFUNIT_SQCM,
+			"", stUnitFormatsArea[3], SURFUNIT_SQMM,
+			"", stUnitFormatsArea[4], SURFUNIT_SQFT,
+			"", stUnitFormatsArea[5], SURFUNIT_SQINCH,
+			"", stUnitFormatsArea[6], SURFUNIT_PROJECT
+
+	ui_outfield `Десятичные`,  x5, yCurr,	inFieldWidth4, outFieldHeight,  4 * _bLockAreaUnitDecimal
+	ui_infield{3} "iWorkUnitAreaDecimal", x6, yCurr-4,	inFieldWidth5, inFieldHeight,
+			8, "", 3, 1, 0, 0, 0, 0,
+			"", '0', 0,
+			"", '1', 1,
+			"", '2', 2,
+			"", '3', 3,
+			"", '4', 4
+	yCurr = yCurr + dy
+
+	ui_outfield `Объем`, x1, yCurr, x2-x1-1, outFieldHeight
+	ui_infield{3} "iWorkUnitVolume", x2, yCurr-4, x4-x2-1, inFieldHeight,
+			8, "", 0, 0, 0, 0, 0, 0,
+			"", stUnitFormatsVol[1], VOLUNIT_CM,
+			"", stUnitFormatsVol[2], VOLUNIT_L,
+			"", stUnitFormatsVol[3], VOLUNIT_CCM,
+			"", stUnitFormatsVol[4], VOLUNIT_CMM,
+			"", stUnitFormatsVol[5], VOLUNIT_CFEET,
+			"", stUnitFormatsVol[6], VOLUNIT_CINCH,
+			"", stUnitFormatsVol[7], VOLUNIT_CYARD,
+			"", stUnitFormatsVol[8], VOLUNIT_GAL,
+			"", stUnitFormatsVol[9], VOLUNIT_PROJECT
+
+	ui_outfield `Десятичные`,  x5, yCurr,	inFieldWidth4, outFieldHeight, 4 * _bLockVolumeUnitDecimal
+	ui_infield{3} "iWorkUnitVolumeDecimal", x6, yCurr-4,	inFieldWidth5, inFieldHeight,
+			8, "", 3, 1, 0, 0, 0, 0,
+			"", '0', 0,
+			"", '1', 1,
+			"", '2', 2,
+			"", '3', 3,
+			"", '4', 4
+
+return
+]]>
+</Script_UI>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="22656" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000001000000
+	010008060000005C72A866000000097048597300000EC400000EC401952B0E1B
+	00000A4F6943435050686F746F73686F70204943432070726F66696C65000078
+	DA9D53675453E9163DF7DEF4424B8880944B6F5215082052428B801491262A21
+	09104A8821A1D91551C1114545041BC8A088038E8E808C15512C0C8A0AD807E4
+	21A28E83A3888ACAFBE17BA36BD6BCF7E6CDFEB5D73EE7ACF39DB3CF07C0080C
+	9648335135800CA9421E11E083C7C4C6E1E42E40810A2470001008B3642173FD
+	230100F87E3C3C2B22C007BE000178D30B0800C04D9BC0301C87FF0FEA42995C
+	01808401C07491384B08801400407A8E42A600404601809D98265300A0040060
+	CB6362E300502D0060277FE6D300809DF8997B01005B94211501A09100201365
+	884400683B00ACCF568A450058300014664BC43900D82D00304957664800B0B7
+	00C0CE100BB200080C00305188852900047B0060C8232378008499001446F257
+	3CF12BAE10E72A00007899B23CB9243945815B082D710757572E1E28CE49172B
+	14366102619A402EC27999193281340FE0F3CC0000A0911511E083F3FD78CE0E
+	AECECE368EB60E5F2DEABF06FF226262E3FEE5CFAB70400000E1747ED1FE2C2F
+	B31A803B06806DFEA225EE04685E0BA075F78B66B20F40B500A0E9DA57F370F8
+	7E3C3C45A190B9D9D9E5E4E4D84AC4425B61CA577DFE67C25FC057FD6CF97E3C
+	FCF7F5E0BEE22481325D814704F8E0C2CCF44CA51CCF92098462DCE68F47FCB7
+	0BFFFC1DD322C44962B9582A14E35112718E449A8CF332A52289429229C525D2
+	FF64E2DF2CFB033EDF3500B06A3E017B912DA85D6303F64B27105874C0E2F700
+	00F2BB6FC1D4280803806883E1CF77FFEF3FFD47A02500806649927100005E44
+	242E54CAB33FC708000044A0812AB0411BF4C1182CC0061CC105DCC10BFC6036
+	844224C4C24210420A64801C726029AC82422886CDB01D2A602FD4401D34C051
+	688693700E2EC255B80E3D700FFA61089EC128BC81090441C808136121DA8801
+	628A58238E08179985F821C14804128B2420C9881451224B91354831528A5420
+	55481DF23D720239875C46BA913BC8003282FC86BC47319481B2513DD40CB543
+	B9A8371A8446A20BD06474319A8F16A09BD072B41A3D8C36A1E7D0AB680FDA8F
+	3E43C730C0E8180733C46C302EC6C342B1382C099363CBB122AC0CABC61AB056
+	AC03BB89F563CFB17704128145C0093604774220611E4148584C584ED848A820
+	1C243411DA093709038451C2272293A84BB426BA11F9C4186232318758482C23
+	D6128F132F107B8843C437241289433227B9900249B1A454D212D246D26E5223
+	E92CA99B34481A2393C9DA646BB20739942C202BC885E49DE4C3E433E41BE421
+	F25B0A9D624071A4F853E22852CA6A4A19E510E534E5066598324155A39A52DD
+	A8A15411358F5A42ADA1B652AF5187A81334759A39CD8316494BA5ADA295D31A
+	681768F769AFE874BA11DD951E4E97D057D2CBE947E897E803F4770C0D861583
+	C7886728199B18071867197718AF984CA619D38B19C754303731EB98E7990F99
+	6F55582AB62A7C1591CA0A954A9526951B2A2F54A9AAA6AADEAA0B55F355CB54
+	8FA95E537DAE46553353E3A909D496AB55AA9D50EB531B5367A93BA887AA67A8
+	6F543FA47E59FD890659C34CC34F43A451A0B15FE3BCC6200B6319B3782C216B
+	0DAB86758135C426B1CDD97C762ABB98FD1DBB8B3DAAA9A13943334A3357B352
+	F394663F07E39871F89C744E09E728A797F37E8ADE14EF29E2291BA6344CB931
+	655C6BAA96979658AB48AB51AB47EBBD36AEEDA79DA6BD45BB59FB810E41C74A
+	275C2747678FCE059DE753D953DDA70AA7164D3D3AF5AE2EAA6BA51BA1BB4477
+	BF6EA7EE989EBE5E809E4C6FA7DE79BDE7FA1C7D2FFD54FD6DFAA7F5470C5806
+	B30C2406DB0CCE183CC535716F3C1D2FC7DBF151435DC34043A561956197E184
+	91B9D13CA3D5468D460F8C69C65CE324E36DC66DC6A326062621264B4DEA4DEE
+	9A524DB9A629A63B4C3B4CC7CDCCCDA2CDD699359B3D31D732E79BE79BD79BDF
+	B7605A785A2CB6A8B6B86549B2E45AA659EEB6BC6E855A3959A558555A5DB346
+	AD9DAD25D6BBADBBA711A7B94E934EAB9ED667C3B0F1B6C9B6A9B719B0E5D806
+	DBAEB66DB67D6167621767B7C5AEC3EE93BD937DBA7D8DFD3D070D87D90EAB1D
+	5A1D7E73B472143A563ADE9ACE9CEE3F7DC5F496E92F6758CF10CFD833E3B613
+	CB29C4699D539BD347671767B97383F3888B894B82CB2E973E2E9B1BC6DDC8BD
+	E44A74F5715DE17AD2F59D9BB39BC2EDA8DBAFEE36EE69EE87DC9FCC349F299E
+	593373D0C3C843E051E5D13F0B9F95306BDFAC7E4F434F8167B5E7232F632F91
+	57ADD7B0B7A577AAF761EF173EF63E729FE33EE33C37DE32DE595FCC37C0B7C8
+	B7CB4FC36F9E5F85DF437F23FF64FF7AFFD100A78025016703898141815B02FB
+	F87A7C21BF8E3F3ADB65F6B2D9ED418CA0B94115418F82AD82E5C1AD2168C8EC
+	90AD21F7E798CE91CE690E85507EE8D6D00761E6618BC37E0C2785878557863F
+	8E7088581AD131973577D1DC4373DF44FA449644DE9B67314F39AF2D4A352A3E
+	AA2E6A3CDA37BA34BA3FC62E6659CCD5589D58496C4B1C392E2AAE366E6CBEDF
+	FCEDF387E29DE20BE37B17982FC85D7079A1CEC2F485A716A92E122C3A96404C
+	884E3894F041102AA8168C25F21377258E0A79C21DC267222FD136D188D8435C
+	2A1E4EF2482A4D7A92EC91BC357924C533A52CE5B98427A990BC4C0D4CDD9B3A
+	9E169A76206D323D3ABD31839291907142AA214D93B667EA67E66676CBAC6585
+	B2FEC56E8BB72F1E9507C96BB390AC05592D0AB642A6E8545A28D72A07B26765
+	5766BFCD89CA3996AB9E2BCDEDCCB3CADB90379CEF9FFFED12C212E192B6A586
+	4B572D1D58E6BDAC6A39B23C7179DB0AE315052B865606AC3CB88AB62A6DD54F
+	ABED5797AE7EBD267A4D6B815EC1CA82C1B5016BEB0B550AE5857DEBDCD7ED5D
+	4F582F59DFB561FA869D1B3E15898AAE14DB1797157FD828DC78E51B876FCABF
+	99DC94B4A9ABC4B964CF66D266E9E6DE2D9E5B0E96AA97E6970E6E0DD9DAB40D
+	DF56B4EDF5F645DB2F97CD28DBBB83B643B9A3BF3CB8BC65A7C9CECD3B3F54A4
+	54F454FA5436EED2DDB561D7F86ED1EE1B7BBCF634ECD5DB5BBCF7FD3EC9BEDB
+	5501554DD566D565FB49FBB3F73FAE89AAE9F896FB6D5DAD4E6D71EDC703D203
+	FD07230EB6D7B9D4D51DD23D54528FD62BEB470EC71FBEFE9DEF772D0D360D55
+	8D9CC6E223704479E4E9F709DFF71E0D3ADA768C7BACE107D31F761D671D2F6A
+	429AF29A469B539AFB5B625BBA4FCC3ED1D6EADE7AFC47DB1F0F9C343C59794A
+	F354C969DAE982D39367F2CF8C9D959D7D7E2EF9DC60DBA2B67BE763CEDF6A0F
+	6FEFBA1074E1D245FF8BE73BBC3BCE5CF2B874F2B2DBE51357B8579AAF3A5F6D
+	EA74EA3CFE93D34FC7BB9CBB9AAEB95C6BB9EE7ABDB57B66F7E91B9E37CEDDF4
+	BD79F116FFD6D59E393DDDBDF37A6FF7C5F7F5DF16DD7E7227FDCECBBBD97727
+	EEADBC4FBC5FF440ED41D943DD87D53F5BFEDCD8EFDC7F6AC077A0F3D1DC47F7
+	068583CFFE91F58F0F43058F998FCB860D86EB9E383E3939E23F72FDE9FCA743
+	CF64CF269E17FEA2FECBAE17162F7EF8D5EBD7CED198D1A197F29793BF6D7CA5
+	FDEAC0EB19AFDBC6C2C61EBEC97833315EF456FBEDC177DC771DEFA3DF0F4FE4
+	7C207F28FF68F9B1F553D0A7FB93199393FF040398F3FC63332DDB000044D269
+	545874584D4C3A636F6D2E61646F62652E786D7000000000003C3F787061636B
+	657420626567696E3D22EFBBBF222069643D2257354D304D7043656869487A72
+	65537A4E54637A6B633964223F3E0A3C783A786D706D65746120786D6C6E733A
+	783D2261646F62653A6E733A6D6574612F2220783A786D70746B3D2241646F62
+	6520584D5020436F726520352E352D633032312037392E3135343931312C2032
+	3031332F31302F32392D31313A34373A31362020202020202020223E0A202020
+	3C7264663A52444620786D6C6E733A7264663D22687474703A2F2F7777772E77
+	332E6F72672F313939392F30322F32322D7264662D73796E7461782D6E732322
+	3E0A2020202020203C7264663A4465736372697074696F6E207264663A61626F
+	75743D22220A202020202020202020202020786D6C6E733A786D703D22687474
+	703A2F2F6E732E61646F62652E636F6D2F7861702F312E302F220A2020202020
+	20202020202020786D6C6E733A64633D22687474703A2F2F7075726C2E6F7267
+	2F64632F656C656D656E74732F312E312F220A20202020202020202020202078
+	6D6C6E733A70686F746F73686F703D22687474703A2F2F6E732E61646F62652E
+	636F6D2F70686F746F73686F702F312E302F220A202020202020202020202020
+	786D6C6E733A786D704D4D3D22687474703A2F2F6E732E61646F62652E636F6D
+	2F7861702F312E302F6D6D2F220A202020202020202020202020786D6C6E733A
+	73744576743D22687474703A2F2F6E732E61646F62652E636F6D2F7861702F31
+	2E302F73547970652F5265736F757263654576656E7423220A20202020202020
+	2020202020786D6C6E733A73745265663D22687474703A2F2F6E732E61646F62
+	652E636F6D2F7861702F312E302F73547970652F5265736F7572636552656623
+	220A202020202020202020202020786D6C6E733A746966663D22687474703A2F
+	2F6E732E61646F62652E636F6D2F746966662F312E302F220A20202020202020
+	2020202020786D6C6E733A657869663D22687474703A2F2F6E732E61646F6265
+	2E636F6D2F657869662F312E302F223E0A2020202020202020203C786D703A43
+	726561746F72546F6F6C3E41646F62652050686F746F73686F7020456C656D65
+	6E74732031332E30202857696E646F7773293C2F786D703A43726561746F7254
+	6F6F6C3E0A2020202020202020203C786D703A437265617465446174653E3230
+	31342D31322D31395431313A32343A30362B30313A30303C2F786D703A437265
+	617465446174653E0A2020202020202020203C786D703A4D6F64696679446174
+	653E323031352D30312D30385431393A30363A32342B30313A30303C2F786D70
+	3A4D6F64696679446174653E0A2020202020202020203C786D703A4D65746164
+	617461446174653E323031352D30312D30385431393A30363A32342B30313A30
+	303C2F786D703A4D65746164617461446174653E0A2020202020202020203C64
+	633A666F726D61743E696D6167652F706E673C2F64633A666F726D61743E0A20
+	20202020202020203C70686F746F73686F703A436F6C6F724D6F64653E333C2F
+	70686F746F73686F703A436F6C6F724D6F64653E0A2020202020202020203C70
+	686F746F73686F703A49434350726F66696C653E735247422049454336313936
+	362D322E313C2F70686F746F73686F703A49434350726F66696C653E0A202020
+	2020202020203C70686F746F73686F703A446F63756D656E74416E636573746F
+	72733E0A2020202020202020202020203C7264663A4261673E0A202020202020
+	2020202020202020203C7264663A6C693E786D702E6469643A62396464353639
+	352D663738652D326634332D383037382D3537646131353865303163663C2F72
+	64663A6C693E0A2020202020202020202020203C2F7264663A4261673E0A2020
+	202020202020203C2F70686F746F73686F703A446F63756D656E74416E636573
+	746F72733E0A2020202020202020203C786D704D4D3A496E7374616E63654944
+	3E786D702E6969643A38396138323962322D346534652D393934642D61366330
+	2D3839326439353233316262343C2F786D704D4D3A496E7374616E636549443E
+	0A2020202020202020203C786D704D4D3A446F63756D656E7449443E786D702E
+	6469643A62396464353639352D663738652D326634332D383037382D35376461
+	31353865303163663C2F786D704D4D3A446F63756D656E7449443E0A20202020
+	20202020203C786D704D4D3A4F726967696E616C446F63756D656E7449443E78
+	6D702E6469643A62396464353639352D663738652D326634332D383037382D35
+	37646131353865303163663C2F786D704D4D3A4F726967696E616C446F63756D
+	656E7449443E0A2020202020202020203C786D704D4D3A486973746F72793E0A
+	2020202020202020202020203C7264663A5365713E0A20202020202020202020
+	20202020203C7264663A6C69207264663A7061727365547970653D225265736F
+	75726365223E0A2020202020202020202020202020202020203C73744576743A
+	616374696F6E3E637265617465643C2F73744576743A616374696F6E3E0A2020
+	202020202020202020202020202020203C73744576743A696E7374616E636549
+	443E786D702E6969643A62396464353639352D663738652D326634332D383037
+	382D3537646131353865303163663C2F73744576743A696E7374616E63654944
+	3E0A2020202020202020202020202020202020203C73744576743A7768656E3E
+	323031342D31322D31395431313A32343A30362B30313A30303C2F7374457674
+	3A7768656E3E0A2020202020202020202020202020202020203C73744576743A
+	736F6674776172654167656E743E41646F62652050686F746F73686F7020456C
+	656D656E74732031332E30202857696E646F7773293C2F73744576743A736F66
+	74776172654167656E743E0A2020202020202020202020202020203C2F726466
+	3A6C693E0A2020202020202020202020202020203C7264663A6C69207264663A
+	7061727365547970653D225265736F75726365223E0A20202020202020202020
+	20202020202020203C73744576743A616374696F6E3E636F6E7665727465643C
+	2F73744576743A616374696F6E3E0A2020202020202020202020202020202020
+	203C73744576743A706172616D65746572733E66726F6D20696D6167652F706E
+	6720746F206170706C69636174696F6E2F766E642E61646F62652E70686F746F
+	73686F703C2F73744576743A706172616D65746572733E0A2020202020202020
+	202020202020203C2F7264663A6C693E0A202020202020202020202020202020
+	3C7264663A6C69207264663A7061727365547970653D225265736F7572636522
+	3E0A2020202020202020202020202020202020203C73744576743A616374696F
+	6E3E73617665643C2F73744576743A616374696F6E3E0A202020202020202020
+	2020202020202020203C73744576743A696E7374616E636549443E786D702E69
+	69643A31326666326132392D363138312D633234322D396638632D6564303035
+	386661636339383C2F73744576743A696E7374616E636549443E0A2020202020
+	202020202020202020202020203C73744576743A7768656E3E323031352D3031
+	2D30355431383A30323A34312B30313A30303C2F73744576743A7768656E3E0A
+	2020202020202020202020202020202020203C73744576743A736F6674776172
+	654167656E743E41646F62652050686F746F73686F7020456C656D656E747320
+	31332E30202857696E646F7773293C2F73744576743A736F6674776172654167
+	656E743E0A2020202020202020202020202020202020203C73744576743A6368
+	616E6765643E2F3C2F73744576743A6368616E6765643E0A2020202020202020
+	202020202020203C2F7264663A6C693E0A202020202020202020202020202020
+	3C7264663A6C69207264663A7061727365547970653D225265736F7572636522
+	3E0A2020202020202020202020202020202020203C73744576743A616374696F
+	6E3E73617665643C2F73744576743A616374696F6E3E0A202020202020202020
+	2020202020202020203C73744576743A696E7374616E636549443E786D702E69
+	69643A64323837306264332D366263652D626234612D396561622D3033633362
+	376237306265383C2F73744576743A696E7374616E636549443E0A2020202020
+	202020202020202020202020203C73744576743A7768656E3E323031352D3031
+	2D30365431343A33353A33362B30313A30303C2F73744576743A7768656E3E0A
+	2020202020202020202020202020202020203C73744576743A736F6674776172
+	654167656E743E41646F62652050686F746F73686F7020456C656D656E747320
+	31332E30202857696E646F7773293C2F73744576743A736F6674776172654167
+	656E743E0A2020202020202020202020202020202020203C73744576743A6368
+	616E6765643E2F3C2F73744576743A6368616E6765643E0A2020202020202020
+	202020202020203C2F7264663A6C693E0A202020202020202020202020202020
+	3C7264663A6C69207264663A7061727365547970653D225265736F7572636522
+	3E0A2020202020202020202020202020202020203C73744576743A616374696F
+	6E3E636F6E7665727465643C2F73744576743A616374696F6E3E0A2020202020
+	202020202020202020202020203C73744576743A706172616D65746572733E66
+	726F6D206170706C69636174696F6E2F766E642E61646F62652E70686F746F73
+	686F7020746F20696D6167652F706E673C2F73744576743A706172616D657465
+	72733E0A2020202020202020202020202020203C2F7264663A6C693E0A202020
+	2020202020202020202020203C7264663A6C69207264663A7061727365547970
+	653D225265736F75726365223E0A202020202020202020202020202020202020
+	3C73744576743A616374696F6E3E646572697665643C2F73744576743A616374
+	696F6E3E0A2020202020202020202020202020202020203C73744576743A7061
+	72616D65746572733E636F6E7665727465642066726F6D206170706C69636174
+	696F6E2F766E642E61646F62652E70686F746F73686F7020746F20696D616765
+	2F706E673C2F73744576743A706172616D65746572733E0A2020202020202020
+	202020202020203C2F7264663A6C693E0A202020202020202020202020202020
+	3C7264663A6C69207264663A7061727365547970653D225265736F7572636522
+	3E0A2020202020202020202020202020202020203C73744576743A616374696F
+	6E3E73617665643C2F73744576743A616374696F6E3E0A202020202020202020
+	2020202020202020203C73744576743A696E7374616E636549443E786D702E69
+	69643A35373232333439622D633466652D386234342D386138392D6230636331
+	333931313738393C2F73744576743A696E7374616E636549443E0A2020202020
+	202020202020202020202020203C73744576743A7768656E3E323031352D3031
+	2D30365431343A33353A33362B30313A30303C2F73744576743A7768656E3E0A
+	2020202020202020202020202020202020203C73744576743A736F6674776172
+	654167656E743E41646F62652050686F746F73686F7020456C656D656E747320
+	31332E30202857696E646F7773293C2F73744576743A736F6674776172654167
+	656E743E0A2020202020202020202020202020202020203C73744576743A6368
+	616E6765643E2F3C2F73744576743A6368616E6765643E0A2020202020202020
+	202020202020203C2F7264663A6C693E0A202020202020202020202020202020
+	3C7264663A6C69207264663A7061727365547970653D225265736F7572636522
+	3E0A2020202020202020202020202020202020203C73744576743A616374696F
+	6E3E73617665643C2F73744576743A616374696F6E3E0A202020202020202020
+	2020202020202020203C73744576743A696E7374616E636549443E786D702E69
+	69643A38396138323962322D346534652D393934642D613663302D3839326439
+	353233316262343C2F73744576743A696E7374616E636549443E0A2020202020
+	202020202020202020202020203C73744576743A7768656E3E323031352D3031
+	2D30385431393A30363A32342B30313A30303C2F73744576743A7768656E3E0A
+	2020202020202020202020202020202020203C73744576743A736F6674776172
+	654167656E743E41646F62652050686F746F73686F7020456C656D656E747320
+	31332E30202857696E646F7773293C2F73744576743A736F6674776172654167
+	656E743E0A2020202020202020202020202020202020203C73744576743A6368
+	616E6765643E2F3C2F73744576743A6368616E6765643E0A2020202020202020
+	202020202020203C2F7264663A6C693E0A2020202020202020202020203C2F72
+	64663A5365713E0A2020202020202020203C2F786D704D4D3A486973746F7279
+	3E0A2020202020202020203C786D704D4D3A4465726976656446726F6D207264
+	663A7061727365547970653D225265736F75726365223E0A2020202020202020
+	202020203C73745265663A696E7374616E636549443E786D702E6969643A6432
+	3837306264332D366263652D626234612D396561622D30336333623762373062
+	65383C2F73745265663A696E7374616E636549443E0A20202020202020202020
+	20203C73745265663A646F63756D656E7449443E786D702E6469643A62396464
+	353639352D663738652D326634332D383037382D353764613135386530316366
+	3C2F73745265663A646F63756D656E7449443E0A202020202020202020202020
+	3C73745265663A6F726967696E616C446F63756D656E7449443E786D702E6469
+	643A62396464353639352D663738652D326634332D383037382D353764613135
+	3865303163663C2F73745265663A6F726967696E616C446F63756D656E744944
+	3E0A2020202020202020203C2F786D704D4D3A4465726976656446726F6D3E0A
+	2020202020202020203C746966663A4F7269656E746174696F6E3E313C2F7469
+	66663A4F7269656E746174696F6E3E0A2020202020202020203C746966663A58
+	5265736F6C7574696F6E3E3936303030302F31303030303C2F746966663A5852
+	65736F6C7574696F6E3E0A2020202020202020203C746966663A595265736F6C
+	7574696F6E3E3936303030302F31303030303C2F746966663A595265736F6C75
+	74696F6E3E0A2020202020202020203C746966663A5265736F6C7574696F6E55
+	6E69743E323C2F746966663A5265736F6C7574696F6E556E69743E0A20202020
+	20202020203C657869663A436F6C6F7253706163653E313C2F657869663A436F
+	6C6F7253706163653E0A2020202020202020203C657869663A506978656C5844
+	696D656E73696F6E3E3235363C2F657869663A506978656C5844696D656E7369
+	6F6E3E0A2020202020202020203C657869663A506978656C5944696D656E7369
+	6F6E3E3235363C2F657869663A506978656C5944696D656E73696F6E3E0A2020
+	202020203C2F7264663A4465736372697074696F6E3E0A2020203C2F7264663A
+	5244463E0A3C2F783A786D706D6574613E0A2020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020200A202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020200A20202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	0A20202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020200A2020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020200A202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020200A20202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020200A2020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020200A202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020200A20
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020200A20202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020200A2020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020200A202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020200A20202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020200A2020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020202020200A202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	200A202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020200A20202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020200A2020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020200A202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020200A20202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020202020200A2020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020202020202020200A
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020200A202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020200A20202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020200A2020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020200A202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020200A20202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020202020202020200A2020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20200A2020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020200A202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020200A20202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020200A2020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020200A202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020200A20202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	0A20202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020200A2020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020200A202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020200A20202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020200A2020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020200A202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020200A20
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020200A20202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020200A2020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020200A202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020200A20202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020200A2020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020202020200A202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	200A202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020200A20202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020200A2020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020200A202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020200A20202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020202020200A2020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020202020202020200A
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020200A202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020200A20202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020200A2020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020200A202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020200A20202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020202020202020200A2020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20200A2020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020200A202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020200A20202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020200A2020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020200A202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020200A20202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	0A20202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020200A2020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020200A202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020200A20202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020200A2020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020200A202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020200A20
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020200A20202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020200A2020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020200A202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020200A20202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020200A2020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020202020200A202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	200A202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020200A20202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020200A2020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020200A202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020200A20202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020202020200A2020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020202020202020200A
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020200A202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020200A20202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020200A2020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020200A202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020200A20202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020202020202020200A2020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20200A2020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020200A202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020200A20202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020200A2020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020200A202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020200A20202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	0A20202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020200A2020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020200A202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020200A20202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020200A2020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020200A202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020200A20
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020200A20202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020200A2020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020200A202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020200A20202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020200A2020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020202020200A202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	200A202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020200A20202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020200A2020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020200A202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020200A20202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	20202020202020202020202020202020202020202020202020200A2020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020202020202020202020202020202020202020202020202020202020200A
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	2020202020202020202020202020202020202020202020202020202020202020
+	202020200A202020202020202020202020202020202020202020202020202020
+	200A3C3F787061636B657420656E643D2277223F3E0F80D15600000020634852
+	4D00007A25000080830000F9FF000080E9000075300000EA6000003A98000017
+	6F925FC546000008C34944415478DAECDDEB6EE3361006D06691E7CB3E6BF705
+	DD5F69DDC09648F122CEF01C6081A28E1D41123FCD28B6E7E3F1783CFE02B6F4
+	CB2E000100080040000002001000800000040020000001000800400000020010
+	0080000004002000000100080040000002001000800000040020000001000800
+	4000000200B8E6F3EC077E7F7DD94B10D8DF7FFEA800000100D4B400A5A504B0
+	8ED2D65D05005A00400B001D7C7CFCF7DF8FC7BEDBB05D003CEFF4929DFFEAE7
+	6B9E5FF23A0E3E046E01CE42A2E4F192A00101102C042C6C48720FE067A97EE5
+	CA5FFB1AA0021870957E5E885717616DEFFEEAE7F5FF10A4026869098E16BA10
+	18D37ED5ECDB5E3787DF3D47A597F01E8083BAFE31283946B5F76F8E5EF3D563
+	CE93052A809213E5EC6A71F54AE30A7F7F48F43A06B58BD9E25FB005F83E191E
+	0F07288BD69BABEFEE093D87C7599B50FB9E11E75EF01640D2AFB1F05B6FAEFE
+	FCD9D2E7BE7ADED1025709DE5401942ECEB352F1D563EFAE16E40EE01E7F01E2
+	A616A0E7C9A28D5079A1057092DAAFAC1800EEDAEE794F40C9AD05A8EAC3AE2E
+	FCA3378494DE1FF8FE3927EDBC9EBCF522F0EA783A8E9BB5003DAA0B1547FF63
+	D1F2E9CA9A3BF73F7F67CDEB3AEE132A809693E0EC8E7FC955E8D50D42077EBD
+	7B02A5CFAB3D9EAFAA4012550025570AE5608CB2BFF4F51DCFA0017076E05A0E
+	6CEB6BBB69B55EF05E7D6B77E99B8A1CEF092DC04A1FD775C0D70A819101A13A
+	DCB00500040020000001000800400000020010004011B301E9CE705015C0D050
+	A97DDC074520700B6036200468015A980D08812B00B3014105704B4B60721024
+	0B00E5FBFAC721FA70D0DADFA305B8B8584BBF08F2F99F2BFCFA211C7938E8D9
+	EFD9E502D4FDAF00CFB3011112235F6BF4F7146A01163AC904CA7DB20F072DD9
+	3E1540639A967CEBEFCF7F52FBFE859F6D38E8D9F376BBD0980DC87225F3CCE1
+	A0BB9F5F660372B86FED5F01D06DF13999042B495B00B301F7B8279029209C13
+	660352B8507A2D96ABEF1D18D18E782F80D980541EB3967D5C3B1CB4F477FE3C
+	A76AB6F16812B11660F152CD5F09D6BF27B0DA7050178E012D80D980B9FBFD59
+	AF3FEB38391F3A54006603EE1102EFDEA1D772D53CFB6C47E987745AB6EFACBD
+	D8E59CFA749A73B5FD1A15C8338783EE7EF1F0ADC02000000100080040000002
+	001000800000F2301C94EE0C0755010C0D95DAC77D600802B7008683428016A0
+	85E1A010B802301C145400B7B404468741B20050BEAF7F1CA20F07C57050261C
+	D71EFFFFDD6316FF22F7007E2E480B53488C7E2D8B7F937B008683DE2BFB7050
+	013021B5CF16F1D957850B81FB17FEF3FFAFF916DE2BCF3D1BDA79753828832B
+	00C34195F9A382A7D7CF33F01E40F69373B7856FFF0A806E8BCFC9245849DA02
+	180EBAD73D0101A10258EA0AE46FC463177EC6E1A0180E4AE531CB361C540004
+	2B3DCF4280B5EE09AC361C94012D80E1A0B9FBFD59AFEF3805AA000C07DD2304
+	B20E0725500BC09AEDD7A8409E391C540B000800400000020010008000000400
+	908CF701D09DD9809B0680E1A0A0051896E4571FF7B650087C0FC07050487E0F
+	C07050085C01180E0A2A805B5A02A3C3E6B75F35FB76D5D980B5BF4705B0C889
+	C71AC720F26CC0B3DFB3CBF9F739EB44394BD5AB571A57F8FB4362E617868E5E
+	FC5A8046CFC341EDE81CB2CF062CD93E2D807660CB85DF7A73F56CC65FCDF38E
+	16F8D5FB1157B74F0550B9380D07CD7B2F6074C5D1FBE75D5C06B60086835AF8
+	68019CA4F62BD92B802B776D95F1B1EF09640A08E7A2E1A04C5E28A5EF1D78F7
+	9787DEDBB2FB7963382855FBB6E54D32B5B3014B8F63CB8CC8DDCF1BC341197E
+	BC4BAB8C19B3019D37412A80922B85B23E6E7F7CE787B79C379D03C070D0BD42
+	60E4E8AF9AC75AB6EFECBCD8E5BC311C94EE21106936E0EEE78E6F0506010008
+	00400000020010008000000400200080040C07A56AFF46D99FB6394905603828
+	04A9004686C0958F10332E786D738E6D361C1436663828680162974D46878DAD
+	C87A5452A537B85A6E84D9E61B2B00FD1CADC776E5631E719BA70540AF29B2CF
+	FF5CE1F35614AFCE89ABA3BE6CF36215C0F370502859502B2FA488DB9CA205D0
+	0EEC1102112ABA88DB5CCA705084FBC617A45F23764EAF77DF59F07B55012B1F
+	EFAC5F4D6F38286CECD7CCC567B172741EF83360C07B0025A590E1A01C9D37D1
+	1651C46D0ED702180EBAD7D57FE56316719B87570086832AD36BABAA777F3BAF
+	A9E86CF3261540497BA1AC8F1B286773FE5608F388DB7C4B00180E4AF640CF7A
+	11321C9429FB74C6B04EDB9CB405000400200000010008004000000200100080
+	00008E190E4AD5FE6D391E67CF9DFD3C0C0765E2F15AE93102B50059BF8D65F5
+	7D5E1B9EA5F31FEE7E1E835A80168683E6F37D3C6A8FC3ECE7A90006F6898683
+	EE59FA3FEFFBA3609EFD3C02B6003527DBAB101004D702F8EABEBB1AC6B39F87
+	E1A0E01EC0E8C55AF27D6957FF9427E961A10AC07050D0026807608716C07050
+	D8FC1EC0A8AB75A6092CA005D01E409E00301C145400FF96EBEFFEF50E989A77
+	7AF930D01A55D98A9F13C070503A5E00DEEDFB95DE26CCFF190E4AD5F1ADF96E
+	80DE63E1B5981B550025092ED9631CA7B39F99FD3C3A0780E1A0941C8F951EA3
+	B105301CD4D5BCF773673F0F5F0A0A0200100080000004002000000100080020
+	13B301A9DAA76603AA009638116B1EF72191BAFDDDF2F16AB30105C0B4107080
+	6385F5BB9F311B30490BD0C26CC035BD1BF356F225AD66036E5401980D986FE1
+	BFFA0E86D240361B500B30ADD4341B70ECC2EF11DE66030A80EEFD24B0C03D00
+	B301F720945500C5E59885095A00579EA4577F01AF05A85A9C66035AFC24BD07
+	30EA6A6D36A0EA0B2D801374A17DEBEA2F002E2F3E8BD5E22769056036A0C57F
+	F47CB301B500D3AB0B27C1BCC56F36604C6603D274AC5BBFEF6185E7A9001667
+	36600C66036E1A00660352723CCC064CD402980DB8EF557CD46B980DA8050004
+	00B05C0BF0FBEBCB1E031500200080D03E1E0FF7504105000800400000020010
+	0080000004002000000100080040000002001000800000040020000001000800
+	40000002001000C014FF0C009E7A1FFB4FC0708C0000000049454E44AE426082
+	]]>
+</Picture>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! =============================================================================
+! Appearence
+! =============================================================================
+values "gs_ui_current_page" 1,2,3
+
+call "label_table_form" parameters AC_CustomReadability = AC_CustomReadability,
+	bUseBuiltinPointer			= not(LABEL_CUSTOM_ARROW),
+	anglePosition 				= LABEL_ROTANGLE,
+	bUsePrefixColumn			= bUsePrefixColumn,
+	bUseContentColumn			= 1,
+	!sPrefixStrings				= prefixTnC,
+	!sContentStrings			= contentTnC,
+	bWrapText					= LABEL_TEXT_WRAP,
+	widthTextBoxPrefix_mm		= widthTextBoxPrefix_mm,
+	widthTextBoxPrefix_pt		= widthTextBoxPrefix_pt,
+	widthTextBoxContent_mm		= widthTextBoxContent_mm,
+	widthTextBoxContent_pt		= widthTextBoxContent_pt,
+	bEnableCustomHeaderStyle 	= 0,
+	bUseCustomHeaderStyle		= 0,
+	xFirstIndentParagraph		= 0,
+	xLeftIndentParagraph		= 0,
+	xRightIndentParagraph		= 0,
+	xTabPositionParagraph		= 0,
+	widthFactorTextBlock		= LABEL_TEXT_WIDTH_FACT,
+	charspaceFactorTextBlock	= LABEL_TEXT_CHARSPACE_FACT,
+	iFixedHeightTextBlock		= 0,
+
+	penTextBody					= LABEL_TEXT_PEN,
+	sTypeFontBody				= LABEL_FONT_NAME,
+	iStyleFontBody				= LABEL_FONT_STYLE2,
+	sizeFontBody				= LABEL_TEXT_SIZE,
+	iAlignmentTableColumns		= LABEL_TEXT_ALIGN,			! 0: custom, 1: left aligned, 2: center aligned, 3: right aligned, 4: full justified
+	sizeLeadingBody				= LABEL_TEXT_LEADING,
+
+	bShowFill					= 1,
+	filltype					= filltypeBackground,
+	penForeground				= LABEL_TEXT_BG_PEN,
+	penBackground				= LABEL_TEXT_BG_PEN,
+	bShowFrame					= LABEL_FRAME_ON,
+	penFrame					= LABEL_ARROW_PEN,
+	lineTypeFrame				= LABEL_ARROW_LINETYPE,
+	iFrameStyle					= iFrameStyle,
+	iReferencePoint				= iReferencePoint,
+	iLabelOrientation 			= iLabelOrientation
+
+
+values{2} "iReferencePoint" 	_valuesRefPoint, _stRefPoint
+
+
+! ==============================================================================
+! Use Label Width
+! ==============================================================================
+if GLOB_UI_BUTTON_ID = 1000 then
+
+	parameters 	bUseWithWall 	= 1,
+				bUseWithSlab	= 1,
+				bUseWithRoof	= 1,
+				bUseWithShell	= 1,
+				bUseWithColumn	= 1,
+				bUseWithBeam	= 1,
+				bUseWithMesh	= 1,
+				bUseWithMorph	= 1,
+				bUseWithObject	= 1,
+				bUseWithLamp	= 1,
+				bUseWithDoor	= 1,
+				bUseWithWindow	= 1,
+				bUseWithSkylight	= 1,
+				bUseWithCW			= 1,
+				bUseWithCWMembers	= 1,
+				bUseWithFill	= 1,
+				bUseWithLabel	= 1
+
+endif
+if  GLOB_UI_BUTTON_ID = 2000 then
+
+	parameters 	bUseWithWall 	= 0,
+				bUseWithSlab	= 0,
+				bUseWithRoof	= 0,
+				bUseWithShell	= 0,
+				bUseWithColumn	= 0,
+				bUseWithBeam	= 0,
+				bUseWithMesh	= 0,
+				bUseWithMorph	= 0,
+				bUseWithObject	= 0,
+				bUseWithLamp	= 0,
+				bUseWithDoor	= 0,
+				bUseWithWindow	= 0,
+				bUseWithSkylight	= 0,
+				bUseWithCW			= 0,
+				bUseWithCWMembers	= 0,
+				bUseWithFill	= 0,
+				bUseWithLabel	= 0
+
+endif
+
+! ==============================================================================
+! Display Order
+! ==============================================================================
+
+isFirstRun = 0
+n = APPLICATION_QUERY ("parameter_script", "firstoccasion_in_progress", isFirstRun)
+
+if n and isFirstRun and GLOB_UI_BUTTON_ID > 999 then
+
+	for i = 1 to _maxFunctionOrder
+		if GLOB_UI_BUTTON_ID = 1000 + i then		! move down
+			dim tempTexts[]
+				tempTexts = functionOrder
+
+			tempTexts[i] 	= functionOrder[i+1]
+			tempTexts[i+1]	= functionOrder[i]
+			functionOrder	= tempTexts
+
+			parameters functionOrder = tempTexts
+		endif
+
+		if GLOB_UI_BUTTON_ID = 2000 + i then		! move up
+			dim tempTexts[]
+				tempTexts = functionOrder
+
+			tempTexts[i] 	= functionOrder[i-1]
+			tempTexts[i-1] 	= functionOrder[i]
+			functionOrder 	= tempTexts
+
+			parameters functionOrder = tempTexts
+		endif
+	next i
+
+	for j = 1 to _maxDimensionNum
+
+		if GLOB_UI_BUTTON_ID = 3000 + j then		! swap
+			dim tempTexts[]
+				tempTexts = iContentOrderDim
+
+			tempTexts[j]		= iContentOrderDim[j-1]
+			tempTexts[j-1]		= iContentOrderDim[j]
+			iContentOrderDim	= tempTexts
+
+			parameters iContentOrderDim = iContentOrderDim
+		endif
+
+	next j
+endif
+
+! =============================================================================
+! Ordering - precalculated functions ordering
+! =============================================================================
+
+_numrow = vardim1(functionOrder)
+dim _recalculatedOrder[]
+_recalculatedOrder = functionOrder
+
+UNUSED = 99
+if _numShownContentGroupUI > EPS then
+	if _numrow > _numShownContentGroupUI then
+		for iRow = 1 to _numrow
+			if 	(_recalculatedOrder[iRow] <> UNUSED and _recalculatedOrder[iRow] <> CONTENT_NONE) then
+				if	_iDisplayOrderingGroupUI[_recalculatedOrder[iRow]]  = VALID then
+				else
+					for iDelete = iRow to _numrow-1
+						_recalculatedOrder[iDelete] = _recalculatedOrder[iDelete+1]
+					next iDelete
+					_recalculatedOrder[_numrow] = UNUSED
+					iRow = iRow - 1
+				endif
+			endif
+		next iRow
+	else
+		! find all unused group to paste
+		for iContent = 2 to _maxContentValues
+			if _iDisplayOrderingGroupUI[iContent] = VALID then
+				_iUnused = 0
+				for iRow = 1 to _numrow
+					if _recalculatedOrder[iRow] <> iContent then
+						_iUnused  = iContent
+					else
+						_iUnused  = 0
+						iRow = _numrow	! force loop end
+					endif
+				next iRow
+				if _iUnused <> 0 then
+					_numrow = _numrow + 1
+					_recalculatedOrder[_numrow] = _iUnused
+				endif
+			endif
+		next iContent
+	endif
+
+	dim functionOrder[]
+		functionOrder[1] = CONTENT_ID
+	for iRow = 1 to vardim1(_recalculatedOrder)
+		if _recalculatedOrder[iRow] <> UNUSED then
+			functionOrder[iRow] = _recalculatedOrder[iRow]
+		endif
+	next iRow
+	parameters functionOrder = functionOrder
+endif
+! ==============================================================================
+! Functions
+! ==============================================================================
+
+if _iDisplayContentGroupUI[CONTENT_ID] <= INVALID then
+	lock "bShowID"
+	hideparameter "bShowID"
+else
+	if not(bShowID) then
+		lock	"sDescriptionID",
+				"iIDText",
+				"sIDTextCustom"
+		hideparameter	"sDescriptionID",
+						"iIDText",
+						"sIDTextCustom"
+	endif
+endif
+
+values{2} "iIDText" 	IDVALUE_IDNUMBER, 	sIDTextValues[1],
+						IDVALUE_MASTERID,	sIDTextValues[4],
+						IDVALUE_FULLIDNUM,	sIDTextValues[3],
+				 		IDVALUE_CUSTOMTEXT,	sIDTextValues[2]
+
+if iIDText <> IDVALUE_CUSTOMTEXT then
+	lock "sIDTextCustom"
+	hideparameter "sIDTextCustom"
+endif
+
+if _iDisplayContentGroupUI[CONTENT_ELEMENT_NAME] <= INVALID then
+	lock "bShowElementName"
+	hideparameter "bShowElementName"
+else
+	if not(bShowElementName) then
+		lock	"sDescriptionElementName"
+		hideparameter	"sDescriptionElementName"
+	endif
+endif
+
+if _iDisplayContentGroupUI[CONTENT_ELEV] <= INVALID then
+	lock "bShowElevation"
+	hideparameter "bShowElevation"
+else
+	if not(bShowElevation) then
+		lock	"sDescriptionElevation",
+				"iRefStory",
+				"bShowElevTop",
+				"iElevationTopMeasuredTo",
+				"strPrefixElevTop",
+				"strSuffixElevTop",
+				"bShowElevBottom",
+				"iElevationBottomMeasuredTo",
+				"strPrefixElevBottom",
+				"strSuffixElevBottom"
+		hideparameter	"sDescriptionElevation",
+				"iRefStory",
+				"bShowElevTop",
+				"iElevationTopMeasuredTo",
+				"strPrefixElevTop",
+				"strSuffixElevTop",
+				"bShowElevBottom",
+				"iElevationBottomMeasuredTo",
+				"strPrefixElevBottom",
+				"strSuffixElevBottom"
+	endif
+endif
+
+if not(bShowElevTop) then
+	lock	"iElevationTopMeasuredTo",
+			"strPrefixElevTop",
+			"strSuffixElevTop"
+	hideparameter	"iElevationTopMeasuredTo",
+					"strPrefixElevTop",
+					"strSuffixElevTop"
+endif
+
+if not(bShowElevBottom) then
+	lock	"iElevationBottomMeasuredTo",
+			"strPrefixElevBottom",
+			"strSuffixElevBottom"
+	hideparameter	"iElevationBottomMeasuredTo",
+					"strPrefixElevBottom",
+					"strSuffixElevBottom"
+endif
+
+
+values{2} "iRefStory"	REF_STORY_CURR,		_stRefStory[1],
+						REF_STORY_PROJECT,	_stRefStory[2]
+
+values{2} "iElevationTopMeasuredTo"		ELEV_MESURED_FINISH,	_sElevationMeasuredTo[1],
+										ELEV_MESURED_CORE,		_sElevationMeasuredTo[2]
+
+values{2} "iElevationBottomMeasuredTo"	ELEV_MESURED_FINISH,	_sElevationMeasuredTo[1],
+										ELEV_MESURED_CORE,		_sElevationMeasuredTo[2]
+
+if _iDisplayContentGroupUI[CONTENT_DIM] <= INVALID then
+	lock "bShowLinearDimension"
+	hideparameter "bShowLinearDimension"
+else
+	if not(bShowLinearDimension) then
+		lock	"bShowWidth",
+				"bShowLength",
+				"bShowHeight",
+				"bShowThickness",
+				"sSeparator",
+				"sDescriptionDimension"
+		hideparameter	"bShowWidth",
+						"bShowLength",
+						"bShowHeight",
+						"bShowThickness",
+						"sSeparator",
+						"sDescriptionDimension"
+	endif
+endif
+
+
+if _iDisplayContentGroupUI[CONTENT_SURF] <= INVALID then
+	lock "bShowSurfaceArea"
+	hideparameter "bShowSurfaceArea"
+else
+	if not(bShowSurfaceArea) | iValueSumSurface = SUMSURFACE_ALL then
+		lock	"bAddTopSurface",
+				"bAddBottomSurface",
+				"bAddSideSurface",
+				"bAddEdgeSurface",
+				"bAddRefSideSurface",
+				"bAddOppSideSurface"
+		hideparameter	"bAddTopSurface",
+						"bAddBottomSurface",
+						"bAddSideSurface",
+						"bAddEdgeSurface",
+						"bAddRefSideSurface",
+						"bAddOppSideSurface"
+	endif
+
+	if not(bShowSurfaceArea) then
+		lock	"iValueSumSurface",
+				"sDescriptionSurfaceArea"
+		hideparameter	"iValueSumSurface",
+						"sDescriptionSurfaceArea"
+	endif
+endif
+
+
+if	_iDisplayContentParametersUI[SURF_TOP] <= INVALID &\
+	_iDisplayContentParametersUI[SURF_BOTTOM] <= INVALID &\
+	_iDisplayContentParametersUI[SURF_SIDE] <= INVALID &\
+	_iDisplayContentParametersUI[SURF_EDGE] <= INVALID &\
+	_iDisplayContentParametersUI[SURF_REFSIDE] <= INVALID &\
+	_iDisplayContentParametersUI[SURF_OPSIDE] <= INVALID then
+
+	values{2} "iValueSumSurface" 	SUMSURFACE_ALL, 		_stValueSumSurface[1]
+else
+	values{2} "iValueSumSurface" 	SUMSURFACE_ALL, 		_stValueSumSurface[1],
+									SUMSURFACE_SELECTED, 	_stValueSumSurface[2]
+endif
+
+if iValueSumSurface = SUMSURFACE_ALL then
+	lock	"bAddTopSurface",
+			"bAddBottomSurface",
+			"bAddSideSurface",
+			"bAddEdgeSurface",
+			"bAddRefSideSurface",
+			"bAddOppSideSurface"
+endif
+
+if _iDisplayContentGroupUI[CONTENT_AREA] <= INVALID then
+	lock "bShowProjectedArea"
+	hideparameter "bShowProjectedArea"
+else
+	if not(bShowProjectedArea) then
+		lock "sDescriptionProjectedArea"
+		hideparameter "sDescriptionProjectedArea"
+	endif
+endif
+
+if _iDisplayContentGroupUI[CONTENT_VOL] <= INVALID then
+	lock "bShowVolume"
+	hideparameter "bShowVolume"
+else
+	if not(bShowVolume) then
+		lock "sDescriptionVolume"
+		hideparameter "sDescriptionVolume"
+	endif
+endif
+
+if _iDisplayContentGroupUI[CONTENT_SKIN] <= INVALID then
+	lock "bShowSkinList"
+	hideparameter "bShowSkinList"
+else
+	if not(bShowSkinList) then
+		lock 	"sDescriptionSkinList",
+				"iTypeSkinContent",
+				"bChangeSkinDirection",
+				"bCustomListContent",
+				"dataCustomSkinRow"
+		hideparameter 	"sDescriptionSkinList",
+						"iTypeSkinContent",
+						"bChangeSkinDirection",
+						"bCustomListContent",
+						"dataCustomSkinRow"
+	else
+		if not(bCustomListContent) then
+			lock 	"dataCustomSkinRow"
+			hideparameter 	"dataCustomSkinRow"
+		endif
+	endif
+endif
+
+values{2} "iTypeSkinContent"	CONTENT_BUILDING_MATERIAL,		_stTypeSkinContentValues[1],
+								CONTENT_BUILDING_ID,			_stTypeSkinContentValues[3],
+								CONTENT_BUILDING_MANUFACTURER,	_stTypeSkinContentValues[4],
+								CONTENT_BUILDING_DESCRIPTION,	_stTypeSkinContentValues[5],
+								CONTENT_CUT_FILL,				_stTypeSkinContentValues[2]
+
+if _iDisplayContentGroupUI[CONTENT_STRUCT_NAME] <= INVALID then
+	lock "bShowStructuralName"
+	hideparameter "bShowStructuralName"
+else
+	if not(bShowStructuralName) then
+		lock 	"sDescriptionStructuralName"
+		hideparameter 	"sDescriptionStructuralName"
+	endif
+endif
+
+if _iDisplayContentGroupUI[CONTENT_MATERIAL] <= INVALID then
+	lock "bShowSurface"
+	hideparameter "bShowSurface"
+else
+	if not(bShowSurface) then
+		lock 	"sDescriptionSurface",
+				"iSurfaceToDisplay",
+				"sCustomSurface",
+				"sPrefixSurface",
+				"sSuffixSurface"
+		hideparameter 	"sDescriptionSurface",
+				"iSurfaceToDisplay",
+				"sCustomSurface",
+				"sPrefixSurface",
+				"sSuffixSurface"
+	endif
+endif
+
+
+dim _iUnitLocal[]
+dim _iSelectedContent[]
+	for iA = 1 to _maxContentValues
+		_iUnitLocal[iA] = 0
+		_iSelectedContent[iA] = 0	! None
+	next iA
+_iSelectedContent[1] = CONTENT_MATERIAL
+_iSelectedContent[2] = CONTENT_SKIN
+_iUnitLocal[CONTENT_SKIN] = iWorkUnitLinear
+
+! set iSurfaceToDisplay values
+call "label_content_macro" parameters all iSelectedContent = _iSelectedContent,
+		iContentOrderDim		= iContentOrderDim,
+		iUnitLocal				= _iUnitLocal,
+		bUseInSingleRank		= 0,
+		bUsePrefixColumn		= 0,
+
+		! for Skin List
+		bChangeSkinDirection	= bChangeSkinDirection,
+		iTypeSkinContent		= iTypeSkinContent,
+		dataCustomSkinRow		= dataCustomSkinRow,
+		bCustomListContent		= bCustomListContent,
+
+		! for Surface Material
+		iSurfaceToDisplay		= iSurfaceToDisplay,
+		sPrefixSurface			= sPrefixSurface,
+		sSuffixSurface			= sSuffixSurface,
+		sCustomSurface			= sCustomSurface,
+		iAvailableMaterial		= iAvailableMaterial,
+		sAvailableMaterial		= sAvailableMaterial
+
+
+if _iDisplayContentGroupUI[CONTENT_CUSTOM] <= INVALID then
+	lock "bShowCustomText"
+	hideparameter "bShowCustomText"
+else
+	if not(bShowCustomText) then
+		lock 	"sDescriptionCustomText",
+				"sCustomText"
+		hideparameter 	"sDescriptionCustomText",
+						"sCustomText"
+	endif
+endif
+
+
+if not(bUsePrefixColumn) then
+	lock 	"sDescriptionID",
+			"sDescriptionElementName",
+			"sDescriptionElevation",
+			"sDescriptionDimension",
+			"sDescriptionSurfaceArea",
+			"sDescriptionProjectedArea",
+			"sDescriptionVolume",
+			"sDescriptionSkinList",
+			"sDescriptionStructuralName",
+			"sDescriptionSurface",
+			"sDescriptionCustomText"
+	hideparameter 	"sDescriptionID",
+			"sDescriptionElementName",
+			"sDescriptionElevation",
+			"sDescriptionDimension",
+			"sDescriptionSurfaceArea",
+			"sDescriptionProjectedArea",
+			"sDescriptionVolume",
+			"sDescriptionSkinList",
+			"sDescriptionStructuralName",
+			"sDescriptionSurface",
+			"sDescriptionCustomText"
+endif
+
+values{2} "iWorkUnitLinear"	DIMUNIT_MM,		stUnitFormats[1],
+							DIMUNIT_CM,		stUnitFormats[2],
+							DIMUNIT_DM,		stUnitFormats[3],
+							DIMUNIT_METER,		stUnitFormats[4],
+							DIMUNIT_INCH,		stUnitFormats[5],
+							DIMUNIT_PROJECT,	stUnitFormats[6]
+
+put 0, 1
+if iWorkUnitLinear = DIMUNIT_CM		then put 2
+if iWorkUnitLinear = DIMUNIT_DM		then put 2, 3
+if iWorkUnitLinear = DIMUNIT_METER	then put 2, 3, 4
+
+values "iWorkUnitLinearDecimal" get(NSP)
+
+if _bLockLinearUnitDecimal then
+	lock "iWorkUnitLinearDecimal"
+endif
+
+values{2} "iWorkUnitArea"	SURFUNIT_SQM,		stUnitFormatsArea[1],
+							SURFUNIT_SQCM,		stUnitFormatsArea[2],
+							SURFUNIT_SQMM,		stUnitFormatsArea[3],
+							SURFUNIT_SQFT,		stUnitFormatsArea[4],
+							SURFUNIT_SQINCH,	stUnitFormatsArea[5],
+							SURFUNIT_PROJECT,	stUnitFormatsArea[6]
+
+put 0, 1
+if iWorkUnitArea = SURFUNIT_SQCM	then put 2
+if iWorkUnitArea = SURFUNIT_SQM		then put 2, 3, 4
+
+values "iWorkUnitAreaDecimal" get(NSP)
+
+if _bLockAreaUnitDecimal then
+	lock "iWorkUnitAreaDecimal"
+endif
+
+values{2} "iWorkUnitVolume"	VOLUNIT_CM,		stUnitFormatsVol[1],
+							VOLUNIT_L, 		stUnitFormatsVol[2],
+							VOLUNIT_CCM,	stUnitFormatsVol[3],
+							VOLUNIT_CMM,	stUnitFormatsVol[4],
+							VOLUNIT_CFEET,	stUnitFormatsVol[5],
+							VOLUNIT_CINCH,	stUnitFormatsVol[6],
+							VOLUNIT_CYARD,	stUnitFormatsVol[7],
+							VOLUNIT_GAL,	stUnitFormatsVol[8],
+							VOLUNIT_PROJECT,stUnitFormatsVol[9]
+
+put 0, 1
+if iWorkUnitVolume = VOLUNIT_CCM		then put 2
+if iWorkUnitVolume = VOLUNIT_L |\
+	iWorkUnitVolume = VOLUNIT_CINCH then
+	put 2, 3
+endif
+if iWorkUnitVolume = VOLUNIT_CM |\
+	iWorkUnitVolume = VOLUNIT_CFEET |\
+	iWorkUnitVolume = VOLUNIT_CYARD |\
+	iWorkUnitVolume = VOLUNIT_GAL then
+	put 2, 3, 4
+endif
+
+values "iWorkUnitVolumeDecimal" get(NSP)
+
+if _bLockVolumeUnitDecimal then
+	lock "iWorkUnitVolumeDecimal"
+endif
+
+]]>
+</Script_VL>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Размер 1"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Размер 2"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Boolean Name="AC_CustomReadability">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="functionOrder">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="11" SecondDimension="0">
+				<AVal Row="1">5</AVal>
+				<AVal Row="2">6</AVal>
+				<AVal Row="3">9</AVal>
+				<AVal Row="4">2</AVal>
+				<AVal Row="5">4</AVal>
+				<AVal Row="6">12</AVal>
+				<AVal Row="7">3</AVal>
+				<AVal Row="8">10</AVal>
+				<AVal Row="9">7</AVal>
+				<AVal Row="10">11</AVal>
+				<AVal Row="11">8</AVal>
+			</ArrayValues>
+		</Integer>
+		<Integer Name="iContentOrderDim">
+			<Description><![CDATA["Порядок Размеров"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="4" SecondDimension="0">
+				<AVal Row="1">1</AVal>
+				<AVal Row="2">2</AVal>
+				<AVal Row="3">3</AVal>
+				<AVal Row="4">4</AVal>
+			</ArrayValues>
+		</Integer>
+
+		<!-- titleUsewith: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="titleUsewith">
+			<Description><![CDATA["Показ параметров следующих Инструментов"]]></Description>
+		</Title>
+		<Boolean Name="bUseWithWall">
+			<Description><![CDATA["Стена"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithSlab">
+			<Description><![CDATA["Перекрытие"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithRoof">
+			<Description><![CDATA["Крыша"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithShell">
+			<Description><![CDATA["Оболочка"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithColumn">
+			<Description><![CDATA["Колонна"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithBeam">
+			<Description><![CDATA["Балка"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithMesh">
+			<Description><![CDATA["3D-сетка"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithMorph">
+			<Description><![CDATA["Морф"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithObject">
+			<Description><![CDATA["Объект"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithLamp">
+			<Description><![CDATA["Источник Света"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithDoor">
+			<Description><![CDATA["Дверь"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithWindow">
+			<Description><![CDATA["Окно"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithSkylight">
+			<Description><![CDATA["Световой Люк"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithCW">
+			<Description><![CDATA["Навесная Стена"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithCWMembers">
+			<Description><![CDATA["Элементы Навесной Стены"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithFill">
+			<Description><![CDATA["Штриховка"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bUseWithLabel">
+			<Description><![CDATA["Независимая Выноска"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+
+		<!-- bShowID: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowID">
+			<Description><![CDATA["Показ ID"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionID">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["ID"]]></Value>
+		</String>
+		<Integer Name="iIDText">
+			<Description><![CDATA["Текст ID"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="sIDTextCustom">
+			<Description><![CDATA["Специальный ID"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["<Специальный Текст>"]]></Value>
+		</String>
+
+		<!-- bShowElementName: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowElementName">
+			<Description><![CDATA["Имя"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionElementName">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Имя"]]></Value>
+		</String>
+
+		<!-- bShowElevation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowElevation">
+			<Description><![CDATA["Отметка"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionElevation">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Возвышение"]]></Value>
+		</String>
+		<Integer Name="iRefStory">
+			<Description><![CDATA["Этаж Привязки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="bShowElevTop">
+			<Description><![CDATA["Отметка Верха"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="iElevationTopMeasuredTo">
+			<Description><![CDATA["Показ Верхней Отметки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="strPrefixElevTop">
+			<Description><![CDATA["Префикс Верхней Отметки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="strSuffixElevTop">
+			<Description><![CDATA["Суффикс Верхней Отметки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Boolean Name="bShowElevBottom">
+			<Description><![CDATA["Отметка Низа"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="iElevationBottomMeasuredTo">
+			<Description><![CDATA["Показ Нижней Отметки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<String Name="strPrefixElevBottom">
+			<Description><![CDATA["Префикс Нижней Отметки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="strSuffixElevBottom">
+			<Description><![CDATA["Суффикс Нижней Отметки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+
+		<!-- bShowLinearDimension: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowLinearDimension">
+			<Description><![CDATA["Размеры"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionDimension">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Размеры"]]></Value>
+		</String>
+		<Boolean Name="bShowWidth">
+			<Description><![CDATA["Ширина"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bShowLength">
+			<Description><![CDATA["Длина"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bShowHeight">
+			<Description><![CDATA["Высота"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bShowThickness">
+			<Description><![CDATA["Толщина"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sSeparator">
+			<Description><![CDATA["Разделитель"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[" x "]]></Value>
+		</String>
+
+		<!-- bShowSurfaceArea: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowSurfaceArea">
+			<Description><![CDATA["Площадь Поверхности"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionSurfaceArea">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Площадь Поверхности"]]></Value>
+		</String>
+		<Integer Name="iValueSumSurface">
+			<Description><![CDATA["Значение"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="bAddTopSurface">
+			<Description><![CDATA["Верхняя Поверхность"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bAddBottomSurface">
+			<Description><![CDATA["Нижняя Поверхность"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bAddSideSurface">
+			<Description><![CDATA["Боковая Поверхность"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bAddEdgeSurface">
+			<Description><![CDATA["Поверхность Торцов"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bAddRefSideSurface">
+			<Description><![CDATA["Наружная/Левая Поверхность"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bAddOppSideSurface">
+			<Description><![CDATA["Внутренняя/Правая Поверхность"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+
+		<!-- bShowProjectedArea: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowProjectedArea">
+			<Description><![CDATA["Площадь Проекции"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionProjectedArea">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Площадь Проекции"]]></Value>
+		</String>
+
+		<!-- bShowVolume: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowVolume">
+			<Description><![CDATA["Объем"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionVolume">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Объем"]]></Value>
+		</String>
+
+		<!-- bShowSkinList: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowSkinList">
+			<Description><![CDATA["Список Слоев"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionSkinList">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Список Слоев"]]></Value>
+		</String>
+		<Integer Name="iTypeSkinContent">
+			<Description><![CDATA["Показать Слой по"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="bChangeSkinDirection">
+			<Description><![CDATA["Обратный Порядок Слоев"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bCustomListContent">
+			<Description><![CDATA["Специальные Данные"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<String Name="dataCustomSkinRow">
+			<Description><![CDATA["Специальные Строки Данных"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="32" SecondDimension="0">
+				<AVal Row="1"><![CDATA[""]]></AVal>
+				<AVal Row="2"><![CDATA[""]]></AVal>
+				<AVal Row="3"><![CDATA[""]]></AVal>
+				<AVal Row="4"><![CDATA[""]]></AVal>
+				<AVal Row="5"><![CDATA[""]]></AVal>
+				<AVal Row="6"><![CDATA[""]]></AVal>
+				<AVal Row="7"><![CDATA[""]]></AVal>
+				<AVal Row="8"><![CDATA[""]]></AVal>
+				<AVal Row="9"><![CDATA[""]]></AVal>
+				<AVal Row="10"><![CDATA[""]]></AVal>
+				<AVal Row="11"><![CDATA[""]]></AVal>
+				<AVal Row="12"><![CDATA[""]]></AVal>
+				<AVal Row="13"><![CDATA[""]]></AVal>
+				<AVal Row="14"><![CDATA[""]]></AVal>
+				<AVal Row="15"><![CDATA[""]]></AVal>
+				<AVal Row="16"><![CDATA[""]]></AVal>
+				<AVal Row="17"><![CDATA[""]]></AVal>
+				<AVal Row="18"><![CDATA[""]]></AVal>
+				<AVal Row="19"><![CDATA[""]]></AVal>
+				<AVal Row="20"><![CDATA[""]]></AVal>
+				<AVal Row="21"><![CDATA[""]]></AVal>
+				<AVal Row="22"><![CDATA[""]]></AVal>
+				<AVal Row="23"><![CDATA[""]]></AVal>
+				<AVal Row="24"><![CDATA[""]]></AVal>
+				<AVal Row="25"><![CDATA[""]]></AVal>
+				<AVal Row="26"><![CDATA[""]]></AVal>
+				<AVal Row="27"><![CDATA[""]]></AVal>
+				<AVal Row="28"><![CDATA[""]]></AVal>
+				<AVal Row="29"><![CDATA[""]]></AVal>
+				<AVal Row="30"><![CDATA[""]]></AVal>
+				<AVal Row="31"><![CDATA[""]]></AVal>
+				<AVal Row="32"><![CDATA[""]]></AVal>
+			</ArrayValues>
+		</String>
+
+		<!-- bShowStructuralName: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowStructuralName">
+			<Description><![CDATA["Показать Состав/Профиль/Материал"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionStructuralName">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Материал Профиль Состав"]]></Value>
+		</String>
+
+		<!-- bShowSurface: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowSurface">
+			<Description><![CDATA["Покрытие"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionSurface">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Покрытие"]]></Value>
+		</String>
+		<Integer Name="iSurfaceToDisplay">
+			<Description><![CDATA["Покрытие Поверхности"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>99</Value>
+		</Integer>
+		<String Name="sCustomSurface">
+			<Description><![CDATA["Специальный Текст"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["<Выбор Поверхности>"]]></Value>
+		</String>
+		<String Name="sPrefixSurface">
+			<Description><![CDATA["Префикс"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="sSuffixSurface">
+			<Description><![CDATA["Суффикс"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="iAvailableMaterial">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="30" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+				<AVal Row="4">0</AVal>
+				<AVal Row="5">0</AVal>
+				<AVal Row="6">0</AVal>
+				<AVal Row="7">0</AVal>
+				<AVal Row="8">0</AVal>
+				<AVal Row="9">0</AVal>
+				<AVal Row="10">0</AVal>
+				<AVal Row="11">0</AVal>
+				<AVal Row="12">0</AVal>
+				<AVal Row="13">0</AVal>
+				<AVal Row="14">0</AVal>
+				<AVal Row="15">0</AVal>
+				<AVal Row="16">0</AVal>
+				<AVal Row="17">0</AVal>
+				<AVal Row="18">0</AVal>
+				<AVal Row="19">0</AVal>
+				<AVal Row="20">0</AVal>
+				<AVal Row="21">0</AVal>
+				<AVal Row="22">0</AVal>
+				<AVal Row="23">0</AVal>
+				<AVal Row="24">0</AVal>
+				<AVal Row="25">0</AVal>
+				<AVal Row="26">0</AVal>
+				<AVal Row="27">0</AVal>
+				<AVal Row="28">0</AVal>
+				<AVal Row="29">0</AVal>
+				<AVal Row="30">0</AVal>
+			</ArrayValues>
+		</Integer>
+		<String Name="sAvailableMaterial">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="30" SecondDimension="0">
+				<AVal Row="1"><![CDATA[""]]></AVal>
+				<AVal Row="2"><![CDATA[""]]></AVal>
+				<AVal Row="3"><![CDATA[""]]></AVal>
+				<AVal Row="4"><![CDATA[""]]></AVal>
+				<AVal Row="5"><![CDATA[""]]></AVal>
+				<AVal Row="6"><![CDATA[""]]></AVal>
+				<AVal Row="7"><![CDATA[""]]></AVal>
+				<AVal Row="8"><![CDATA[""]]></AVal>
+				<AVal Row="9"><![CDATA[""]]></AVal>
+				<AVal Row="10"><![CDATA[""]]></AVal>
+				<AVal Row="11"><![CDATA[""]]></AVal>
+				<AVal Row="12"><![CDATA[""]]></AVal>
+				<AVal Row="13"><![CDATA[""]]></AVal>
+				<AVal Row="14"><![CDATA[""]]></AVal>
+				<AVal Row="15"><![CDATA[""]]></AVal>
+				<AVal Row="16"><![CDATA[""]]></AVal>
+				<AVal Row="17"><![CDATA[""]]></AVal>
+				<AVal Row="18"><![CDATA[""]]></AVal>
+				<AVal Row="19"><![CDATA[""]]></AVal>
+				<AVal Row="20"><![CDATA[""]]></AVal>
+				<AVal Row="21"><![CDATA[""]]></AVal>
+				<AVal Row="22"><![CDATA[""]]></AVal>
+				<AVal Row="23"><![CDATA[""]]></AVal>
+				<AVal Row="24"><![CDATA[""]]></AVal>
+				<AVal Row="25"><![CDATA[""]]></AVal>
+				<AVal Row="26"><![CDATA[""]]></AVal>
+				<AVal Row="27"><![CDATA[""]]></AVal>
+				<AVal Row="28"><![CDATA[""]]></AVal>
+				<AVal Row="29"><![CDATA[""]]></AVal>
+				<AVal Row="30"><![CDATA[""]]></AVal>
+			</ArrayValues>
+		</String>
+		<String Name="sAvailableMaterialPict">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="30" SecondDimension="0">
+				<AVal Row="1"><![CDATA[""]]></AVal>
+				<AVal Row="2"><![CDATA[""]]></AVal>
+				<AVal Row="3"><![CDATA[""]]></AVal>
+				<AVal Row="4"><![CDATA[""]]></AVal>
+				<AVal Row="5"><![CDATA[""]]></AVal>
+				<AVal Row="6"><![CDATA[""]]></AVal>
+				<AVal Row="7"><![CDATA[""]]></AVal>
+				<AVal Row="8"><![CDATA[""]]></AVal>
+				<AVal Row="9"><![CDATA[""]]></AVal>
+				<AVal Row="10"><![CDATA[""]]></AVal>
+				<AVal Row="11"><![CDATA[""]]></AVal>
+				<AVal Row="12"><![CDATA[""]]></AVal>
+				<AVal Row="13"><![CDATA[""]]></AVal>
+				<AVal Row="14"><![CDATA[""]]></AVal>
+				<AVal Row="15"><![CDATA[""]]></AVal>
+				<AVal Row="16"><![CDATA[""]]></AVal>
+				<AVal Row="17"><![CDATA[""]]></AVal>
+				<AVal Row="18"><![CDATA[""]]></AVal>
+				<AVal Row="19"><![CDATA[""]]></AVal>
+				<AVal Row="20"><![CDATA[""]]></AVal>
+				<AVal Row="21"><![CDATA[""]]></AVal>
+				<AVal Row="22"><![CDATA[""]]></AVal>
+				<AVal Row="23"><![CDATA[""]]></AVal>
+				<AVal Row="24"><![CDATA[""]]></AVal>
+				<AVal Row="25"><![CDATA[""]]></AVal>
+				<AVal Row="26"><![CDATA[""]]></AVal>
+				<AVal Row="27"><![CDATA[""]]></AVal>
+				<AVal Row="28"><![CDATA[""]]></AVal>
+				<AVal Row="29"><![CDATA[""]]></AVal>
+				<AVal Row="30"><![CDATA[""]]></AVal>
+			</ArrayValues>
+		</String>
+
+		<!-- bShowCustomText: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bShowCustomText">
+			<Description><![CDATA["Специальный Текст"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<String Name="sDescriptionCustomText">
+			<Description><![CDATA["Имя Параметра"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Текст"]]></Value>
+		</String>
+		<String Name="sCustomText">
+			<Description><![CDATA["Специальный Текст"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["<Специальный Текст>"]]></Value>
+		</String>
+
+		<!-- titleGeneralSettings: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="titleGeneralSettings">
+			<Description><![CDATA["Общие Параметры"]]></Description>
+		</Title>
+		<Boolean Name="bUsePrefixColumn">
+			<Description><![CDATA["Показать Столбец Названий Параметров"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bShowUnit">
+			<Description><![CDATA["Единицы Измерения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="iWorkUnitLinear">
+			<Description><![CDATA["Единицы Длины"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>10</Value>
+		</Integer>
+		<Integer Name="iWorkUnitLinearDecimal">
+			<Description><![CDATA["Десятичные Знаки Линейных Размеров"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="iWorkUnitArea">
+			<Description><![CDATA["Единицы Площади"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>20</Value>
+		</Integer>
+		<Integer Name="iWorkUnitAreaDecimal">
+			<Description><![CDATA["Десятичные Знаки Площади"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="iWorkUnitVolume">
+			<Description><![CDATA["Единицы Объема"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>30</Value>
+		</Integer>
+		<Integer Name="iWorkUnitVolumeDecimal">
+			<Description><![CDATA["Десятичные Знаки Объема"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="iReferencePoint">
+			<Description><![CDATA["Точка Привязки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>5</Value>
+		</Integer>
+		<Integer Name="iLabelOrientation">
+			<Description><![CDATA["Ориентация"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3</Value>
+		</Integer>
+		<Integer Name="iFrameStyle">
+			<Description><![CDATA["Стиль Рамки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<RealNum Name="widthTextBoxPrefix_mm">
+			<Description><![CDATA["Ширина Текста Столбца Названий Параметров (мм)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>50</Value>
+		</RealNum>
+		<RealNum Name="widthTextBoxPrefix_pt">
+			<Description><![CDATA["Ширина Текста Столбца Названий Параметров (пт)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>141.732</Value>
+		</RealNum>
+		<RealNum Name="widthTextBoxContent_mm">
+			<Description><![CDATA["Ширина Текста Столбца Значений (мм)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>50</Value>
+		</RealNum>
+		<RealNum Name="widthTextBoxContent_pt">
+			<Description><![CDATA["Ширина Текста Столбца Значений (пт)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>141.732</Value>
+		</RealNum>
+		<FillPattern Name="filltypeBackground">
+			<Description><![CDATA["Замена Штриховки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<Integer Name="gs_ui_current_page">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+	</Parameters>
+</ParamSection>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["label_table_form"]]></MName>
+		<MainGUID>4FEBC7E5-70D7-458B-861B-B1B1221819BD</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["label_content_macro"]]></MName>
+		<MainGUID>6B7FBFF1-5200-4263-AE6F-AF308BB208A3</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["ui_tab_popup"]]></MName>
+		<MainGUID>A0E69B6A-A2E3-4BA9-BFE2-EEB20935B708</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+actualGUID = FROM_GUID
+
+! ==============================================================================
+! Subroutines
+! ==============================================================================
+
+	_autoID		= "93027F91-7C6C-4C9A-8E74-C5679C10FBC7"
+	_startID	= "BA847C7E-A1AE-4781-8C9E-54125125BC8B"
+	_endID		= "64B22F0D-7156-4D63-AA97-195F3F4A7D9B"
+gosub "NewOrderingOption_FWM"
+
+	_startID	= "64B22F0D-7156-4D63-AA97-195F3F4A7D9B"
+	_endID		= "6C39062C-7C01-48D2-BB3E-AB635C1720BD"
+gosub "SurfaceAreaCorrections_FWM"
+
+! ==============================================================================
+! Set migration GUID
+! ==============================================================================
+
+setmigrationguid actualGUID
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! en
+! ==============================================================================
+
+
+! ==============================================================================
+! NewOrderingOption
+! ==============================================================================
+"NewOrderingOption_FWM":
+	if actualGUID = _startID | actualGUID = _autoID then
+
+		dim	iContentOrderDim[4]
+			iContentOrderDim[1] = DIM_WDT
+			iContentOrderDim[2] = DIM_LGT
+			iContentOrderDim[3] = DIM_THK
+			iContentOrderDim[4] = DIM_HGT
+
+		parameters	iContentOrderDim	= iContentOrderDim
+
+		actualGUID = _endID
+	endif
+return
+
+! ==============================================================================
+! SurfaceAreaCorrections
+! ==============================================================================
+"SurfaceAreaCorrections_FWM":
+	if actualGUID = _startID then
+		_bShowSurfaceArea = 0
+		bHas =	STORED_PAR_VALUE ("bShowSurfaceArea",	_bShowSurfaceArea)
+
+		if _bShowSurfaceArea then
+			if	GLOB_ELEM_TYPE = ELEM_TYPE_FILL | \
+				GLOB_ELEM_TYPE = ELEM_TYPE_MORPH then
+
+				iValueSumSurface = SUMSURFACE_ALL
+				parameters iValueSumSurface = iValueSumSurface
+			endif
+		endif
+
+		actualGUID = _endID
+	endif
+return
+
+]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+targetGUID = TO_GUID
+
+! ==============================================================================
+! Subroutines
+! ==============================================================================
+
+gosub "SurfaceAreaCorrections_BWM"
+
+gosub "NewOrderingOption_BWM"
+
+! ==============================================================================
+! Set migration GUID
+! ==============================================================================
+
+setmigrationguid targetGUID
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! en
+! ==============================================================================
+
+
+! ==============================================================================
+! SurfaceAreaCorrections
+! ==============================================================================
+"SurfaceAreaCorrections_BWM":
+	if targetGUID # "" then
+		bMigrationSuccess = 1
+
+		if bShowSurfaceArea then
+			if GLOB_ELEM_TYPE = ELEM_TYPE_FILL & iValueSumSurface = SUMSURFACE_SELECTED & not(bAddTopSurface) then
+				bMigrationSuccess = 0
+			endif
+
+			if GLOB_ELEM_TYPE = ELEM_TYPE_MORPH & iValueSumSurface = SUMSURFACE_SELECTED then
+				bMigrationSuccess = 0
+			endif
+		endif
+
+		if bMigrationSuccess = 0 then
+			targetGUID = ""
+		endif
+	endif
+return
+
+! ==============================================================================
+! NewOrderingOption
+! ==============================================================================
+"NewOrderingOption_BWM":
+	if targetGUID # "" then
+		bMigrationSuccess = 1
+
+		for iCol = 1 to 4
+			if iContentOrderDim[iCol] <> iCol then
+				bMigrationSuccess = 0
+				iCol = 4				! break;
+			endif
+		next iCol
+
+		if not(bMigrationSuccess) then
+			targetGUID = ""
+		endif
+	endif
+return
+
+]]>
+</Script_BWM>
+
+<MigrationTable SectVersion="1" SectionFlags="0" SubIdent="0">
+	<MigrationTableElement>
+		<MainGUID>93027F91-7C6C-4C9A-8E74-C5679C10FBC7</MainGUID>
+		<Version>19</Version>
+		<Name><![CDATA[""]]></Name>
+		<AutoMigration>false</AutoMigration>
+	</MigrationTableElement>
+	<MigrationTableElement>
+		<MainGUID>BA847C7E-A1AE-4781-8C9E-54125125BC8B</MainGUID>
+		<Version>0</Version>
+		<Name><![CDATA[""]]></Name>
+		<AutoMigration>false</AutoMigration>
+	</MigrationTableElement>
+	<MigrationTableElement>
+		<MainGUID>64B22F0D-7156-4D63-AA97-195F3F4A7D9B</MainGUID>
+		<Version>0</Version>
+		<Name><![CDATA[""]]></Name>
+		<AutoMigration>false</AutoMigration>
+	</MigrationTableElement>
+</MigrationTable>
+
+</Symbol>

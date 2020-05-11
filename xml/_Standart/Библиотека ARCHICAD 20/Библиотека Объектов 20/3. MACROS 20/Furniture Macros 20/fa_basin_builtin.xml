@@ -1,0 +1,2019 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="true" IsPlaceable="false" MainGUID="06C22CBB-D5CD-40C8-AB42-B3D1D485FE4D" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>9BCE6139-F733-4E13-B439-AAF1AF232B89</MainGUID>
+	<MainGUID>30E58E66-1DA9-4D20-9341-700170100E12</MainGUID>
+	<MainGUID>D39DF9D9-2191-4C4D-B004-2E8C1B298D7C</MainGUID>
+	<MainGUID>0D6515ED-B372-41C6-8291-C527CE94BA43</MainGUID>
+</Ancestry>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! fa_basin_builtin
+! ==============================================================================
+
+unID = basinbuiltin_unID
+
+if not(gs_shadow) then SHADOW OFF
+
+pen gs_cont_pen
+if gs_detlevel_3D_m = OFF_3D then end basinbuiltin_unID
+if (GLOB_CONTEXT>20 & GLOB_CONTEXT<40) | gs_detlevel_3D_m = SIMPLE_3D then gs_resol = 6
+resol gs_resol
+
+d = 0
+if side_vis_m = 1 then
+	if bSideSplashL & not(bSideSplashR) then d = 1
+	if not(bSideSplashL) & bSideSplashR then d = 2
+	if bSideSplashL & bSideSplashR then d = 3
+endif
+if side_vis_m = 2 then
+	if bSideSplashR then d = 3 else d = 1
+endif
+if side_vis_m = 3 then
+	if bSideSplashL then d = 3 else d = 2
+endif
+if side_vis_m = 4 then d = 3
+
+
+! ==============================================================================
+! Sink Streching/ 3D Hotspot Editing
+! ==============================================================================
+
+if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+	ADD temp_aa,temp_bb,0
+	HOTSPOT 0,         0, 0, unID,sink_dist,1+128 : unID=unID+1
+	HOTSPOT sink_dist, 0, 0, unID,sink_dist,2     : unID=unID+1
+	HOTSPOT -1,        0, 0, unID,sink_dist,3     : unID=unID+1
+	DEL 1
+else
+	for hi = 1 to nSink
+		add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing), B/2, 0
+		hotspot 0,       		yBasinPos, 0, unID, sinkPos[hi][1], 1+128 : unID=unID+1
+		hotspot sinkPos[hi][1],	yBasinPos, 0, unID, sinkPos[hi][1], 2 : unID=unID+1
+		hotspot -1,      		yBasinPos, 0, unID, sinkPos[hi][1], 3 : unID=unID+1
+
+		hotspot sinkPos[hi][1], 0, 			0, unID, yBasinPos, 1+128 : unID=unID+1
+		hotspot sinkPos[hi][1], yBasinPos,	0, unID, yBasinPos, 2 : unID=unID+1
+		hotspot sinkPos[hi][1], -1, 		0, unID, yBasinPos, 3 : unID=unID+1
+		del 1
+	next hi
+endif
+
+
+! ==============================================================================
+! Table Top
+! ==============================================================================
+
+material count_mat
+
+add A/2, B/2, -count_th
+for hi = 1 to nSink
+	if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+		add sink_dist-a/2+temp_aa, -b/2 + temp_bb, 0
+	else
+		add -A/2 + sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], yBasinPos, 0
+	endif
+	if gs_sink_type_m <> BASIN_BUILTIN_RECT then
+		muly sink_depth / sink_width
+		cutpolya 2, 1, 0,
+			0, 0, 900 + 7 + 64,
+			sink_width/2, 360, 4001 + 7
+		del 1
+	else
+		cutpolya 5, 1, 0,
+			-sink_width/2, -sink_depth/2, 7,
+			 sink_width/2, -sink_depth/2, 7,
+			 sink_width/2,  sink_depth/2, 7,
+			-sink_width/2,  sink_depth/2, 7,
+			-sink_width/2, -sink_depth/2, -1
+	endif
+	del 1
+next hi
+if gs_detlevel_3D_m = SIMPLE_3D | (gs_detlevel_3D_m = DETAILED_3D & gs_count_type_m = COUNTERTYPE_RECT) | gs_detlevel_3D_m = DRAFT_3D then
+	rr = 0
+	cprism_ count_mat, count_mat, count_mat, 4, count_th,
+		-a/2, -b/2, 13+2*((d=1) OR (d>2)),
+		a/2, -b/2, 8+7*(d>1),
+		a/2, b/2, 13+2*(d>1),
+		-a/2, b/2, 8+7*((d=1) OR (d>2))
+	body -1
+endif
+if gs_count_type_m = COUNTERTYPE_ROUNDED & gs_detlevel_3D_m = DETAILED_3D then
+	add -A/2, -B/2, 0
+	gosub 6000
+	gosub 2000
+	del 1
+endif
+for hi = 1 to nSink
+	cutend
+next hi
+del 1
+
+
+! ==============================================================================
+! Backsplash & Sidesplash
+! ==============================================================================
+
+if bBackSplash & bs_h > 0 & not(dob_face) & gs_detlevel_3D_m <> DRAFT_3D then
+	add A/2, B/2, 0
+	cprism_ bs_mat, bs_mat, bs_mat, 5, bs_h,
+		-a/2, b/2-backSplashThk, 13+2*((d=1) OR (d>2)),
+		a/2, b/2-backSplashThk, 8+7*(d>1),
+		a/2, b/2, 13+2*(d>1),
+		-a/2, b/2, 8+7*((d=1) OR (d>2)),
+		-a/2, b/2-backSplashThk, -1
+	body -1
+	del 1
+endif
+if bSideSplashL & bs_h > 0 & gs_detlevel_3D_m <> DRAFT_3D then
+	cprism_ bs_mat, bs_mat, bs_mat, 5, bs_h,
+		0, rr, 15,
+		backSplashThk, rr, 15,
+		backSplashThk, B - rr * dob_face - backSplashThk * bBackSplash, 15,
+		0, B - rr * dob_face - backSplashThk * bBackSplash, 15,
+		0, rr, -1
+	body -1
+endif
+if bSideSplashR & bs_h > 0 & gs_detlevel_3D_m <> DRAFT_3D then
+	cprism_ bs_mat, bs_mat, bs_mat, 5, bs_h,
+		A, rr, 15,
+		A - backSplashThk, rr, 15,
+		A - backSplashThk, B - rr * dob_face - backSplashThk * bBackSplash, 15,
+		A, B - rr * dob_face - backSplashThk * bBackSplash, 15,
+		A, rr, -1
+	body -1
+endif
+
+
+! ==============================================================================
+! Front Face Panel
+! ==============================================================================
+
+if bFrontFacePanel & frontFacePanelHeight > 0 & gs_detlevel_3D_m <> DRAFT_3D then
+	add A/2, B/2, -count_th - frontFacePanelHeight
+	cprism_ matFrontPanel, matFrontPanel, matFrontPanel, 5, frontFacePanelHeight,
+		-a/2, -b/2 + frontFacePanelOvg, 13+2*((d=1) OR (d>2)),
+		a/2, -b/2 + frontFacePanelOvg, 8+7*(d>1),
+		a/2, -b/2 + count_th + frontFacePanelOvg, 13+2*(d>1),
+		-a/2, -b/2 + count_th + frontFacePanelOvg, 8+7*((d=1) OR (d>2)),
+		-a/2, -b/2 + frontFacePanelOvg, -1
+	body -1
+	del 1
+endif
+
+! ==============================================================================
+! Sink Frame
+! ==============================================================================
+
+sinkWidthMod = sink_width - 0.002 * not(bUnderMounted)
+sinkDepthMod = sink_depth - 0.002 * not(bUnderMounted)
+if gs_detlevel_3D_m = SIMPLE_3D then
+	material gs_sink_mat
+	for hi = 1 to nSink
+	if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+		add sink_dist + temp_aa, temp_bb, -count_th * bUnderMounted
+	else
+		add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B/2 + yBasinPos, -count_th * bUnderMounted
+	endif
+	if gs_sink_type_m <> BASIN_BUILTIN_RECT then
+		muly sink_depth / sink_width
+		if not(bUnderMounted) then
+			prism_ 3, 0.005,
+				0, 0, 979,
+				sink_width/2 + 0.02, 360, 4078,
+				sink_width/2-0.001, 360, 4079
+			body -1
+		endif
+		extrude 2, 0, 0, -count_th-bs_h, 1+4+16,
+				0, 0, 901,
+				sinkWidthMod/2, 360, 4001
+		del 1
+	else
+		if not(bUnderMounted) then
+			prism_ 5 + 5, 0.005,
+				-sink_width/2 - 0.02, -sink_depth/2 - 0.02, 15,
+				sink_width/2 + 0.02, -sink_depth/2 - 0.02, 15,
+				sink_width/2 + 0.02, sink_depth/2 + 0.02, 15,
+				-sink_width/2 - 0.02, sink_depth/2 + 0.02, 15,
+				-sink_width/2 - 0.02, -sink_depth/2 - 0.02, -1,
+
+				-sinkWidthMod/2, -sinkDepthMod/2, 14,
+				sinkWidthMod/2, -sinkDepthMod/2, 14,
+				sinkWidthMod/2, sinkDepthMod/2, 14,
+				-sinkWidthMod/2, sinkDepthMod/2, 14,
+				-sinkWidthMod/2, -sinkDepthMod/2, -1
+			body -1
+		endif
+		extrude 5, 0, 0, -count_th-bs_h, 1+4+16,
+			-sinkWidthMod/2, -sinkDepthMod/2, 0,
+			sinkWidthMod/2, -sinkDepthMod/2, 0,
+			sinkWidthMod/2, sinkDepthMod/2, 0,
+			-sinkWidthMod/2, sinkDepthMod/2, 0,
+			-sinkWidthMod/2, -sinkDepthMod/2, -1
+	endif
+	del 1
+	next hi
+endif
+if gs_detlevel_3D_m = DETAILED_3D then
+	material gs_sink_mat
+	orig_sink_width = sinkWidthMod
+	angsink  = 360/gs_resol
+
+	for hi = 1 to nSink
+	if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+		add sink_dist + temp_aa, temp_bb, -count_th * bUnderMounted
+	else
+		add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B/2 + yBasinPos, -count_th * bUnderMounted
+	endif
+	if gs_sink_type_m <> BASIN_BUILTIN_RECT then
+		material gs_sink_mat
+		mulz -1
+		muly sink_depth / sinkWidthMod
+
+		if not(bUnderMounted) then
+			addz -0.005
+			prism_ 3, 0.005,
+				0, 0, 979,
+				sinkWidthMod/2 + 0.02, 360, 4075,
+				sinkWidthMod/2, 360, 4079
+			body -1
+			del 1
+		endif
+
+		for jj= 1 to 3
+			if jj = 1 then
+				mul_akt = 0.9
+				hgh_akt = 0.052
+			endif
+			if jj = 2 then
+				mul_akt = 0.79
+				hgh_akt = 0.052
+			endif
+			if jj = 3 then
+				mul_akt = 0.63
+				hgh_akt = 0.026
+			endif
+
+			for kk=0 to gs_resol-1
+				put sinkWidthMod/2 * sin(kk*angsink), sinkWidthMod/2 * cos(kk*angsink), 1
+			next kk
+
+			sink_width_muled = sinkWidthMod/2 * mul_akt
+			for kk=0 to gs_resol-1
+				put sink_width_muled * sin(kk*angsink), sink_width_muled * cos(kk*angsink) + (sinkWidthMod/2 - sink_width_muled), hgh_akt
+			next kk
+
+			ruled gs_resol, 4,
+				get(nsp)
+
+			add 0,(sinkWidthMod/2 - sink_width_muled), hgh_akt
+			sinkWidthMod = sink_width_muled * 2
+		next jj
+
+		hgh_akt = 0.007
+		for kk=0 to gs_resol-1
+			put sinkWidthMod/2 * sin(kk*angsink), sinkWidthMod/2 * cos(kk*angsink) * sink_depth / orig_sink_width, 1
+		next kk
+
+		for kk=0 to gs_resol-1
+			put 0.03 * sin(kk*angsink), 0.03 * cos(kk*angsink), hgh_akt
+		next kk
+
+		muly orig_sink_width / sink_depth
+		ruled gs_resol, 4+32,
+			get(nsp)
+		del 1
+
+		material gs_drain_mat
+		addz hgh_akt
+		muly orig_sink_width / sink_depth
+		extrude 2, 0, 0, 0.005, 2+4+16+32,
+			0, 0, 901,
+			0.03, 360, 4001
+		del 2
+
+		del 5
+
+		sinkWidthMod = sink_width - 0.002
+	else
+		material gs_sink_mat
+		if not(bUnderMounted) then
+			prism_ 5 + 5, 0.005,
+				-sinkWidthMod/2 - 0.02, -sinkDepthMod/2 - 0.02, 15,
+				sinkWidthMod/2 + 0.02, -sinkDepthMod/2 - 0.02, 15,
+				sinkWidthMod/2 + 0.02, sinkDepthMod/2 + 0.02, 15,
+				-sinkWidthMod/2 - 0.02, sinkDepthMod/2 + 0.02, 15,
+				-sinkWidthMod/2 - 0.02, -sinkDepthMod/2 - 0.02, -1,
+
+				-sinkWidthMod/2, -sinkDepthMod/2, 15,
+				sinkWidthMod/2, -sinkDepthMod/2, 15,
+				sinkWidthMod/2, sinkDepthMod/2, 14,
+				-sinkWidthMod/2, sinkDepthMod/2, 15,
+				-sinkWidthMod/2, -sinkDepthMod/2, -1
+			body -1
+		endif
+
+		add 0,(sinkDepthMod/2 - sinkDepthMod/2 * (0.9 * 0.79 * 0.63)), 0
+		cutpolya 2, 1, 0,
+				0, 0, 900 + 7,
+				0.03, 360, 4015
+		del 1
+
+		add -sinkWidthMod/2, -sinkDepthMod / 2, 0
+		zzyzx = 0
+		minHeight = zzyzx - 0.1
+		halfWidth = sinkWidthMod/2
+		maxRadius = (halfWidth^2 + 0.1^2) / (2 * 0.1)
+
+		for i = 1 to gs_resol + 1
+			put zzyzx
+		next i
+
+		actualX = 0
+		RRR = 2 * maxRadius
+		actualMinHeight = zzyzx - (RRR - sqr (RRR^2 - halfWidth^2))
+		for i = 1 to gs_resol + 1
+			put actualMinHeight + (RRR) - sqr (RRR^2 - (halfWidth - actualX)^2)
+			actualX = actualX + (2 * halfWidth) / gs_resol
+		next i
+
+		actualX = 0
+		RRR = 1.1 * maxRadius
+		actualMinHeight = zzyzx - (RRR - sqr (RRR^2 - halfWidth^2))
+		for i = 1 to gs_resol + 1
+			put actualMinHeight + (RRR) - sqr (RRR^2 - (halfWidth - actualX)^2)
+			actualX = actualX + (2 * halfWidth) / gs_resol
+		next i
+
+		for j = 1 to 3
+			actualX = 0
+			for i = 1 to gs_resol + 1
+				put minHeight + maxRadius - sqr (maxRadius^2 - (halfWidth - actualX)^2)
+				actualX = actualX + (2 * halfWidth) / gs_resol
+			next i
+		next j
+
+		mesh 2 * halfWidth, sinkDepthMod, gs_resol + 1, 6, 4 + 16*0,
+			get (nsp)
+
+		del 1
+		cutend
+
+		material gs_tap_mat
+		actualX = 0
+		for i = 1 to gs_resol + 1
+			put (2 * halfWidth) / (gs_resol + 1*0) * (i - 1) - halfWidth, minHeight + maxRadius - sqr (maxRadius^2 - (halfWidth - actualX)^2), 7 + 64
+			actualX = actualX + (2 * halfWidth) / gs_resol
+		next i
+		rotx 90
+		cutpolya nsp/3, 1, 0,
+			get(nsp)
+		del 1
+
+		material gs_drain_mat
+		add 0,(sinkDepthMod/2 - sinkDepthMod/2 * (0.9 * 0.79 * 0.63)), -0.105
+		extrude 2, 0, 0, 0.05, 1 + 4 + 16 + 32,
+			0, 0, 901,
+			0.03, 360, 4001
+		del 1
+
+		cutend
+	endif
+	del 1
+	next hi
+endif
+
+
+! ==============================================================================
+! Taps
+! ==============================================================================
+
+if gs_detlevel_3D_m <> DRAFT_3D and gs_tap_type_m <> 0 then
+	for hi = 1 to nSink
+		if bWallMountedTap then
+			if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+				add sink_dist + temp_aa, B, tapHeight - h_top
+				bEnableTapEdit = 1
+			else
+				add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B, tapHeight - h_top
+				hotspot 0,       		0,	tapPos[hi][3], unID, tapPos[hi][1], 1+128 : unID=unID+1
+				hotspot tapPos[hi][1],	0,	tapPos[hi][3], unID, tapPos[hi][1], 2 : unID=unID+1
+				hotspot -1,      		0,	tapPos[hi][3], unID, tapPos[hi][1], 3 : unID=unID+1
+
+				hotspot tapPos[hi][1], 0, 0, 				unID, tapPos[hi][3], 1+128 : unID=unID+1
+				hotspot tapPos[hi][1], 0, tapPos[hi][3],	unID, tapPos[hi][3], 2 : unID=unID+1
+				hotspot tapPos[hi][1], 0, -1, 				unID, tapPos[hi][3], 3 : unID=unID+1
+				del 1
+
+				add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1] + tapPos[hi][1], B, tapHeight - h_top + tapPos[hi][3]
+				bEnableTapedit = 0
+			endif
+
+			call "tapType_m" parameters all bShower 			= 0,
+											bEnableTapEdit		= bEnableTapEdit,
+											bSinkTap			= 0,
+											useOldSimpleTaps	= 0
+
+			del 1
+		else
+			if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+				add sink_dist + temp_aa, temp_bb + 0.23 + yBasinPos, 0
+				bEnableTapEdit = 1
+			else
+				add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B/2 + sink_depth/2 + 0.04 + yBasinPos, 0
+				hotspot 0,       		tapPos[hi][2], 0, unID, tapPos[hi][1], 1+128 : unID=unID+1
+				hotspot tapPos[hi][1],	tapPos[hi][2], 0, unID, tapPos[hi][1], 2 : unID=unID+1
+				hotspot -1,      		tapPos[hi][2], 0, unID, tapPos[hi][1], 3 : unID=unID+1
+
+				hotspot tapPos[hi][1], 0, 				0, unID, tapPos[hi][2], 1+128 : unID=unID+1
+				hotspot tapPos[hi][1], tapPos[hi][2],	0, unID, tapPos[hi][2], 2 : unID=unID+1
+				hotspot tapPos[hi][1], -1, 			0, unID, tapPos[hi][2], 3 : unID=unID+1
+				del 1
+
+				add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1] + tapPos[hi][1], B/2 + sink_depth/2 + 0.04 + yBasinPos + tapPos[hi][2], 0
+				bEnableTapedit = 0
+			endif
+
+			call "tapType_m" parameters all bShower 			= 0,
+											bEnableTapEdit		= bEnableTapEdit,
+											bSinkTap			= 0,
+											useOldSimpleTaps	= 0,
+											GS_HotspotUnIDBegin = 10000 + hi - 1
+
+			del 1
+		endif
+	next hi
+endif
+
+basinbuiltin_unID = unID
+end basinbuiltin_unID
+
+
+! ==============================================================================
+! Countertop
+! ==============================================================================
+
+2000:
+
+vert 0, 0, 0
+vert 1, 0, 0
+vert 0, 1, 0
+vert 0, 0, 1
+
+coor 2, -1, -2, -3, -4
+
+base
+
+body -1
+
+return
+
+
+6000:
+
+rr=min (count_th*4/5, 0.02)
+
+d = 0
+if side_vis_m = 1 then
+	if bSideSplashL & not(bSideSplashR) then d = 1
+	if not(bSideSplashL) & bSideSplashR then d = 2
+	if bSideSplashL & bSideSplashR then d = 3
+endif
+if side_vis_m = 2 then
+	if bSideSplashR then d = 3 else d = 1
+endif
+if side_vis_m = 3 then
+	if bSideSplashL then d = 3 else d = 2
+endif
+if side_vis_m = 4 then d = 3
+
+maskk = 8
+if side_vis_m = 1 then
+	if bSideSplashL & not(bSideSplashR) then maskk = 9
+	if not(bSideSplashL) & bSideSplashR then maskk = 12
+	if bSideSplashL & bSideSplashR then maskk = 13
+endif
+if side_vis_m = 2 then
+	if bSideSplashR then d = 13 else maskk = 9
+endif
+if side_vis_m = 3 then
+	if bSideSplashL then d = 13 else maskk = 12
+endif
+if side_vis_m = 4 then maskk = 13
+
+rotz 90
+rotx 90
+if dob_face = 0 then
+	prism_ 9, a,
+		0, 0, 15,
+		0, 0.0001, maskk,
+		0, count_th-rr, 64+maskk,
+		0, 10, 800,
+		rr, count_th-rr, 900,
+		rr, count_th, 3000+maskk,
+		b, count_th, maskk,
+		b, 0, maskk,
+		0, 0, -1
+	body -1
+else
+	prism_ 14, a,
+		0, 0, 15,
+		0, 0.0001, maskk,
+		0, count_th-rr, 64+maskk,
+		0, 10, 800,
+
+		rr, count_th-rr, 900,
+		rr, count_th, 3000+maskk,
+		b-rr, count_th, 64+maskk,
+		b-rr+10, count_th, 800,
+		b-rr, count_th-rr, 900,
+		b, count_th-rr, 3000+maskk,
+		b, count_th-rr, 64+maskk,
+
+		b, 0.0001, maskk,
+		b, 0, maskk,
+		0, 0, -1
+	body -1
+endif
+del 2
+
+return
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! fa_basin_builtin
+! ==============================================================================
+
+
+! ==========================================================================
+! Scale
+! ==========================================================================
+
+call "2dDetailLevel" parameters gs_detlevel_2D_m = gs_detlevel_2D_m,
+				returned_parameters gs_detlevel_2D_m
+
+pen gs_cont_pen
+fill gs_fill_type
+
+unID = 100
+
+hotspot2 0, b, unID: unID=unID+1
+hotspot2 a/2, b, unID: unID=unID+1
+
+
+! ==============================================================================
+! Sink Streching/ 3D Hotspot Editing
+! ==============================================================================
+
+if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+	ADD2 temp_aa,temp_bb
+	HOTSPOT2 0,        0,unID,sink_dist,1+128 :unID=unID+1
+	HOTSPOT2 sink_dist,0,unID,sink_dist,2 :unID=unID+1
+	HOTSPOT2 -1,       0,unID,sink_dist,3 :unID=unID+1
+	DEL 1
+else
+	for hi = 1 to nSink
+		add2 sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing), B/2
+		hotspot2 0,       			yBasinPos, unID, sinkPos[hi][1], 1+128 : unID=unID+1
+		hotspot2 sinkPos[hi][1],	yBasinPos, unID, sinkPos[hi][1], 2 : unID=unID+1
+		hotspot2 -1,      			yBasinPos, unID, sinkPos[hi][1], 3 : unID=unID+1
+
+		hotspot2 sinkPos[hi][1], 0, 		unID, yBasinPos, 1+128 : unID=unID+1
+		hotspot2 sinkPos[hi][1], yBasinPos, unID, yBasinPos, 2 : unID=unID+1
+		hotspot2 sinkPos[hi][1], -1, 		unID, yBasinPos, 3 : unID=unID+1
+		del 1
+	next hi
+endif
+
+
+
+! ==============================================================================
+! Fill
+! ==============================================================================
+
+drawindex 10
+
+poly2_b 4, 2+4+64, gs_fill_pen, gs_back_pen,
+		0, 0, 1,
+		A, 0, 1,
+		A, B, 1,
+		0, B, 1
+
+hotline2 0, 0, A, 0
+hotline2 A, 0, A, B
+hotline2 0, B, A, B
+hotline2 0, 0, 0, B
+
+
+! ==============================================================================
+! Symbol / Cabinet
+! ==============================================================================
+
+drawindex 20
+
+d = 0
+if side_vis2D_m = 1 then
+	if bSideSplashL & not(bSideSplashR) then d = 1
+	if not(bSideSplashL) & bSideSplashR then d = 2
+	if bSideSplashL & bSideSplashR then d = 3
+endif
+if side_vis2D_m = 2 then
+	if bSideSplashR then d = 3 else d = 1
+endif
+if side_vis2D_m = 3 then
+	if bSideSplashL then d = 3 else d = 2
+endif
+if side_vis2D_m = 4 then d = 3
+
+line2 0, 0, A, 0
+line2 0, B, A, B
+if d = 2 or d = 3 then
+	line2 A, 0, A, B
+endif
+if d = 1 or d = 3 then
+	line2 0, 0, 0, B
+endif
+if bs_h > 0 and gs_detlevel_2D_m > 1 and not(dob_face) & bBackSplash then
+	line2 backSplashThk * bSideSplashL, B - backSplashThk, A - backSplashThk * bSideSplashR, B - backSplashThk
+endif
+if bs_h > 0 and gs_detlevel_2D_m > 1 & bSideSplashL then
+	line2 backSplashThk, B - backSplashThk, backSplashThk, 0
+endif
+if bs_h > 0 and gs_detlevel_2D_m > 1 & bSideSplashR then
+	line2 A - backSplashThk, B - backSplashThk, A - backSplashThk, 0
+endif
+
+
+! ==============================================================================
+! Sink Frame
+! ==============================================================================
+
+for hi = 1 to nSink
+	if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+		add2 sink_dist + temp_aa, temp_bb
+	else
+		add2 sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B/2 + yBasinPos
+	endif
+
+	if gs_sink_type_m <> BASIN_BUILTIN_RECT then
+		mul2 sink_width / sink_depth, 1
+		if gs_detlevel_2D_m > 1  & not(bUnderMounted) then
+			circle2 0, 0, sink_depth/2 + sinkFlangeWidth
+		endif
+		circle2 0, 0, sink_depth/2
+
+		hotarc2 0, 0, sink_depth/2, 0, 180
+		hotarc2 0, 0, sink_depth/2, 180, 360
+		del 1
+	else
+		rect2 -sink_width/2, -sink_depth/2, sink_width/2, sink_depth/2
+		hotline2 -sink_width/2, -sink_depth/2, sink_width/2, -sink_depth/2
+		hotline2 -sink_width/2,  sink_depth/2, sink_width/2,  sink_depth/2
+		hotline2 -sink_width/2, -sink_depth/2, -sink_width/2, sink_depth/2
+		hotline2  sink_width/2, -sink_depth/2, sink_width/2, sink_depth/2
+		if gs_detlevel_2D_m > 1 & not(bUnderMounted) then rect2 -sink_width/2 - sinkFlangeWidth, -sink_depth/2 - sinkFlangeWidth, sink_width/2 + sinkFlangeWidth, sink_depth/2 + sinkFlangeWidth
+	endif
+
+	if gs_detlevel_2D_m > 2 then
+		sinkDepthMod = sink_depth - 0.002 * not(bUnderMounted)
+		add2 0,(sinkDepthMod/2 - sinkDepthMod/2 * (0.9 * 0.79 * 0.63))
+		circle2 0, 0, 0.03
+		del 1
+	endif
+	del 1
+next hi
+
+
+! ==============================================================================
+! Taps
+! ==============================================================================
+
+if gs_tap_type_m <> 0 and (gs_detlevel_2D_m = 2 or gs_detlevel_2D_m = 3) then
+	drawindex 30
+
+	for hi = 1 to nSink
+		if bWallMountedTap then
+			if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+				add2 sink_dist + temp_aa, B
+				bEnableTapEdit = 1
+			else
+				add2 sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B
+				hotspot2 0,       		tapPos[hi][2], unID, tapPos[hi][1], 1+128 : unID=unID+1
+				hotspot2 tapPos[hi][1],	tapPos[hi][2], unID, tapPos[hi][1], 2 : unID=unID+1
+				hotspot2 -1,      		tapPos[hi][2], unID, tapPos[hi][1], 3 : unID=unID+1
+
+				hotspot2 tapPos[hi][1], 0, 				unID, tapPos[hi][2], 1+128 : unID=unID+1
+				hotspot2 tapPos[hi][1], tapPos[hi][2],	unID, tapPos[hi][2], 2 : unID=unID+1
+				hotspot2 tapPos[hi][1], -1, 			unID, tapPos[hi][2], 3 : unID=unID+1
+				del 1
+
+				add2 sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1] + tapPos[hi][1], B
+				bEnableTapedit = 0
+			endif
+
+			call "tapType_m" parameters all bShower 			= 0,
+											bEnableTapEdit		= bEnableTapEdit,
+											bSinkTap			= 0
+
+			del 1
+		else
+			if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+				add2 sink_dist + temp_aa, temp_bb + 0.23 + yBasinPos
+				bEnableTapEdit = 1
+			else
+				add2 sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B/2 + sink_depth/2 + 0.04 + yBasinPos
+				hotspot2 0,       		tapPos[hi][2], unID, tapPos[hi][1], 1+128 : unID=unID+1
+				hotspot2 tapPos[hi][1],	tapPos[hi][2], unID, tapPos[hi][1], 2 : unID=unID+1
+				hotspot2 -1,      		tapPos[hi][2], unID, tapPos[hi][1], 3 : unID=unID+1
+
+				hotspot2 tapPos[hi][1], 0, 				unID, tapPos[hi][2], 1+128 : unID=unID+1
+				hotspot2 tapPos[hi][1], tapPos[hi][2],	unID, tapPos[hi][2], 2 : unID=unID+1
+				hotspot2 tapPos[hi][1], -1, 			unID, tapPos[hi][2], 3 : unID=unID+1
+				del 1
+
+				add2 sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1] + tapPos[hi][1], B/2 + sink_depth/2 + 0.04 + yBasinPos + tapPos[hi][2]
+				bEnableTapedit = 0
+			endif
+
+			call "tapType_m" parameters all bShower 			= 0,
+											bEnableTapEdit		= bEnableTapEdit,
+											bSinkTap			= 0,
+											GS_HotspotUnIDBegin = 10000 + hi - 1
+
+			del 1
+		endif
+	next hi
+endif
+
+end
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! fa_basin_builtin
+! ==============================================================================
+
+
+EPS = 0.0001
+
+OFF_3D				= 0
+SIMPLE_3D 			= 1
+DETAILED_3D			= 2
+DRAFT_3D			= 3
+
+BASIN_BUILTIN		= 1
+BASIN_CABINET		= 2
+MULTIBASIN_COUNTER 	= 3
+
+BASIN_BUILTIN_CIRCLE 	= 1
+BASIN_BUILTIN_ELLIPSE 	= 2
+BASIN_BUILTIN_RECT 		= 3
+
+COUNTERTYPE_RECT		= 1
+COUNTERTYPE_ROUNDED		= 2
+
+TAPGROUP_SINGLE 		= 1
+TAPGROUP_TWOHANDLE 		= 2
+TAPGROUP_TRADITIONAL 	= 3
+TAPGROUP_SENSOR			= 4
+TAPGROUP_WALLMOUNTED	= 5
+TAPGROUP_NONE 			= 6
+TAPGROUP_CUSTOMTAPS		= 7
+
+bWallMountedTap 		= (gs_tap_type_m > 20 and gs_tap_type_m < 28) or (gs_tap_type_m = -1 and iTapGroup = TAPGROUP_WALLMOUNTED)
+
+temp_aa = A/2
+temp_bb = B/2
+if (iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET) & cab_size & nSink = 1 then
+	temp_aa = (A-left_cab-right_cab)/2+left_cab
+	temp_bb = (B-front_cab-rear_cab)/2+front_cab
+endif
+
+sinkFlangeWidth = 0.02
+counterFilletR = min (count_th*4/5, 0.02)
+
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+! ==============================================================================
+! fa_basin_builtin
+! ==============================================================================
+
+
+values "gs_detlevel_3D_m" 3,2,1,0
+values "nSink" range [1, )
+values "gs_count_type_m" 1,2
+VALUES "side_vis_m" 1,2,3,4
+VALUES "side_vis2D_m" 1,2,3,4
+values "TapSymbol_m" 2,1,0
+values "gs_detlevel_2D_m" 0, 1, 2, 3
+
+
+]]>
+</Script_VL>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<Version>26</Version>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+		<SymbolColor>0</SymbolColor>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Dimension 1"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Dimension 2"]]></Description>
+			<Fix/>
+			<Value>0.6</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Height"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Showing 2D Hotspots in 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Bottom Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Top Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+
+		<!-- basinParameters: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="basinParameters">
+			<Description><![CDATA["Basin Parameters"]]></Description>
+		</Title>
+		<Integer Name="iBasinType">
+			<Description><![CDATA["Basin Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="cab_size">
+			<Description><![CDATA["'A' 'B' Size=Cabinet Size"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="sink_width">
+			<Description><![CDATA["Sink Width"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.46</Value>
+		</Length>
+		<Length Name="sink_depth">
+			<Description><![CDATA["Sink Depth"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.33</Value>
+		</Length>
+		<Length Name="sink_dist">
+			<Description><![CDATA["Basin X Distance from Counter Center"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="yBasinPos">
+			<Description><![CDATA["Basin Y Distance from Counter Center"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="sinkSpacing">
+			<Description><![CDATA["Basin Spacing"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.48</Value>
+		</Length>
+		<Length Name="sinkDistL">
+			<Description><![CDATA["Distance of End Basin from End Left"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.24</Value>
+		</Length>
+		<Length Name="sinkDistR">
+			<Description><![CDATA["Distance of End Basin from End Right"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.24</Value>
+		</Length>
+		<Length Name="sinkPos">
+			<Description><![CDATA["Sink Position"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="7" SecondDimension="2">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="1" Row="2">0</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+				<AVal Column="1" Row="3">0</AVal>
+				<AVal Column="2" Row="3">0</AVal>
+				<AVal Column="1" Row="4">0</AVal>
+				<AVal Column="2" Row="4">0</AVal>
+				<AVal Column="1" Row="5">0</AVal>
+				<AVal Column="2" Row="5">0</AVal>
+				<AVal Column="1" Row="6">0</AVal>
+				<AVal Column="2" Row="6">0</AVal>
+				<AVal Column="1" Row="7">0</AVal>
+				<AVal Column="2" Row="7">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Integer Name="nSink">
+			<Description><![CDATA["No of Basins"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="bUnderMounted">
+			<Description><![CDATA["Undermount"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="gs_sink_type_m">
+			<Description><![CDATA["Sink Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="gs_tap_type_m">
+			<Description><![CDATA["Tap Styles"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="iTapGroup">
+			<Description><![CDATA["Tap Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="tapHeight">
+			<Description><![CDATA["Tap Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1.1</Value>
+		</Length>
+		<Length Name="xTapPos">
+			<Description><![CDATA["Tap X Position"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="yTapPos">
+			<Description><![CDATA["Tap Y Position"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="zTapPos">
+			<Description><![CDATA["Tap Z Position"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="tapPos">
+			<Description><![CDATA["Tap Position"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<ArrayValues FirstDimension="4" SecondDimension="3">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="1" Row="2">0</AVal>
+				<AVal Column="2" Row="2">0</AVal>
+				<AVal Column="3" Row="2">0</AVal>
+				<AVal Column="1" Row="3">0</AVal>
+				<AVal Column="2" Row="3">0</AVal>
+				<AVal Column="3" Row="3">0</AVal>
+				<AVal Column="1" Row="4">0</AVal>
+				<AVal Column="2" Row="4">0</AVal>
+				<AVal Column="3" Row="4">0</AVal>
+			</ArrayValues>
+		</Length>
+
+		<!-- counterParameters: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="counterParameters">
+			<Description><![CDATA["Counter Parameters"]]></Description>
+		</Title>
+		<Length Name="h_top">
+			<Description><![CDATA["Counter Top Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="count_th">
+			<Description><![CDATA["Counter Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.03</Value>
+		</Length>
+		<Integer Name="gs_count_type_m">
+			<Description><![CDATA["Counter Edge Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Length Name="bs_h">
+			<Description><![CDATA["Back and Side Splash Height (0-None)"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.1</Value>
+		</Length>
+		<Length Name="backSplashThk">
+			<Description><![CDATA["Back and Side Splash Thickness"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.02</Value>
+		</Length>
+		<Boolean Name="bBackSplash">
+			<Description><![CDATA["Backsplash"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Boolean Name="bSideSplashL">
+			<Description><![CDATA["Side Splash Left"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="bSideSplashR">
+			<Description><![CDATA["Side Splash Right"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="front_cab">
+			<Description><![CDATA["Overhang to Front of Cabinet"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.15</Value>
+		</Length>
+		<Length Name="rear_cab">
+			<Description><![CDATA["Overhang to Rear of Cabinet"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="left_cab">
+			<Description><![CDATA["Overhang to Left of Cabinet"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="right_cab">
+			<Description><![CDATA["Overhang to Right of Cabinet"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="side_vis_m">
+			<Description><![CDATA["Edge Visibility in 3D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Boolean Name="dob_face">
+			<Description><![CDATA["Double Faced"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+
+		<!-- bFrontFacePanel: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Boolean Name="bFrontFacePanel">
+			<Description><![CDATA["Front Face Panel"]]></Description>
+			<Flags>
+				<ParFlg_BoldName/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="frontFacePanelHeight">
+			<Description><![CDATA["Front Face Panel Height"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.15</Value>
+		</Length>
+		<Length Name="frontFacePanelOvg">
+			<Description><![CDATA["Front Face Panel Overhang"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.025</Value>
+		</Length>
+
+		<!-- gs_3D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_3D_representation">
+			<Description><![CDATA["3D Representation"]]></Description>
+			<Fix/>
+		</Title>
+		<String Name="gs_detlevel_3D">
+			<Description><![CDATA["3D Detail Level"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="gs_detlevel_3D_m">
+			<Description><![CDATA["3D Detail Level"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<Integer Name="gs_resol">
+			<Description><![CDATA["Resolution"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>16</Value>
+		</Integer>
+		<Boolean Name="gs_shadow">
+			<Description><![CDATA["Shadow"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Integer Name="MEP_version">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>4</Value>
+		</Integer>
+		<String Name="MEP_ConInfo">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="3">
+				<AVal Column="1" Row="1"><![CDATA[""]]></AVal>
+				<AVal Column="2" Row="1"><![CDATA[""]]></AVal>
+				<AVal Column="3" Row="1"><![CDATA[""]]></AVal>
+			</ArrayValues>
+		</String>
+		<Length Name="gs_Connections">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="26">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">0</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">0</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0</AVal>
+				<AVal Column="13" Row="1">0</AVal>
+				<AVal Column="14" Row="1">0</AVal>
+				<AVal Column="15" Row="1">0</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">0</AVal>
+				<AVal Column="20" Row="1">0</AVal>
+				<AVal Column="21" Row="1">0</AVal>
+				<AVal Column="22" Row="1">0</AVal>
+				<AVal Column="23" Row="1">0</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="26" Row="1">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Integer Name="MEP_NumberConnections">
+			<Description><![CDATA["Number of Connections"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="MEP_NumConnectionData">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="26">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">0</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">0</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0</AVal>
+				<AVal Column="13" Row="1">0</AVal>
+				<AVal Column="14" Row="1">0</AVal>
+				<AVal Column="15" Row="1">0</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">0</AVal>
+				<AVal Column="20" Row="1">0</AVal>
+				<AVal Column="21" Row="1">0</AVal>
+				<AVal Column="22" Row="1">0</AVal>
+				<AVal Column="23" Row="1">0</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="26" Row="1">0</AVal>
+			</ArrayValues>
+		</Length>
+		<String Name="MEP_StrConnectionData">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="3">
+				<AVal Column="1" Row="1"><![CDATA[""]]></AVal>
+				<AVal Column="2" Row="1"><![CDATA[""]]></AVal>
+				<AVal Column="3" Row="1"><![CDATA[""]]></AVal>
+			</ArrayValues>
+		</String>
+		<Length Name="gs_AddConnections">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="2">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="MEP_NumConnectedConnectionData">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Unique/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="1" SecondDimension="26">
+				<AVal Column="1" Row="1">0</AVal>
+				<AVal Column="2" Row="1">0</AVal>
+				<AVal Column="3" Row="1">0</AVal>
+				<AVal Column="4" Row="1">0</AVal>
+				<AVal Column="5" Row="1">0</AVal>
+				<AVal Column="6" Row="1">0</AVal>
+				<AVal Column="7" Row="1">0</AVal>
+				<AVal Column="8" Row="1">0</AVal>
+				<AVal Column="9" Row="1">0</AVal>
+				<AVal Column="10" Row="1">0</AVal>
+				<AVal Column="11" Row="1">0</AVal>
+				<AVal Column="12" Row="1">0</AVal>
+				<AVal Column="13" Row="1">0</AVal>
+				<AVal Column="14" Row="1">0</AVal>
+				<AVal Column="15" Row="1">0</AVal>
+				<AVal Column="16" Row="1">0</AVal>
+				<AVal Column="17" Row="1">0</AVal>
+				<AVal Column="18" Row="1">0</AVal>
+				<AVal Column="19" Row="1">0</AVal>
+				<AVal Column="20" Row="1">0</AVal>
+				<AVal Column="21" Row="1">0</AVal>
+				<AVal Column="22" Row="1">0</AVal>
+				<AVal Column="23" Row="1">0</AVal>
+				<AVal Column="24" Row="1">0</AVal>
+				<AVal Column="25" Row="1">0</AVal>
+				<AVal Column="26" Row="1">0</AVal>
+			</ArrayValues>
+		</Length>
+		<String Name="LibraryLangCode">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA["RUS"]]></Value>
+		</String>
+
+		<!-- gs_2D_representation: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_2D_representation">
+			<Description><![CDATA["2D Representation"]]></Description>
+			<Fix/>
+		</Title>
+		<Integer Name="gs_detlevel_2D_m">
+			<Description><![CDATA["2D Detail Level"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="side_vis2D_m">
+			<Description><![CDATA["Sides Visible in 2D"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+		<Integer Name="TapSymbol_m">
+			<Description><![CDATA["Tap Symbol Type"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2</Value>
+		</Integer>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Contour Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>8</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Fill Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Fill Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Fill Background Pen"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+
+		<!-- gs_material: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_material">
+			<Description><![CDATA["Surfaces"]]></Description>
+		</Title>
+		<Material Name="count_mat">
+			<Description><![CDATA["Counter"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>23</Value>
+		</Material>
+		<Material Name="bs_mat">
+			<Description><![CDATA["Backsplash"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>23</Value>
+		</Material>
+		<Material Name="gs_sink_mat">
+			<Description><![CDATA["Sink"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>11</Value>
+		</Material>
+		<Material Name="gs_tap_mat">
+			<Description><![CDATA["Tap"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>13</Value>
+		</Material>
+		<Material Name="matFrontPanel">
+			<Description><![CDATA["Front Panel"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>23</Value>
+		</Material>
+		<Material Name="gs_drain_mat">
+			<Description><![CDATA["Drain"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>11</Value>
+		</Material>
+
+		<!-- gs_list: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_list">
+			<Description><![CDATA["Parameters for Listing"]]></Description>
+			<Fix/>
+		</Title>
+		<Integer Name="ifc_subtype">
+			<Description><![CDATA["IFC Subtype"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Integer Name="ifc_predefinedtype">
+			<Description><![CDATA["IFC Predefined Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="gs_list_manufacturer">
+			<Description><![CDATA["Manufacturer"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductName">
+			<Description><![CDATA["Product Name"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_GUID">
+			<Description><![CDATA["Product ID"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_material">
+			<Description><![CDATA["Material"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_gauge">
+			<Description><![CDATA["Gauge Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="gs_list_area">
+			<Description><![CDATA["Area"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="gs_list_volume">
+			<Description><![CDATA["Volume"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="gs_list_cost">
+			<Description><![CDATA["Cost"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="gs_list_note">
+			<Description><![CDATA["Note/Remarks"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_location">
+			<Description><![CDATA["Location"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_accessories">
+			<Description><![CDATA["Accessories"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_Type">
+			<Description><![CDATA["Group Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Механическое Оборудование"]]></Value>
+		</String>
+		<Integer Name="iFMType">
+			<Description><![CDATA["Group Type"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>12</Value>
+		</Integer>
+		<String Name="FM_InventoryNumber">
+			<Description><![CDATA["Inventory Number"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_SerialNumber">
+			<Description><![CDATA["Serial Number"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="FM_ProductionYear">
+			<Description><![CDATA["Production Year"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="FM_ObjectWeight">
+			<Description><![CDATA["Object Weight"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="FM_ObjectWeightUnit">
+			<Description><![CDATA["Object Weight Unit"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["кг"]]></Value>
+		</String>
+		<String Name="gs_list_custom1">
+			<Description><![CDATA["User Defined 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom2">
+			<Description><![CDATA["User Defined 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom3">
+			<Description><![CDATA["User Defined 3"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom4">
+			<Description><![CDATA["User Defined 4"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_list_custom5">
+			<Description><![CDATA["User Defined 5"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+
+		<!-- gs_onorm_Title: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="gs_onorm_Title">
+			<Description><![CDATA["Additional Listing Parameters"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<String Name="gs_onorm_dimensions">
+			<Description><![CDATA["Dimensions W/D/H"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_manufacturer">
+			<Description><![CDATA["Additional Manufacturer"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_baseheight_value">
+			<Description><![CDATA["Base Height Value"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_baseheight">
+			<Description><![CDATA["Additional Base Height"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_assemblydate">
+			<Description><![CDATA["Assembly Date"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_customtext1">
+			<Description><![CDATA["Additional Information 1"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_customtext2">
+			<Description><![CDATA["Additional Information 2"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_aks">
+			<Description><![CDATA["AKS Number"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_product">
+			<Description><![CDATA["Product Name"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_leistungbuch">
+			<Description><![CDATA["Collection of Specifications ID"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_description">
+			<Description><![CDATA["Additional Description"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_number">
+			<Description><![CDATA["Additional Number"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_id">
+			<Description><![CDATA["ID Number"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_admission">
+			<Description><![CDATA["Admission Date"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_modification">
+			<Description><![CDATA["Modification Date"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="gs_onorm_tozonenumber">
+			<Description><![CDATA["To Zone Number"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="basinbuiltin_unID">
+			<Description><![CDATA[""]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Integer>
+	</Parameters>
+</ParamSection>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="3583" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000000800000
+	008008020000004C5CF69C00000DBC49444154785EECD1A1010020080041F75F
+	920148041241DDC068B9CFDF6EEDAFE902080000010020000004008000001000
+	0002004000000800000100200000040080000010000002004000000800000100
+	200000AA2A2232B3BB67E6F9EBB06F664D5125591CA70A0A148ABD90BD5150C7
+	3046C1E9080D355C97A19D371FBAA39F26BAE793F8597CF7411D1F0CB7714143
+	6D35DCD771C41D9AC52E96A26828E757F9D733376E218ADEBA1A3D9CE84EF326
+	97CA5BE79767C97393A282E004000F1E3C78F2E4099D4227B1586CE1C285A5A5
+	A5F1789CB6ACAC8CCB9292127E5420999700614E4F4F3F7CF8F0EEDDBBB76FDF
+	BE79F3E6952B57CE9D3B77FAF4E923478E1C3E7CF8C08103FBF7EFA73D74E810
+	238C5FBA74E9CE9D3BBDBDBD030303580CBFFE7F6801119AA058663299478F1E
+	4D4E4E469C30426B7D11E29E743A3DE924954A714987169B8846A318C782050B
+	B0923227D80D97083FFAA31A4051FE0CCB5AAFA068295760840D365353538081
+	105486868688225C0AA18101097EACBCBCDC5C1968E7017C8AC79BE1398A8A08
+	1874AAAAAA72C110CF01333838F8F2E54BFA20D1AFC83E145D4485BEC0CC0308
+	184C4D4D8DB932392EB199989880CDF3E7CFB11E012E760218057FD90D6C1884
+	DC3C8060C0A04D56BAB932C18301F6213F06212C063002A65F412081181804C0
+	8099071018185A813184534E00333E3E4E87002330F4B130C2122C05032A6A65
+	31A09D07306730521CAB9E752DFB40CB1884C028B01B186E931FC3745EBD7A25
+	4E489113598CD795E1D9668B31F30050CDE3C78F6FDDBA353C3C8C5A511651BD
+	BDA363F9B265F2515E5A5127B820322B03031231B07419300C6A630F15B82A57
+	96AD4894A77D020079CFC0842FCF73FBD2D0D00455B2A1DBB76F5F5D7DFDB77F
+	F9F6B764F2F03F0F8161E5CA953F7CFFBDBCD64752548B78C12098085CD54248
+	062478805456167F2740E212330A0900AABF7CF93286CFC438562D16AF2F36C9
+	93F659A4CF9E3D636BFDF8716F6353238EA3B2A292F189D4785767275A0BC4C2
+	7C780446B6C20328CCD0A145150263BB4B097D84F120018C8E8E1E3F7EFCC58B
+	1700674AD9A9FA98AA021DC278E060F425D9225CBF7E9D4D1CDEE3CC99338BEA
+	EB7FFAF91F5BB66EBB79E3FA85F3E7366FDECCBC79626F3C8C8AD5662C5D2631
+	E35246A3B40D2A5BB66C09060009DFD1A34771BBA8D89C8FC474040309606000
+	0C190A2D9796EFC3664E60C0C957BAED840E8C0787865EBF7EBD68D1A296D656
+	2E7FEDEF1F1F1BDBB3670F7DE5A3334A9860E4B8289A757777070000AB67ED43
+	787667F73E3032085AD57C3017D90D60B8A40F241524723F843B93C924453D32
+	4B45541C3361808E1C0E80DF64DE3435377DD7DD6DBFFEC585C7030385C86DDB
+	B67D6E1674FFFE7DEA9A2045171F19D9724B7888BCA7CF620400010F60642EBA
+	540B7B129E254B9660CBA74E9DEAEBEF67EDB3C248496A6B6BDDB6A064F1E2C5
+	232349CC1F185FE126E6B3005CBD7AF5C2850B8AB7B340FA3430F2A15061451B
+	182D734514AC04ED33D8DCDC7CFEFCF9A74F9F726773734B494931E4C852CA2B
+	2A76FDB53B353EDE73F68CF65C00FE8394220048ADFFDAB56B7328B00407066D
+	6A63D5D4D484E9F4F4F4F02450298FC7FFFED3CFB857B24F424AF7777F4B24EA
+	1EFDFB6141A480FB7171900B3E2B0B1F00DFF9E4C993BC7B09B1EEE847027573
+	536C94B2C19F00EB68DDBB7BF75C4FCF0F3FFE48280155AC38363D354D825459
+	5929062A655BD4A1931BF9D5FF1A0160E6C78E1DA396C2D387913FB89E657599
+	77C2252B1DDD5DBE7285C49FE49A4172D07F9D3C8171B049A5E585379026D369
+	F0E091080FDC23841245F8DC74994B81D16D16AB8C50F800FCE9669EB46FAA31
+	3FA3BAE6447A826FCD88F44510400AD04334D3D2D2DAD7D7C76100482D5FBE9C
+	DD0054DADBDBEFDFBBF77A7858602ACACB5130CA0567C6B3C0B589558C31300A
+	693214E1B18EC60D8CF1B04E7E0110E54E9C388146B0DF7CA89E45A74A321A19
+	1D1BA342861FA7DC525D5D9348242A2A2BABAA2A4BCB784989F788392D445DC2
+	53721C397AB4BDA37DCBD6AD63A3C8D8E4649A7F86060693C911FA24A97A1347
+	458D920D30980B3033AACCAA0B7C82D7F5697749EB4B97E5D6E8D0BE0F4C00A5
+	08760D67CF9EE5E1E09F8F554FDD8B8C7E786888ED3CDFAD369168696969A86F
+	A8AAAE2E2D2B456B859168C42D61EF1900840EEFF49FF4F6363636422535919A
+	4C23341308BD24109249B229FADCAC0227D537CC028AC230A7DCD1BB9B334FA5
+	AC4C1FAEE822FF46ABB565600CF31CF6019C6FB878F1228403D73E9F895E7E1D
+	18C087A04D2A977F6A6B23B7710113C3CF4E49084DA726E476EC9B98C1EBB710
+	D2D5F1544A3F202033CE2F922F449DAFCFD699A7A6C65C52CB5CD8078E140CB5
+	3535B2868FAF02F9B23E5558F193C263DFCBD265B92F190A76639B980FBB2011
+	63E1DFB871437129F0853F343CDCDFDFAFBA715B5B1BAB3EEE1626FAC2EF63E1
+	A833F2EE66426A86D5E42E69A040479B5ED58AE1C335A6428BD03160595B77D8
+	7071232323F8F286C646D8D36F6A6C443B30F8640B96C67D7A5359DB6AC30646
+	952B44216D36005055BA093DE007BEF6D9B89241D247FBD46D127575E80818C0
+	663294370D73DA0C4B145D42205A081014AA98C9008D456E6E90CE69D491FA4D
+	DC95C65EF5F5B18BEEECEA62B3F69FDEDE256D6D6210C22606516D0E06C0289A
+	A5BA49BA497513A7968F62082923D98B022F1B28658AC040A1582F6B83852D00
+	4E7351F76DA6B5F2A5563AB204A9F5ADC665FBAE2B0AFACF28881C1630383070
+	F9975F88DB040196C237ADADA16D65540B526766008435D24D12E7FCA59BE48B
+	A81E4BA44505F866C60B9DDFCCEACFDC7D24421FAF9E1D2E2222C4B8C1976664
+	9C4C39A78F33E21FB753C8880DB4C450A1430C307FA6263B22B16E686860B5B1
+	2A65042130D0AB820D1B3610126600C0E14E3C8FFC72FE9E030B8BE16A9CD0CF
+	E6E92ECB86807C78CCE59AD85FE9C252EE5416282A685E6A8F48E46469148081
+	81FC3EF53BE25E924CBB54476E8806DF0C2D449FAF7379E1548AC08F6367D2ED
+	DBB713F01829DCBB77AF2FDD24D9D702C9EBBB43F2C2674F9FAA66096C548EFA
+	A562763EE5F1729276B4531C2B7EBB7A51AD279AD18F30E2BADE0A350B5F1681
+	D26512590A483A2B7490A1C14166E738D19F57ADA290C73851877428848D3D73
+	91B0F11A00B3B32C288C743337BCB36BC5C5F10E998580A9A18E31F79666C1DB
+	B7DB6FB807D5A2440CE54DA6B8A0B820E64DC3A46B29DBD4EDFEE75230E0A65C
+	5068858949D91930B266CD9A6FDADAC0C3A4AD2D2D4A46F3A77DAD3332EC9D3B
+	77EA708624EA4D78282BCAC643A81162646BD7AE25F524CEF3644C8A4DE02F50
+	220564127624ED5E7FCB7123BE0D9119844FE002088064DD9013EDD754A366AF
+	50DFD0D0B5664DDBE2C5B0C104790690E755FB4A7F3B3A3A76EFDEEDD5FEFF5C
+	10B9267F5851515161055B1EDAE29B8F475029298C1B1B1AAAABABA91FA06B85
+	62CC021DA13EBC3EEE1F83C01E5915E81B1DC9CB2B97110FED4D9DF39170E12E
+	1125E3AA2939A1539748B0F013B5B5CC4B85A3AAB2120C797D57ACD74DAB57AF
+	DEBA756BAE6B8948CBEC47E8705FDA09C6A2BD3BDCE8F3DCB420D16A92EE663E
+	BE31771172A6636B4A0968CA4DA3CDBD74440D880E4BB5AE6E5145799C442856
+	546814791AFC393683F02120E45129262154207E73C208245481C0FC89314C29
+	48B479F5FBD34EB0753CDE7B6B410A51765801F1D65BA02230C6437844854111
+	96A17C32184D9D9DCE2D58454E2EE90109559565CF985490B75150C3324A8A4B
+	C868C8992810A526D2A32323725940488D8F116DF93895624ADE1DA2C2EF8381
+	A08C84996E6EDAB48980375B316EC089EA7956715507893AF1FD9D85AC41E468
+	E121301012273B1B6367633F064CEE3831D46BC87A37806FC7CF8819CF27D431
+	09C92B8D7BF08C4B5761A914880E97BA39FC74733600280E3B05970E1899EBD7
+	0E13F12299118C9DB6F082818751A1D588B0D9AB155F9D6B163012ED1510CDCD
+	A3110B048C4C88A493E9A73D62A5246E0DF3B51DBC719B243C78CEB91D4D9427
+	91DBA12FD76FD52E9DF530303E73C905631FA84F9063F1F931198D7E0492D9C0
+	28E42A02793A1233AE003285E0D2CDC0CE86DA013CB5EAD85AA615F9398141BC
+	310612F266E6C734AEA5A0E59C0B06F97ACE05ABD0B674E9528EC9107EC2389C
+	6B4AD48B24A549C2233616638D8482CDC7803157460B18F575F8D2C05856F665
+	C158945AB56A15451ECD1E06805CC9FDB308C00892382932FBC0F8628CC641E2
+	8B31E6CA04C3C2BEB2008D8344F12C178CB5794A37D7AD5BD7D5D515ECF1F4E0
+	C10883397D25E94265608C412E18136136308865C6BE30C388D2E57C80B17493
+	F3BFCBDC5F210400207C31EDC85C84C7B7C330D5CF62313E3060B6ACCCE7C744
+	CBD2653D832FE9B2CB39A49B210008532CC803C6C28C0849C53E300A30B9C1DF
+	776ADC1763E4C7D84B8B0A62914CF88D8418FBD2CD5DBB76D5A8981A2E802F0F
+	46EB97BEF931815164363032975C30A64A2F9849C94CE932ADA6D02649E9E68E
+	1D3BE2F13830C203F0F58341535E3FE6CDCACCBD8887DA0F8201ADB932CE236B
+	DF8AC727DDD48B9379001F3ED2638B17259A4219373076CEE77DE93223A8FEE0
+	C183D8446767E7C68D1B457D1EC0E78241CC8FC9CFC8A1794FEDE9780F876838
+	16BE7EFD7AA59BF300F20846D18516B1133E9C25E0D0D88A152B029BECBFEDDC
+	210100000C02C1F50FCDA6E609705FE10C8AADD3EF2E9F713EE3040080000010
+	0000020040000008000001002000000400800000100000020040000008000001
+	002000000400800000D0012D50DF12A4460E2E0000000049454E44AE426082
+	]]>
+</Picture>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["2dDetailLevel"]]></MName>
+		<MainGUID>2FD16305-CA53-4505-BFA7-4E98A8BA9399</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["tapType_m"]]></MName>
+		<MainGUID>D8F9E491-FD02-4664-8E12-E1E966386D6A</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>GRAPHISOFT</Author>
+	<License>
+		<Type>CC BY-ND</Type>
+		<Version>3.0</Version>
+	</License>
+</Copyright>
+
+</Symbol>

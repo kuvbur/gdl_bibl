@@ -1,0 +1,317 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="E8380BA2-295D-4C2E-82E5-DFF580454FFD" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="43">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+</Ancestry>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["macro_replace_char"]]></MName>
+		<MainGUID>F7600ED1-F8B2-4F9D-89E9-A27DE81B342C</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["macro_replace_word"]]></MName>
+		<MainGUID>3F1A476B-44B6-4A9C-93AE-7816A0509FDD</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["macro_trim_space"]]></MName>
+		<MainGUID>4B061C8B-6B86-4616-B17B-78D03ACACEC0</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+!Разбивка по словам
+!mlb_in_str = "  stringxxstring  " : mlb_l_max = 0.6
+!dim mlb_out_str_arr[]
+!call "macro_line_break" parameters mlb_in_str=mlb_in_str, mlb_l_max=mlb_l_max,
+!									RETURNED_PARAMETERS mlb_n_row, mlb_out_str, mlb_out_str_arr
+
+!DEFINE STYLE{2} "macro_line_break" AC_TextFont_1, AC_TextSize_1, AC_TextStyle_1
+!STYLE "macro_line_break"
+
+dim text_w[] : text_w[1] = ""
+dim text_r[] : text_r[1] = ""
+EPS = 0.0001
+FILE_DEPENDENCE "macro_trim_space", "macro_replace_char", "macro_replace_word"
+
+if strlen(mlb_in_str)<EPS then goto "m_end"
+
+ns = 0
+aft = mlb_in_str
+
+mrc_newChar = " " : mrc_charToReplace = "\n" : mrc_in_str = aft
+call "macro_replace_char" parameters mrc_in_str=mrc_in_str, mrc_charToReplace=mrc_charToReplace, mrc_newChar = mrc_newChar, RETURNED_PARAMETERS mrc_out_str
+!if vardtype(mrc_out_str)=2 then aft = mrc_out_str
+if (STW(aft) / 1000 * GLOB_SCALE) <= mlb_l_max then 
+	rs = 1
+	text_r[rs] = aft
+	goto "m_end"
+endif
+
+!Чтоб на разрывать обозначение ГОСТа, ТУ или серий
+dim unbreak[] : i=0
+i=i+1 : unbreak[i] = "ГОСТ"
+i=i+1 : unbreak[i] = "ТУ"
+i=i+1 : unbreak[i] = "Серия"
+i=i+1 : unbreak[i] = "Серии"
+i=i+1 : unbreak[i] = "ОСТ"
+
+for inx = 1 to vardim1(unbreak)
+	mrw_wordToReplace = unbreak[inx]+" "
+	mrw_in_str = aft
+	mrw_newWord = unbreak[inx]+"@"
+	mrw_out_str = ""
+	call "macro_replace_word" parameters mrw_in_str=mrw_in_str,
+										mrw_newWord=mrw_newWord,
+										mrw_wordToReplace = mrw_wordToReplace,
+										RETURNED_PARAMETERS mrw_out_str
+	if vartype(mrw_out_str)=2 then aft = mrw_out_str
+next inx
+
+pos_prob = STRSTR(aft, " ", 1)
+WHILE pos_prob>0 DO
+	word = STRSUB(aft, 1, pos_prob-1)
+	if strlen(word)>0 then
+		ns = ns + 1
+		text_w[ns] = word
+	endif
+	aft = STRSUB(aft, pos_prob+1, strlen(aft) - pos_prob)
+	pos_prob = STRSTR(aft, " ", 1)
+ENDWHILE
+
+ns = ns + 1
+text_w[ns] = aft
+rs = 0 : ns = 1
+for is = 1 to 100
+	txt = ""
+	w_txt = 0
+	w_txt_next = 0
+	WHILE w_txt<=mlb_l_max and w_txt_next<=mlb_l_max and ns <= vardim1(text_w) DO
+		if txt = "" then
+			txt = text_w[ns]
+		else
+			txt = txt + " " + text_w[ns]
+		endif
+		w_txt = STW (txt) / 1000 * GLOB_SCALE
+		if ns<vardim1(text_w) then 
+			w_txt_next = STW (txt + " " + text_w[ns+1]) / 1000 * GLOB_SCALE
+		else
+			w_txt_next = 0
+		endif
+		ns = ns + 1
+	ENDWHILE
+	if txt<>"" then
+		rs = rs + 1
+		text_r[rs] = txt
+	else
+		goto "m_end"
+	endif
+next is
+
+"m_end":
+
+mlb_out_str_ = ""
+for is=1 to rs
+	txt = text_r[is]
+	mts_in_str = txt
+	call "macro_trim_space" parameters mts_in_str=mts_in_str,
+										RETURNED_PARAMETERS mts_out_str
+	if vartype(mts_out_str)=2 then txt = mts_out_str
+	for inx = 1 to vardim1(unbreak)
+		mrw_wordToReplace = unbreak[inx]+"@"
+		mrw_in_str = txt
+		mrw_newWord = unbreak[inx]+" "
+		mrw_out_str = ""
+		call "macro_replace_word" parameters mrw_in_str=mrw_in_str,
+											mrw_newWord=mrw_newWord,
+											mrw_wordToReplace = mrw_wordToReplace,
+											RETURNED_PARAMETERS mrw_out_str
+		if vartype(mrw_out_str)=2 then txt = mrw_out_str
+	next inx
+	if vartype(mrc_out_str)=2 then txt = mrc_out_str
+	text_r[is] = txt
+	mlb_out_str_ = mlb_out_str_ + text_r[is]+"\n"
+next is
+if mlb_out_str_ = "" then mlb_out_str_ = "ОШИБКА"
+
+mlb_out_str_arr = text_r
+mlb_n_row = rs
+mlb_out_str = mlb_out_str_
+parameters mlb_out_str_arr=mlb_out_str_arr, mlb_n_row=mlb_n_row, mlb_out_str=mlb_out_str
+EXIT mlb_n_row, mlb_out_str, mlb_out_str_arr
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_BWM>
+
+<ParamSection SectVersion="27" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Размер 1"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Размер 2"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Высота"]]></Description>
+			<Fix/>
+			<Value>1</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Показ Узловых 2D Точек в 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Отметка Низа"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Отметка Верха"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="AC_TextFont_1">
+			<Description><![CDATA["Шрифт"]]></Description>
+			<Value><![CDATA["ISOCPEUR Кириллический"]]></Value>
+		</String>
+		<RealNum Name="AC_TextSize_1">
+			<Description><![CDATA["Размер шрифта"]]></Description>
+			<Value>3</Value>
+		</RealNum>
+		<RealNum Name="AC_TextCharWidthFactor_1">
+			<Description><![CDATA[""]]></Description>
+			<Value>1</Value>
+		</RealNum>
+		<RealNum Name="AC_TextCharSpaceFactor_1">
+			<Description><![CDATA[""]]></Description>
+			<Value>1</Value>
+		</RealNum>
+		<Integer Name="AC_TextStyle_1">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="macro_line_C">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Length Name="macro_line_D">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Length>
+		<String Name="mlb_in_str">
+			<Description><![CDATA["Строка входа"]]></Description>
+			<Value><![CDATA["Пример пример  пример пример"]]></Value>
+		</String>
+		<Length Name="mlb_l_max">
+			<Description><![CDATA["Максимальная длина строки"]]></Description>
+			<Value>0.3</Value>
+		</Length>
+		<Integer Name="mlb_n_row">
+			<Description><![CDATA["Количество строк"]]></Description>
+			<Value>4</Value>
+		</Integer>
+		<String Name="mlb_out_str">
+			<Description><![CDATA["Строка с разбивкой \n"]]></Description>
+			<Value><![CDATA["Пример\nпример\nпример\nпример\n"]]></Value>
+		</String>
+		<String Name="mlb_out_str_arr">
+			<Description><![CDATA["Массив строк"]]></Description>
+			<ArrayValues FirstDimension="4" SecondDimension="0">
+				<AVal Row="1"><![CDATA["Пример"]]></AVal>
+				<AVal Row="2"><![CDATA["пример"]]></AVal>
+				<AVal Row="3"><![CDATA["пример"]]></AVal>
+				<AVal Row="4"><![CDATA["пример"]]></AVal>
+			</ArrayValues>
+		</String>
+	</Parameters>
+</ParamSection>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author>kuvbur</Author>
+	<License>
+		<Type>CC0</Type>
+		<Version>1.0</Version>
+	</License>
+</Copyright>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[Разбивка длинных строк на строки заданной длины]]>
+</Comment>
+
+</Symbol>

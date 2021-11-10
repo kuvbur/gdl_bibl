@@ -1,0 +1,109 @@
+﻿
+! Sand Filter
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+IF useSysMat THEN MainBoxMaterial = sMat
+MATERIAL MainBoxMaterial
+PEN gs_cont_pen
+RESOL res
+
+
+IF mbShow THEN
+
+					! --- HOTSPOTS --- !
+
+	unID = 1
+	HOTSPOT 0, A/2, 0, unID: unID=unID+1
+	HOTSPOT 0, -A/2, 0, unID: unID=unID+1
+	HOTSPOT A/2, 0, 0, unID: unID=unID+1
+	HOTSPOT -A/2, 0, 0, unID: unID=unID+1
+	HOTSPOT 0, 0, ZZYZX, unID: unID=unID+1
+
+
+					! --- MAIN BOX --- !
+
+	IF gs_detlevel_3D_m = 2 THEN
+		lowerArcRad = ((A/2-footingUWidth/2)^2+lowerArcHeight^2)/(2*(A/2-footingUWidth/2))
+		beta = ASN(lowerArcHeight/lowerArcRad)
+
+		CONE footingHeight, footingLWidth/2, footingUWidth/2, 90, 90
+
+		ROTy -90
+			PUT footingHeight, footingUWidth/2, 1
+			 num = 3
+			 alpha_i = beta/num: alpha = 90-beta
+			FOR i = 1 TO num
+				 alpha = alpha+alpha_i
+				PUT footingHeight+lowerArcHeight-lowerArcRad*COS(alpha), A/2-lowerArcRad+lowerArcRad*SIN(alpha), 1
+			NEXT i
+
+			 num = 4
+			 alpha_i = 90/num: alpha = 0
+			FOR i = 1 TO num+1
+				PUT ZZYZX-arcRad+arcRad*SIN(alpha), A/2-arcRad+arcRad*COS(alpha), 1
+				 alpha = alpha+alpha_i
+			NEXT i
+
+		REVOLVE NSP/3, 360, 1+2+16+32,
+			GET (NSP)
+		DEL 1
+	ELSE
+		CYLIND ZZYZX, A/2
+	ENDIF
+
+
+					! --- CONNECTIONS --- !
+
+	RESOL res
+	CUTPOLYA 2, 2, 0,
+		0, 0, 979,
+		A/2, 360, 4079
+
+	IF ConStatus_1 THEN		! --- PIPE INLET CONNECTION --- !
+		ADDz ConPosZ_1
+		ROTy -90
+			EXTRUDE 2, 0, 0, A/2, 16,
+				0, 0, 901,
+				ConWidth_1/2, 360, 4001
+		DEL 2
+	ENDIF
+
+
+	IF ConStatus_2 THEN		! --- PIPE OUTLET CONNECTION --- !
+		ADDz ConPosZ_2
+		ROTy -90
+			EXTRUDE 2, 0, 0, A/2, 16,
+				0, 0, 901,
+				ConWidth_2/2, 360, 4001
+		DEL 2
+	ENDIF
+	CUTEND
+ENDIF
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	ui_current_con = ui_current_con,
+	MEP_NumberConnections = MEP_NumberConnections,
+	MEP_NumConnectionData = gs_Connections,
+	gs_AddConnections = gs_AddConnections,
+	cShow3D = 1,
+	gs_ConMat = MainBoxMaterial,
+	MEP_InsShow = 0,
+	MEP_cline_show_3D = 0,
+	gs_cont_pen = gs_cont_pen,
+	ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 14, ConEdgeVisible_1 = 0,
+	ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = 14, ConEdgeVisible_2 = 0
+END

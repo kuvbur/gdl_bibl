@@ -1,0 +1,1402 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="55F71BED-B134-40F5-A5EB-FD5DA9A3C16A" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="43">
+<Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
+	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
+	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
+	<MainGUID>43EC5FE8-94F1-488F-8E9C-A63483E499C1</MainGUID>
+</Ancestry>
+
+<CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
+	<Macro>
+		<MName><![CDATA["Показ_по_сборкам"]]></MName>
+		<MainGUID>8CE26AA8-652F-4D4A-95D8-E7E763E145D4</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["Libraryflobals-km"]]></MName>
+		<MainGUID>2087989F-7AAB-43CC-9F4A-8CC8975EA122</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["Спецификатор"]]></MName>
+		<MainGUID>88E821BC-A95F-4CEA-9F73-6500A781AE09</MainGUID>
+	</Macro>
+</CalledMacros>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+gosub "set_3d"
+show_3d_hotspot_t = 1
+if GLOB_PREVIEW_MODE<>0 or GLOB_FEEDBACK_MODE=1 then show_3d_hotspot_t = 0
+
+group "body"
+	addz det_r_z
+	if det_mirr then rotz 180
+	roty det_ang 
+	hotspot 0,0,0, unID : unID = unID + 1
+	hotspot 0,-bb/2,0, unID : unID = unID + 1
+	hotspot 0,bb/2,0, unID : unID = unID + 1
+	rotx 90
+	addz -bb/2
+	for inx=1 to vardim1(tmp_coord)
+!		if show_3d_hotspot_t then 
+!			hotspot tmp_coord[inx][1],tmp_coord[inx][2],0, unID : unID = unID + 1
+!			hotspot tmp_coord[inx][1],tmp_coord[inx][2],bb, unID : unID = unID + 1
+!		endif
+		PUT tmp_coord[inx][1],tmp_coord[inx][2],15
+	next inx
+	PRISM_ NSP/3, bb, GET(NSP)
+	del top
+endgroup
+
+if det_r_qty=1 then 
+	placegroup "body"
+else
+	dphi = 360/det_r_qty
+	phi = det_add_angle
+	for i=1 to det_r_qty
+		add det_r_c * cos(phi), det_r_c * sin(phi), 0
+		rotz phi
+		placegroup "body"
+		del 2
+		phi = phi + dphi
+	next i
+endif
+if NSP>0 then tt = max(get(NSP))
+end
+"set_3d":
+	show_subpos=1 : show_marker=1
+	call "Показ_по_сборкам" PARAMETERS ALL subpos=subpos, pos=pos RETURNED_PARAMETERS show_subpos, show_marker
+	if not(show_subpos) then end
+	building_material det_mat
+	pen gs_cont_pen
+	sect_attrs{2} gs_cont_pen
+return
+]]>
+</Script_3D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+PAPER_TO_MODEL = GLOB_SCALE / 1000
+if GLOB_PREVIEW_MODE<>0 or GLOB_FEEDBACK_MODE=1 then show_2d_hotspot = 0
+gosub "set_2d"
+if det_r_qty>1 then 
+	dphi = 360/det_r_qty
+	phi = det_add_angle
+	for i=1 to det_r_qty
+		add2 det_r_c * cos(phi), det_r_c * sin(phi)
+		rot2 phi
+		rect2 -t/2-t1,-bb/2,t/2+t1,bb/2
+		hotspot2 0,0
+		del 2
+		phi = phi + dphi
+	next i
+else
+	hotspot2 0,0
+	rect2 -t/2-t1,-bb/2,t/2+t1,bb/2
+endif
+if NSP>0 then tt = max(get(NSP))
+end
+"set_2d":
+	show_subpos=1 : show_marker=1
+	call "Показ_по_сборкам" PARAMETERS ALL subpos=subpos, pos=pos RETURNED_PARAMETERS show_subpos, show_marker
+	if not(show_subpos) then end
+	building_material det_mat
+	pen gs_cont_pen
+	sect_attrs{2} gs_cont_pen
+return
+]]>
+</Script_2D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+unID=1
+EPS=0.0001
+n_trans = 0
+n = REQUEST ("Name_of_main", "", name)
+is_call = 0 : if name<>"" then is_call = 1
+
+MS14 = 1
+MS58 = 2
+
+dim tdet_type[]
+dim idet_type[] : i=0
+i=i+1 : idet_type[i]=MS14 : tdet_type[i] = "МС1...МС4"
+i=i+1 : idet_type[i]=MS58 : tdet_type[i] = "МС5...МС8"
+
+dim det_info[][] : i=0
+!MC-1 			Высота наружного      Высота внутреннего     Ширина                Толщина               Толщина листа 1        Толщина листа 2        Масса
+i = i + 1	:	det_info[i][1]=0.16 : det_info[i][2]=0.160 : det_info[i][3]=0.08 : det_info[i][4]=0.09 : det_info[i][5]=0.008 : det_info[i][6]=0.006 : det_info[i][7]=1.94
+!MC-2
+i = i + 1	:	det_info[i][1]=0.16 : det_info[i][2]=0.160 : det_info[i][3]=0.08 : det_info[i][4]=0.10 : det_info[i][5]=0.008 : det_info[i][6]=0.006 : det_info[i][7]=1.98
+!MC-3
+i = i + 1	:	det_info[i][1]=0.16 : det_info[i][2]=0.160 : det_info[i][3]=0.08 : det_info[i][4]=0.11 : det_info[i][5]=0.008 : det_info[i][6]=0.006 : det_info[i][7]=2.01
+!MC-4
+i = i + 1	:	det_info[i][1]=0.16 : det_info[i][2]=0.160 : det_info[i][3]=0.08 : det_info[i][4]=0.12 : det_info[i][5]=0.008 : det_info[i][6]=0.006 : det_info[i][7]=2.05
+!MC-5
+i = i + 1	:	det_info[i][1]=0.16 : det_info[i][2]=0.162 : det_info[i][3]=0.08 : det_info[i][4]=0.09 : det_info[i][5]=0.008 : det_info[i][6]=0.006 : det_info[i][7]=1.56
+!MC-6
+i = i + 1	:	det_info[i][1]=0.16 : det_info[i][2]=0.162 : det_info[i][3]=0.08 : det_info[i][4]=0.10 : det_info[i][5]=0.008 : det_info[i][6]=0.006 : det_info[i][7]=1.60
+!MC-7
+i = i + 1	:	det_info[i][1]=0.16 : det_info[i][2]=0.162 : det_info[i][3]=0.08 : det_info[i][4]=0.11 : det_info[i][5]=0.008 : det_info[i][6]=0.006 : det_info[i][7]=1.63
+!MC-8
+i = i + 1	:	det_info[i][1]=0.16 : det_info[i][2]=0.162 : det_info[i][3]=0.08 : det_info[i][4]=0.12 : det_info[i][5]=0.008 : det_info[i][6]=0.006 : det_info[i][7]=1.67
+
+dim det_info_txt[][] : i=0
+i = i + 1	:	det_info_txt[i][1]="МС-1" : det_info_txt[i][2]="10.0.0"
+i = i + 1	:	det_info_txt[i][1]="МС-2" : det_info_txt[i][2]="10.0.0-01"
+i = i + 1	:	det_info_txt[i][1]="МС-3" : det_info_txt[i][2]="10.0.0-02"
+i = i + 1	:	det_info_txt[i][1]="МС-4" : det_info_txt[i][2]="10.0.0-03"
+i = i + 1	:	det_info_txt[i][1]="МС-5" : det_info_txt[i][2]="11.0.0"
+i = i + 1	:	det_info_txt[i][1]="МС-6" : det_info_txt[i][2]="11.0.0-01"
+i = i + 1	:	det_info_txt[i][1]="МС-7" : det_info_txt[i][2]="11.0.0-02"
+i = i + 1	:	det_info_txt[i][1]="МС-8" : det_info_txt[i][2]="11.0.0-03"
+
+inx_s = 1 : inx_e = 1
+if det_type=MS14 then
+	inx_s = 1
+	inx_e = 4
+endif
+
+if det_type=MS58 then
+	inx_s = 5
+	inx_e = 8
+endif
+
+
+inx_det = 1
+for i = inx_s to inx_e
+	if abs(det_info[i][4]-det_t)<EPS then inx_det = i
+next i
+
+obozn = "ТПР 901-09-11.84-КЖИ."
+ves = det_info[inx_det][7]
+obozn = obozn + det_info_txt[inx_det][2]
+pos = det_info_txt[inx_det][1]
+naen = "Элемент соединительный " + pos
+kol_vo_spec = det_r_qty
+
+hout = det_info[inx_det][1]
+hin = det_info[inx_det][2]
+bb = det_info[inx_det][3]
+t = det_info[inx_det][4]
+t1 = det_info[inx_det][5]
+t2 = det_info[inx_det][6]
+
+if det_r_qty<EPS then det_r_qty = 1
+if det_r_c<EPS then det_r_c = 0.5
+
+dim tmp_coord[][2] : inx = 0
+
+if det_type=MS14 or det_type=MS58 then
+	inx=inx + 1
+		tmp_coord[inx][1] = -t/2
+		tmp_coord[inx][2] = -t2/2
+	inx=inx + 1
+		tmp_coord[inx][1] = -t/2
+		tmp_coord[inx][2] = -hout/2
+	inx=inx + 1
+		tmp_coord[inx][1] = -t/2-t1
+		tmp_coord[inx][2] = -hout/2
+	inx=inx + 1
+		tmp_coord[inx][1] = -t/2-t1
+		tmp_coord[inx][2] = hout/2
+	inx=inx + 1
+		tmp_coord[inx][1] = -t/2
+		tmp_coord[inx][2] = hout/2
+	inx=inx + 1
+		tmp_coord[inx][1] = -t/2
+		tmp_coord[inx][2] = t2/2
+	inx=inx + 1
+		tmp_coord[inx][1] = t/2
+		tmp_coord[inx][2] = t2/2
+	inx=inx + 1
+		tmp_coord[inx][1] = t/2
+		tmp_coord[inx][2] = hin/2*(det_type=MS14) + t2/2*(det_type=MS58)
+	inx=inx + 1
+		tmp_coord[inx][1] = t/2+t1
+		tmp_coord[inx][2] = hin/2*(det_type=MS14) + t2/2*(det_type=MS58)
+	inx=inx + 1
+		tmp_coord[inx][1] = t/2+t1
+		tmp_coord[inx][2] = -hin/2
+	inx=inx + 1
+		tmp_coord[inx][1] = t/2
+		tmp_coord[inx][2] = -hin/2
+	inx=inx + 1
+		tmp_coord[inx][1] = t/2
+		tmp_coord[inx][2] = -t2/2
+endif
+
+
+area_pokr = 0
+for inx=2 to vardim1(tmp_coord)
+	rr = sqr((tmp_coord[inx][1]-tmp_coord[inx-1][1])^2+(tmp_coord[inx][2]-tmp_coord[inx-1][2])^2)
+	area_pokr = area_pokr + rr
+next inx
+rr = sqr((tmp_coord[inx][1]-tmp_coord[1][1])^2+(tmp_coord[inx][2]-tmp_coord[1][2])^2)
+area_pokr = area_pokr + rr
+area_pokr = area_pokr * bb + area_pokr * bb * 0.3
+]]>
+</Script_1D>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_PR SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+if mat_pokr<>"Нет" then
+	tip_el = "30"
+	komment_t = "кв.м."
+	obozn_t = "см. примечания"
+	naen_t = "Покрытие " + mat_pokr
+	ves_t = 0
+	kol_vo_spec_t=area_pokr
+	gosub "out"
+endif
+
+if type_spec="Металл" then
+	subpos = subpos + "'" + pos
+	for i=1 to kol_vo_spec
+		ndet = 1
+		z_th = t1
+		z_at = max(hout, bb)
+		z_bt = min(hout, bb)
+		gosub "out_sheet"
+	next i
+	tip_el="45"
+	pos = subpos
+	kol_vo_spec_t=kol_vo_spec
+	obozn_t = obozn
+	naen_t = naen
+	komment=""
+	ves_t = ves
+	gosub "out"
+endif
+
+if type_spec="Изделие" then
+	tip_el="40"
+	kol_vo_spec_t=kol_vo_spec
+	ves_t = ves
+	obozn_t = obozn
+	naen_t = naen
+	komment=""
+	gosub "out"
+endif
+
+goto "eend"
+
+"out":
+	call "Спецификатор" parameters tip_el=tip_el,
+									subpos = subpos, 
+									pos = pos, 
+									obozn=obozn_t,
+									naen=naen_t,
+									ves=ves_t,
+									kol_vo_spec=kol_vo_spec_t,
+									komment=komment
+return
+
+"out_sheet":
+	z_s_plit_obsh = z_at * z_bt
+	z_naen = "--" + str("%.0mm", z_th) + "x" + str("%.0mm", z_at) + "x" + str("%.0mm", z_bt)
+	z_ves_p = z_th * 7850
+	z_tip_profile = "-- " + str('%.0mm', z_th)
+	call "Спецификатор" parameters tip_el="20",
+									subpos = pos, 
+									pos = str("%.0",ndet),
+									tip_konstr="Прочее",
+									stal_gost="ГОСТ 27772-2015",
+									mater="С235",
+									obozn="ГОСТ 19903-74",
+									tip_profile=z_tip_profile,
+									dlin_prof=z_s_plit_obsh,
+									ves=z_ves_p, 
+									naen=z_naen
+return
+
+"eend":
+
+
+
+]]>
+</Script_PR>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_UI SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_UI>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_VL SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[
+if not(is_call) then
+	dim cov_type_arr[]
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "cov_type_arr", cov_type_arr)
+	values "mat_pokr" cov_type_arr
+	dim type_spec_type_arr[]
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "type_spec_type_arr", type_spec_type_arr)
+	values "type_spec" type_spec_type_arr
+	parameters A=bb
+	parameters ZZYZX=hout
+	parameters det_t = B
+	values{2} "det_type" idet_type, tdet_type
+	dim idet_t[]
+	j = 0
+	for i = inx_s to inx_e
+		j = j + 1
+		idet_t[j]=det_info[i][4]
+	next i
+	values "B" idet_t
+	parameters obozn = obozn, naen = naen, ves = ves, kol_vo_spec = kol_vo_spec
+endif
+
+]]>
+</Script_VL>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_BWM>
+
+<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+	<ParamSectHeader>
+		<AutoHotspots>false</AutoHotspots>
+		<StatBits>
+			<STBit_FixSize/>
+		</StatBits>
+		<WDLeftFrame>0</WDLeftFrame>
+		<WDRightFrame>0</WDRightFrame>
+		<WDTopFrame>0</WDTopFrame>
+		<WDBotFrame>0</WDBotFrame>
+		<LayFlags>65535</LayFlags>
+		<WDMirrorThickness>0</WDMirrorThickness>
+		<WDWallInset>0</WDWallInset>
+	</ParamSectHeader>
+	<Parameters>
+		<Length Name="A">
+			<Description><![CDATA["Размер 1"]]></Description>
+			<Fix/>
+			<Value>0.08</Value>
+		</Length>
+		<Length Name="B">
+			<Description><![CDATA["Размер 2"]]></Description>
+			<Fix/>
+			<Value>0.12</Value>
+		</Length>
+		<Length Name="ZZYZX">
+			<Description><![CDATA["Высота"]]></Description>
+			<Fix/>
+			<Value>0.16</Value>
+		</Length>
+		<Boolean Name="AC_show2DHotspotsIn3D">
+			<Description><![CDATA["Показыв. 2D-узл.т. в 3D"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<Length Name="ac_bottomlevel">
+			<Description><![CDATA["Уровень внизу"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</Length>
+		<Length Name="ac_toplevel">
+			<Description><![CDATA["Уровень вверху"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="det_type">
+			<Description><![CDATA["Тип детали"]]></Description>
+			<Value>2</Value>
+		</Integer>
+		<Length Name="det_t">
+			<Description><![CDATA["Толщина детали в свету (В)"]]></Description>
+			<Value>0.12</Value>
+		</Length>
+		<Angle Name="det_ang">
+			<Description><![CDATA["Угол поворота вдоль детали"]]></Description>
+			<Value>0</Value>
+		</Angle>
+		<Boolean Name="det_mirr">
+			<Description><![CDATA["Отзеркалить деталь"]]></Description>
+			<Value>0</Value>
+		</Boolean>
+		<Length Name="det_r_c">
+			<Description><![CDATA["Радиус кольца по середине"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Integer Name="det_r_qty">
+			<Description><![CDATA["Количество деталей"]]></Description>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="det_r_z">
+			<Description><![CDATA["Отступ начала"]]></Description>
+			<Value>0</Value>
+		</Length>
+		<Angle Name="det_add_angle">
+			<Description><![CDATA[""]]></Description>
+			<Value>0</Value>
+		</Angle>
+
+		<!-- all_spec: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="all_spec">
+			<Description><![CDATA["Спецификация"]]></Description>
+			<Fix/>
+		</Title>
+		<String Name="type_spec">
+			<Description><![CDATA["Специфицировать как"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Изделие"]]></Value>
+		</String>
+		<String Name="mat_pokr">
+			<Description><![CDATA["Тип обработки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["тип 2"]]></Value>
+		</String>
+		<String Name="obozn">
+			<Description><![CDATA["Обозначение"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["ТПР 901-09-11.84-КЖИ.11.0.0-03"]]></Value>
+		</String>
+		<String Name="naen">
+			<Description><![CDATA["Наименование"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["Элемент соединительный МС-8"]]></Value>
+		</String>
+		<RealNum Name="ves">
+			<Description><![CDATA["Масса ед., кг."]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1.67</Value>
+		</RealNum>
+		<Integer Name="kol_vo_spec">
+			<Description><![CDATA["Кол-во"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="komment">
+			<Description><![CDATA["Комментарий"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[" "]]></Value>
+		</String>
+		<String Name="subpos">
+			<Description><![CDATA["Входит в сборку"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="tip_el">
+			<Description><![CDATA["Тип элемента"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value><![CDATA[" "]]></Value>
+		</String>
+		<String Name="param_name_out">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="0">
+				<AVal Row="1"><![CDATA["naen - наименование"]]></AVal>
+				<AVal Row="2"><![CDATA["obozn - обозначение"]]></AVal>
+			</ArrayValues>
+		</String>
+		<Boolean Name="show_subpos">
+			<Description><![CDATA["Показ по сборкам"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Boolean Name="show_marker">
+			<Description><![CDATA["Показ маркировки сборки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Material Name="gs_ifc_mat">
+			<Description><![CDATA["Покрытие IFC"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>53</Value>
+		</Material>
+		<Boolean Name="gs_StorySensitive">
+			<Description><![CDATA["Изменять отображение на других этажах"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="krat">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1000</Value>
+		</Integer>
+		<Length Name="krat_txt">
+			<Description><![CDATA["Кратность размеров"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0.001</Value>
+		</Length>
+
+		<!-- d2vid: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="d2vid">
+			<Description><![CDATA["2D-представление"]]></Description>
+			<Fix/>
+		</Title>
+		<BuildingMaterial Name="det_mat">
+			<Description><![CDATA["Материал детали"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</BuildingMaterial>
+		<PenColor Name="gs_cont_pen">
+			<Description><![CDATA["Перо контура"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_sec_pen">
+			<Description><![CDATA["Перо сечения"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type">
+			<Description><![CDATA["Штриховка в плане"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>140</Value>
+		</FillPattern>
+		<FillPattern Name="gs_fill_type_sec">
+			<Description><![CDATA["Штриховка в сечении"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen">
+			<Description><![CDATA["Перо штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen">
+			<Description><![CDATA["Перо фона штриховки"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>19</Value>
+		</PenColor>
+		<LineType Name="gs_line_type">
+			<Description><![CDATA["Тип линии"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</LineType>
+		<PenColor Name="gs_cont_pen_up">
+			<Description><![CDATA["Перо контура этажом выше"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type_up">
+			<Description><![CDATA["Образец штриховки этажом выше"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen_up">
+			<Description><![CDATA["Перо штриховки этажом выше"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen_up">
+			<Description><![CDATA["Перо фона штриховки этажом выше"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<LineType Name="gs_line_type_up">
+			<Description><![CDATA["Тип линии этажом выше"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>21</Value>
+		</LineType>
+		<PenColor Name="gs_cont_pen_down">
+			<Description><![CDATA["Перо контура этажом ниже"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<FillPattern Name="gs_fill_type_down">
+			<Description><![CDATA["Образец штриховки этажом ниже"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>65</Value>
+		</FillPattern>
+		<PenColor Name="gs_fill_pen_down">
+			<Description><![CDATA["Перо штриховки этажом ниже"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>1</Value>
+		</PenColor>
+		<PenColor Name="gs_back_pen_down">
+			<Description><![CDATA["Перо фона штриховки этажом ниже"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</PenColor>
+		<LineType Name="gs_line_type_down">
+			<Description><![CDATA["Тип линии этажом ниже"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>21</Value>
+		</LineType>
+
+		<!-- label_sp: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="label_sp">
+			<Description><![CDATA[""]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<Length Name="label_posxyz">
+			<Description><![CDATA["Привязка выносной надписи"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="3" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+				<AVal Row="3">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Length Name="label_posang">
+			<Description><![CDATA["Угла поворота выносной надписи"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<ArrayValues FirstDimension="2" SecondDimension="0">
+				<AVal Row="1">0</AVal>
+				<AVal Row="2">0</AVal>
+			</ArrayValues>
+		</Length>
+		<Boolean Name="label_posset">
+			<Description><![CDATA["Есть данные для передачи в выноску"]]></Description>
+			<Fix/>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+	</Parameters>
+</ParamSection>
+
+<Copyright SectVersion="1" SectionFlags="0" SubIdent="0">
+	<Author></Author>
+	<License>
+		<Type>CC0</Type>
+		<Version>1.0</Version>
+	</License>
+</Copyright>
+
+<Keywords SectVersion="1" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Keywords>
+
+<Comment SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Comment>
+
+<Picture MIME="image/png" SectVersion="19" SectionFlags="0" SubIdent="0" length_in_bytes="18261" platform="Win">
+	<![CDATA[
+	696D6167652F706E670089504E470D0A1A0A0000000D49484452000003280000
+	02E90802000000D7559503000000017352474200AECE1CE90000000467414D41
+	0000B18F0BFC6105000000097048597300000B1200000B1201D2DD7EFC000046
+	E049444154785EEDDDBD62D4C88236E0F5979D09B9083252266409D96B80E8C4
+	C41302E16C4A7C22B886259C710829992FC2211BCEF7E2D2D1F6D8EEEE92D45D
+	AD9FE7094096ABEDEE52A9F47655597D757373F31F00009CDFFFEBFE0700E0CC
+	042F008046042F008046042F008046042F008046042F008046042F008046042F
+	008046042F008046042F008046042F008046042F008046042F008046042F0080
+	46042F008046042F008046042F008046042F008046042F008046042F00804604
+	2F008046042F008046042F008046042F008046042F008046042F008046042F00
+	8046042F008046042F008046042F008046042F008046042F008046042F008046
+	042F008046042F008046042F008046042F008046042F008046042F008046042F
+	008046042F008046042F008046042F008046042F008046042F008046042F0080
+	46042F008046042F008046042F008046042F008046042F008046042F00804604
+	2F008046042F008046042F008046042F008046042F008046042F008046042F00
+	8046042F008046042F008046042F008046042F008046042F008046042F008046
+	042F008046042F008046042F008046042F008046042F008046042F008046042F
+	008046042F008046042F008046042F008046042F008046042F008046042F0080
+	46042F008046042F008046042F008046042F008046042F008046042F00804604
+	2F008046042F008046042F008046042F008046042F008046042F008046042F00
+	8046042F008046042F008046042F008046042F008046042F008046042F008046
+	042F008046042F008046042F008046042F008046042F008046042F008046042F
+	008046042F008046042F008046042F008046042F008046042F008046042F0080
+	46042F008046042F008046042F008046042F008046042F008046042F00804604
+	2F008046042F008046042F008046042F008046042F008046042F008046042F00
+	8046042F008046042F008046042F008046042F008046042F008046042F008046
+	042F008046042F008046042F008046042F008046042F008046042F008046042F
+	008046042F008046042F008046042F008046042F008046042F008046042F0080
+	46042F008046042F008046042F008046042F008046042F008046042F00804604
+	2F008046042F008046042F008046042F008046042F008046042F008046042F00
+	8046042F008046042F008046042F008046042F008046042F008046042F008046
+	AE6E6E6EBA4DB89C8F1F3F7EFDFAF5B7DF7E7BF1E245B76B88FFFEEFFFFEF3CF
+	3F0F3CFCBFFEEBBFDEBE7DFBEBAFBF765F03C025085E5C58F25652D72FBFFC52
+	32D3FBF7EFCBFE4AC95B1F3E7C281BEFDEBDDBF7F0ABABAB04AFE8BE06804B10
+	BCB8983E722530FDE77FFE67B7B75A1FB9CAC313ADFEFAEBAFF2AD87F25D4D1D
+	808BB3C68BCB48E47AF3E6CDAB57AFFEF8E38F11A9EBE59D44AE710F07808B10
+	BC682D91EBE9D3A74F9E3CF9EBAFBF864E2C461E727575F5E2C58B3C5CE40260
+	59042FDAF9FAF5EBEBD7AFBF7FFFFEC71F7F8C885C7FFEF9E7CB972FAFAFAFC7
+	3D1C002ECEC2175A38ED72AEB2F31E6BBC00983F235E9CDDC4E55CEFDFBF7FF9
+	F2E58B172F2CE70260E9042FCE68FADCE2D5D5D5F5F5F5B8D560003037821767
+	5122D7BFFEF5AFDF7FFF7DC4485559CEF5E1C3873C36BABD07BD7BF7AEDB0280
+	B9B2F085D3FB78274968DC28D7D1E55C2358E305C01C18F1E29492B726DE2AC2
+	722E00564CF0E234DC2A02008E32FFC2540D6E15319DA94600E6C08817932472
+	F9E41F00A8247831D2C4B9C53CE4CA27FF00B031E65F186C11738BF7986A0460
+	0E8C7831CC94B9C5FEEE5CE7985BB4241F80F913BCA835F35B45945134009833
+	C18BE3A6DF2AC227FF004058F8C2210B5ACE956C9760D77DF180355E00CC8111
+	2FF69AED722E005828C18B474CBF55C459977301C042997FE16F9678AB88C254
+	2300F367C48BFF636E1100CE4AF0E2A789B78A48E40A910B000E13BCB66EFA72
+	AE2B9FFC0300752C7CD9AEE52EE77A94355E00CC9F11AF8DB29C0B00DA13BC36
+	C7AD2200E052CCBF6CC8F4B9C544AE3C3091ABDB3527A61A01983F235E5B7192
+	B9C53C769EA90B001641F05ABF29B78A58D072AE3CC36E0B00E64AF05AB34D2D
+	E71AF10201A0310B5FD66965B78A98CE1A2F00E6C088D70AB9550400CC936180
+	559938D095C895E0B5CABC65C40B803930E2B5126539D7BFFEF5AFDF7FFF7D44
+	727AEF937F00E0FC04AF35983EB7787D7D9DC75A9F0E006725782DDB466E1501
+	00EB20782DD5A66E1551C3701D00F367C5F1F24CBF554422571E98C8D5ED5A05
+	1F1904C0FC19F15A9893DC2A228F5D59EA028045300CB0185306BA12B9567643
+	D4878C7801307F46BC1660FAAD2256B69C0BB8ACBC094CA7947FBBAF816A82D7
+	DC4D9F5B74AB08E054FA3FEBF9F6EDDB93274F9E3E7D2A7EC12082D77CA53B73
+	AB086026EE0DBD674FFAA5F44EE2170C62E1CB1C4DFCBBC544AE04AFADE52D6B
+	BCE07CD223C56EAFB27BC6957786B7B7B7F9F7EDDBB777FB80C719F19A97E9CB
+	B9D21BFAE41FE05492B7FAA1F77DBD4A7A9E489992CFBABDC06304AF7979F3E6
+	CD2FBFFC32227259CE059C56BF9CABB2574919338F7094E0353B2F5EBCB8BABA
+	AA0F4F967301A73565E8BDC4AFC4B5FC846E17B043F09A9D745B89500952956F
+	3193BADC2A0238958F13FE923ACA5BC16C7CFBF6ADEC0176095E7354DE3266E3
+	C0D0577AB77CF7FAFA3A256B221AC061FDDCE2B85EE5DEE87BB717F83BC16BBE
+	F6C5AFBE774BD7A67703A6BB37B7D8ED1D229D5258F00047F91BFB7979FAF469
+	095BBB92BACA9BC87467D9C89EB25DBE4B9178FAB0EA7AF9AEA60E8F4AE4FAF6
+	EDDBD0C0D49F717D07756F90CC49078F32E2B500FDD057DE505ACEB54FFAFD6E
+	0BA8F3F1EE5611AF5EBD4A0F33A25729A3EFFE981A06F18E645E1E1DF1EA1D1E
+	D4E1006FBE61D7D76977692E912B0F3CF070271D3CCA89312F82D799B8064031
+	31724522578257360E77474E3A7894A94680AD9878AB88F73B9F8DD1ED020612
+	BC00D6EFEBD7AF4F9F3E9D78AB08CBB9603AC10B60CDFA5B45243345B7B75A7F
+	FF9A777FBF55843F678171042F8075BA7777AE71738B495D8FFE31B5712F1847
+	F062255C0660D74996736563DCD424B08FE0C54A945BCB0265A0EBFBF7EF895C
+	233293E55C7056FEDC775EDC4E62B4C395E32FDBD98289B78A48E43AE1676338
+	E9E05146BC00D660FADCE2BEE55CC009095E00CB96C8F5F4E9D3274F9E8CBE55
+	C4D5D5D5F5F5B5E55CD080E005B0542759CEF5E1C3873C3CBABD75443418C71C
+	FCBC58E3359A355E6CCAC597731DED8E9C74F028235E000B6339172C97E005B0
+	186E15014B6728785E4C358E66AA91759BD5AD22C254238CE3C49817C16B34C1
+	8B157BFDFAF5B76FDFC6CD0C9E3C721582178C63AA1160BECAAD225EBD7A9594
+	33223659CE0573237801CC91E55CB04A8682E7C554E368A61A598DB92DE77A94
+	A94618C78817C08C4CBC55C4CB3B895CE616619E042F8059F8FAF5EBD3A74FBF
+	7FFFFED7A88FEEC943AEAEAE5EBC7891878B5C305B82172B91B7F8DD162C4D59
+	CEF5AF7FFDEB8F3BDDDE6A9673C18298839F176BBCCEC47213E66911CBB91E65
+	8D178C63C40BE032262EE77AEF5611B0408217406B136F155196736563DC6A30
+	E082042F8076FAE55CBFFFFEFB8891AAF92CE7B2AA12C631073F2FD6789D89E5
+	26CCC1C73B892C2332D30597738DE3A4834719F10238BBE4ADBCAD7AF2E4C9B8
+	C9C13CC4722E5807C18B95B0D2658392665EBF7E9D7FBBAF6769E272AE3FFFFC
+	F3EAEAEAFAFADA722E5807C18B9528B3306C449F66BE7DFBF6E4C993A74F9FCE
+	307E9D6439571A761E1BDD5E60E1042F6049EEA599EC79FFFEFD5F7FFD35B7F8
+	956732FA56117DE47AE7937F60752C7E9C178BEB473B5C39D6F9AE43D24CEC66
+	91DDE35E66E26E6F6FF3EFDBB76FEFF65D40A2619EE4E87BA2E65594C8B5F489
+	45271D3CCA8817B0008932FDE2F47D6926492552E62E9E5D60E8EB24738B3EF9
+	07D64DF00266AD5FCE5519475226E1ACFDCC639EE49B376F262EE75AD0DCA268
+	08E3180A9E17538DA3996A5C9F9A39BBC3C73D69E6C78F1F9F3F7FEEBE3E8FBB
+	F1B5ADDC9DAB77B43B72D2C1A38C780173942833E5730CCB185236BE7DFB56F6
+	9CC3D0D1B87BF2903C4977E7824DF18E645E8C788D76B872BCF95E907EA02B71
+	A4DBB5DFC3E37E6F0CE94C87BE6634EE80E50E74F58E76474E3A7894112F602E
+	CA00D2EEAD228E4A70E9B6EEBCBC939D671D439A321AB7C4E55CC009095EC02C
+	8C5B9CDE4FF065E3EAEAEAC58B177FEDFFB3C7E9120D9F3E7DFAFDFBF7FC9611
+	738B6D72213067821770611FEF6E15F1EAD5AB7199A98C219DFB2E0CFD685C7E
+	4B747BABB5C985C0FC99839F176BBC463B5C39969BCC538395522739F4895C5B
+	5ECEF5A8A3DD91930E1EE5C49817C16BB4C395E31A3037132357BC7CF93299E6
+	8F637376130F7D9E64E4498E184B5B6BE42A8E76474E3A7894A946A0B5449929
+	B78A68B69CCBAD22809313BC5889777FFFEB36E669E2E2F4C6CBB9C6DD86BEE4
+	C26C8C7B8DC0BA190A9E17538D6762D6E3E21A2CE77AD4D0437F37B5686EF1B8
+	A3DD91930E1E65C40B38AF890348910CB46FDAEE84434A6534AE7C0EF7D01F5B
+	86E292BA12B9CC2D0207085EC0197D3CC572AE6CEC0B43658469A23E1AE6498E
+	48727988E55C4025C10B388B9266462F4E5FC472AE3CC9E4C23CC9118364C036
+	99839F176BBCCEC472939692663EB65ACE75F4A4387CE873C6E5572472755F57
+	DBD472AE4725681ECE9A4E3A7894112FE094A6CF2D369EB6CBEF4A44389C2176
+	59CE55D4D718B04BF0024E23916BF4E2F4B8D4B45D7E5722548254CD2F4D19CB
+	B98029042F56A2E5A59A7B4EB29C2BD1270F8F6E6F4379CE65BEF2C0D0D7A572
+	21B03282172B5116DCD0D8F4C5E9F399B6DB17BF2E9E0B813511BC809116B79C
+	AB469E553FF338AB5C08AC83E0C5FA95D18BA484F225D32DE25611A3E52995A1
+	AF19E64260E9FCB9EFBCB89DC4688F564E2EF0650AF2DDBB7765FBED9DF25D46
+	6879AB881A474F8A14387C3B0967DC991CAE79D82C27C6BCB80C8C76AF721EBD
+	C0BF7FFFFEFAFAFAD9B367CF9F3FFFF5D75FCB4EEABD7EFDFADBB76FE346804E
+	1EB98AA327C5E1CBBF336EB49C4DD17DF198C3350F9B65AA9115CAF5E0E5CB97
+	B9C0DF8B08D99F3D4F9E3C79F3E68D99C741CAAD225EBD7A9520322236952362
+	DA6E4D4A8C068612BC58955CE0F33E3B1B07F241CAE4BB895F4912E2D751EB5E
+	CE05D098E0C57A0CBAC08B5F47ADE9561100332178B178E5029F8D1117F8C4AF
+	3C2AC14BF6BA271532E556113922D12072E557745B004B2078B16C494EB9C0BF
+	78F122DBE32EF086BEEEF9FAF56BAAE2FBF7EFA9969AB1C37BF290ABABAB1C91
+	03B3BD2734E219025C90E0C552F58B87C6E5837BC4AFE8E716FFB8D3EDAD6639
+	17C051FEDC775E72D5CFE5BFFBE2017FDC5EE402FFF0C604072A27212069E0C5
+	8B173569203F3CBE7CF9F2EBAFBF6EE78E5F73BB3BD7091DBEA981336EB4A395
+	73B8E661B38C78B1303F970E552F1E4A20286330D9C897B9121CCD5EF99929F3
+	EAD5AB04918D0C7DE565AEEF937F00E649F0623172814F72AA5C3C542257FF27
+	75D9938767BB6CC45DA9BD5220BF65F5338F136F159187E48864237535E2E100
+	1B2478B100FDC0D5817C50425591328F8EC1647F79780259D9382C65D61ABF4E
+	72AB08CBB9008632073F2F569CDC930BFCA0C543FBCA3FACBA12172A43438A25
+	64ACE6B3867ECEA17EFC982A1A9199861E918BCBA1B7C6EB1C8E56CEE19A87CD
+	32E2C57C2516D42F1E2A6330FDDCE2D1F2F9E1F5B12325F3339F2CFFB386F2E4
+	1335F24272C9AC7FF9BD3CA4FE88B431E255005C90E0C51C2545E5EDF2F5905B
+	45E421E70E047926793E0B9D799CB89C6BC41169A30CBF012C85A1E07931F171
+	A699AC93575DC2479EE7DB3BDDAEB95AF1AD22E2E8914D01538DE730B1E661B3
+	8C783117B9C00F9A2B3C87C4A9CAE19C14CBF34CA099F9D0579EDEE85B45CCE1
+	88305B6915DD163084E0C52C24C79C75F150E545A2A4AEBC53AF895F299377FC
+	B39D799C7EAB88B92DE7625646342A20042F2EAC0CAB0CBA31418A0DEDF4EBCB
+	A7649940596EFC72AB0880D912BCB898113359C901C943C9040F0B9F36229438
+	958DFAF8959790F895C473D9F89527F0E6CD9B2991CBDC22C0F9085E5C4692CA
+	A099ACDD6198471F5216809FD6A0F895A7943217FCACA1FCD2A74F9FE609E439
+	8B5C00F32478D15AD249724C36920F8EA699B878261814BF4AE1C6338F967301
+	2C85E0453BBBA35635F96056C3302551656356F1CB722E8065719F9579C975BA
+	5CDD1F954BFE81EFCE592EF0652A3011AA261C0C2D1F2D2BA764949AA4923289
+	3567FAACA19F339A9BF9E49F7D8E1EF714701FAF7348AB3BDCF00ED73C6C9611
+	2FCE2EBD73FD4C561983A92F7F11472F39BD14CBAB7872EACF1AFAFAF56B12C3
+	F7EFDF130B2A9FC9AE52C373184764B94A70078612BC38A3113359794822D7B8
+	3C71C0697FDA50F9ED7945279979ECE71653A5D1EDAD9667727575556A58E402
+	68CF50F0BCAC66E2A3FD4CD6E1CA994FD525FAA466C67DD65022D75A3FF967B4
+	A34736054C359EC3C49A87CD32E2C5E96D73262B892ABA2FF64B99D4CCDDEAAC
+	01435F299C88E0937F00964EF0E294922AF236779B33592575E5E51F8D5F2990
+	FAA99C7974AB88C39226BB2D802510BC388DA1CBB952A6A6D8B2E41525077CF8
+	F0A1E6A5A5CCE1F835F15611F9F94981D9C86F595F55F756FCD2805512BC986A
+	E84C561FD156390053E254366A86BE22655269895FC958BBF12BDB6FDEBC9932
+	B7E8EE5C003364F1E3BC2C6EA96FAEEB2572555EE01308F26FCA9F3C751DAE9C
+	F65597F413D9C82BAD79B1A526DFBE7DFBFCF9F344AEFA2ADD95DF981F928D73
+	D4F042E5D05B5C7F0E472BE770CDC36619F162A45CE3D3B15E5F5FA7F3AD8908
+	2993F22B5E6C744F5E63A99664CDCAFA49CD9481AEFEB183E421F95DDBA96180
+	2512BC182C912B17F80F1F3EE4021FDDDEFD4AF96DCE7CE5F596518184CE03AF
+	7DB74A533EE1E970F97B868660002E45F062803E1F542EE78AE48036C330794A
+	DDD6FCA412F2F4526FFB5251AA28FFF655946235712D868660002E4BF0A2D6D0
+	08D50F74B5198669F02BA6E8B3D4BEE7F97094AB7FC8A3F16B440806E0E2042F
+	8EEB23542EF0FB72C3AE7B99A0DBCB5D96DA5781D9FFE8A858BE7C98D8B23D28
+	04AFD8BDEA0298397F75322F73FB1BAB44A844816C2413D45FE0CBB5705657C4
+	F65537C8EED34BBD95CCFA680596509B6321D116478F6C0AF8ABC6739858F3B0
+	5946BCD82B17FE71C32A79E0A3A1811AA9BA723DCB756BB71AFB71C41C0EA90B
+	60A1042F1E91EB7DAEFAD9480210A1DAB857CFF9B29F79BC37756B39177390D6
+	D86D0143085EFC4DB9C6572EE74A81A36566621117897B435CD92E435FFBC61D
+	EFAA5F2CE632B43D1847F0A2336858A5CF67F3197D397C1998FF4522CFF0D119
+	C6B2FDE8F32F3BEF950760CE042F7ECA957BDFB0CA43F5F9ACA53CA56E6BC972
+	20CAE05C659C2AE5CB8C64B70B801913BCB66EE8DC620281BB189C552A39FA38
+	15DD37F648814787CA0098217FEE3B2F2DFFB83D91AB8C12E51A7F34450D2A7C
+	11A7AD9CC6F63DF904A952ED352F2DC728B2910334CF63740E478F7B0AB89DC4
+	451CAE79D82C235E1BF5F24E5254CDD8552EFF296CA0ABBD41A3593934A54C0E
+	D6D1C2005C84E0B539B924E72A9E14952BFAD114F5E7BF272253D8B5FC824AFC
+	AA390429539FD56034AD0BC631143C2F679DF8488A5AD3DCE23D132BE7B20E3F
+	F9712F2DD7C51CC11CBE755F208F564E0A986A3C8789350F9B65C46B13CAC055
+	B90C574E17E6216B9A5BDCE0BBF3BCE4725D343201301FDE91CCCB39DE7F1BF9
+	88990F5D2CFAC95FD6D1CA4901235EE730B1E661B38C78ADD99F7FFE99BECF0A
+	AD75CB917570019642F05AA77E6EF18F3BDD5ED6A8A4AE24EC41F1EB2EADAD21
+	AEBDF38981C0A2085E2B347439D76AAEC19B95C397C39D835E7F1C4BC9A1716D
+	86345D605904AF55C9452897D2FA45F1A5FCAC3E7291717228CB829BFA2C9562
+	43E31A0013095E2B51E6162B3FF92776CB57A634E62F873E47B36CE410979D07
+	A4D8D0B806C01482D7E2F5CBB92AE7168796675972404B84CA51AECC52293628
+	AEC151A5ED7DFCF8B17C09F404AF654BEF96EB6BE5DCA2C8B51D69188386B246
+	C4357854E967CA68FA93274F9E3E7D2A7EC12EC16BA9D2BBE59A9A8D9A5B456C
+	2172E5A5755BFC5B1A46AAA57E15578A997964B487FD4C69815FBF7E4DF6CABF
+	5D39D836C16B79FADE2D5DDBD1AB63291CABFF886B41E1517D96AAAF9F72B1AC
+	8F6B97E5B8CF44E967FAC8D5EDBD3B40895C4F9E3C79F3E68DA12F08C16B61D2
+	B50D1AB84AF02A9F87EDFAB46539FA831A400A0F8D6B9792D3A1DBE242D248AE
+	8E7DEE7E6951661E217CA4C3BC1CFE0093A4AEFC9BC855BEA45E2E0C072AF6E2
+	0E3FBD993FF9CB3A5A3929E02383CE219593BEA804DFBC15AC1C4DFFDFFFFDDF
+	DF7FFF3D8F7A7BA7DB0B5B62C46B49D2CDE56D65FABBF98F43307F69451A12E3
+	FC79F7D7AF8346DF8B7FFCE31F697579D4C73BDD5ED812C16B614A9F757D7D7D
+	77D174D564BCD27EE47886BA5BCDF532796B50E4DA9526F7979947B64AF05A9E
+	F459E9EFB291B79BFD25331BFD360F25AD765BEC489B293533A8FD0C2ACC9AE4
+	B827A91F5ECE552F3F4DFC628304AFA52A7D5636D20FE6DDA78FFD391C050485
+	7D5233A5727673FC61A598A1B24D297F1F5DFFD9182993F29525FFE77FFEE71F
+	FFF8C7EBD7AFC52FB640F05AB07485256FE50D68B6A3FBC6269545BE8C938B5F
+	9FE32B2F9683CAB35CE95812A1EA977395F2E99A4A8F54D33C5EBD7AF5FBEFBF
+	E7DF9FCBBE642FD64EF05AAA7467E9DD12B9CA1BD07EE1D7C6E31753A4FD0C8D
+	5F65A652FC5AAB1CD6BE9FA98C5C7D44CB9ED22A06A579338FAC9EE0B53CFD1B
+	CADD31FF6C949E2EDFAAE9E3609FB49FFA855FA54CCA9799CAE8BEC1C2E55026
+	30652361A8E6B0A6CCA3112DFB4B9AAF6C1BA5BCF8C58A095E4B72EF0DE5C337
+	A07D1F67048229D2784AFB2971AAEC3C20654AC3AB2CCF9C3DFAD6EE809AF265
+	7F7DDB48C9F4723E6B885512BC9624BD5BFE7D3472ED4A9F257E315DDF902A5B
+	9186B77447DFDAEDCA211E5A7E50AB48619F35C42A095E0BF3A2FA06AA29D34F
+	0075BB364C258C96AA1B547B293C28AE3113395E495195CBB9227D4B82577DF9
+	714A7332F3C89AF8C8A07949E7522E5A8F4AE4CA77D3135D5F5FA7BFCB9E9A6B
+	5BCA94B7A4358597AB544EF7C50387BF7B718B7EF29775B47252C047061D5606
+	AE129E12A1BA5D156A6AFEB4B557BA329F35C4D219F15A9EF43EA57FAC1CCD4A
+	99D2FDA51F5C77F60206E9E70AD3A50C4A5D27944EA9B25F4AB1BC81FC78A7DB
+	050B24782D55FAA041712A654AC79A7EB6B29B837DD284B4A2451BB43CEBAC4A
+	43AAEFC7D2EF997964D104AF652BDD50366ABAADF4AD29F3E2C58BCAA132D8A7
+	B49FA163A8293CA87C8DE4866E8B6A390A8396738D3B70F587263F3C85EBFBA5
+	1413BF582EC16B0D4AB7557903D5D26765C3CC23538C6848A5D8691B9E363C48
+	19E81A71AB88114362830E4D0A8F684EE9F712BFEEE61EC52F16C3E2FA7999B8
+	D4373D51993BA8EFB906959FB3C39573B4EA2E6BD14FBE349EFA86B45BA641C3
+	4BED595C1F89503946D9C861AA4C51895CF9775FF933554E9E676423BFB4F279
+	A615E5A55974CF5218F15A957440A52B4C9F5879094CAF5A366ACAC343A5F1A4
+	21E5E257B6BB6FECD19729E5CB4ECE273966E872AE1C97F421E7BE55C4A3F2EB
+	4AABC873AE6C1E29967ECFCC234B2178AD50E986B25113BF52A0947115648A34
+	9ED2EA2A1B525FBEF24D02E3A46E9360EA23544969F573916732A2799487885F
+	CC9FE0B55AE986FA41886ED77E23BAB9B92943775CD6D086B48286375B232254
+	8A0D4A69E796E753DF8915E521DFBF7F97BD982DC16BCDD2076DE72AB8B827BC
+	627D43AA3C2829567273362A1FC20123E616FB94960337AB43902733A82D454A
+	E6551BFA62B604AFF5EB7BAEFAF895FE3A5D7036D21D777B61A0B49FE8BE38A6
+	2F3C74CA7B50E12D487E8AA191AB4F69DDDE5338E1A1F9D93806FEB4944FBF27
+	7E314382D756A41B2ABD6A3AD9A35DD8A0C2702AE5625936CA9EA39218BAADCD
+	4BA5E5CDD58B172F5287F51385095E679A5B9CC3A1295D59E2D7EBD7AFC52F66
+	C2ED24E6A5C11FB7A7272AEF6E2BAF6D43CBCFD349AAEE7C0E3FBD993FF9CB3A
+	5A3929B0FADB49243C959493F3B4D9DAAC9A9A3F6BED951E69503FE69613CC81
+	11AFCD4907547AC3748B357DD6D0F270585A9186742AF7260A9BA5AEC86FECB6
+	2EA4B4A241FD989947E640F0DAA8D20D65A3BEDB4A3F9BFE3D1B167E3145696F
+	72FC74A9C0A4AECA89C2143E6D859FF6A78D93E750F2DFDD8BABEAC7C42F2E4E
+	F0DAB47443F5DD560A94ACB6C4855F177F77CEAEB49F3EC777BB8E49C9FAC2AB
+	97AA4872CD464EC9A3D55246C5C67DECCFFCDDB58B9F3550DF9C522CCD2FF12B
+	D94BFCA23DC16BEBEE7AAD01DD56CA0C1A2A6BE6F09399D553258636A452C638
+	599FA2FEA8BB3BD7A526221B1BD19C42F6E222042F7E4A1F34B4DB9A5BFCCAD5
+	A5DB6239D2781208CAC6D129EC19B6BA96862EE74A15A5A2E67337D40686B690
+	52DECC238D095EFC9F11DDD6D00923B82799A0B49FCA29EC94D960FCCA2B4DFD
+	54A6A8A1A3622B93979C7EA96CD4BCFC9411BF6849F0E2BE7443E9B62A6FA05A
+	FAAC6C6C7310825319DA904AF9B4D2EEEBF5CA39983AC92BCDEBADAC99FA88B6
+	56A9845257F56F0B532CFDDEDDC4A3ECC579095E3C227D507AED6C1884A0A572
+	F1ABB95896419D6C9486BA4AFDDC625E63CDCBEC07BA2A23DAEAF5FD52656D94
+	F286BE3837C18BBDFA6EAB7E10A25C1E2AE31A3CD4B7BA7D4DA88F238968696F
+	AB1CD419FA1AEF95EFF69ED952CEF13CCF414F3585C52FCE4AF0E288D20D65A3
+	267E95F53A2F5EBCA819B46869564F86A372BC1E3D64D99984B1EE79B411AF31
+	C1AB7D9DE41CEFB6D6284721F599F8E5B38638391F19342F798F5552CEA3127D
+	0E7CF7DCD21395B7D4E9DC6BFAF7BE7C36BA5DE774B8722E5B75472DFAC9B791
+	6C51AEF4A505969D35527B4BF9C8A0D1AFF1228E56CE3ADA6DE9C77CD6102764
+	C48B5AE9804A379AB7E33559AA2F9FFEB74DF6629586CEBB2DD1165EE3ACA447
+	AAEC94522CFD9899474E48F06298D20D65A3324EA54CAE2565A3A63CDCB33B8F
+	B6BE56B4E2C8554EFC792AADA8FE3D618A895F9C8AE0C518A51BCA464DCF9502
+	A54CAE2E470BC33D7DFB29DBF9773563A87915439773FDAC8B85BCF6993FCF3C
+	BDA143F2299634F9FDFBF764AFAF5FBF767B6120C18BF14A375419A7467473F0
+	D03A1A5219E81A748FD314CB4B2E1B650FD3A532CBC85C65734A991CB2274F9E
+	BC79F3C6D017E3085E4C926E68D05570687978546948092E892FDDAE851831B7
+	98175B22575EB2B3E6E452A5D1BF878CEE1BFBA54C8E859947C611BC3881D20D
+	65A33E7EA59BCB55331BB90E757BD9BCB487E8BE38A8C497B251F62C429E7388
+	5C3394EA2D9D58FD8A88F210F18BA1042F4E26DD502E27D9C8A5E568CF35A830
+	AB97369084912C7E348EDC1B31EAF6CE5E79812F5EBCC8A55AE49AAD5475895F
+	95EF2123C5D21413BC642F2A095E9C52AE28E986727569BFF02B7D5FB7C5A294
+	2055563BC5E150924692C2ED6F163AC5EE0BAC3C2944AECB4AB5977EA9B2FE4B
+	79435F5412BC38BDBEDBAA8C5343CB3F6AF403B9947B63578783D4D0F8320783
+	5E60E475895CF3914330E828A4B0F8450DC18B7329DD5036EAE357AE4FF50B2C
+	58AE1191AB3EBECC449A719E76FDE05C69F66B8A5CDB3C91F3AA73C413BF7CD6
+	10FBF8C8A079C95BA512561E950473E0BBB3B5DBFFD6F4C52953AEB227ECB867
+	5E75879FDE428FFBA392A27270B391E35B19A14A33D8D7188E564E0A34FEC8A0
+	7334E019AAA9F9D5B4DB114A33F059433C64C48BB34B0754AE40E986CAC66129
+	53FAEB74DC35E559843270356810A8F8D97A16D20CCA6B5CD67C28435536C894
+	493F66E69187042F1A29DD50362AE3D4D0F2CC5C4249F99BBE551ECD85CE874E
+	9157DA6D6D4C69C083FA31F18B5D82174D956E281BF5DD56FAF7CAA1B203367B
+	91988F1CC18907F1517338B2795D8346F2CE54158DADE0258C96D73EA85F2AE5
+	7DD61085E0C505946EE8BAEE06AA29337DE86BF40369298769E891BAEC914DEB
+	4DB34C4BAE1CC9EBE722B73024B66E39DC43DF439645F73E6B08C18BCB28DD50
+	36721DAAECB60E7773353F84D9CAE12B09662989A49F5B4C332E2DF9A8ADCD45
+	6E41DA6D39FAD938FA1E32522CFD9899C78D13BCB8A4D20D6563D0BBC66C3C8C
+	6BB9A4755B5C548ECBBD4373583F08F433BF2C2191F491AB3E42A542D2C29775
+	DF572AE5809606FFB053DA27C5C4AF2D13BCB8BCD20D65A3267E956E2ED7B0FA
+	0516B431741E6D4482B9B834B93CE7FA08B51B2B35D715CBC11DF41E32522C2D
+	3FC14BF6DA1AC18BB928DD50659C1AD1CD71568322D41223579E731A5B22541A
+	5E65934BB141298DA5CB11AFEFC422C50C7D6D90E0C58C946E281B95716AB77C
+	D9437B390AA9FFCA78B1D0C8559E739E70747B0FEA07BAEA531AEBD0774AF5C7
+	BD3C44FCDA0E77AE9F979C78E5A47D542E6F07BEBB32E98CCAE5B9A6FFEA0B97
+	EDB273410E1FD9D91EF7C48B547B3652F335912B85F36FE5313D95D4DE943BD7
+	97D755F3028B4175B2683988878FE3A6FAAB9328F5797B7B9B7FDDEF7EC58C78
+	3153E9834AAF9DEEFB70FF1E7D815CF31E2D7CF4273054AA74D03C5A12490AE7
+	989EF6589CF5C896D755F9028BF232073D64A14ABEE484D298E3C9932777EBBE
+	0C7DAD96E0C5ACA51B7A778A855F2E1227946C31621E2D25EB0BD73BEB914D7E
+	4A8AAA89FEBD33BD4CB623ED27679699C71513BC98BBD20D65A3F2FA37B43CF5
+	4AE44AD6491AAE5CEDB474694279B14999D9D09C98A8BE15A598F8B5568217CB
+	50BAA16C3C1AA7CA9EDDFDD9EEAF97890BDD5EA6D9CE3CDAAE34A192322B475E
+	297202765BFC5B693FF5EF09532CD5E8B3865646F06249FA4BE0CB7FDFABB09F
+	F62AFB777BB4DDC2650F13A54AFBEADDA7A6CC12E545ED46FFA27C8B47A99F47
+	A55A860EE1A71F7BE2B3865644F06261FE73E706AABBD35E657FB6EF0D4B64DB
+	CC631B7D085EF17858DFC6A2DB05C39586948DFAF865E67135042F962D17FBE8
+	BE3818B3C4AF7AA9A2A1B5742F04777BD7257592F6938DB4A5BC5213D94C7177
+	92FDDF7BC5E8BEB15FCA94F8F5FAF56BF16BB9042F1626D7B97E6E311E8D53A5
+	7BCAC6C3FD7D37D7EDE2EFFAEAAD0F4FA9CCD4F3BAD77E95D7988DB4ABD278F2
+	6F5E6F36525D9A13A3A5F194CEAABE5F4AB157AF5E2578C95E0B2578B1182513
+	3C1C564937943D6523CACE28FBEF7567D97E3493114347AD7643F05A2B33AFEB
+	5EE4DAA5397112431B52296FE671A1042F162397F97DC32AE9864A6FB52F66DD
+	7B48BFDFF5B24825A42A068D5AE521495DEB1EE84A9D2456A6A91C6E249A1327
+	D137A4CA5654CA8B5F8BE32383E625E74F39F11E956EFDC07729D21995619B9A
+	CE2B612EEACB9FC9E1237BD6E35E5E7E36520395F9A97F482257D97341472B27
+	05A67C64501934AD6C1E83DADED29DB5593248696F3E6B68298C78B136E98372
+	3DB8BEBECE85E1E8F52F512365CAC5750B17CB7BF292078D5A2572ED4E47767B
+	57AD348F34A76C44B7778F142859A4A6EDAD9E1A68E667D3F45943CB2178B136
+	251CFCF8F123EFFCBE7CF992FE287BBAEFED91325BBB5E965AAA9947DB9547AD
+	7B6EF151A99F92322BD3F9069BD3A3525DDD164D948667E671FE042F6627DDC7
+	B8CB550913BFFDF6DB3FFFF9CFCF9F3F2778E5DFDBDBDBECACF98129B385EB65
+	A9A571A3563F0FCC5693445EF8A0E69132A57A2B9B1F1C902654D98A524CFC9A
+	39C18B19499791ABDAF5A83B70E6B1B9C23D7BF62C61EBD75F7FEDF6DEAD78B8
+	B9B949FC72BD2CB6396A752A6912F5F1AB4C64A7B65739919DE0DE6D717EA5FD
+	D4BF274CB11CA0BB8947D96B76042F66A19FF94A20189A09F2D8F44789560958
+	FB16960E8A5FEBBE5EE615ADE9455DE4F29F0AEC177EA5F9757BF74899558EA4
+	AEE9B52C426975F59D52697886BE6648F0E2C2EECD7C0D8D5C79EC6FBFFDF6E9
+	D3A77D916B57CA4465CF55BAAD6CACEC7A5923AF77292FF952CF33BF37CD351B
+	9523A329B3D9E6C4A98C6845E521E2D7AC085E5CCC49225759CEB53BB7785882
+	D7D099C74D5D2FF31AF34AC7CDF66ED0D0E6913265882E1B35E5E1A1B49C12FA
+	B37174C0B5280F49FCF259437320787101532257A413C9C31F2EE7AA37227E2D
+	EE7A39F4A99683326EB677E352CFF5F1EBEEB0FC2C533F6704F7E4F42C8D27E7
+	6C652B2A0FF15943732078D154B9BAC7B8F5DDE5E15FBE7CA99C5B3C2C3F213F
+	A7327EA5402933FFEB659EDEA051AB89399822D59E0AAC6C1E29B3A99154CE61
+	442B2A0F31F3785982174DE51A9FC895337FE8C5A6848311738B87E5E7247EC5
+	3AAE97A596EA47AD44AED31ADA3C66DE9C5884B49CFAC45F9486277E5D8AE045
+	5339E1EB7B875E1E927C30656EF1B004AFA52FFC1A1AA144AEF319DA3C522647
+	A1F26F24E763262D9FE89BDCA083521ADEF7EFDF93BDBE7EFDDAEDE5FC042F66
+	2DD7A15CBD12890EDC2AE25446C4AF395C2FC745AE7037AFB34AAB48F5662355
+	7DB4390D2A3C136972DD16F3909633B4F1A47C1ADE93274FDEBC7963E8AB19C1
+	8B992AF9A0FE5611A792DF55167ECDFF7A3934721579D4B8D9DE799AF3ABC811
+	C9D3ABBF215CCACC6D24952D280DCFCC63338217E7929379DCC5A38F5CA75DCE
+	55AF2CFC7AF6ECD96CAF975346AD7E1E95155DD4E73FEE92DA1ED43C869687C3
+	D28A6A1A52CA885F6D085E9C5E8905F57F55B72B277F1E7BBEE55CF546CC3C36
+	BB5EAE6CD46A0B86368F9479F7EF15D339DCDD5E18AEB4B7410D2FC14BF63A1F
+	C18B532A916BE8E457511E7BAA5B459CCA88F8D55F2FBB5D67901F7ED69FCF99
+	E4A8A579948DA34730054A56CB7971B4F00C9557CA1CA4FDD4F74BA5E119FA3A
+	1FC18BD3981EB92E38B77854E257247EA54B3ADA73956E2B1B0D86BE0EB87BA6
+	CBBB5AAF5E7F5C065D05B371D9E634C2B29EEDEA0D6D48A5BCF8750E82172790
+	5334C969DC5FC995C7CE616EF1B03E7BCDFF7A5982ECB8A95EDA18DA3C2ED89C
+	5893349EF4D265231D45D97940299FF8E5B3864E48F06292FE1A9F9373E8F520
+	8FCD55E4CB972F0D6E15712A799E43671E4B37975A1A5A3FC5D047E5178D1B77
+	A4BD1CDCA1F1AB7EC2081E956EA1B49FCA4EA994F759432724783152895C13E7
+	163F7DFAF4F9F3E76EEF720C8A5FA5DBAABFA740AF0FB5DDD7C7E487E7F98C1B
+	77E48272E0721255DE102E650C7D31DDD08654CA7FFFFEDDCCE3748217834D89
+	5C5122D76C9773D5FB39F5F8F6ED972F5FD2259DF67A79AF86BBBDFBF5112D85
+	6BFA50E62647AD1CE81CC79A2338A839C13E693C9563A8A593C9461A6A997974
+	B3FBD1042F06CB19387A3957AE13F35FCE552FC12BAFE5B6EE6EAB913247AF97
+	D99F9F565FC343CB335B35CD6357CA0C8A6BF050DFEAF635A17BEF03D3C9A4E4
+	AB57AFDCEC7E34C18BC172D6ED3B45F729A7EEDC6E15712A7945236E39918D7B
+	D7CBA103577DF9F49B438F08B39543591FBFCA5570C44436EC4AE379B4FD6467
+	3A9987931BD99F56EA6F1EC711BC38AF120ED631B778D8A0F8F5B393FBFBF532
+	B5B4FB9EB214DBE7DE7BD06E2F2B925691835B9A470E77B7778F94193454D6C6
+	7C9E0923E4F0A53965234D6B5F8F943269A53F97DCCB5E43085E1C92F32ABA2F
+	86CB63930FD634B77854E257540E3FA44CB95EA65F1B3457982BB1B9C5D5EB9B
+	474EA241CD6926F12B6741B7C5A2F443E9E9618E36A4D2EA0C7D0D7295F7E8DD
+	263390B65BBACE47A53F3DF0DDD3CAB957FACDBCA11971752FA7EEF3E7CF13B9
+	BA5D1B53DE05A6F6A65F025B1EF7C5395A392970A0979BCF1977585A5119E0AC
+	694EBB65A637BF7D6A6A5EBB5D9687DD7E693F35ADA83C366FB3F3CEB3DBC51E
+	46BC78C4EE34D6D0D45522D7726F15712AE97D062DFC8203D2844A88A9694E29
+	50CAE42C3E5A78B4F40FDD16AB90A692AEFBDE507A693F35AD280FC903BF7FFF
+	FEFAF5EB6E177B085EFC4D4EB0F4ECA3A7B172DEC6EA9773D54BFC4A00ADFFB3
+	C787C63D6A3B3675F94F63C8EBAD8C5329539FD546D03257A3BC5BDEF7673A65
+	CFD156547E4836BE7DFB56F6B08FE045A73FF76AE6F51FCA4372663E7BF6ECE6
+	E646E4DA95DA48FC4ACD0C1D7EE88F48F7358F19D156172DAF77509C1A5A9E4D
+	299D4C3FBFD1ED7DA06F458F36A1CA1F424FF0E2A79C4E3973C60D7495B36EAD
+	B78A389541338F3A320EEB2F84F5F12B6D29213E1B695DDD5EB62D9D4C944EA6
+	A6DB4FE34913CA43BAAF1FF454232649B649F0DABA72E6EC1B643EAC3C760BB7
+	8A38959AF895FDA9557FB4C851692A2597A7C11C3D79071566DDD200D205A593
+	49B75FD9C9F40FE9837BF6E8A9C611BCB6EBDE9B956E6FB572D66DEA5611A792
+	F8150F177EF521388763773FEC930B5E9A4A2E7E39916BDA4CCA9879DCB2119D
+	4C8AA5B564A37F73AEA79A48F0DAAE9C3CE3DEACE481390FBF7CF97273739300
+	D1ED658892BDFA855FA5233362CF38694243671EC5AFAD19D1C9A46D3C8C5CF9
+	574F3591E0B55D3991CAB954AF9CBA6E15712AC95E65E631B56AC49E89723A0F
+	8D5FB97C560E953D34EE515C440ED6A04E26E51F46AE92DBB2ADA79AC80D54E7
+	65CEB773CC5997732F91CBC4E2C92DE5369E4B94DA3BD0CBADB2E67723514D3C
+	4A9932865153B877B472B4DB39288129392969A9DB754C6906F75A51DF426A8E
+	BB5C7198112F8E2B279B5B453043BB97078AD449A996CAD1AC942997D29CE635
+	E559847E8C2A91AB3E75C5CFD6F3EF66507E88E55CA72578ADDFEE59345439EB
+	DC2A82D92A731F3C94B37E509C1A5A9ED9EA23D794955827F9213C4AF05AB3F4
+	9EE943F36665C43953CE3AB78A80451B11BFA62CFCE2E272E0D2754F59332A72
+	9D9BE0B54EE5CC29E3C323CE9C72EABA5504AC438953E910B291CEA1DBBB47CA
+	9C64E82BBFB1DBA289DD6EBFF2C0A5D8BD92F9F2706E7358A713BCD666E29B95
+	F270B78A8095C905351D42367282DFBBD63E2A6526C6AF718F628411DD7E9FD2
+	FAC295B9CD619D4EF05A8F9344AE7E6EB1DB0BACC8D038953283E21AEDE5B8E4
+	E80C9A5BBC77A59878ED6028C16B0DA69F36797858CE055B30287EA53F49995C
+	D7D3C3C85EB392C39123988D1CCDCA43531ED2A73491EB2204AF652BA74D8C5E
+	4A59CE43B78A80ADC9B99FCB6D659C4A99932CFCE2244ACF3F6839D7C387E4DF
+	29D70E4613BC962DE7524E9BFAB73BBBCA79E85611B059E93786CE3CF6E5CB1E
+	1A2BFDF6D031AA7B196B446EE38404AF65CB3933E2B429679D5B4500913E6468
+	FCCA55BF6CD494E75452DBBBF9A9DB7B509FB1CAFBF371B98DD312BC36A79CBA
+	6E1501EC4ACF501FBFFA0207662A8FFE10EA8D18A3BA97B144AEF910BC36A49C
+	78E616817D7251CF85F9409CDA953207B25A7E48B7C504A303531ED88F8DE5E8
+	E4879C6439574DC3E030C16B19D2D6A734F772EA9A5B048E4A573374E6715079
+	EAA5DF8E7163543916513AFF132EE792A7A713BCE6AE3F6D46BF4DC9C9969F20
+	7201F5D26F1C885365CFEEFE6C271FA4A7CA467AAD6E2F63A51A53F3E56FA7C6
+	75FEE5DA616E718604AF59CBB9973367F4F87039756F6F6FDD2A0218217D483A
+	9F6CA423CA7636764750F2E56E2C7B589811868E51A5CCBD6222D7CC095E3335
+	F4DCBBA73CDC722E562F97966E8BF3C8653B5D50DEFEE5427EEF729EFD0F47C5
+	FA9D65BB6C50636860EA2F13BB2553E7D97992E55C9C89E0354753CE9C722A5A
+	CEC546B8B437961E26BA2FEEE41094F89B8DFE70F41B8FCE54F2506A6950B79F
+	C2F7225AE9FC47BF5DA719C16B76A69C39E5D475AB08E054762FE7F1E8C2AF6C
+	972F1305EEED4F32B8B7937B52C3A9CFD470EAB6A6A25226E577235A3946F543
+	655C96E0352FCF9F3FCFBF23CE9C72E2995B044E65DFE5BCC4A9B211656764FB
+	C0CCA3A1AF87FA1A4EF546B777BF527EF79DB9C8B54482D7BC7CFEFCF9D9B367
+	837AA872E2995B044E2B7DCBBE99AF7450A58F7A389A952F4BD2DA7D54BF53FC
+	2A4604A6D45B1EB27B441EEE611104AFD9797BE76177F6A872E2895CC0C9A57B
+	39DC0BE5BBFBE254BE4C1AE8BEF8B77EE7C6E3575EFBA0C0D40F74A5B64BBDF5
+	7BF213B65C930B2578CD5182D7CDCDCDEDEDED81EE29FBF35DB78A002E2B7D51
+	FD68567246CABCDBEAC2AFA181E9DEC0D8C33D06BA9648F09AAF7DF1AB9C7896
+	73416CF0E23D4F39100901254EA58FEAF6EE91325B9B791C1798F2A87E604CE4
+	5A0DC16BEE7ECE3BEECC3CE6C4B39C0B7A3935BA2D2648F7322500954CF0E3C7
+	8FBC1BCC7BC56CD7FCB494D948FCCAAB4B9D8C588C9507969A19FD139821C16B
+	0112BCCAD0D7F3E7CFDD2A0238A15CD1937BCA46D93348895CBBEF06FBFEAA32
+	4EA54CC244362AE3DAB2F4D5DB2FCF1AAAD4B0E55C6B22782D46BAB3F46BF9B7
+	FB1A60828999E061E4EABE716750FCFACF9D9BE3AF265B4C0F4CE527985B5C1F
+	C10B605B9203260EC3E451C9044707E013BFA2324EA5CC3A661E4704A6BCDEDD
+	973CE7C895A7D46D3196E005B015B9BA4F9FF9CA4FA8FFE39E94193AF3B8E8F8
+	95E79CCC54BF182BE5F34AAF773E6F71E84F686C8907656E042F80F52B17F86C
+	4C895C0904BFFDF65B22D7D095A623E2571959C9464DF93928F533F45611A57C
+	C958437F020B257801AC592EE1A78A5C13FF9E3AF1ABFCD9634DFC4A815266FE
+	0BBF4AFDD4CF0C3E2C3FF427B0688217C06A95C8323A72451E984C70AABFA7CE
+	4F48FC8ACA389532339F794CE584C8453DC10B60B5125646E7956482C49D2F5F
+	BEDCDCDC242A757B4F213F6D050BBFF24CF27C5EBC7891E736227265677E4276
+	BA3BD7D6085E00FC4D4909FD72AE6EEFA98D885F492DD7D7D7D9C833ECF65E42
+	A99FCAC558A570EC06AC413F8195B94ABBEF36810B79FAF4697943FFA85C960E
+	7C77E38E564E0A1CE8E5D4FC3D09041F3E7CF8F1E34752D1F489C54A5FBF7EFD
+	F6EDDBF7EFDF134D2A1358193A6A1F594AFD6423BFBD728CAA3CC9FEA98EF809
+	CB72F88C238C7801AC412EEDFDD57D9C3CFCE5E99673D52B0BBFF27B93486A5E
+	42CA94409C6BFCC4973C48A99FA13383795479926594AB44C6E5CE2D96D7C214
+	8217C0B2F5F356A3AFE5B99A26C4DCDEDEDE9C7A3957BD392FFC4A0DE7B7A486
+	F31BC7FDAE3C6A44689BA1325CC7148217C0824D1C4429A1ADFE86A8E736227E
+	E5B5570E958DD00F53A57AA3DB3B441F8BF3F0333D4996C55C2C5C9E9546A31D
+	AD9C1438D0CB2DBAE673152F916BDCE53C81200F6FBC9CABDEC78F1FF3EF9327
+	4FF26FCD0B9C581B8F4A60CABFF9999589B6FCEAFE09941ACE46FD4F98BF8967
+	1C61C40B58B05CD2BAAD2D993E889247E527B45FCE552F71306E6F6F935D6A5E
+	63CA9440900BFFB83AD9959F909F533F33D81F9152B87C598260E54F603B042F
+	60C1A65F6217272F3917F5D1AB854AA4B8EC72AE7A798643671E532DD948158D
+	6B1B2342EDBD8C95474D3940AC9EE005B00C7D26F86BD412EFF2F0F92CE7AA37
+	287E95E893DC533954D61B314C959FBF3B303622B4B1418217C0DCDDCB04DDDE
+	6AE5E1D33F6CF1B212BF22C1319926AFA8DBBB47CA0C9A794C9954D188B9C592
+	B1EE1D20035D1C207801CC5DAEEBA3A7AE120862D191AB97E09557717B7B9B57
+	5419A78EC6AFD46DBE9B8DFA71C414CB132847245F665BE4A29EE0053077B9D2
+	5766825D794822C5B367CF6E6E6E961EB976257E0D5DF89554948D7B71AD1FA6
+	2AA356DDDE83FA81AE92D2A24F60221795FCD9275C9EDB499C4F6AEF402FB7D6
+	9A4F3E489E98EDAD224EE8E39DE4AA9AE4943265682A21291BD953B6CB770F2B
+	559A8DF2907B5FDE15D984A327C5E1338E30E2052C58CDE57653CA90CCD29773
+	D5FBB9ECEBEDDB64A0CAE0554243AA28FF0E1AA64AC59A5BE424042F60C1CAA8
+	C36A2419D404884795C8151B895CBD04AFA1338F895F495195E58B944CC612B9
+	984EF002B8BC5CD79303AEC77EDE621E9E4CB0BEE55CF5C6C5AF6CD4974F0D5B
+	CEC574E662E1F2ACF11AED68E5A4C0815E6E0E353F71B55079F816967355FAFA
+	F5EBB76FDFBE7FFF9E905499A8BAADBF6FF7261EA0959978C6112A082E4FF01A
+	6DE265E0B2352F729DCFA045F79162A9CC94EFBFCCBF22D743A9995239FB085E
+	47A920B83CC16BB485062F91AB8D41F12B65760F8AC8358EE07594355E00ED24
+	334D5CA09D7C5096736D6A05FD38950BBFF2AD14C846727689DA9673713E8217
+	400B25724DB9A2979FB0C40F5BBCACD4553C7ABFFBDDC8D57FAB6CDC2B09A722
+	7801B490D894C8B57B81AF5722D776EECE7572257B3D7BF6ECC3BFEFF8957F1F
+	462E6840F00296AABF82962F672ECF73C45315B94E28D9AB9F79CC9722171721
+	7801CB53E2C8F5F5F51F7777123FBC8267B9F2A2F2322DE73AADC4AFFC2B7271
+	298217B0242572ED2E4ECF15B42C885E53FCCACBCCCBB19C0BD647F00216A38C
+	003DBA383DDF4A142B1B51765EC4C427D0CF2D267219E8626E2E7B72AD83E005
+	2CC0EEDCE2BEAEFF2EF0FCFC56BF80BAB1FE498EBB07411FB92CE762B6CAEDCD
+	9842F00266ADC491FA1B5F25725D64E671D0937C284F353FC1722E583DC10B98
+	B504AF1137BE2AF1EBFAFABAFBFA9CF2BB12F2A6DC9DAB2CE7BAB9B9B19C0B56
+	4FF002662DB126BA2FAA9571B21F3F7E7CFAF4A9DB7506E5B71C9E003DA03CBC
+	5FCED5ED05564DF00256A54F33E75E2995A4955F346EA0ABD99304E646F002D6
+	236926CE9D66FA81AE7177E02C89CD722ED826C10B988B24921139A6C803AFAE
+	AE92666E6E6ECE1DB9FA45F4DDDE6AE549DEDEDE5ACE059B257801975712C9B8
+	1B319430D4E65EA3F95D53E616DD1015B8CA1BAF6E13B890A74F9F963B203C2A
+	89E4C077972E89A4DC19E8DDBB7723D24C1EFBE3C78F449971A35C0D6A7EFA93
+	E4E40E1FF758F74937C5D19A4901B9E230235EC0659441A0D1F7BECA6363E68B
+	D3DF5BCE05FC9DE005B4363172B559CE95DFD26D8D623917F028C10B686762E4
+	2A0F3FF74AA9F25B46DF7CB5CD9304164AF0025A287124E67CE3ABF25BFA5CD8
+	EDADD6E649028B2678012D24942472FD35E31B5F95DF32FA937FF2D810B980C3
+	042FA085C49AE8BEA896873458295546AA467FF24F7992E75E730673F0EEDDBB
+	6E8BB1FCD9275CDE966F27B14FC25083BB30A4E6CBE0562E270F47B98ED67C9B
+	27C9C9B99DC4F9A4EAE48AC354105C9EE0B5AB659A79FDFAF52FBFFCB26F39D7
+	819A17B9164DF03A1FC1EB28538DC029FD9C509C7023863CF665C31B5FE5B7E4
+	77E55251FF9CCBBC6458CE058C207801A75112C9B88FFD893C3C01E8CB972F79
+	BB7CBEE55C0FE577C5870F1F6AB2579F0BF324452E6004C10B3881C491649729
+	77E7FAEDB7DF3E7DFAF4F9F3E76E6F43095E0952B7B7B70786BECA9374772E60
+	22C10B982449257965CE77E7AAB42F7ECDEA49024B27780123954432E52E0C79
+	78B3E55C957ECE3BEECC3C8A5CB06BC499CE3D82173046894D5306BA663B6D97
+	A75486BE9E3F7F3EB75C089795F724DD1663F9B34FB8BC65DD4E22B1A974BEFB
+	EEC2704079ACBB3070596E2731DAD19A4901B9E230150497B794E0D547AE476F
+	377A98C8C57C085EA3095ED3996A046A253C8D9B5B9CE7722E80F62453B8BC65
+	4D350E62A08B1932E2359A11AFE98C78016791C8E54F0201EE11BC80D34BE40A
+	910BE01EC10BB8EFFD9DEE8B81F2C0ABAB2B1FAA03F028C10BF83F25368DFBBC
+	C532B7E84375000E10BC809F4A6C2AB7A11FFA778B9673015412BC60EB4A6CFA
+	30F623AEDFBB55044035C10BB66B7AE4BABABABABDBDBDB9B931B70850C3FD36
+	E0F2DADFC72B916BF43DE8A33CDCDDB95828F7F11AED68CDA4805C7198112FD8
+	9632CA15533EDFDA722E8071042FD89624A744AEBC671D71C308CBB9002612BC
+	605B129E4644AEC4B5ABABAB2F5FBE58CE055BF6EEDDBB6E8BB1CCC5C2E5CDF9
+	B31A2DE7627DACF13A1F6BBC8E32E2053CCE722E809313BC609DC64D29F6F258
+	CBB9004E4EF082B5292355E33EF627CAC37DF20FC039988B85CB3BE11AAF64A6
+	FCEBEE5C7080355EE7638DD75146BC6025DEDFDD47DEDDB900E64CF082C5EBE7
+	1613B946ACEBB29C0BA83465E52885E005CB5662D394812ECBB9804AE5A3C698
+	C25C2C5CDEB8355E6549563612B9CA9E7A9673B165D6788D76B466ACF13A4A05
+	C1E50D0D5E7DE41AB788FEE5CB97F9099F3E7D12B9D826C16B34C16B3A538DB0
+	3C894DE3E616CB02FC67CF9EA56794BA00DA934CE1F2C64D350E626E117A46BC
+	4633E2359D112F58B944AE976E1501300F8217CCDAC43FDE76AB08805911BC60
+	A6CA48D5F5F575F7F5406539D7EDEDEDCDCD8D5B4500CC84E005B35322D7870F
+	1FDEBD7B37EE561179B8BB7301CC90E005F332FD86A8967301E750563E4C5CFF
+	80E00573D1CF2D26728DE8DA4A62B39C0B38B9DDDE295F5E5D5D895FA3095E30
+	0BE9D4FAB9C511035DE907BF7CF9623917705A2572EDF64E895CE58E12E2D738
+	EEB70197F7FAF5EB5F7EF9A5BC957C28BDDBBE1BE7A44F74772E18CA7DBC2A25
+	5795C8F568C0DADDD96FA7EAE48AC38C78C1E57DFEFCF9D9B36783DE3E96B7A1
+	967301E7B03BB7B8AF5FCAFEF2AD84B37D657848F08259787BA7B2FF4A99F489
+	96730127F7706EB1FBC61EE98ECC3C0E2278C15C2478DDDCDCDCDEDE1EE8BFD2
+	27E6BB96730167924E66C45F5597F835FABE839B2278C1BCEC8B5FFDDCE2A74F
+	9F3E7FFEDCED0538A9743BBB3D4FA5D241FDF8F1231D54B78B3D2C828399FA78
+	E7DDBB771F3E7CC85B4F2BE8E1542CAE3FA144AEF4513AA87A8217CC5AB2D7D7
+	AF5FD39D9958845311BC4EE5FDDD9F3D7EFAF449E4AA67AA11662D79EBF3E7CF
+	52177072E366158B3C30F1B47C1AACD43588E00500DB5262D3F5F5F5D0DB3547
+	59CEE5D3604733D508C0B66C79AAB12CC9CAC6BB77EF86A62ECBB94EC2881700
+	AC5F19A94A72AABC41D73DEFDD3EF0448C7801B02D5B1BF19A32CA15FD40971B
+	D99C84E005C0B66C27789D2A72995B3C21538D00B03665623146DC86BE280FF7
+	69B027277801C0DA24782572FDF5D75F236E1851FEE6F1D9B3676E15710EA61A
+	01D8163750DDC7DC6203821700DB22783D24723563AA110036CDAD225A12BC00
+	60A99299A2FB62B83FFFFCF3EAEAEACB972F3737376E43DF86E00500CB53FE6E
+	71DCC7FE4479F86FBFFDF6E9D32737E86AC91A2F00B665056BBC9299F2AFBB73
+	2D91112F00588CF777F77A187D77AE3CDC72AECB12BC006001FAB9C544AE11EB
+	BACAC3BF7CF9F2E9D327CBB92E48F00280B92B2355E306BAFAE55C6E433F0782
+	1700CC573FD0F5D7D8DBD0E7E1E616E743F00280392A91EBC3870FEFDEBDFBE3
+	8F3FBABDD512B9AEAEAE6E6F6FDD2A6256042F0098A304AF29738B9673CD93DB
+	4900B02D2BFEC8A0442EB78A9839235E00B00696732D82E005009794C014DD17
+	A3985B5C10C10B002EA304A6D11FFB13E527B855C48258E305C0B6CC648D5702
+	53FE1DF7B13F457E4282D7A74F9FE4AD0531E205004DBD9FF6B13F517EC2B367
+	CF6E6E6EA4AE6511BC00A0917E6E71DCC7FE84E55C4B277801400B495AC94CA3
+	07BA2CE75A07C10B00CEAB1FE81AF7B13F51429B5B45AC80E00500E75222D7E8
+	8FFD89FC84ABABAB2F5FBEF8E49F7510BC00E05C129BA6CF2D7EFAF4E9F3E7CF
+	DD5E16CEED2400D896F97F645022974FFE592B235E0030239673AD9BE00500B3
+	50E616DD2A62DD4C3502B02D679A6A2C7FAE38EE8F16CD2D6E87112F00982461
+	2B596DF4472E9A5BDC14C10B00462A9383E54EF423FE74B124B6DBDB5BB78AD8
+	0E538D006CCB49A61ACBE46036C67DCAB5B9C5CD12BC00D89689C14BE4620A53
+	8D0050A54C2C263695DBD08F485D9673217801C0112572C5C4DBD0BB5504A61A
+	01D89611538DE52611E5DFA1CC2DB24BF002605B5A7E64D0CB972F13BC3E7DFA
+	247251986A0480D32BB78A78F6ECD9CDCD8DD4454FF0028053B29C8B034C3502
+	B02D07A61ACB2AAE0F1F3E8C9B6AB49C8BA38C780140374C35FA637FC2AD22A8
+	61C40B806DB937E25586A9B2D1DF1075E8E2FA12DA9E3F7F9EC8D5ED823D8C78
+	01B05D65986AE2DDB97EFBEDB74F9F3E495DD430E205C0B69411AF87035DBDCA
+	11AF442ECBB918CA8817009B93CC94D435E5937FCAAD222CE76228235E006CCB
+	EBD7AF7FF9E59744AEEEEB070E8C78957132035D8C66C40B806DF9FCF9F3B367
+	CF92AECACD232AF5CBB9FEF9CF7F1AE86234C10B80CD79FBF6EDCDCDCDEDED6D
+	65FC72AB084EC5542300DBF5F1E3C7FCFBE4C993FCDB27B0DDA9C632D095A016
+	650F4C217801B075895FF1EEDDBB92BD4AF0B29C8B7330D508C0D6255ADD9B79
+	B49C8B3331E20500FFE7E3C78F5FBF7E4DD832B7C839085E00008D986A040068
+	44F002006844F002006844F002006844F002006844F002006844F002006844F0
+	02006844F002006844F002006844F002006844F002006844F002006844F00200
+	6844F002006844F002006844F002006844F002006844F002006844F002006844
+	F002006844F002006844F002006844F002006844F002006844F002006844F002
+	006844F002006844F002006844F002006844F002006844F002006844F0020068
+	44F002006844F002006844F002006844F002006844F002006844F002006844F0
+	02006844F002006844F002006844F002006844F002006844F002006844F00200
+	6844F002006844F002006844F002006844F002006844F002006844F002006844
+	F002006844F002006844F002006844F002006844F002006844F002006844F002
+	006844F002006844F002006844F002006844F002006844F002006844F0020068
+	44F002006844F002006844F002006844F002006844F002006844F002006844F0
+	02006844F002006844F002006844F002006844F002006844F002006844F00200
+	6844F002006844F002006844F002006844F002006844F002006844F002006844
+	F002006844F002006844F002006844F002006844F002006844F002006844F002
+	006844F002006844F002006844F002006844F002006844F002006844F0020068
+	44F002006844F002006844F002006844F002006844F002006844F002006844F0
+	02006844F002006844F002006844F002006844F002006844F002006844F00200
+	6844F002006844F002006844F002006844F002006844F002006844F002006844
+	F002006844F002006844F002006844F002006844F002006844F002006844F002
+	006844F002006844F002006844F002006844F002006844F0020068E23FFEE3FF
+	03E627DDD3817CE3010000000049454E44AE426082
+	]]>
+</Picture>
+
+</Symbol>

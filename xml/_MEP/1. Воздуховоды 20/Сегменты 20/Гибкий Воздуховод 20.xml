@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="0A4AF68F-458C-40BC-B689-BD1F1AED9F1D" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="0A4AF68F-458C-40BC-B689-BD1F1AED9F1D" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="43">
 <Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
 	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
 	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
@@ -14,18 +14,25 @@
 
 <Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
-! Flexible Duct
-! Zsolt Feke/2008
+!-----------3d---------------------
+if show_el < EPS then end
+IF gs_detlevel_3D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
 
 
-IF gs_detlevel_3D_m = DETLEV_3D_OFF THEN END
-
-CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, sMat, gs_InsMat
-
-IF useSysMat AND MEP_StrConnectionData[1][2] <> "0" THEN
-	gs_DuctMat = sMat
-	gs_InsMat = sMat
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
 ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+duct_show = duct_show*not(show_axis)
+
 
 addStatus = 0
 IF GLOB_CONTEXT > 40 AND GLOB_CONTEXT < 50 THEN
@@ -40,6 +47,15 @@ snum = 24
 IF gs_detlevel_3D_m = DETLEV_3D_SIMPLE	THEN snum = 8
 IF gs_detlevel_3D_m = DETLEV_3D_DRAFT	THEN snum = 6
 RESOL snum
+
+IF ((MEP_cline_show_3D and show_axis_and) or show_axis) THEN
+	pen MEP_cline_pen
+	FOR i = 1 TO numPoint-1
+!		Hotline MEP_FlexibleDuctPoints[i][1], MEP_FlexibleDuctPoints[i][2],MEP_FlexibleDuctPoints[i][3], MEP_FlexibleDuctPoints[i+1][1], MEP_FlexibleDuctPoints[i+1][2], MEP_FlexibleDuctPoints[i+1][3]
+		LIN_ MEP_FlexibleDuctPoints[i][1], MEP_FlexibleDuctPoints[i][2],MEP_FlexibleDuctPoints[i][3], MEP_FlexibleDuctPoints[i+1][1], MEP_FlexibleDuctPoints[i+1][2], MEP_FlexibleDuctPoints[i+1][3]
+	NEXT i
+	PEN gs_cont_pen
+endif
 
 IF res < 50 THEN
 	alpha_j = 360/snum
@@ -125,7 +141,7 @@ NEXT i
 				GET(NSP)
 		ENDIF
 
-		IF MEP_InsShow THEN
+		IF MEP_InsShow and show_isol and not(show_axis) THEN
 			alpha = 0
 			FOR k = 1 TO snum
 				PUT iHalfWidth*COS(alpha), iHalfWidth*SIN(alpha), 1
@@ -218,7 +234,7 @@ ELSE
 	IF duct_show THEN
 		MATERIAL gs_DuctMat
 
-		IF MEP_InsShow THEN
+		IF MEP_InsShow and show_isol and not(show_axis) THEN
 			TUBE 2, NSP/4, addStatus+16+32,
 				 0, 0, 901,
 				 ductHalfWidth, 360, 4001,
@@ -233,7 +249,7 @@ ELSE
 		ENDIF
 	ENDIF
 
-	IF MEP_InsShow THEN
+	IF MEP_InsShow and show_isol and not(show_axis) THEN
 		MATERIAL gs_InsMat
 
 		TUBE 2, NSP/4, addStatus+16+32,
@@ -261,11 +277,11 @@ NEXT i
 
 <Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
-! Flexible Duct
-! Zsolt Feke/2008
+!-----------2d---------------------
+if show_el < EPS then end
+IF gs_detlevel_2D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, gs_fill_type, gs_fill_pen, gs_back_pen, MEP_cline_type, MEP_cline_pen, show_el
 
-
-CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, gs_fill_type, gs_fill_pen, gs_back_pen, MEP_cline_type, MEP_cline_pen
 
 numPoint = NumFlexibleDuctPoints
 
@@ -285,15 +301,14 @@ NEXT i
 
 PEN gs_cont_pen
 IF gs_fill_pen THEN PEN gs_fill_pen
-PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0, PARAMETERS gs_detlevel_3D_m = DETLEV_3D_DETAILED, duct_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0
+if not(show_axis) then PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0, PARAMETERS gs_detlevel_3D_m = DETLEV_3D_DETAILED, duct_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0
 PEN gs_cont_pen
-PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0, PARAMETERS gs_detlevel_3D_m = DETLEV_3D_DETAILED, duct_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0
-IF MEP_InsShow THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS gs_detlevel_3D_m = DETLEV_3D_DETAILED, duct_show = 0, MEP_InsShow = 1, MEP_cline_show_3D = 0
+if not(show_axis) then PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0, PARAMETERS gs_detlevel_3D_m = DETLEV_3D_DETAILED, duct_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0
+IF MEP_InsShow and show_isol and not(show_axis) THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS gs_detlevel_3D_m = DETLEV_3D_DETAILED, duct_show = 0, MEP_InsShow = 1, MEP_cline_show_3D = 0
 
-IF MEP_cline_show THEN
+IF ((MEP_cline_show and show_axis_and) or show_axis) THEN
 	PEN MEP_cline_pen
 	SET LINE_TYPE MEP_cline_type
-
 	FOR i = 1 TO numPoint-1
 		LINE2 MEP_FlexibleDuctPoints[i][1], MEP_FlexibleDuctPoints[i][2], MEP_FlexibleDuctPoints[i+1][1], MEP_FlexibleDuctPoints[i+1][2]
 	NEXT i
@@ -305,9 +320,17 @@ ENDIF
 
 <Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
-! Flexible Duct
-! Zsolt Feke/2008
+!-----------Основной---------------------
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_axis", show_axis)
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_axis_and", show_axis_and)
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_isol", show_isol)
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_conventions", show_conventions)
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_size", show_size)
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_2D_m",gs_detlevel_2D_m)
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_3D_m", gs_detlevel_3D_m)
+call "Показ_систем" PARAMETERS All isMep=1 RETURNED_PARAMETERS show_el, syst_name
 
+call "common_param" PARAMETERS ALL
 
 EPS = 0.00001
 
@@ -369,12 +392,16 @@ IF MEP_StrConnectionData[1][2] = "0" THEN LOCK "useSysMat"
 UI_DIALOG `Специальные Параметры MEP`
 
 
-DIM ui_set_str[2][2]
+DIM ui_set_str[3][2]
 	ui_set_str[1][1] = `Изоляция`
 	ui_set_str[2][1] = `Толщина`
 
 	ui_set_str[1][2] = "MEP_InsShow"
 	ui_set_str[2][2] = "MEP_InsThickness"
+
+	ni = vardim1(ui_set_str)
+	ui_set_str[ni][1] = `Толщина стенки`
+	ui_set_str[ni][2] = "mep_th_elem"
 
 DIM ui_set_attr[3][9]
 	FOR i = 2 TO 3
@@ -761,8 +788,6 @@ PARAMETERS ac_bottomlevel 	= z2
 ]]>
 </Script_VL>
 
-<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
-
 <Comment SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[Гибкий воздуховод с дополнительной изоляцией.]]>
 </Comment>
@@ -773,7 +798,6 @@ PARAMETERS ac_bottomlevel 	= z2
 
 <ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
 	<ParamSectHeader>
-		<Version>26</Version>
 		<AutoHotspots>false</AutoHotspots>
 		<StatBits>
 			<STBit_UIDefault/>
@@ -786,7 +810,6 @@ PARAMETERS ac_bottomlevel 	= z2
 		<LayFlags>65535</LayFlags>
 		<WDMirrorThickness>0</WDMirrorThickness>
 		<WDWallInset>0</WDWallInset>
-		<SymbolColor>0</SymbolColor>
 	</ParamSectHeader>
 	<Parameters>
 		<Length Name="A">
@@ -854,7 +877,7 @@ PARAMETERS ac_bottomlevel 	= z2
 		</Length>
 		<Length Name="ConWallThickness_1">
 			<Description><![CDATA["Толщина Стенки"]]></Description>
-			<Value>0.001</Value>
+			<Value>0.0007</Value>
 		</Length>
 		<String Name="ConType_1">
 			<Description><![CDATA["Тип Сечения"]]></Description>
@@ -880,7 +903,7 @@ PARAMETERS ac_bottomlevel 	= z2
 		</Length>
 		<String Name="ConSystem_1">
 			<Description><![CDATA["Система MEP"]]></Description>
-			<Value><![CDATA["Приточная Вентиляция"]]></Value>
+			<Value><![CDATA["В2"]]></Value>
 		</String>
 		<Angle Name="RotationAroundDAxis">
 			<Description><![CDATA["Поворот Вокруг X"]]></Description>
@@ -945,7 +968,7 @@ PARAMETERS ac_bottomlevel 	= z2
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value><![CDATA[""]]></Value>
+			<Value><![CDATA["Простое Тело"]]></Value>
 		</String>
 		<String Name="ConNominalWidth_1">
 			<Description><![CDATA["Номинальный Диаметр"]]></Description>
@@ -1047,7 +1070,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value><![CDATA["Приточная Вентиляция"]]></Value>
+			<Value><![CDATA["В2"]]></Value>
 		</String>
 		<String Name="ConType_2">
 			<Description><![CDATA["Тип Сечения"]]></Description>
@@ -1063,7 +1086,7 @@ PARAMETERS ac_bottomlevel 	= z2
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value><![CDATA[""]]></Value>
+			<Value><![CDATA["Простое Тело"]]></Value>
 		</String>
 		<String Name="ConNominalWidth_2">
 			<Description><![CDATA["Номинальный Диаметр"]]></Description>
@@ -1103,7 +1126,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>0.001</Value>
+			<Value>0.0007</Value>
 		</Length>
 		<Length Name="ConLength_2">
 			<Description><![CDATA["Длина Соединения"]]></Description>
@@ -1186,14 +1209,14 @@ PARAMETERS ac_bottomlevel 	= z2
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>6</Value>
+			<Value>1</Value>
 		</LineType>
 		<PenColor Name="MEP_cline_pen">
 			<Description><![CDATA["Перо Линии Оси"]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>1</Value>
+			<Value>60</Value>
 		</PenColor>
 		<PenColor Name="gs_cont_pen">
 			<Description><![CDATA["Перо Контура"]]></Description>
@@ -1201,7 +1224,7 @@ PARAMETERS ac_bottomlevel 	= z2
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>1</Value>
+			<Value>8</Value>
 		</PenColor>
 		<FillPattern Name="gs_fill_type">
 			<Description><![CDATA["Тип Штриховки"]]></Description>
@@ -1217,7 +1240,7 @@ PARAMETERS ac_bottomlevel 	= z2
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>39</Value>
+			<Value>80</Value>
 		</PenColor>
 		<PenColor Name="gs_back_pen">
 			<Description><![CDATA["Перо Фона Штриховки"]]></Description>
@@ -1252,7 +1275,6 @@ PARAMETERS ac_bottomlevel 	= z2
 		</Boolean>
 		<String Name="gs_detlevel_3D">
 			<Description><![CDATA["3D-детализация"]]></Description>
-			<Fix/>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -1264,7 +1286,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>-1</Value>
+			<Value>2</Value>
 		</Integer>
 		<Material Name="gs_DuctMat">
 			<Description><![CDATA["Покрытие"]]></Description>
@@ -1280,7 +1302,7 @@ PARAMETERS ac_bottomlevel 	= z2
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>45</Value>
+			<Value>9</Value>
 		</Material>
 		<Boolean Name="useSysMat">
 			<Description><![CDATA["Использовать Покрытие Системы"]]></Description>
@@ -1295,7 +1317,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>100</Value>
+			<Value>72</Value>
 		</Material>
 
 		<!-- gs_hidden_params: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
@@ -1339,48 +1361,48 @@ PARAMETERS ac_bottomlevel 	= z2
 				<AVal Column="1" Row="1">0</AVal>
 				<AVal Column="2" Row="1">0</AVal>
 				<AVal Column="3" Row="1">0</AVal>
-				<AVal Column="1" Row="2">0.143858988717</AVal>
-				<AVal Column="2" Row="2">0.0172982353029</AVal>
+				<AVal Column="1" Row="2">0.143858988717037</AVal>
+				<AVal Column="2" Row="2">0.0172982353028608</AVal>
 				<AVal Column="3" Row="2">0.021484375</AVal>
-				<AVal Column="1" Row="3">0.272519726501</AVal>
-				<AVal Column="2" Row="3">0.0637725210384</AVal>
+				<AVal Column="1" Row="3">0.272519726501062</AVal>
+				<AVal Column="2" Row="3">0.0637725210383798</AVal>
 				<AVal Column="3" Row="3">0.078125</AVal>
-				<AVal Column="1" Row="4">0.503866386155</AVal>
-				<AVal Column="2" Row="4">0.211726722769</AVal>
+				<AVal Column="1" Row="4">0.503866386154936</AVal>
+				<AVal Column="2" Row="4">0.211726722769013</AVal>
 				<AVal Column="3" Row="4">0.25</AVal>
-				<AVal Column="1" Row="5">0.733279852731</AVal>
-				<AVal Column="2" Row="5">0.378817563115</AVal>
+				<AVal Column="1" Row="5">0.733279852731341</AVal>
+				<AVal Column="2" Row="5">0.378817563115139</AVal>
 				<AVal Column="3" Row="5">0.421875</AVal>
-				<AVal Column="1" Row="6">0.859524099169</AVal>
-				<AVal Column="2" Row="6">0.44921264712</AVal>
+				<AVal Column="1" Row="6">0.859524099168531</AVal>
+				<AVal Column="2" Row="6">0.449212647120025</AVal>
 				<AVal Column="3" Row="6">0.478515625</AVal>
 				<AVal Column="1" Row="7">1</AVal>
 				<AVal Column="2" Row="7">0.5</AVal>
 				<AVal Column="3" Row="7">0.5</AVal>
-				<AVal Column="1" Row="8">1.15722045962</AVal>
-				<AVal Column="2" Row="8">0.524563161669</AVal>
+				<AVal Column="1" Row="8">1.15722045962003</AVal>
+				<AVal Column="2" Row="8">0.524563161668531</AVal>
 				<AVal Column="3" Row="8">0.478515625</AVal>
-				<AVal Column="1" Row="9">1.32413006312</AVal>
-				<AVal Column="2" Row="9">0.522342352731</AVal>
+				<AVal Column="1" Row="9">1.32413006311514</AVal>
+				<AVal Column="2" Row="9">0.522342352731341</AVal>
 				<AVal Column="3" Row="9">0.421875</AVal>
-				<AVal Column="1" Row="10">1.49128131574</AVal>
-				<AVal Column="2" Row="10">0.494291963967</AVal>
+				<AVal Column="1" Row="10">1.49128131574494</AVal>
+				<AVal Column="2" Row="10">0.494291963967214</AVal>
 				<AVal Column="3" Row="10">0.341796875</AVal>
-				<AVal Column="1" Row="11">1.64922672277</AVal>
-				<AVal Column="2" Row="11">0.441366386155</AVal>
+				<AVal Column="1" Row="11">1.64922672276901</AVal>
+				<AVal Column="2" Row="11">0.441366386154936</AVal>
 				<AVal Column="3" Row="11">0.25</AVal>
-				<AVal Column="1" Row="12">1.78851878945</AVal>
-				<AVal Column="2" Row="12">0.364520010073</AVal>
+				<AVal Column="1" Row="12">1.78851878944696</AVal>
+				<AVal Column="2" Row="12">0.36452001007329</AVal>
 				<AVal Column="3" Row="12">0.158203125</AVal>
-				<AVal Column="1" Row="13">1.89971002104</AVal>
-				<AVal Column="2" Row="13">0.264707226501</AVal>
+				<AVal Column="1" Row="13">1.89971002103838</AVal>
+				<AVal Column="2" Row="13">0.264707226501062</AVal>
 				<AVal Column="3" Row="13">0.078125</AVal>
-				<AVal Column="1" Row="14">1.9733529228</AVal>
-				<AVal Column="2" Row="14">0.142882426217</AVal>
+				<AVal Column="1" Row="14">1.97335292280286</AVal>
+				<AVal Column="2" Row="14">0.142882426217037</AVal>
 				<AVal Column="3" Row="14">0.021484375</AVal>
 				<AVal Column="1" Row="15">2</AVal>
 				<AVal Column="2" Row="15">0</AVal>
-				<AVal Column="3" Row="15">5.55111512313e-017</AVal>
+				<AVal Column="3" Row="15">5.55111512312578e-17</AVal>
 			</ArrayValues>
 		</Length>
 		<Length Name="tangentVectors">
@@ -1392,45 +1414,45 @@ PARAMETERS ac_bottomlevel 	= z2
 				<AVal Column="1" Row="1">1</AVal>
 				<AVal Column="2" Row="1">0</AVal>
 				<AVal Column="3" Row="1">0</AVal>
-				<AVal Column="1" Row="2">0.938151477735</AVal>
-				<AVal Column="2" Row="2">0.21893314074</AVal>
-				<AVal Column="3" Row="2">0.268216488511</AVal>
-				<AVal Column="1" Row="3">0.798186501681</AVal>
-				<AVal Column="2" Row="3">0.388526646743</AVal>
-				<AVal Column="3" Row="3">0.460375230986</AVal>
-				<AVal Column="1" Row="4">0.70301930777</AVal>
-				<AVal Column="2" Row="4">0.480316962756</AVal>
-				<AVal Column="3" Row="4">0.524461121716</AVal>
-				<AVal Column="1" Row="5">0.756172371624</AVal>
-				<AVal Column="2" Row="5">0.480975712804</AVal>
-				<AVal Column="3" Row="5">0.443695512806</AVal>
-				<AVal Column="1" Row="6">0.880535582752</AVal>
-				<AVal Column="2" Row="6">0.398847633512</AVal>
-				<AVal Column="3" Row="6">0.256081340106</AVal>
-				<AVal Column="1" Row="7">0.968682554463</AVal>
-				<AVal Column="2" Row="7">0.248264461048</AVal>
-				<AVal Column="3" Row="7">0.00434350768133</AVal>
-				<AVal Column="1" Row="8">0.97075882329</AVal>
-				<AVal Column="2" Row="8">0.0707522258846</AVal>
-				<AVal Column="3" Row="8">-0.229393612678</AVal>
-				<AVal Column="1" Row="9">0.923109100531</AVal>
-				<AVal Column="2" Row="9">-0.0814559461061</AVal>
-				<AVal Column="3" Row="9">-0.375811811097</AVal>
-				<AVal Column="1" Row="10">0.863591098153</AVal>
-				<AVal Column="2" Row="10">-0.214581665207</AVal>
-				<AVal Column="3" Row="10">-0.456251163448</AVal>
-				<AVal Column="1" Row="11">0.796916860047</AVal>
-				<AVal Column="2" Row="11">-0.349431228501</AVal>
-				<AVal Column="3" Row="11">-0.492769048055</AVal>
-				<AVal Column="1" Row="12">0.710731445878</AVal>
-				<AVal Column="2" Row="12">-0.506143540715</AVal>
-				<AVal Column="3" Row="12">-0.488548388629</AVal>
-				<AVal Column="1" Row="13">0.574337157852</AVal>
-				<AVal Column="2" Row="13">-0.699337520243</AVal>
-				<AVal Column="3" Row="13">-0.425515994871</AVal>
-				<AVal Column="1" Row="14">0.338327999276</AVal>
-				<AVal Column="2" Row="14">-0.903337454265</AVal>
-				<AVal Column="3" Row="14">-0.263658128317</AVal>
+				<AVal Column="1" Row="2">0.938151477734948</AVal>
+				<AVal Column="2" Row="2">0.21893314074019</AVal>
+				<AVal Column="3" Row="2">0.268216488511369</AVal>
+				<AVal Column="1" Row="3">0.79818650168089</AVal>
+				<AVal Column="2" Row="3">0.388526646743015</AVal>
+				<AVal Column="3" Row="3">0.460375230985607</AVal>
+				<AVal Column="1" Row="4">0.703019307770037</AVal>
+				<AVal Column="2" Row="4">0.480316962756245</AVal>
+				<AVal Column="3" Row="4">0.524461121715569</AVal>
+				<AVal Column="1" Row="5">0.756172371624426</AVal>
+				<AVal Column="2" Row="5">0.480975712804025</AVal>
+				<AVal Column="3" Row="5">0.44369551280642</AVal>
+				<AVal Column="1" Row="6">0.880535582751546</AVal>
+				<AVal Column="2" Row="6">0.398847633511848</AVal>
+				<AVal Column="3" Row="6">0.256081340105824</AVal>
+				<AVal Column="1" Row="7">0.968682554463415</AVal>
+				<AVal Column="2" Row="7">0.248264461047601</AVal>
+				<AVal Column="3" Row="7">0.00434350768133456</AVal>
+				<AVal Column="1" Row="8">0.970758823289675</AVal>
+				<AVal Column="2" Row="8">0.0707522258845993</AVal>
+				<AVal Column="3" Row="8">-0.229393612678338</AVal>
+				<AVal Column="1" Row="9">0.923109100531449</AVal>
+				<AVal Column="2" Row="9">-0.081455946106149</AVal>
+				<AVal Column="3" Row="9">-0.375811811096953</AVal>
+				<AVal Column="1" Row="10">0.863591098153198</AVal>
+				<AVal Column="2" Row="10">-0.214581665207198</AVal>
+				<AVal Column="3" Row="10">-0.456251163447787</AVal>
+				<AVal Column="1" Row="11">0.79691686004713</AVal>
+				<AVal Column="2" Row="11">-0.349431228500793</AVal>
+				<AVal Column="3" Row="11">-0.492769048055018</AVal>
+				<AVal Column="1" Row="12">0.710731445878258</AVal>
+				<AVal Column="2" Row="12">-0.506143540715341</AVal>
+				<AVal Column="3" Row="12">-0.488548388628946</AVal>
+				<AVal Column="1" Row="13">0.574337157852128</AVal>
+				<AVal Column="2" Row="13">-0.699337520243045</AVal>
+				<AVal Column="3" Row="13">-0.425515994870521</AVal>
+				<AVal Column="1" Row="14">0.338327999276165</AVal>
+				<AVal Column="2" Row="14">-0.903337454265063</AVal>
+				<AVal Column="3" Row="14">-0.263658128317151</AVal>
 				<AVal Column="1" Row="15">0</AVal>
 				<AVal Column="2" Row="15">-1</AVal>
 				<AVal Column="3" Row="15">0</AVal>
@@ -1445,48 +1467,48 @@ PARAMETERS ac_bottomlevel 	= z2
 				<AVal Column="1" Row="1">0</AVal>
 				<AVal Column="2" Row="1">-1</AVal>
 				<AVal Column="3" Row="1">0</AVal>
-				<AVal Column="1" Row="2">0.218291077717</AVal>
-				<AVal Column="2" Row="2">-0.975339030949</AVal>
-				<AVal Column="3" Row="2">0.032600308223</AVal>
-				<AVal Column="1" Row="3">0.385134377427</AVal>
-				<AVal Column="2" Row="3">-0.916758643547</AVal>
-				<AVal Column="3" Row="3">0.105948576231</AVal>
-				<AVal Column="1" Row="4">0.468208044767</AVal>
-				<AVal Column="2" Row="4">-0.867686241537</AVal>
-				<AVal Column="3" Row="4">0.167038358057</AVal>
-				<AVal Column="1" Row="5">0.460524513533</AVal>
-				<AVal Column="2" Row="5">-0.872860011508</AVal>
-				<AVal Column="3" Row="5">0.161346127147</AVal>
-				<AVal Column="1" Row="6">0.379026048655</AVal>
-				<AVal Column="2" Row="6">-0.916927015634</AVal>
-				<AVal Column="3" Row="6">0.124836302578</AVal>
-				<AVal Column="1" Row="7">0.24646848335</AVal>
-				<AVal Column="2" Row="7">-0.963502860505</AVal>
-				<AVal Column="3" Row="7">0.104477387571</AVal>
-				<AVal Column="1" Row="8">0.101341636841</AVal>
-				<AVal Column="2" Row="8">-0.987039767716</AVal>
-				<AVal Column="3" Row="8">0.124428170404</AVal>
-				<AVal Column="1" Row="9">-0.0196026667675</AVal>
-				<AVal Column="2" Row="9">-0.986004380534</AVal>
-				<AVal Column="3" Row="9">0.165562969966</AVal>
-				<AVal Column="1" Row="10">-0.126119402046</AVal>
-				<AVal Column="2" Row="10">-0.968083015832</AVal>
-				<AVal Column="3" Row="10">0.216585250847</AVal>
-				<AVal Column="1" Row="11">-0.235113955496</AVal>
-				<AVal Column="2" Row="11">-0.930816025649</AVal>
-				<AVal Column="3" Row="11">0.279826650492</AVal>
-				<AVal Column="1" Row="12">-0.361869235483</AVal>
-				<AVal Column="2" Row="12">-0.858611478396</AVal>
-				<AVal Column="3" Row="12">0.36309363197</AVal>
-				<AVal Column="1" Row="13">-0.516782460718</AVal>
-				<AVal Column="2" Row="13">-0.712869579043</AVal>
-				<AVal Column="3" Row="13">0.474081060125</AVal>
-				<AVal Column="1" Row="14">-0.678094643723</AVal>
-				<AVal Column="2" Row="14">-0.428297658573</AVal>
-				<AVal Column="3" Row="14">0.597284496547</AVal>
-				<AVal Column="1" Row="15">-0.753334362379</AVal>
+				<AVal Column="1" Row="2">0.218291077716687</AVal>
+				<AVal Column="2" Row="2">-0.975339030949267</AVal>
+				<AVal Column="3" Row="2">0.0326003082229648</AVal>
+				<AVal Column="1" Row="3">0.385134377426872</AVal>
+				<AVal Column="2" Row="3">-0.916758643547332</AVal>
+				<AVal Column="3" Row="3">0.105948576230511</AVal>
+				<AVal Column="1" Row="4">0.468208044767283</AVal>
+				<AVal Column="2" Row="4">-0.867686241537207</AVal>
+				<AVal Column="3" Row="4">0.167038358056569</AVal>
+				<AVal Column="1" Row="5">0.460524513533121</AVal>
+				<AVal Column="2" Row="5">-0.872860011508054</AVal>
+				<AVal Column="3" Row="5">0.161346127146711</AVal>
+				<AVal Column="1" Row="6">0.379026048655262</AVal>
+				<AVal Column="2" Row="6">-0.916927015633984</AVal>
+				<AVal Column="3" Row="6">0.124836302577953</AVal>
+				<AVal Column="1" Row="7">0.246468483349501</AVal>
+				<AVal Column="2" Row="7">-0.963502860505248</AVal>
+				<AVal Column="3" Row="7">0.104477387570712</AVal>
+				<AVal Column="1" Row="8">0.101341636841418</AVal>
+				<AVal Column="2" Row="8">-0.98703976771568</AVal>
+				<AVal Column="3" Row="8">0.124428170403969</AVal>
+				<AVal Column="1" Row="9">-0.0196026667674762</AVal>
+				<AVal Column="2" Row="9">-0.98600438053373</AVal>
+				<AVal Column="3" Row="9">0.165562969965805</AVal>
+				<AVal Column="1" Row="10">-0.126119402046377</AVal>
+				<AVal Column="2" Row="10">-0.968083015832378</AVal>
+				<AVal Column="3" Row="10">0.216585250846755</AVal>
+				<AVal Column="1" Row="11">-0.235113955496435</AVal>
+				<AVal Column="2" Row="11">-0.930816025649156</AVal>
+				<AVal Column="3" Row="11">0.279826650491926</AVal>
+				<AVal Column="1" Row="12">-0.361869235483196</AVal>
+				<AVal Column="2" Row="12">-0.858611478396125</AVal>
+				<AVal Column="3" Row="12">0.363093631970085</AVal>
+				<AVal Column="1" Row="13">-0.516782460717528</AVal>
+				<AVal Column="2" Row="13">-0.712869579043229</AVal>
+				<AVal Column="3" Row="13">0.474081060125235</AVal>
+				<AVal Column="1" Row="14">-0.678094643722522</AVal>
+				<AVal Column="2" Row="14">-0.428297658573006</AVal>
+				<AVal Column="3" Row="14">0.597284496547254</AVal>
+				<AVal Column="1" Row="15">-0.753334362378768</AVal>
 				<AVal Column="2" Row="15">0</AVal>
-				<AVal Column="3" Row="15">0.657637695437</AVal>
+				<AVal Column="3" Row="15">0.657637695436762</AVal>
 			</ArrayValues>
 		</Length>
 		<Boolean Name="editable">
@@ -1588,7 +1610,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<AVal Column="11" Row="1">0</AVal>
 				<AVal Column="12" Row="1">0.5</AVal>
 				<AVal Column="13" Row="1">0.5</AVal>
-				<AVal Column="14" Row="1">0.001</AVal>
+				<AVal Column="14" Row="1">0.0007</AVal>
 				<AVal Column="15" Row="1">0.03</AVal>
 				<AVal Column="16" Row="1">0</AVal>
 				<AVal Column="17" Row="1">0</AVal>
@@ -1614,7 +1636,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<AVal Column="11" Row="2">0</AVal>
 				<AVal Column="12" Row="2">0.5</AVal>
 				<AVal Column="13" Row="2">0.5</AVal>
-				<AVal Column="14" Row="2">0.001</AVal>
+				<AVal Column="14" Row="2">0.0007</AVal>
 				<AVal Column="15" Row="2">0.03</AVal>
 				<AVal Column="16" Row="2">0</AVal>
 				<AVal Column="17" Row="2">0</AVal>
@@ -1659,7 +1681,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<AVal Column="11" Row="1">0</AVal>
 				<AVal Column="12" Row="1">0.5</AVal>
 				<AVal Column="13" Row="1">0.5</AVal>
-				<AVal Column="14" Row="1">0.001</AVal>
+				<AVal Column="14" Row="1">0.0007</AVal>
 				<AVal Column="15" Row="1">0.03</AVal>
 				<AVal Column="16" Row="1">0</AVal>
 				<AVal Column="17" Row="1">0</AVal>
@@ -1685,7 +1707,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<AVal Column="11" Row="2">0</AVal>
 				<AVal Column="12" Row="2">0.5</AVal>
 				<AVal Column="13" Row="2">0.5</AVal>
-				<AVal Column="14" Row="2">0.001</AVal>
+				<AVal Column="14" Row="2">0.0007</AVal>
 				<AVal Column="15" Row="2">0.03</AVal>
 				<AVal Column="16" Row="2">0</AVal>
 				<AVal Column="17" Row="2">0</AVal>
@@ -1969,22 +1991,6 @@ PARAMETERS ac_bottomlevel 	= z2
 				<ParFlg_Hidden/>
 			</Flags>
 		</Title>
-		<Boolean Name="show_el">
-			<Description><![CDATA["Показ элемента"]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-				<ParFlg_Hidden/>
-			</Flags>
-			<Value>1</Value>
-		</Boolean>
-		<String Name="syst_name">
-			<Description><![CDATA["Имя системы"]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-				<ParFlg_Hidden/>
-			</Flags>
-			<Value><![CDATA["!!!"]]></Value>
-		</String>
 		<Boolean Name="mun_elev">
 			<Description><![CDATA["Ручной этаж"]]></Description>
 			<Flags>
@@ -2007,7 +2013,7 @@ PARAMETERS ac_bottomlevel 	= z2
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>0</Value>
+			<Value>-7.1</Value>
 		</Length>
 		<Length Name="otm_elem_abs">
 			<Description><![CDATA["Отметка оси элемента абсолютная"]]></Description>
@@ -2015,22 +2021,99 @@ PARAMETERS ac_bottomlevel 	= z2
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>0</Value>
+			<Value>-7.1</Value>
 		</Length>
-		<String Name="spec_add_param">
-			<Description><![CDATA["Доп.параметры в смету"]]></Description>
+		<Boolean Name="show_el">
+			<Description><![CDATA["Показ элемента"]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value><![CDATA["!!!"]]></Value>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="tConToolType">
+			<Description><![CDATA["Тип инструмента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+
+		<!-- mep_par_geom: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="mep_par_geom">
+			<Description><![CDATA["Геометрия"]]></Description>
+		</Title>
+		<Length Name="mep_th_elem">
+			<Description><![CDATA["Толщина стенки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="mep_razm">
+			<Description><![CDATA["Размер сечения (BxH), мм"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["d500"]]></Value>
 		</String>
+		<String Name="mep_razm_abs">
+			<Description><![CDATA["Размер сечения (MAXxMIN), мм"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["d500"]]></Value>
+		</String>
+		<RealNum Name="mep_vol">
+			<Description><![CDATA["Внутренний объём, куб.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.38288128125</Value>
+		</RealNum>
+		<RealNum Name="mep_s_el">
+			<Description><![CDATA["Наружная площадь, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>3.15729795</Value>
+		</RealNum>
+		<RealNum Name="mep_s_in">
+			<Description><![CDATA["Площадь сечения, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.196349375</Value>
+		</RealNum>
 
 		<!-- mep_par_spec: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
 
 		<Title Name="mep_par_spec">
 			<Description><![CDATA["Спецификация"]]></Description>
 		</Title>
+		<String Name="type_spec">
+			<Description><![CDATA["Тип спецификации"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="syst_name">
+			<Description><![CDATA["Имя системы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="spec_add_param">
+			<Description><![CDATA["Доп.параметры в смету"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
 		<String Name="subpos">
 			<Description><![CDATA["Входит в сборку"]]></Description>
 			<Flags>
@@ -2087,8 +2170,8 @@ PARAMETERS ac_bottomlevel 	= z2
 			</Flags>
 			<Value>0</Value>
 		</RealNum>
-		<RealNum Name="mep_vol">
-			<Description><![CDATA["Внутренний объём, куб.м."]]></Description>
+		<RealNum Name="mep_m_ves">
+			<Description><![CDATA["Вес п.м., кг."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -2099,45 +2182,17 @@ PARAMETERS ac_bottomlevel 	= z2
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>0</Value>
-		</RealNum>
-		<String Name="mep_razm">
-			<Description><![CDATA["Размер сечения (BxH), мм"]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-			</Flags>
-			<Value><![CDATA[""]]></Value>
-		</String>
-		<String Name="mep_razm_abs">
-			<Description><![CDATA["Размер сечения (MAXxMIN), мм"]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-			</Flags>
-			<Value><![CDATA[""]]></Value>
-		</String>
-		<RealNum Name="mep_s_el">
-			<Description><![CDATA["Наружная площадь, кв.м."]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-			</Flags>
-			<Value>0</Value>
+			<Value>1.95</Value>
 		</RealNum>
 		<RealNum Name="mep_s_ins">
 			<Description><![CDATA["Площадь изоляции, кв.м."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>0</Value>
+			<Value>3.43061628</Value>
 		</RealNum>
 		<RealNum Name="mep_s_pokr">
 			<Description><![CDATA["Площадь покрытия, кв.м."]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-			</Flags>
-			<Value>0</Value>
-		</RealNum>
-		<RealNum Name="mep_s_in">
-			<Description><![CDATA["Площадь сечения, кв.м."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -2164,13 +2219,39 @@ PARAMETERS ac_bottomlevel 	= z2
 			</Flags>
 			<Value>0</Value>
 		</RealNum>
+		<String Name="mep_m_gost">
+			<Description><![CDATA["ГОСТ на материал"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="mep_gost">
+			<Description><![CDATA["ГОСТ на элемент"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
 	</Parameters>
 </ParamSection>
 
 <CalledMacros SectVersion="2" SectionFlags="0" SubIdent="0">
 	<Macro>
+		<MName><![CDATA["Показ_систем"]]></MName>
+		<MainGUID>815BEB36-F280-443A-937B-64990DB2FB36</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["common_param"]]></MName>
+		<MainGUID>723AE44F-E9B7-4219-931A-F5F5505B4A30</MainGUID>
+	</Macro>
+	<Macro>
 		<MName><![CDATA["MEP_m_RequestSystemGlobals"]]></MName>
 		<MainGUID>5DC5ED79-B7C9-4B2A-A7A7-687FB97394F7</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["Libraryflobals-mep"]]></MName>
+		<MainGUID>9799A140-EDFF-46BA-ACA1-B5401FE64F3E</MainGUID>
 	</Macro>
 	<Macro>
 		<MName><![CDATA["MEP_m_ConnectionsMEP_4"]]></MName>
@@ -2339,5 +2420,17 @@ PARAMETERS ac_bottomlevel 	= z2
 		<Version>3.0</Version>
 	</License>
 </Copyright>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_FWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_FWM>
+
+<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
+
+<Script_BWM SectVersion="20" SectionFlags="0" SubIdent="0">
+<![CDATA[]]>
+</Script_BWM>
 
 </Symbol>

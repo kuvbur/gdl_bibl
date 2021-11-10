@@ -1,0 +1,153 @@
+﻿
+! Gas Meter
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+IF useSysMat THEN
+	MainBoxMaterial = sMat
+	HouseMaterial = sMat
+	DialPlateMaterial = sMat
+	WheelMaterial = sMat
+ENDIF
+MATERIAL MainBoxMaterial
+PEN gs_cont_pen
+RESOL res
+
+addStatus = 0
+IF GLOB_CONTEXT > 40 AND GLOB_CONTEXT < 50 THEN
+	addStatus = 3
+ENDIF
+
+
+				! --- HOTSPOTS --- !
+
+unID = 1
+HOTSPOT A/2, B/2, 0, unID: unID=unID+1
+HOTSPOT -A/2, B/2, 0, unID: unID=unID+1
+HOTSPOT -A/2, -B/2, 0, unID: unID=unID+1
+HOTSPOT A/2, -B/2, 0, unID: unID=unID+1
+HOTSPOT A/2, B/2, ZZYZX, unID: unID=unID+1
+HOTSPOT -A/2, B/2, ZZYZX, unID: unID=unID+1
+HOTSPOT -A/2, -B/2, ZZYZX, unID: unID=unID+1
+HOTSPOT A/2, -B/2, ZZYZX, unID: unID=unID+1
+
+
+				! --- MAIN BOX --- !
+
+IF withHouse THEN
+	MATERIAL HouseMaterial
+
+	ADDy B/2
+	ROTx 90
+	EXTRUDE 5, 0, 0, B, addStatus+16+32,
+		-A/2, 0, 0,
+		A/2, 0, 0,
+		A/2, ZZYZX, 0,
+		-A/2, ZZYZX, 0,
+		-A/2, 0, -1
+
+	POLY_ 5,
+		-A/2, 0, 1,
+		A/2, 0, 1,
+		A/2, ZZYZX, 1,
+		-A/2, ZZYZX, 1,
+		-A/2, 0, -1
+
+	IF isCovered THEN
+		ADDz B
+		POLY_ 5,
+			-A/2, 0, 1,
+			A/2, 0, 1,
+			A/2, ZZYZX, 1,
+			-A/2, ZZYZX, 1,
+			-A/2, 0, -1
+		DEL 1
+	ENDIF
+	DEL 2
+
+	ADDz ZZYZX/2
+ELSE
+	ADDz meterBoxSizeZ/2
+ENDIF
+
+
+MATERIAL MainBoxMaterial
+ADD -meterBoxSizeX/2, -meterBoxSizeY/2, -meterBoxSizeZ/2
+IF gs_detlevel_3D_m = 2 THEN
+	ADDy chSize
+	BLOCK meterBoxSizeX, meterBoxSizeY-chSize*2, meterBoxSizeZ
+	DEL 1
+
+	FOR i = 1 TO 2
+		MULy 1-2*(i-1)
+		ADD meterBoxSizeX/2, chSize-meterBoxSizeY*(i-1), 0
+		ROTx 90
+		RULED 4, 1+2+4+16+32,
+			-meterBoxSizeX/2, 0, 0,
+			meterBoxSizeX/2, 0, 0,
+			meterBoxSizeX/2, meterBoxSizeZ, 0,
+			-meterBoxSizeX/2, meterBoxSizeZ, 0,
+
+			-meterBoxSizeX/2+chsize, chsize, chsize,
+			meterBoxSizeX/2-chsize, chsize, chsize,
+			meterBoxSizeX/2-chsize, meterBoxSizeZ-chsize, chsize,
+			-meterBoxSizeX/2+chsize, meterBoxSizeZ-chsize, chsize
+		DEL 3
+	NEXT i
+
+
+	ww = (meterBoxSizeX - chsize*2)*0.80
+	hh = (meterBoxSizeZ - chsize*2)*0.40
+	ADD meterBoxSizeX/2-ww/2, 0, meterBoxSizeZ/2
+	MATERIAL DialPlateMaterial
+	ROTx 90
+	ADDz EPS
+	POLY_ 5,
+		0, 0, 1,
+		ww, 0, 1,
+		ww, hh, 1,
+		0, hh, 1,
+		0, 0, -1
+
+	MATERIAL WheelMaterial
+	ADD ww*0.1, hh*0.40,  EPS
+	ww = ww*0.80
+	hh = ww*0.20
+	POLY_ 5,
+		0, 0, 1,
+		ww, 0, 1,
+		ww, hh, 1,
+		0, hh, 1,
+		0, 0, -1
+	DEL 5
+ELSE
+	BLOCK meterBoxSizeX, meterBoxSizeY, meterBoxSizeZ
+ENDIF
+DEL 1
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	ui_current_con = ui_current_con,
+	MEP_NumberConnections = MEP_NumberConnections,
+	MEP_NumConnectionData = gs_Connections,
+	gs_AddConnections = gs_AddConnections,
+	cShow3D = 1,
+	gs_ConMat = MainBoxMaterial,
+	MEP_InsShow = 0,
+	MEP_cline_show_3D = 0,
+	gs_cont_pen = gs_cont_pen,
+	ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 15,
+	ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = 15
+END

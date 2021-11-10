@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="7C199292-0F4C-4A32-9814-2602467404A2" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="7C199292-0F4C-4A32-9814-2602467404A2" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="43">
 <Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
 	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
 	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
@@ -14,7 +14,11 @@
 
 <Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
-if show_el<1 then end
+!-----------3d---------------------
+if show_el < EPS then end
+IF gs_detlevel_3D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+gs_DuctMat = sMat
 IF gs_detlevel_3D_m = -1 THEN
 	gs_detlevel_3D_m = 2	! Detailed
 	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
@@ -26,17 +30,9 @@ IF gs_detlevel_3D_m = 0 THEN END
 res = 24	! Detailed
 IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
 
-CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, sMat, gs_InsMat
-if show_axis then MEP_cline_pen = gs_cont_pen
-duct_show = not(show_axis)
+duct_show = duct_show*not(show_axis)
 PEN gs_cont_pen
 RESOL res
-
-IF useSysMat AND MEP_StrConnectionData[1][2] <> "0" THEN
-	gs_DuctMat = sMat
-
-ENDIF
-
 
 XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
 		MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
@@ -59,6 +55,7 @@ HOTSPOT 0, 0, 0, hceID_1
 HOTSPOT MEP_StraightLength, 0, oHeight, hceID_2
 
 IF ((MEP_cline_show and show_axis_and) or show_axis) AND operatedMode < EPS THEN
+	pen MEP_cline_pen
 	LIN_ 0, 0, 0, aLen, 0, 0
 	LIN_ aLen, 0, 0, aLen+oHeight/(TAN(rd_angle)), 0, oHeight
 	LIN_ aLen+oHeight/(TAN(rd_angle)), 0, oHeight, aLen*2+oHeight/(TAN(rd_angle)), 0, oHeight
@@ -68,6 +65,7 @@ IF ((MEP_cline_show and show_axis_and) or show_axis) AND operatedMode < EPS THEN
 	HOTLINE 0, 0, 0, aLen, 0, 0, hceID_1 : hceID_1 = hceID_1 + 1 
 	HOTLINE aLen, 0, 0, aLen+oHeight/(TAN(rd_angle)), 0, oHeight, hceID_1 : hceID_1 = hceID_1 + 1
 	HOTLINE aLen+oHeight/(TAN(rd_angle)), 0, oHeight, aLen*2+oHeight/(TAN(rd_angle)), 0, oHeight, hceID_1 : hceID_1 = hceID_1 + 1
+	PEN gs_cont_pen
 ENDIF
 
 
@@ -270,9 +268,11 @@ RETURN
 
 <Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
-if show_el<1 then end
-CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, gs_fill_type, gs_fill_pen, gs_back_pen, MEP_cline_type, MEP_cline_pen
-if show_axis then MEP_cline_pen = gs_cont_pen
+!-----------2d---------------------
+if show_el < EPS then end
+IF gs_detlevel_2D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, gs_fill_type, gs_fill_pen, gs_back_pen, MEP_cline_type, MEP_cline_pen, show_el
+
 PEN gs_cont_pen
 SET FILL gs_fill_type
 
@@ -294,11 +294,10 @@ IF ABS(MEP_Position[3][3]) > EPS OR ABS(MEP_Position[2][3]) > EPS THEN
 	if not(show_axis) then PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0, PARAMETERS duct_show = 1, MEP_InsShow = 0, cl_show = 0, gs_detlevel_3D_m = 2
 	PEN gs_cont_pen
 	if not(show_axis) then PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0, PARAMETERS duct_show = 1, MEP_InsShow = 0, cl_show = 0, gs_detlevel_3D_m = 2
-
 	IF MEP_InsShow and show_isol and not(show_axis) THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS duct_show = 0, MEP_InsShow = 1, cl_show = 0, gs_detlevel_3D_m = 2
 ELSE
 
-	IF ABS(shapeType - 1) < EPS THEN
+	IF ABS(shapeType - 1) < EPS and not(show_axis) THEN
 		FOR i = 7 TO 9 + 4*MEP_InsShow STEP 2
 			LINE2 outCoords[i][1], outCoords[i][2], outCoords[i+1][1], outCoords[i+1][2]
 		NEXT i
@@ -322,6 +321,20 @@ ELSE
 		HOTSPOT2 MEP_StraightLength, offset, hceID_2
 	ENDIF
 
+				! --- CENTERLINE --- !
+	
+	IF ((MEP_cline_show and show_axis_and) or show_axis)  THEN
+		PEN MEP_cline_pen
+		SET LINE_TYPE MEP_cline_type
+	
+		LINE2 outCoords[1][1], outCoords[1][2], outCoords[15][1], outCoords[15][2]
+		LINE2 outCoords[15][1], outCoords[15][2], outCoords[16][1], outCoords[16][2]
+		LINE2 outCoords[16][1], outCoords[16][2], outCoords[4][1], outCoords[4][2]
+		PEN gs_cont_pen
+		SET LINE_TYPE 1
+	ENDIF
+	if show_axis then end 
+
 	IF flangeA THEN
 		PUT cutbackA, connectorHalfWidthA, 1
 		PUT cutbackA, -connectorHalfWidthA, 1
@@ -343,7 +356,7 @@ ELSE
 
 			GET (NSP)
 	ENDIF
-if not(show_axis) then 
+
 	PUT cutbackA*(flangeA), ductHalfWidth, 1
 	PUT cutbackA*(flangeA), -ductHalfWidth, 1
 	PUT MEP_StraightLength-cutbackB*(flangeB), -ductHalfWidth, 1
@@ -352,7 +365,6 @@ if not(show_axis) then
 	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
 
 		GET (NSP)
-endif
 			! --- INSULATION --- !
 
 	IF MEP_InsShow and show_isol and not(show_axis) THEN
@@ -364,16 +376,7 @@ endif
 ENDIF
 
 
-			! --- CENTERLINE --- !
 
-IF ((MEP_cline_show and show_axis_and) or show_axis)  THEN
-	PEN MEP_cline_pen
-	SET LINE_TYPE MEP_cline_type
-
-	LINE2 outCoords[1][1], outCoords[1][2], outCoords[15][1], outCoords[15][2]
-	LINE2 outCoords[15][1], outCoords[15][2], outCoords[16][1], outCoords[16][2]
-	LINE2 outCoords[16][1], outCoords[16][2], outCoords[4][1], outCoords[4][2]
-ENDIF
 ]]>
 </Script_2D>
 
@@ -381,13 +384,17 @@ ENDIF
 
 <Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
+!-----------Основной---------------------
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_axis", show_axis)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_axis_and", show_axis_and)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_isol", show_isol)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_conventions", show_conventions)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_size", show_size)
-call "Показ_систем" PARAMETERS All RETURNED_PARAMETERS show_el, syst_name
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_2D_m",gs_detlevel_2D_m)
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_3D_m", gs_detlevel_3D_m)
+call "Показ_систем" PARAMETERS All isMep=1 RETURNED_PARAMETERS show_el, syst_name
 
+call "common_param" PARAMETERS ALL
 
 EPS = 0.00001
 
@@ -603,7 +610,7 @@ PARAMETERS ac_bottomlevel 	= z
 UI_DIALOG `Специальные Параметры MEP`
 
 
-DIM ui_set_str[6][2]
+DIM ui_set_str[7][2]
 	ui_set_str[1][1] = "(A) "+`Длина`
 	ui_set_str[2][1] = `Подъем/Спуск`
 	ui_set_str[3][1] = "(B) "+`Высота Препятствия`
@@ -618,8 +625,12 @@ DIM ui_set_str[6][2]
 	ui_set_str[5][2] = "MEP_InsShow"
 	ui_set_str[6][2] = "MEP_InsThickness"
 
-DIM ui_set_attr[7][9]
-	FOR i = 2 TO 7
+	ni = vardim1(ui_set_str)
+	ui_set_str[ni][1] = `Толщина стенки`
+	ui_set_str[ni][2] = "mep_th_elem"
+
+DIM ui_set_attr[8][9]
+	FOR i = 2 TO 8
 		FOR j = 1 TO 9
 			ui_set_attr[i][j] = 0
 		NEXT j
@@ -633,8 +644,6 @@ DIM ui_set_attr[7][9]
 	ui_set_attr[1][7] = 15
 	ui_set_attr[1][8] = 128
 	ui_set_attr[1][9] = 23
-
-	ui_set_attr[6][3] = 1
 
 DIM ui_vis_attr[6][5]
 	FOR i = 1 TO 6
@@ -955,8 +964,6 @@ ENDIF
 ]]>
 </Script_VL>
 
-<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
-
 <Comment SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[Воздуховод с препятствием с уступом, круглой, овальной или прямоугольной формы, с дополнительной изоляцией и фланцем, положение подъема или опускания.]]>
 </Comment>
@@ -967,7 +974,6 @@ ENDIF
 
 <ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
 	<ParamSectHeader>
-		<Version>26</Version>
 		<AutoHotspots>false</AutoHotspots>
 		<StatBits>
 			<STBit_UIDefault/>
@@ -980,7 +986,6 @@ ENDIF
 		<LayFlags>65535</LayFlags>
 		<WDMirrorThickness>0</WDMirrorThickness>
 		<WDWallInset>0</WDWallInset>
-		<SymbolColor>0</SymbolColor>
 	</ParamSectHeader>
 	<Parameters>
 		<Length Name="A">
@@ -1072,7 +1077,7 @@ ENDIF
 			<Flags>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>30.9460068551</Value>
+			<Value>30.9460068551078</Value>
 		</Angle>
 		<Length Name="oHeight">
 			<Description><![CDATA["Высота Препятствия"]]></Description>
@@ -1114,7 +1119,7 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value><![CDATA["ОТСУТСТВУЕТ"]]></Value>
+			<Value><![CDATA["В2"]]></Value>
 		</String>
 		<String Name="ConConnectorType_1">
 			<Description><![CDATA["Тип Соединения"]]></Description>
@@ -1222,7 +1227,7 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value><![CDATA["ОТСУТСТВУЕТ"]]></Value>
+			<Value><![CDATA["В2"]]></Value>
 		</String>
 		<String Name="ConType_2">
 			<Description><![CDATA["Тип Сечения"]]></Description>
@@ -1278,7 +1283,7 @@ ENDIF
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>0.002</Value>
+			<Value>0.001</Value>
 		</Length>
 		<Length Name="ConLength_2">
 			<Description><![CDATA["Длина Соединения"]]></Description>
@@ -1361,14 +1366,14 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>6</Value>
+			<Value>1</Value>
 		</LineType>
 		<PenColor Name="MEP_cline_pen">
 			<Description><![CDATA["Перо Линии Оси"]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>1</Value>
+			<Value>60</Value>
 		</PenColor>
 		<PenColor Name="gs_cont_pen">
 			<Description><![CDATA["Перо Контура"]]></Description>
@@ -1376,7 +1381,7 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>68</Value>
+			<Value>8</Value>
 		</PenColor>
 		<PenColor Name="gs_fill_pen">
 			<Description><![CDATA["Перо Штриховки"]]></Description>
@@ -1384,7 +1389,7 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>68</Value>
+			<Value>80</Value>
 		</PenColor>
 		<PenColor Name="gs_back_pen">
 			<Description><![CDATA["Перо Фона Штриховки"]]></Description>
@@ -1392,7 +1397,7 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>0</Value>
+			<Value>-1</Value>
 		</PenColor>
 		<FillPattern Name="gs_fill_type">
 			<Description><![CDATA["Тип Штриховки"]]></Description>
@@ -1411,7 +1416,6 @@ ENDIF
 		</Title>
 		<String Name="gs_detlevel_3D">
 			<Description><![CDATA["3D-детализация"]]></Description>
-			<Fix/>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -1453,7 +1457,7 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>149</Value>
+			<Value>9</Value>
 		</Material>
 		<Boolean Name="useSysMat">
 			<Description><![CDATA["Использовать Покрытие Системы"]]></Description>
@@ -1468,7 +1472,7 @@ ENDIF
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>76</Value>
+			<Value>72</Value>
 		</Material>
 
 		<!-- gs_hidden_params: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
@@ -1805,7 +1809,7 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>2.88788988111</Value>
+			<Value>2.88788988111094</Value>
 		</RealNum>
 		<RealNum Name="gs_list_volume">
 			<Description><![CDATA["Объем"]]></Description>
@@ -1953,22 +1957,6 @@ ENDIF
 				<ParFlg_Hidden/>
 			</Flags>
 		</Title>
-		<Boolean Name="show_el">
-			<Description><![CDATA["Показ элемента"]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-				<ParFlg_Hidden/>
-			</Flags>
-			<Value>1</Value>
-		</Boolean>
-		<String Name="syst_name">
-			<Description><![CDATA["Имя системы"]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-				<ParFlg_Hidden/>
-			</Flags>
-			<Value><![CDATA["!!!"]]></Value>
-		</String>
 		<Boolean Name="mun_elev">
 			<Description><![CDATA["Ручной этаж"]]></Description>
 			<Flags>
@@ -1991,7 +1979,7 @@ ENDIF
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>0</Value>
+			<Value>-7.1</Value>
 		</Length>
 		<Length Name="otm_elem_abs">
 			<Description><![CDATA["Отметка оси элемента абсолютная"]]></Description>
@@ -1999,22 +1987,99 @@ ENDIF
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>0</Value>
+			<Value>-7.1</Value>
 		</Length>
-		<String Name="spec_add_param">
-			<Description><![CDATA["Доп.параметры в смету"]]></Description>
+		<Boolean Name="show_el">
+			<Description><![CDATA["Показ элемента"]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value><![CDATA["!!!"]]></Value>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="tConToolType">
+			<Description><![CDATA["Тип инструмента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+
+		<!-- mep_par_geom: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="mep_par_geom">
+			<Description><![CDATA["Геометрия"]]></Description>
+		</Title>
+		<Length Name="mep_th_elem">
+			<Description><![CDATA["Толщина стенки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="mep_razm">
+			<Description><![CDATA["Размер сечения (BxH), мм"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["800x500"]]></Value>
 		</String>
+		<String Name="mep_razm_abs">
+			<Description><![CDATA["Размер сечения (MAXxMIN), мм"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["800x500"]]></Value>
+		</String>
+		<RealNum Name="mep_vol">
+			<Description><![CDATA["Внутренний объём, куб.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.4</Value>
+		</RealNum>
+		<RealNum Name="mep_s_el">
+			<Description><![CDATA["Наружная площадь, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>2.756</Value>
+		</RealNum>
+		<RealNum Name="mep_s_in">
+			<Description><![CDATA["Площадь сечения, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.4</Value>
+		</RealNum>
 
 		<!-- mep_par_spec: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
 
 		<Title Name="mep_par_spec">
 			<Description><![CDATA["Спецификация"]]></Description>
 		</Title>
+		<String Name="type_spec">
+			<Description><![CDATA["Тип спецификации"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="syst_name">
+			<Description><![CDATA["Имя системы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="spec_add_param">
+			<Description><![CDATA["Доп.параметры в смету"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
 		<String Name="subpos">
 			<Description><![CDATA["Входит в сборку"]]></Description>
 			<Flags>
@@ -2071,8 +2136,8 @@ ENDIF
 			</Flags>
 			<Value>0</Value>
 		</RealNum>
-		<RealNum Name="mep_vol">
-			<Description><![CDATA["Внутренний объём, куб.м."]]></Description>
+		<RealNum Name="mep_m_ves">
+			<Description><![CDATA["Вес п.м., кг."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -2083,45 +2148,17 @@ ENDIF
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>0</Value>
-		</RealNum>
-		<String Name="mep_razm">
-			<Description><![CDATA["Размер сечения (BxH), мм"]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-			</Flags>
-			<Value><![CDATA[""]]></Value>
-		</String>
-		<String Name="mep_razm_abs">
-			<Description><![CDATA["Размер сечения (MAXxMIN), мм"]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-			</Flags>
-			<Value><![CDATA[""]]></Value>
-		</String>
-		<RealNum Name="mep_s_el">
-			<Description><![CDATA["Наружная площадь, кв.м."]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-			</Flags>
-			<Value>0</Value>
+			<Value>1</Value>
 		</RealNum>
 		<RealNum Name="mep_s_ins">
 			<Description><![CDATA["Площадь изоляции, кв.м."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>0</Value>
+			<Value>2.84</Value>
 		</RealNum>
 		<RealNum Name="mep_s_pokr">
 			<Description><![CDATA["Площадь покрытия, кв.м."]]></Description>
-			<Flags>
-				<ParFlg_Child/>
-			</Flags>
-			<Value>0</Value>
-		</RealNum>
-		<RealNum Name="mep_s_in">
-			<Description><![CDATA["Площадь сечения, кв.м."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -2148,6 +2185,20 @@ ENDIF
 			</Flags>
 			<Value>0</Value>
 		</RealNum>
+		<String Name="mep_m_gost">
+			<Description><![CDATA["ГОСТ на материал"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="mep_gost">
+			<Description><![CDATA["ГОСТ на элемент"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
 	</Parameters>
 </ParamSection>
 
@@ -2155,6 +2206,10 @@ ENDIF
 	<Macro>
 		<MName><![CDATA["Показ_систем"]]></MName>
 		<MainGUID>815BEB36-F280-443A-937B-64990DB2FB36</MainGUID>
+	</Macro>
+	<Macro>
+		<MName><![CDATA["common_param"]]></MName>
+		<MainGUID>723AE44F-E9B7-4219-931A-F5F5505B4A30</MainGUID>
 	</Macro>
 	<Macro>
 		<MName><![CDATA["MEP_m_RequestSystemGlobals"]]></MName>

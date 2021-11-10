@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="9FC82011-71FA-4945-9DDE-9A013B602A36" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Symbol IsArchivable="false" IsPlaceable="false" MainGUID="9FC82011-71FA-4945-9DDE-9A013B602A36" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="43">
 <Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
 	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
 	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
@@ -10,16 +10,17 @@
 
 <Script_3D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
-if show_el<1 then end
-IF gs_detlevel_3D_m = 0 THEN END
+!-----------3d---------------------
+if show_el < EPS then end
+if GLOB_VIEW_TYPE=2 then gs_detlevel_3D_m = gs_detlevel_2D_m
+if (GLOB_PREVIEW_MODE or GLOB_FEEDBACK_MODE or GLOB_SEO_TOOL_MODE) then gs_detlevel_3D_m = 1
+IF gs_detlevel_3D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+
 _pTM = GLOB_SCALE / 1000
 lmmza = 1
-CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, sMat, gs_InsMat
-if show_axis then MEP_cline_pen = gs_cont_pen
-!IF useSysMat AND MEP_StrConnectionData[1][2] <> "0" THEN
-	gs_DuctMat = sMat
-!	gs_InsMat = sMat
-!ENDIF
+gs_DuctMat = sMat
+
 
 RESOL res
 PEN gs_cont_pen
@@ -33,7 +34,7 @@ XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
 		MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
 		MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
 
-duct_show = not(show_axis)
+duct_show = duct_show*not(show_axis)
 IF duct_show and not(show_axis) THEN			! -----> duct bend <----- !
 
 	HOTSPOT PointAX, 0, 0, hceID_1
@@ -102,7 +103,6 @@ ENDIF
 
 IF MEP_InsShow and show_isol and not(show_axis) THEN			! -----> insulation <----- !
 	MATERIAL gs_InsMat
-	pen MEP_cline_pen
 	halfWidth 	= ductHalfWidthA+MEP_InsThickness
 	halfHeight 	= ductHalfHeightA+MEP_InsThickness
 
@@ -130,13 +130,14 @@ IF MEP_InsShow and show_isol and not(show_axis) THEN			! -----> insulation <----
 		COOR    3,    -1,   -2,    -3,    -4
 	ENDIF
 	BODY -1
+	MATERIAL gs_DuctMat
 ENDIF
 
 
 IF GLOB_CONTEXT < 41 OR GLOB_CONTEXT > 49 THEN
 
-	IF (MEP_cline_show and show_axis_and) or show_axis THEN		! -----> center line <----- !
-
+	IF (MEP_cline_show_3D and show_axis_and) or show_axis THEN		! -----> center line <----- !
+		PEN MEP_cline_pen
 		IF add_l THEN
 			LIN_ 0, 0, 0, -add_l, 0, 0
 			xx = MEP_BendRadius*SIN(bendAngle)
@@ -525,9 +526,11 @@ RETURN
 
 <Script_2D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
-if show_el<1 then end
-CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, gs_fill_type, gs_fill_pen, gs_back_pen, MEP_cline_type, MEP_cline_pen
-if show_axis then MEP_cline_pen = gs_cont_pen
+!-----------2d---------------------
+if show_el < EPS then end
+IF gs_detlevel_2D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, gs_fill_type, gs_fill_pen, gs_back_pen, MEP_cline_type, MEP_cline_pen, show_el
+
 _pTM = GLOB_SCALE / 1000
 lmmza = 1
 PEN gs_cont_pen
@@ -542,7 +545,7 @@ HOTSPOT2 MEP_Position[1][1]+outCoords[1][1], MEP_Position[1][2]+outCoords[1][2],
 HOTSPOT2 MEP_Position[1][1]+outCoords[2][1], MEP_Position[1][2]+outCoords[2][2], HptsUnIDBeginForConnEnds
 HOTSPOT2 MEP_Position[1][1]+outCoords[3][1], MEP_Position[1][2]+outCoords[3][2], hceID_2
 
-IF ((MEP_cline_show and show_axis_and) or show_axis) AND MEP_BendAngle > 0.001 THEN		! -----> center line <----- !
+IF (show_axis_and or show_axis) AND MEP_BendAngle > 0.001 THEN		! -----> center line <----- !
 	PEN MEP_cline_pen
 	SET LINE_TYPE MEP_cline_type
 	ADD2 MEP_Position[1][1], MEP_Position[1][2]
@@ -760,6 +763,7 @@ ELSE
 	PEN gs_cont_pen
 	if not(show_axis) then PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0, PARAMETERS duct_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0, gs_detlevel_3D_m = gs_detlevel_2D_m
 	IF MEP_InsShow and show_isol and not(show_axis) THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS duct_show = 0, MEP_InsShow = 1, MEP_cline_show_3D = 0, gs_detlevel_3D_m = gs_detlevel_2D_m
+	IF ((MEP_cline_show and show_axis_and) or show_axis) THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS duct_show = 0, MEP_InsShow = 0, MEP_cline_show_3D = 1, gs_detlevel_3D_m = gs_detlevel_2D_m
 ENDIF
 
 
@@ -930,16 +934,14 @@ RETURN
 
 <Script_1D SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[
-ConID = 1
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_axis", show_axis)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_axis_and", show_axis_and)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_isol", show_isol)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_conventions", show_conventions)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_size", show_size)
-success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_3D_m", gs_detlevel_3D_m)
 success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_2D_m",gs_detlevel_2D_m)
-call "Показ_систем" PARAMETERS All RETURNED_PARAMETERS show_el, syst_name
-
+success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_3D_m", gs_detlevel_3D_m)
+call "Показ_систем" PARAMETERS All isMep=1, isEqp=0 RETURNED_PARAMETERS show_el, syst_name
 ! MEP_m_Duct_Bend
 ! Zsolt Feke/2007
 
@@ -991,7 +993,7 @@ IF MEP_BendStyleID = 1 THEN
 	flangeThick = MAX(MEP_NumConnectionData[1][15]*flangeA, MEP_NumConnectionData[2][15]*flangeB)
 	ductHalfWidth = MAX(ductHalfWidthA, ductHalfWidthB)
 	minBendRadius = ductHalfWidth + 0.001
-	if minBendRadius_n = 0 then
+	if abs(minBendRadius_n)<EPS then
 		VALUES "MEP_BendRadius" RANGE[minBendRadius, ]
 		IF MEP_BendRadius < minBendRadius THEN
 			MEP_BendRadius = minBendRadius
@@ -1211,15 +1213,12 @@ VALUES "MEP_VanesNum" RANGE [1,]
 ]]>
 </Script_VL>
 
-<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
-
 <Comment SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[]]>
 </Comment>
 
-<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+<ParamSection SectVersion="27" SectionFlags="0" SubIdent="0">
 	<ParamSectHeader>
-		<Version>26</Version>
 		<AutoHotspots>false</AutoHotspots>
 		<StatBits>
 			<STBit_FixSize/>
@@ -1231,7 +1230,6 @@ VALUES "MEP_VanesNum" RANGE [1,]
 		<LayFlags>65535</LayFlags>
 		<WDMirrorThickness>0</WDMirrorThickness>
 		<WDWallInset>0</WDWallInset>
-		<SymbolColor>0</SymbolColor>
 	</ParamSectHeader>
 	<Parameters>
 		<Length Name="A">
@@ -1359,28 +1357,28 @@ VALUES "MEP_VanesNum" RANGE [1,]
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>6</Value>
+			<Value>1</Value>
 		</PenColor>
 		<PenColor Name="gs_cont_pen">
 			<Description><![CDATA["Contour Pen"]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>7</Value>
+			<Value>1</Value>
 		</PenColor>
 		<PenColor Name="gs_fill_pen">
 			<Description><![CDATA["Fill Pen"]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>91</Value>
+			<Value>1</Value>
 		</PenColor>
 		<PenColor Name="gs_back_pen">
 			<Description><![CDATA["Fill Background Pen"]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>91</Value>
+			<Value>1</Value>
 		</PenColor>
 		<FillPattern Name="gs_fill_type">
 			<Description><![CDATA["Fill Type"]]></Description>
@@ -1537,14 +1535,6 @@ VALUES "MEP_VanesNum" RANGE [1,]
 				<AVal Column="2" Row="2">0</AVal>
 			</ArrayValues>
 		</Length>
-		<Boolean Name="show_el">
-			<Description><![CDATA[""]]></Description>
-			<Value>-1</Value>
-		</Boolean>
-		<String Name="syst_name">
-			<Description><![CDATA[""]]></Description>
-			<Value><![CDATA["!!!"]]></Value>
-		</String>
 		<Integer Name="ConToolType_1">
 			<Description><![CDATA[""]]></Description>
 			<Flags>
@@ -1552,6 +1542,257 @@ VALUES "MEP_VanesNum" RANGE [1,]
 			</Flags>
 			<Value>0</Value>
 		</Integer>
+
+		<!-- mep_par_h: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="mep_par_h">
+			<Description><![CDATA["Скрытые параметры"]]></Description>
+			<Flags>
+				<ParFlg_Hidden/>
+			</Flags>
+		</Title>
+		<Boolean Name="mun_elev">
+			<Description><![CDATA["Ручной этаж"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="n_elev">
+			<Description><![CDATA["Номер этажа"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<Length Name="otm_elem">
+			<Description><![CDATA["Отметка оси элемента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Length Name="otm_elem_abs">
+			<Description><![CDATA["Отметка оси элемента абсолютная"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<Boolean Name="show_el">
+			<Description><![CDATA["Показ элемента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Boolean>
+		<Integer Name="tConToolType">
+			<Description><![CDATA["Тип инструмента"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+				<ParFlg_Hidden/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+
+		<!-- mep_par_geom: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="mep_par_geom">
+			<Description><![CDATA["Геометрия"]]></Description>
+		</Title>
+		<Length Name="mep_th_elem">
+			<Description><![CDATA["Толщина стенки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Length>
+		<String Name="mep_razm">
+			<Description><![CDATA["Размер сечения (BxH), мм"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["250x200"]]></Value>
+		</String>
+		<String Name="mep_razm_abs">
+			<Description><![CDATA["Размер сечения (MAXxMIN), мм"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["250x200"]]></Value>
+		</String>
+		<RealNum Name="mep_vol">
+			<Description><![CDATA["Внутренний объём, куб.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>5.e-6</Value>
+		</RealNum>
+		<RealNum Name="mep_s_el">
+			<Description><![CDATA["Наружная площадь, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.09009</Value>
+		</RealNum>
+		<RealNum Name="mep_s_in">
+			<Description><![CDATA["Площадь сечения, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.05</Value>
+		</RealNum>
+
+		<!-- mep_par_spec: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="mep_par_spec">
+			<Description><![CDATA["Спецификация"]]></Description>
+		</Title>
+		<String Name="type_spec">
+			<Description><![CDATA["Тип спецификации"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="syst_name">
+			<Description><![CDATA["Имя системы"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA["!!!"]]></Value>
+		</String>
+		<String Name="spec_add_param">
+			<Description><![CDATA["Доп.параметры в смету"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="subpos">
+			<Description><![CDATA["Входит в сборку"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="naen">
+			<Description><![CDATA["Наименование"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="obozn">
+			<Description><![CDATA["Обозначение"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<Integer Name="eq_code">
+			<Description><![CDATA["Код"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</Integer>
+		<String Name="eq_plant">
+			<Description><![CDATA["Завод-изготовитель"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="komment">
+			<Description><![CDATA["Единица измерения"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<RealNum Name="kol_vo_spec">
+			<Description><![CDATA["Кол-во"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="ves">
+			<Description><![CDATA["Масса ед., кг."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="mep_m_ves">
+			<Description><![CDATA["Вес п.м., кг."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="mep_l">
+			<Description><![CDATA["Длина, м"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0.0001</Value>
+		</RealNum>
+		<RealNum Name="mep_s_ins">
+			<Description><![CDATA["Площадь изоляции, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<RealNum Name="mep_s_pokr">
+			<Description><![CDATA["Площадь покрытия, кв.м."]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<Material Name="mep_m_ins">
+			<Description><![CDATA["Материал изоляции"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Material>
+		<Material Name="mep_m_pokr">
+			<Description><![CDATA["Материал покрытия"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Material>
+		<RealNum Name="mep_ra">
+			<Description><![CDATA["Расход"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>0</Value>
+		</RealNum>
+		<String Name="mep_m_gost">
+			<Description><![CDATA["ГОСТ на материал"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
+		<String Name="mep_gost">
+			<Description><![CDATA["ГОСТ на элемент"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value><![CDATA[""]]></Value>
+		</String>
 	</Parameters>
 </ParamSection>
 

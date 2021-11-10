@@ -1,0 +1,383 @@
+﻿
+! Cable Ladder Bend
+
+
+EPS = 0.00001
+
+HptsUnIDBeginForConnEnds = 30000
+
+hceID_1 = HptsUnIDBeginForConnEnds+100
+hceID_2 = HptsUnIDBeginForConnEnds+200
+
+
+bendAngle = ABS(MEP_BendAngle)
+
+res = 48
+
+alpha_Res = 90/(INT(res/3))
+bendRes = INT(bendAngle/alpha_Res)+1*(((bendAngle/alpha_Res)-INT(bendAngle/alpha_Res))>=0.5)
+IF bendRes < 2 THEN bendRes = 2
+
+IF gs_detlevel_3D = `Простой` THEN
+	res = 8
+	IF bendAngle > 46 THEN
+		bendRes = 2
+	ELSE
+		bendRes = 1
+	ENDIF
+ENDIF
+
+DIM BendStyleStr_dim[2]
+	BendStyleStr_dim[1] = `Радиус Определен`
+	BendStyleStr_dim[2] = `Длина Перехвата Определена`
+
+DIM BendTypeStr_dim[]
+
+isBendTypeQuery = APPLICATION_QUERY ("MEPBEND", "GetBendTypeNames()", BendTypeStr_dim)
+
+DIM BendType2Str_dim[3]
+	BendType2Str_dim[1] = `Горизонтальный Отвод`
+	BendType2Str_dim[2] = `Наружный Отвод`
+	BendType2Str_dim[3] = `Внутренний Отвод`
+
+IF isBendTypeQuery THEN
+
+	! ********* set bend types to shape type *********
+
+	PUT 1, 3
+
+	DIM BendTypesStrToShapeTypes_dim[]
+	DIM BendTypesIDToShapeTypes_dim[]
+
+	BendTypesStrToShapeTypes_dim[1] = ""
+	BendTypesIDToShapeTypes_dim[1] = 0
+
+	FOR i = 1 TO NSP
+		id = GET(1)
+		BendTypesStrToShapeTypes_dim[i] = BendTypeStr_dim[id]
+		BendTypesIDToShapeTypes_dim[i] = id
+	NEXT i
+
+	IF setProgram THEN
+		isInvalidBendTypeID = 1
+		numBendTypesID = VARDIM1(BendTypesIDToShapeTypes_dim)
+		FOR i = 1 TO numBendTypesID
+			IF ABS(BendTypesIDToShapeTypes_dim[i] - MEP_BendTypeID) < EPS THEN
+				isInvalidBendTypeID = 0
+				i = numBendTypesID
+			ENDIF
+		NEXT i
+
+		IF isInvalidBendTypeID THEN
+			MEP_BendTypeID = 1
+			PARAMETERS MEP_BendTypeID = MEP_BendTypeID
+		ENDIF
+	ENDIF
+
+
+	! ********* control bend type and bend type ID *********
+
+	num = VARDIM1(BendTypesStrToShapeTypes_dim)
+	IF GLOB_MODPAR_NAME = "ConType_1" THEN
+		false = 1
+		FOR i = 1 TO num
+			IF MEP_BendType = BendTypesStrToShapeTypes_dim[i] THEN
+				false = 0
+				i = num
+			ENDIF
+		NEXT i
+		IF false THEN
+			MEP_BendType = BendTypesStrToShapeTypes_dim[1]
+			PARAMETERS MEP_BendType = MEP_BendType
+
+			MEP_BendTypeID = BendTypesIDToShapeTypes_dim[1]
+			PARAMETERS MEP_BendTypeID = MEP_BendTypeID
+		ENDIF
+	ENDIF
+	IF GLOB_MODPAR_NAME = "MEP_BendType" THEN
+		FOR i = 1 TO num
+			IF MEP_BendType = BendTypesStrToShapeTypes_dim[i] THEN
+				MEP_BendTypeID = BendTypesIDToShapeTypes_dim[i]
+				PARAMETERS MEP_BendTypeID = MEP_BendTypeID
+				i = num
+			ENDIF
+		NEXT i
+	ENDIF
+	IF MEP_BendType <> BendTypeStr_dim[MEP_BendTypeID] THEN
+		MEP_BendType = BendTypeStr_dim[MEP_BendTypeID]
+		PARAMETERS MEP_BendType = MEP_BendType
+
+		MEP_BendStyleID = MEP_BendAttrs[MEP_BendTypeID][1]
+		PARAMETERS MEP_BendStyleID = MEP_BendStyleID
+
+		MEP_HeelSegments = MEP_BendAttrs[MEP_BendTypeID][4]
+		PARAMETERS MEP_HeelSegments = MEP_HeelSegments
+
+		MEP_ThroatSegments = MEP_BendAttrs[MEP_BendTypeID][5]
+		PARAMETERS MEP_ThroatSegments = MEP_ThroatSegments
+	ENDIF
+
+
+		! ********* set bend type attributes *********
+
+	IF GLOB_MODPAR_NAME = "ConType_1" OR GLOB_MODPAR_NAME = "MEP_BendType" THEN
+		MEP_BendStyleID = MEP_BendAttrs[MEP_BendTypeID][1]
+		PARAMETERS MEP_BendStyleID = MEP_BendStyleID
+
+		MEP_HeelSegments = MEP_BendAttrs[MEP_BendTypeID][4]
+		PARAMETERS MEP_HeelSegments = MEP_HeelSegments
+
+		MEP_ThroatSegments = MEP_BendAttrs[MEP_BendTypeID][5]
+		PARAMETERS MEP_ThroatSegments = MEP_ThroatSegments
+	ENDIF
+
+	IF ABS(MEP_BendAttrs[MEP_BendTypeID][2]-MEP_BendAttrs[MEP_BendTypeID][3]) < EPS THEN
+		MEP_BendAngle = MEP_BendAttrs[MEP_BendTypeID][2]
+		PARAMETERS MEP_BendAngle = MEP_BendAngle
+		LOCK "MEP_BendAngle"
+	ELSE
+		VALUES "MEP_BendAngle" RANGE (MEP_BendAttrs[MEP_BendTypeID][2], MEP_BendAttrs[MEP_BendTypeID][3])
+	ENDIF
+
+	IF MEP_BendAttrs[MEP_BendTypeID][7] < EPS THEN HIDEPARAMETER "MEP_Vanes", "MEP_VanesNum"
+
+	IF ABS(MEP_BendAttrs[MEP_BendTypeID][6] - 1) < EPS THEN
+		MEP_HeelSegments = MEP_ThroatSegments
+		PARAMETERS MEP_HeelSegments = MEP_HeelSegments
+	ENDIF
+
+
+	! ********* control bend style and bend style ID *********
+
+	IF GLOB_MODPAR_NAME = "MEP_BendStyle" THEN
+		FOR i = 1 TO 2
+			IF MEP_BendStyle = BendStyleStr_dim[i] THEN
+				MEP_BendStyleID = i
+				PARAMETERS MEP_BendStyleID = MEP_BendStyleID
+			ENDIF
+		NEXT i
+	ENDIF
+	IF MEP_BendStyle <> BendStyleStr_dim[MEP_BendStyleID] THEN
+		MEP_BendStyle = BendStyleStr_dim[MEP_BendStyleID]
+		PARAMETERS MEP_BendStyle = MEP_BendStyle
+	ENDIF
+ENDIF
+
+
+						! ------------------ !
+						! --- Properties --- !
+						! ------------------ !
+
+cableTrayWidth			= MEP_NumConnectionData[1][12]
+cableTrayHeight			= MEP_NumConnectionData[1][13]
+cableTrayHalfWidth		= MEP_NumConnectionData[1][12]/2
+cableTrayHalfHeight		= MEP_NumConnectionData[1][13]/2
+connectedA				= MEP_NumConnectionData[1][18]
+connectedB				= MEP_NumConnectionData[2][18]
+
+IF MEP_BendStyleID = 1 THEN
+	minBendRadius = cableTrayHalfWidth+0.01*(ConWidth_1/0.10)
+	VALUES "MEP_BendRadius" RANGE[minBendRadius, ]
+	IF MEP_BendRadius < minBendRadius THEN
+		MEP_BendRadius = minBendRadius
+		PARAMETERS MEP_BendRadius = MEP_BendRadius
+	ENDIF
+
+	ConThroatLength = (MEP_BendRadius-MEP_NumConnectionData[1][12]/2)*TAN(bendAngle/2)
+	ConThroatLength_1 = ConThroatLength
+	PARAMETERS ConThroatLength_1 = ConThroatLength_1
+	ConThroatLength_2 = ConThroatLength
+	PARAMETERS ConThroatLength_2 = ConThroatLength_2
+ENDIF
+
+cableCarrierBendStraightLengthA = 0
+cableCarrierBendStraightLengthB = 0
+IF MEP_BendStyleID = 2 THEN
+	VALUES "ConThroatLength_1" RANGE(0, ]
+	VALUES "ConThroatLength_2" RANGE(0, ]
+
+	IF SGN(ConThroatLength_1-ConThroatLength_2) = -1 THEN cableCarrierBendStraightLengthB = ABS(ConThroatLength_1-ConThroatLength_2)
+	IF SGN(ConThroatLength_1-ConThroatLength_2) = 1 THEN cableCarrierBendStraightLengthA = ABS(ConThroatLength_1-ConThroatLength_2)
+	ConThroatLength = MIN(ConThroatLength_1, ConThroatLength_2)
+	MEP_BendRadius = ConThroatLength/TAN(bendAngle/2)+MEP_NumConnectionData[1][12]/2
+	PARAMETERS MEP_BendRadius = MEP_BendRadius
+	LOCK "MEP_BendRadius"
+ENDIF
+
+heelLength = (MEP_BendRadius+cableTrayHalfWidth)*TAN(bendAngle/2)
+IF MEP_HeelSegments > 2 THEN
+	heelRadius = heelLength/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(MEP_HeelSegments-2))))
+	heelSegmentLength = 2*heelRadius*SIN(bendAngle/(2*(MEP_HeelSegments-2)))
+ELSE
+	heelSegmentLength = heelLength
+ENDIF
+
+throatLength = (MEP_BendRadius-cableTrayHalfWidth)*TAN(bendAngle/2)
+IF MEP_ThroatSegments > 2 THEN
+	throatRadius = throatLength/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(MEP_ThroatSegments-2))))
+	throatSegmentLength = 2*throatRadius*SIN(bendAngle/(2*(MEP_ThroatSegments-2)))
+ELSE
+	throatSegmentLength = throatLength
+ENDIF
+
+
+						! ---------------- !
+						! --- Z vector --- !
+						! ---------------- !
+
+dZx = -MEP_Position[3][2]*MEP_Position[2][3]+MEP_Position[3][3]*MEP_Position[2][2]
+dZy = -MEP_Position[3][3]*MEP_Position[2][1]+MEP_Position[3][1]*MEP_Position[2][3]
+dZz = -MEP_Position[3][1]*MEP_Position[2][2]+MEP_Position[3][2]*MEP_Position[2][1]
+
+
+						! ------------------------ !
+						! --- 3 points of bend --- !
+						! ------------------------ !
+
+! --- x,y,z coordinates of 1st point ---
+
+PointAX = 0
+PointAY = 0
+PointAZ = 0
+
+! --- x,y,z coordinates of middle point ---
+
+PointMX = cableCarrierBendStraightLengthA+MEP_BendRadius*(TAN(bendAngle/2))
+PointMY = 0
+PointMZ = 0
+
+! --- x,y,z coordinates of 2nd point ---
+
+PointBX = cableCarrierBendStraightLengthA+MEP_BendRadius*SIN(bendAngle)+cableCarrierBendStraightLengthB*COS(bendAngle)
+PointBY = MEP_BendRadius-MEP_BendRadius*COS(bendAngle)+cableCarrierBendStraightLengthB*SIN(bendAngle)
+PointBZ = 0
+
+vectorX = COS(bendAngle)
+vectorY = SIN(bendAngle)
+vectorZ = 0
+
+
+						! ------------------- !
+						! --- coordinates --- !
+						! ------------------- !
+
+! --- Building of Transformational Matrix
+
+DIM MatrixT[3][3]
+
+MatrixT[1][1] = MEP_Position[2][1]
+MatrixT[1][2] = MEP_Position[2][2]
+MatrixT[1][3] = MEP_Position[2][3]
+
+MatrixT[2][1] = MEP_Position[3][1]
+MatrixT[2][2] = MEP_Position[3][2]
+MatrixT[2][3] = MEP_Position[3][3]
+
+MatrixT[3][1] = dZx
+MatrixT[3][2] = dZy
+MatrixT[3][3] = dZz
+
+
+! --- Input Coordinates
+
+
+
+PUT PointAX, PointAY, PointAZ
+PUT PointMX, PointMY, PointMZ
+PUT PointBX, PointBY, PointBZ
+
+IF MEP_ThroatSegments = 1 AND MEP_HeelSegments = 1 OR MEP_HeelSegments = 1 THEN
+	IF cableCarrierBendStraightLengthA THEN
+		PUT PointAX+cableCarrierBendStraightLengthA/2, PointAY, PointAZ
+		PUT PointAX+cableCarrierBendStraightLengthA, PointAY, PointAZ
+	ENDIF
+
+	pnum = 10+2*(cableCarrierBendStraightLengthA > 0)+2*(cableCarrierBendStraightLengthB > 0)
+	alpha = 0: alpha_i = bendAngle/(pnum-1)
+	FOR i = 1 TO pnum
+		PUT cableCarrierBendStraightLengthA+MEP_BendRadius*SIN(alpha), MEP_BendRadius-MEP_BendRadius*COS(alpha), 0
+		alpha = alpha + alpha_i
+	NEXT i
+	IF cableCarrierBendStraightLengthB THEN
+		PUT cableCarrierBendStraightLengthA+MEP_BendRadius*SIN(bendAngle)+(cableCarrierBendStraightLengthB/2)*COS(bendAngle), MEP_BendRadius-MEP_BendRadius*COS(bendAngle)+(cableCarrierBendStraightLengthB/2)*SIN(bendAngle), 0
+	ENDIF
+ENDIF
+
+IF MEP_HeelSegments > 2 THEN
+	segments = MEP_HeelSegments
+	Len = MEP_BendRadius*TAN(bendAngle/2)
+	rr = Len/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(segments-2))))
+	segmentLen = 2*rr*SIN(bendAngle/(2*(segments-2)))
+
+	PUT cableCarrierBendStraightLengthA+segmentLen, 0, 0
+	alpha = 0
+	FOR i = 1 TO segments-2
+		alpha = alpha + bendAngle/(MEP_HeelSegments-2)
+		PUT cableCarrierBendStraightLengthA+segmentLen+rr*SIN(alpha), rr-rr*COS(alpha), 0
+	NEXT i
+	pnum = segments-1
+ENDIF
+
+PUT vectorX, vectorY, vectorZ
+
+Coordinates = NSP/3
+
+DIM inCoords[20][3]
+
+FOR cnum = 1 TO Coordinates
+	inCoords[cnum][1] = GET(1)
+	inCoords[cnum][2] = GET(1)
+	inCoords[cnum][3] = GET(1)
+NEXT cnum
+
+
+! --- the Matrix Operation, what makes the Output-Coordinates
+
+DIM outCoords[20][3]
+
+FOR cnum = 1 TO Coordinates
+	outCoords[cnum][1] = inCoords[cnum][1]*MatrixT[1][1]+inCoords[cnum][2]*MatrixT[2][1]+inCoords[cnum][3]*MatrixT[3][1]
+	outCoords[cnum][2] = inCoords[cnum][1]*MatrixT[1][2]+inCoords[cnum][2]*MatrixT[2][2]+inCoords[cnum][3]*MatrixT[3][2]
+	outCoords[cnum][3] = inCoords[cnum][1]*MatrixT[1][3]+inCoords[cnum][2]*MatrixT[2][3]+inCoords[cnum][3]*MatrixT[3][3]
+NEXT cnum
+
+
+						! --------------------- !
+						! --- Set Side Flag --- !
+						! --------------------- !
+
+MEP_EmptySideID = 1
+IF ABS(ABS(MEP_Position[2][3]) - 1) < EPS THEN
+	IF SGN(MEP_Position[2][3]) = 1 THEN
+		MEP_EmptySideID = 4
+		PARAMETERS MEP_EmptySideID = MEP_EmptySideID
+	ELSE
+		MEP_EmptySideID = 2
+		PARAMETERS MEP_EmptySideID = MEP_EmptySideID
+	ENDIF
+ELSE
+	IF ABS(dZz) < EPS THEN
+		IF SGN(MEP_Position[3][3]) = 1 THEN
+			MEP_EmptySideID = 2
+		ELSE
+			MEP_EmptySideID = 4
+		ENDIF
+	ENDIF
+	IF ABS(MEP_Position[3][3]) < EPS THEN
+		IF SGN(dZz) = 1 THEN
+			MEP_EmptySideID = 1
+		ELSE
+			MEP_EmptySideID = 3
+		ENDIF
+	ENDIF
+	PARAMETERS MEP_EmptySideID = MEP_EmptySideID
+ENDIF
+
+
+						! ---------------------------- !
+						! --- Top and Bottom Level --- !
+						! ---------------------------- !
+
+z = MEP_Position[1][3] + MEP_Position[2][3]*(MEP_BendRadius*TAN(MEP_BendAngle/2))
+PARAMETERS ac_toplevel 		= z
+PARAMETERS ac_bottomlevel 	= z

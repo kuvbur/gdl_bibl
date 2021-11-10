@@ -1,0 +1,213 @@
+﻿
+! Cooling Tower
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+IF useSysMat THEN MainBoxMaterial = sMat
+MATERIAL MainBoxMaterial
+
+PEN gs_cont_pen
+RESOL res
+
+operatedMode = 0
+addStatus = 0
+IF GLOB_CONTEXT > 40 AND GLOB_CONTEXT < 50 THEN
+	operatedMode = 1
+	addStatus = 3
+ENDIF
+
+
+IF mbShow THEN
+
+					! --- HOTSPOTS --- !
+
+	unID = 1
+	HOTSPOT A/2, 	B/2, 	0, unID: unID=unID+1
+	HOTSPOT A/2, 	-B/2, 0, unID: unID=unID+1
+	HOTSPOT -A/2, -B/2, 0, unID: unID=unID+1
+	HOTSPOT -A/2, B/2, 	0, unID: unID=unID+1
+	HOTSPOT 0, 0, ZZYZX, unID: unID=unID+1
+	HOTSPOT A/2, 	B/2, 	ZZYZX-cylindHeight, unID: unID=unID+1
+	HOTSPOT A/2, 	-B/2, ZZYZX-cylindHeight, unID: unID=unID+1
+	HOTSPOT -A/2, -B/2, ZZYZX-cylindHeight, unID: unID=unID+1
+	HOTSPOT -A/2, B/2, 	ZZYZX-cylindHeight, unID: unID=unID+1
+
+
+					! --- MAIN BOX --- !
+
+	IF gs_detlevel_3D_m = 2 THEN
+
+		ADD -A/2+edgeThick, -B/2+edgeThick, 0
+			BLOCK A-edgeThick*2, B-edgeThick*2, toeHeight
+		DEL 1
+
+		ADD -A/2, -B/2, toeHeight
+			BLOCK A, B, edgeHeight
+		DEL 1
+
+		 num = MAX(1, INT(midHeight/2.50))
+		 midSHeight = midHeight/num
+		FOR j = 1 TO num
+			ADDz toeHeight+edgeHeight+midSHeight*(j-1)
+			ROTx 90
+			ADDz -B/2+edgeThick+0.10
+			PRISM_ 5, B-edgeThick*2-0.20,
+				A/2-0.25, 0, 15,
+				A/2-edgeThick, midSHeight-0.15, 15,
+				-A/2+edgeThick, midSHeight-0.15, 15,
+				-A/2+0.25, 0, 15,
+				A/2-0.25, 0, -1
+			DEL 2
+
+			ROTz 90
+			ROTx 90
+			ADDz -A/2+edgeThick
+			PRISM_ 9, A-edgeThick*2,
+				B/2-edgeThick, 0, 15,
+				B/2-edgeThick, midSHeight, 15,
+				-B/2+edgeThick, midSHeight, 15,
+				-B/2+edgeThick, 0, 15,
+				-B/2+edgeThick+0.10, 0, 15,
+				-B/2+edgeThick+0.10, midSHeight-0.15, 15,
+				B/2-edgeThick-0.10, midSHeight-0.15, 15,
+				B/2-edgeThick-0.10, 0, 15,
+				B/2-edgeThick, 0, -1
+			DEL 4
+		NEXT j
+
+		 num = 5
+		IF A > 6 THEN num = INT((A-edgeThick*2)/1.1)
+		 dist = (A-edgeThick*2)/num
+		FOR i = 1 TO num-1
+			ADD -A/2+edgeThick+dist*i, -B/2+edgeThick, toeHeight+edgeHeight
+			PRISM_ 4, midHeight,
+				0.06, 0, 15,
+				0, -edgeThick, 15,
+				-0.06, 0, 15,
+				0.06, 0, -1
+			DEL 1
+
+			ADD -A/2+edgeThick+dist*i, B/2-edgeThick, toeHeight+edgeHeight
+			PRISM_ 4, midHeight,
+				0.06, 0, 15,
+				0, edgeThick, 15,
+				-0.06, 0, 15,
+				0.06, 0, -1
+			DEL 1
+		NEXT i
+
+		ADD -A/2, -B/2, toeHeight+edgeHeight+midHeight
+			BLOCK A, B, edgeHeight
+		DEL 1
+
+		ADDz ZZYZX-cylindHeight
+			EXTRUDE 2, 0, 0, cylindHeight, addStatus+16+32,
+				0, 0, 901,
+				cylindRadius, 360, 4001
+		ADDz cylindHeight
+			IF operatedMode < EPS THEN GOSUB 500
+		DEL 2
+
+	ELSE
+		ADD -A/2+edgeThick, -B/2+edgeThick, 0
+			BLOCK A-edgeThick*2, B-edgeThick*2, toeHeight
+		DEL 1
+
+		ADD -A/2, -B/2, toeHeight
+			BLOCK A, B, edgeHeight*2+midHeight
+		DEL 1
+
+		ADDz ZZYZX-cylindHeight
+			CYLIND cylindHeight, cylindRadius
+		DEL 1
+	ENDIF
+ELSE
+	ADD  -A/2, -B/2, ZZYZX/2
+	RECT A, B
+	DEL 1
+ENDIF
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+		ui_current_con = ui_current_con,
+		MEP_NumberConnections = MEP_NumberConnections,
+		MEP_NumConnectionData = gs_Connections,
+		gs_AddConnections = gs_AddConnections,
+		cShow3D = 1,
+		gs_ConMat = MainBoxMaterial,
+		MEP_InsShow = 0,
+		MEP_cline_show_3D = 0,
+		gs_cont_pen = gs_cont_pen,
+		ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 15,
+		ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = 15,
+		ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConEdit_3 = 12
+END
+
+
+500:
+	 SegmetAng = 360/SegmentsNum
+	 SegmetHalfAng = SegmetAng/2
+	 TotalInsideRad = Rad-HalfThick/TAN(SegmetHalfAng)-Thick
+	 DivisionInsideDist = (TotalInsideRad-Thick*(DivisionNum-1))/DivisionNum
+
+	ROTz SegmetHalfAng
+
+	PUT 0, 0, 901
+	PUT Rad, 360, 4001
+
+	alpha = 0
+	FOR i = 1 TO SegmentsNum
+		InsideDist = DivisionInsideDist
+		CenterPointPosX = (HalfThick/SIN(SegmetHalfAng))*COS(alpha)
+		CenterPointPosY = (HalfThick/SIN(SegmetHalfAng))*SIN(alpha)
+		FOR j = 1 TO DivisionNum
+			InsideDist = InsideDist+Thick*(j>1)
+			PointOnArcEndPosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)-(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+			PointOnArcEnd2PosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)+(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+			PointOnArcEndPosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)+(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+			PointOnArcEnd2PosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)-(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+
+			IF j = 1 THEN
+				PUT CenterPointPosX, CenterPointPosY, 1
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, 1
+				PUT 0, 0, 901
+				PUT PointOnArcEnd2PosX, PointOnArcEnd2PosY, 3001
+				PUT CenterPointPosX, CenterPointPosY, -1
+			ELSE
+				InsideDist = InsideDist+DivisionInsideDist
+				OPointOnArcEndPosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)-(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+				OPointOnArcEnd2PosX = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*COS(alpha)+(InsideDist*SIN(SegmetHalfAng))*SIN(alpha)
+				OPointOnArcEndPosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)+(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+				OPointOnArcEnd2PosY = (HalfThick/SIN(SegmetHalfAng)+InsideDist*COS(SegmetHalfAng))*SIN(alpha)-(InsideDist*SIN(SegmetHalfAng))*COS(alpha)
+
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, 1
+				PUT 0, 0, 901
+				PUT PointOnArcEnd2PosX, PointOnArcEnd2PosY, 3001
+				PUT OPointOnArcEnd2PosX, OPointOnArcEnd2PosY, 1
+				PUT 0, 0, 901
+				PUT OPointOnArcEndPosX, OPointOnArcEndPosY, 3001
+				PUT PointOnArcEndPosX, PointOnArcEndPosY, -1
+			ENDIF
+		NEXT j
+		 alpha = alpha+SegmetAng
+	NEXT i
+
+
+	POLY_ NSP/3,
+
+		GET(NSP)
+
+	DEL 1
+RETURN

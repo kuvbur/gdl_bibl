@@ -1,0 +1,209 @@
+﻿
+! Cable Tray Reducer
+
+
+EPS = 0.00001
+
+HptsUnIDBeginForConnEnds = 30000
+
+hceID_1 = HptsUnIDBeginForConnEnds+100
+hceID_2 = HptsUnIDBeginForConnEnds+200
+
+DIM ReducerTypeStr_dim[3]
+	ReducerTypeStr_dim[1] = `Посередине`
+	ReducerTypeStr_dim[2] = `По Левому Краю`
+	ReducerTypeStr_dim[3] = `По Правому Краю`
+
+
+						! ------------------ !
+						! --- Properties --- !
+						! ------------------ !
+
+cableTrayWidthA			= MEP_NumConnectionData[1][12]
+cableTrayWidthB			= MEP_NumConnectionData[2][12]
+cableTrayHeight			= MEP_NumConnectionData[1][13]
+cableTrayHalfWidthA		= MEP_NumConnectionData[1][12]/2
+cableTrayHalfWidthB		= MEP_NumConnectionData[2][12]/2
+cableTrayHalfHeight		= MEP_NumConnectionData[1][13]/2
+cableTrayStraightLength = (MEP_StraightLength - MEP_TransitionLength)/2
+
+IF GLOB_MODPAR_NAME = "MEP_ReducerTypeID" THEN GOTO 100
+
+IF SGN(MEP_offset_y) = 0 AND MEP_ReducerTypeID > 1 THEN
+	MEP_ReducerTypeID = 1
+	PARAMETERS MEP_ReducerTypeID = MEP_ReducerTypeID
+ENDIF
+
+IF GLOB_MODPAR_NAME = "MEP_ReducerType" THEN
+	FOR i = 1 TO 3
+		IF MEP_ReducerType = ReducerTypeStr_dim[i] THEN
+			MEP_ReducerTypeID = i
+			PARAMETERS MEP_ReducerTypeID = MEP_ReducerTypeID
+			i = 3
+		ENDIF
+	NEXT i
+
+	GOTO 100
+ENDIF
+
+fullOffset = ABS(cableTrayHalfWidthA-cableTrayHalfWidthB)
+
+IF SGN(MEP_offset_y) = 1 THEN
+	MEP_ReducerTypeID = 2
+	PARAMETERS MEP_ReducerTypeID = MEP_ReducerTypeID
+ENDIF
+IF SGN(MEP_offset_y) = -1 THEN
+	MEP_ReducerTypeID = 3
+	PARAMETERS MEP_ReducerTypeID = MEP_ReducerTypeID
+ENDIF
+
+100:
+IF ABS(MEP_ReducerTypeID - 1) < EPS THEN
+	MEP_offset_y = 0
+ELSE
+	IF cableTrayHalfWidthA > cableTrayHalfWidthB THEN
+		IF ABS(MEP_ReducerTypeID - 2) < EPS THEN
+			MEP_offset_y = cableTrayHalfWidthA-cableTrayHalfWidthB
+		ENDIF
+		IF ABS(MEP_ReducerTypeID - 3) < EPS THEN
+			MEP_offset_y = -cableTrayHalfWidthA+cableTrayHalfWidthB
+		ENDIF
+	ELSE
+		IF ABS(MEP_ReducerTypeID - 2) < EPS THEN
+			MEP_offset_y = -cableTrayHalfWidthA+cableTrayHalfWidthB
+		ENDIF
+		IF ABS(MEP_ReducerTypeID - 3) < EPS THEN
+			MEP_offset_y = cableTrayHalfWidthA-cableTrayHalfWidthB
+		ENDIF
+	ENDIF
+ENDIF
+PARAMETERS MEP_offset_y = MEP_offset_y
+
+IF MEP_ReducerType <> ReducerTypeStr_dim[MEP_ReducerTypeID] THEN
+	MEP_ReducerType = ReducerTypeStr_dim[MEP_ReducerTypeID]
+	PARAMETERS MEP_ReducerType = MEP_ReducerType
+ENDIF
+
+
+						! ---------------- !
+						! --- Z vector --- !
+						! ---------------- !
+
+dZx = -MEP_Position[3][2]*MEP_Position[2][3]+MEP_Position[3][3]*MEP_Position[2][2]
+dZy = -MEP_Position[3][3]*MEP_Position[2][1]+MEP_Position[3][1]*MEP_Position[2][3]
+dZz = -MEP_Position[3][1]*MEP_Position[2][2]+MEP_Position[3][2]*MEP_Position[2][1]
+
+
+					!!! +++ Transformational Matrix +++ !!!
+
+DIM tMatrix[3][3]
+
+tMatrix[1][1] = MEP_Position[2][1]
+tMatrix[1][2] = MEP_Position[2][2]
+tMatrix[1][3] = MEP_Position[2][3]
+
+tMatrix[2][1] = MEP_Position[3][1]
+tMatrix[2][2] = MEP_Position[3][2]
+tMatrix[2][3] = MEP_Position[3][3]
+
+tMatrix[3][1] = dZx
+tMatrix[3][2] = dZy
+tMatrix[3][3] = dZz
+
+
+						!!! +++ Input Coordinates +++ !!!
+
+PUT ConPosX_1, ConPosY_1, ConPosZ_1
+PUT gs_Connections[1][4], gs_Connections[1][5], gs_Connections[1][6]
+PUT gs_Connections[1][7], gs_Connections[1][8], gs_Connections[1][9]
+
+PUT ConPosX_2, ConPosY_2, ConPosZ_2
+PUT gs_Connections[2][4], gs_Connections[2][5], gs_Connections[2][6]
+PUT gs_Connections[2][7], gs_Connections[2][8], gs_Connections[2][9]
+
+PUT ConPosX_1+cableTrayStraightLength, ConPosY_1, ConPosZ_1
+PUT ConPosX_2-cableTrayStraightLength, ConPosY_2, ConPosZ_2
+
+Coordinates = NSP/3
+
+DIM inCoords[20][3]
+
+FOR cnum = 1 TO Coordinates
+	inCoords[cnum][1] = GET(1)
+	inCoords[cnum][2] = GET(1)
+	inCoords[cnum][3] = GET(1)
+NEXT cnum
+
+
+! --- the Matrix Operation, what make the Output-Coordinates
+
+DIM outCoords[20][3]
+
+FOR cnum = 1 TO Coordinates
+	outCoords[cnum][1] = inCoords[cnum][1]*tMatrix[1][1]+inCoords[cnum][2]*tMatrix[2][1]+inCoords[cnum][3]*tMatrix[3][1]
+	outCoords[cnum][2] = inCoords[cnum][1]*tMatrix[1][2]+inCoords[cnum][2]*tMatrix[2][2]+inCoords[cnum][3]*tMatrix[3][2]
+	outCoords[cnum][3] = inCoords[cnum][1]*tMatrix[1][3]+inCoords[cnum][2]*tMatrix[2][3]+inCoords[cnum][3]*tMatrix[3][3]
+NEXT cnum
+
+
+						! ------------------------------ !
+						! --- 2 points of cable tray --- !
+						! ------------------------------ !
+
+! --- x,y,z coordinates of 1st point ---
+
+rx1 = MEP_Position[1][1]
+ry1 = MEP_Position[1][2]
+rz1 = MEP_Position[1][3]
+
+
+! --- x,y,z coordinates of 2nd point ---
+
+rx2 = rx1+MEP_Position[2][1]*MEP_StraightLength
+ry2 = ry1+MEP_Position[2][2]*MEP_StraightLength
+rz2 = rz1+MEP_Position[2][3]*MEP_StraightLength
+
+dx = rx2-rx1
+dy = ry2-ry1
+dz = rz2-rz1
+
+IF ABS(dx) < EPS THEN dx = 0
+IF ABS(dy) < EPS THEN dy = 0
+IF ABS(dz) < EPS THEN dz = 0
+
+
+! --- dirAngOnXYPlane of the route ---
+
+IF ABS(ABS(MEP_Position[2][3])-1) < EPS THEN
+	 arCosVal = MEP_Position[3][1]
+	IF arCosVal < -1 THEN arCosVal = -1
+	IF arCosVal > 1 THEN arCosVal = 1
+	dirAngOnXYPlane = ACS(arCosVal)-90
+	IF SGN(MEP_Position[3][2]) = -1 THEN dirAngOnXYPlane = 180-dirAngOnXYPlane
+ELSE
+	IF ABS(dx)>EPS OR ABS(dy)>EPS THEN
+		arCosVal = dx/(SQR(dx^2+dy^2))
+		IF arCosVal < -1 THEN arCosVal = -1
+		IF arCosVal > 1 THEN arCosVal = 1
+		dirAngOnXYPlane = ACS(arCosVal)
+		IF SGN(dy) = -1 THEN dirAngOnXYPlane = 360-dirAngOnXYPlane
+	ENDIF
+ENDIF
+
+
+						! --------------------- !
+						! --- Set Side Flag --- !
+						! --------------------- !
+
+MEP_EmptySideID = 1
+IF SGN(dZz) = -1 THEN MEP_EmptySideID = 3
+PARAMETERS MEP_EmptySideID = MEP_EmptySideID
+
+
+						! ---------------------------- !
+						! --- Top and Bottom Level --- !
+						! ---------------------------- !
+
+z = MEP_Position[1][3] + MEP_Position[2][3]*MEP_StraightLength/2
+PARAMETERS ac_toplevel 		= z
+PARAMETERS ac_bottomlevel 	= z

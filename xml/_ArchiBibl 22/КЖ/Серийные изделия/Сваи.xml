@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="D2E2B96A-6F52-475F-AE65-4911F564E392" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="38">
+<Symbol IsArchivable="false" IsPlaceable="true" MainGUID="D2E2B96A-6F52-475F-AE65-4911F564E392" MigrationValue="Normal" Owner="1196638531" Signature="1196644685" Version="43">
 <Ancestry SectVersion="1" SectionFlags="0" SubIdent="0" Template="false">
 	<MainGUID>F938E33A-329D-4A36-BE3E-85E126820996</MainGUID>
 	<MainGUID>103E8D2C-8230-42E1-9597-46F84CCE28C0</MainGUID>
@@ -15,12 +15,36 @@ hotspot -size/2,-size/2,0
 hotspot size/2,-size/2,0
 hotspot size/2,size/2,0
 hotspot -size/2,size/2,0
-е = length
+e = length
 length = length - razb
 material gs_ifc_mat
 if seriaSV<>"Индивидуальная" then
+	if razb>EPS and show_razb then
+		pmat = 0
+		bSucceed = request{2} ("Building_Material_info", mat_razb, "gs_bmat_surface", pmat)
+		group "razb"
+			building_material mat_razb
+			SECT_ATTRS{2} 1, line_razb
+			MODEL SURFACE
+			addz razb
+			rotx 180
+			cprism_ mat,mat,mat,
+				5,razb,
+				-size/2,-size/2,15,
+				size/2,-size/2,15,
+				size/2,size/2,15,
+				-size/2,size/2,15,
+				-size/2,-size/2,-1
+		endgroup
+		placegroup "razb"
+	endif
+	pmat = 0
+	bSucceed = request{2} ("Building_Material_info", mat, "gs_bmat_surface", pmat)
 	group "A"
-	addz -length+h1
+	MODEL SOLID
+	building_material mat
+	SECT_ATTRS{2} gs_sec_pen, 1
+	addz -length
 	rotx 180
 	pyramid 4,h1,21,
 		-size/2,-size/2,0,
@@ -29,9 +53,11 @@ if seriaSV<>"Индивидуальная" then
 		-size/2,size/2,0
 	endgroup
 	group "B"
-	addz -length+h1
-	cprism_ gs_ifc_mat,gs_ifc_mat,gs_ifc_mat,
-		5,length-h1,
+	MODEL SOLID
+	addz -length
+	building_material mat
+	cprism_ pmat,pmat,pmat,
+		5,length,
 		-size/2,-size/2,15,
 		size/2,-size/2,15,
 		size/2,size/2,15,
@@ -40,7 +66,9 @@ if seriaSV<>"Индивидуальная" then
 	endgroup
 	placegroup addgroup ("A","B")
 else
-	material gs_ifc_mat
+	MODEL SOLID
+	building_material mat
+	SECT_ATTRS{2} gs_sec_pen, 1
 	rotx 180	
 	CYLIND length, size/2
 endif
@@ -88,7 +116,9 @@ hotspot2 0,0
 if seriaSV<>"Индивидуальная" then
 	POLY2_B 4, 1+2+4,gs_fill_pen, gs_back_pen, -size/2,-size/2,1, size/2,-size/2,1, size/2,size/2,1, -size/2,size/2,1
 else
-	CIRCLE2 0, 0, size/2
+	put 0,0,900+1
+	put size/2,360,4000+1
+	POLY2_B NSP/3, 1+2+4,gs_fill_pen, gs_back_pen, get(NSP)
 endif
 
 line_type 1
@@ -99,13 +129,23 @@ if mark then
 	HOTSPOT2 dist, 0, unID, dista, 1+128: unID=unID+1
 	HOTSPOT2 dist, dista, unID, dista, 2: unID=unID+1
 	HOTSPOT2 dist, -1, unID, dista, 3: unID=unID+1
-
 	HOTSPOT2 0, dista, unID, dist, 1+128: unID=unID+1
 	HOTSPOT2 dist, dista, unID, dist, 2: unID=unID+1
 	HOTSPOT2 -1, dista, unID, dist, 3: unID=unID+1
 	add2 dist,dista
 	rot2 turn
-	if texttt="ID" then texttt=GLOB_ID else texttt=marka
+	if texttt="ID" then 
+		texttt=GLOB_ID
+	else
+		if texttt="Марка" then
+			texttt=marka
+		else
+			parValue = ""
+			querystring = "GetParameter(" + texttt + ")"
+			n = APPLICATION_QUERY ("OwnCustomParameters", querystring, parValue)
+			texttt=parValue
+		endif
+	endif
 	text2 0,0,texttt
 	del top
 endif
@@ -147,16 +187,9 @@ values "seriaSV"  serDan,"Индивидуальная","Квадратная"
 if seriaSV<>"Серия 1.011.1-10 вып. 8" then hideparameter "lenup","lendown"
 values "font" fonts_stated
 values "fonth" 1,1.5,2,2.5,3,3.5,4,4.5,5,custom
-values "texttt" "ID",marka
-parameters ac_bottomlevel = 0
-parameters ac_toplevel = length
-
-if abs_proj then
-	parameters AbsZem = GLOB_PROJECT_ALTITUDE
-	LOCK "AbsZem"
-endif
-
-!values "textmark" texttt     !,custom
+parameters ac_bottomlevel = -(length+hl)
+parameters ac_toplevel = razb
+values "texttt" "ID", "Марка", CUSTOM
 values "KonLine" "Видимая","Невидимая"
 
 values "krat_txt" 50 / 1000, 10 / 1000, 5 / 1000, 1 / 1000
@@ -174,20 +207,19 @@ else
 	parameters koord_y = koord_1
 	parameters koord_x = koord_2
 endif
-parameters OtnOstr = symb_pos_z - length + razb
+parameters OtnOstr = symb_pos_z - length + razb - hl
 parameters AbsOstr = AbsZem + OtnOstr
 parameters OtnOg = symb_pos_z  
 parameters AbsOg = AbsZem + OtnOg
 
-
-
 if seriaSV="Квадратная" then
 	HIDEPARAMETER "sechen", "typeSV", "marka"
 else
-	parameters naen = marka
-	parameters obozn = seriaSV
+	if seriaSV<>"Индивидуальная" and seriaSV<>"Квадратная" then
+		parameters naen = marka
+		parameters obozn = seriaSV
+	endif
 endif
-
 
 if seriaSV="Серия 1.011.1-10 вып. 3" then
 	parameters typeSV="Сваи с центр. армир"
@@ -432,7 +464,6 @@ if seriaSV="Серия 3.015-5/86 вып 2" then
 	endif
 endif
 if seriaSV="Индивидуальная" then
-	hideparameter "h1","sechen"
 	values "typeSV" "Свая индивидуальная.",custom
 	values "marka" "Свая инд. буронаб. без уширен. основ.","Свая квадратная",custom
 	values "size" .400,custom
@@ -457,15 +488,12 @@ endif
 ]]>
 </Script_VL>
 
-<!-- GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT ===== GDL SCRIPT -->
-
 <Comment SectVersion="20" SectionFlags="0" SubIdent="0">
 <![CDATA[]]>
 </Comment>
 
-<ParamSection SectVersion="26" SectionFlags="0" SubIdent="0">
+<ParamSection SectVersion="27" SectionFlags="0" SubIdent="0">
 	<ParamSectHeader>
-		<Version>26</Version>
 		<AutoHotspots>false</AutoHotspots>
 		<StatBits>
 			<STBit_FixSize/>
@@ -477,7 +505,6 @@ endif
 		<LayFlags>65535</LayFlags>
 		<WDMirrorThickness>0</WDMirrorThickness>
 		<WDWallInset>0</WDWallInset>
-		<SymbolColor>0</SymbolColor>
 	</ParamSectHeader>
 	<Parameters>
 		<RealNum Name="AbsZem">
@@ -487,10 +514,6 @@ endif
 			</Flags>
 			<Value>0</Value>
 		</RealNum>
-		<Boolean Name="abs_proj">
-			<Description><![CDATA["Взять из глобальной переменной"]]></Description>
-			<Value>0</Value>
-		</Boolean>
 		<Length Name="razb">
 			<Description><![CDATA["Высота разбивки"]]></Description>
 			<Value>0.2</Value>
@@ -533,7 +556,7 @@ endif
 			<Flags>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>0</Value>
+			<Value>-3</Value>
 		</Length>
 		<Length Name="ac_toplevel">
 			<Description><![CDATA["Уровень вверху"]]></Description>
@@ -541,7 +564,7 @@ endif
 			<Flags>
 				<ParFlg_Hidden/>
 			</Flags>
-			<Value>3</Value>
+			<Value>0.2</Value>
 		</Length>
 		<String Name="seriaSV">
 			<Description><![CDATA["Серия сваи"]]></Description>
@@ -611,28 +634,28 @@ endif
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>-3.68</Value>
+			<Value>-9.9</Value>
 		</RealNum>
 		<RealNum Name="OtnOstr">
 			<Description><![CDATA["Отметка острия сваи отн."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>-3.68</Value>
+			<Value>-9.9</Value>
 		</RealNum>
 		<RealNum Name="AbsOg">
 			<Description><![CDATA["Отметка оголовка сваи после разбивки абс."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>-0.88</Value>
+			<Value>-7.1</Value>
 		</RealNum>
 		<RealNum Name="OtnOg">
 			<Description><![CDATA["Отметка оголовка сваи после разбивки отн."]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
-			<Value>-0.88</Value>
+			<Value>-7.1</Value>
 		</RealNum>
 
 		<!-- all_spec: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
@@ -771,7 +794,7 @@ endif
 			<Value>0</Value>
 		</Boolean>
 		<String Name="texttt">
-			<Description><![CDATA["Варианты текста"]]></Description>
+			<Description><![CDATA["Варианты текста (параметры со знаками %%)"]]></Description>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -779,7 +802,6 @@ endif
 		</String>
 		<String Name="Shrift">
 			<Description><![CDATA["Шрифт"]]></Description>
-			<Fix/>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -787,7 +809,6 @@ endif
 		</String>
 		<RealNum Name="Shrift_razm">
 			<Description><![CDATA["Размер шрифта"]]></Description>
-			<Fix/>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -795,7 +816,6 @@ endif
 		</RealNum>
 		<Integer Name="Shrift_tip">
 			<Description><![CDATA["Тип (обычный, курсив, жирный)"]]></Description>
-			<Fix/>
 			<Flags>
 				<ParFlg_Child/>
 			</Flags>
@@ -822,10 +842,16 @@ endif
 			</Flags>
 			<Value>0</Value>
 		</RealNum>
+
+		<!-- _sp1_A: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
+
+		<Title Name="_sp1_A">
+			<Description><![CDATA["Данные свай"]]></Description>
+		</Title>
 		<String Name="serDan">
 			<Description><![CDATA["Данные серий"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="6" SecondDimension="0">
 				<AVal Row="1"><![CDATA["Серия 1.011.1-10 вып. 3"]]></AVal>
@@ -839,7 +865,7 @@ endif
 		<String Name="mar1">
 			<Description><![CDATA["Марки данные1**"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="7" SecondDimension="0">
 				<AVal Row="1"><![CDATA["СЦ30.30-АIIIв"]]></AVal>
@@ -854,7 +880,7 @@ endif
 		<RealNum Name="dan1">
 			<Description><![CDATA["Данные марки 1"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="7" SecondDimension="3">
 				<AVal Column="1" Row="1">3000</AVal>
@@ -883,7 +909,7 @@ endif
 		<String Name="mar2">
 			<Description><![CDATA["Марки данные 2**"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="55" SecondDimension="0">
 				<AVal Row="1"><![CDATA["C30.30-1"]]></AVal>
@@ -946,7 +972,7 @@ endif
 		<RealNum Name="Dan2">
 			<Description><![CDATA["Данные марки 2"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="55" SecondDimension="4">
 				<AVal Column="1" Row="1">3000</AVal>
@@ -1174,7 +1200,7 @@ endif
 		<String Name="mar2400">
 			<Description><![CDATA["Марки данные 21**"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="60" SecondDimension="0">
 				<AVal Row="1"><![CDATA["С40.40-1"]]></AVal>
@@ -1242,7 +1268,7 @@ endif
 		<RealNum Name="dan2400">
 			<Description><![CDATA["Данные марки 2400"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="60" SecondDimension="4">
 				<AVal Column="1" Row="1">4000</AVal>
@@ -1490,7 +1516,7 @@ endif
 		<String Name="mar3">
 			<Description><![CDATA["Марка 3**"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="59" SecondDimension="0">
 				<AVal Row="1"><![CDATA["С40.35-1"]]></AVal>
@@ -1557,7 +1583,7 @@ endif
 		<RealNum Name="dan3">
 			<Description><![CDATA["Данные марки 3"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="59" SecondDimension="4">
 				<AVal Column="1" Row="1">4000</AVal>
@@ -1801,7 +1827,7 @@ endif
 		<String Name="mar4300">
 			<Description><![CDATA["Марка 4 (2 секции) 300"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="11" SecondDimension="0">
 				<AVal Row="1"><![CDATA["C140.30-Cв"]]></AVal>
@@ -1820,7 +1846,7 @@ endif
 		<RealNum Name="dan4300">
 			<Description><![CDATA["Данные марки 4 (2 секции)300"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="11" SecondDimension="6">
 				<AVal Column="1" Row="1">14000</AVal>
@@ -1894,7 +1920,7 @@ endif
 		<String Name="mar4350">
 			<Description><![CDATA["Марка 4 (2 секции) 350"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="11" SecondDimension="0">
 				<AVal Row="1"><![CDATA["C140.35-Cв"]]></AVal>
@@ -1913,7 +1939,7 @@ endif
 		<RealNum Name="dan4350">
 			<Description><![CDATA["Данные марки 4 (2 секции)350"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="11" SecondDimension="6">
 				<AVal Column="1" Row="1">14000</AVal>
@@ -1987,7 +2013,7 @@ endif
 		<String Name="mar4400">
 			<Description><![CDATA["Марка 4 (2 секции) 400"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="11" SecondDimension="0">
 				<AVal Row="1"><![CDATA["C140.40-Cв"]]></AVal>
@@ -2006,7 +2032,7 @@ endif
 		<RealNum Name="dan4400">
 			<Description><![CDATA["Данные марки 4 (2 секции)400"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="11" SecondDimension="2">
 				<AVal Column="1" Row="1">2.26</AVal>
@@ -2036,7 +2062,7 @@ endif
 		<String Name="mar5300">
 			<Description><![CDATA["Марка 5** напряг 300"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="6" SecondDimension="0">
 				<AVal Row="1"><![CDATA["СН90.30-А-IIIв"]]></AVal>
@@ -2050,7 +2076,7 @@ endif
 		<RealNum Name="dan5300">
 			<Description><![CDATA["Данные марки 5 напряг 300"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="6" SecondDimension="3">
 				<AVal Column="1" Row="1">9000</AVal>
@@ -2076,7 +2102,7 @@ endif
 		<String Name="mar5350">
 			<Description><![CDATA["Марка 5** напряг 350"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="6" SecondDimension="0">
 				<AVal Row="1"><![CDATA["СН90.35-АIIIв"]]></AVal>
@@ -2090,7 +2116,7 @@ endif
 		<RealNum Name="dan5350">
 			<Description><![CDATA["Данные марки 5 напряг 350"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="6" SecondDimension="3">
 				<AVal Column="1" Row="1">25</AVal>
@@ -2116,7 +2142,7 @@ endif
 		<String Name="mar6300">
 			<Description><![CDATA["Марка 6** 300"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="8" SecondDimension="0">
 				<AVal Row="1"><![CDATA["C6-30 ТК1"]]></AVal>
@@ -2132,7 +2158,7 @@ endif
 		<RealNum Name="dan6300">
 			<Description><![CDATA["Данные марки 6  300"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="8" SecondDimension="3">
 				<AVal Column="1" Row="1">6000</AVal>
@@ -2164,7 +2190,7 @@ endif
 		<String Name="mar6350">
 			<Description><![CDATA["Марка 6** 350"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="20" SecondDimension="0">
 				<AVal Row="1"><![CDATA["C6-35 ТК1"]]></AVal>
@@ -2192,7 +2218,7 @@ endif
 		<RealNum Name="dan6350">
 			<Description><![CDATA["Данные марки 6  350"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="5" SecondDimension="4">
 				<AVal Column="1" Row="1">6000</AVal>
@@ -2220,7 +2246,7 @@ endif
 		<String Name="mar6400">
 			<Description><![CDATA["Марка 6** 400"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="12" SecondDimension="0">
 				<AVal Row="1"><![CDATA["C10-40 ТК1"]]></AVal>
@@ -2240,7 +2266,7 @@ endif
 		<RealNum Name="dan6400">
 			<Description><![CDATA["Данные марки 6  400"]]></Description>
 			<Flags>
-				<ParFlg_Hidden/>
+				<ParFlg_Child/>
 			</Flags>
 			<ArrayValues FirstDimension="3" SecondDimension="3">
 				<AVal Column="1" Row="1">10000</AVal>
@@ -2316,10 +2342,37 @@ endif
 			<Fix/>
 			<Flags>
 				<ParFlg_Child/>
-				<ParFlg_Hidden/>
 			</Flags>
 			<Value>0.005</Value>
 		</Length>
+		<Boolean Name="show_razb">
+			<Description><![CDATA["Показ разбиваемой части"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</Boolean>
+		<BuildingMaterial Name="mat">
+			<Description><![CDATA["Материал сваи"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>1</Value>
+		</BuildingMaterial>
+		<BuildingMaterial Name="mat_razb">
+			<Description><![CDATA["Материал разбиваемой части"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>30</Value>
+		</BuildingMaterial>
+		<LineType Name="line_razb">
+			<Description><![CDATA["Линия контура разбивки"]]></Description>
+			<Flags>
+				<ParFlg_Child/>
+			</Flags>
+			<Value>21</Value>
+		</LineType>
 		<PenColor Name="MarkPen">
 			<Description><![CDATA["Перо маркировки"]]></Description>
 			<Flags>
@@ -2332,6 +2385,7 @@ endif
 			<Fix/>
 			<Flags>
 				<ParFlg_Child/>
+				<ParFlg_Hidden/>
 			</Flags>
 			<Value>53</Value>
 		</Material>
@@ -2479,15 +2533,6 @@ endif
 			</Flags>
 			<Value>21</Value>
 		</LineType>
-		<String Name="Shrift_fille">
-			<Description><![CDATA["Имя стиля"]]></Description>
-			<Fix/>
-			<Flags>
-				<ParFlg_Child/>
-				<ParFlg_Hidden/>
-			</Flags>
-			<Value><![CDATA["Откл"]]></Value>
-		</String>
 
 		<!-- label_sp: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
 
@@ -2532,16 +2577,6 @@ endif
 			</Flags>
 			<Value>0</Value>
 		</Boolean>
-
-		<!-- shrift_sp0: PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK ===== PARAMETER BLOCK -->
-
-		<Title Name="shrift_sp0">
-			<Description><![CDATA["Шрифт"]]></Description>
-			<Fix/>
-			<Flags>
-				<ParFlg_Hidden/>
-			</Flags>
-		</Title>
 	</Parameters>
 </ParamSection>
 

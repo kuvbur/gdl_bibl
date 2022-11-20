@@ -1,0 +1,398 @@
+﻿
+LOD3D_SIMPLEPLANE = 1
+LOD3D_DETAILEDPLANE = 2
+LOD3D_SIMPLEPANEL = 3
+LOD3D_DETAILEDPANEL = 4
+
+dim shutLampoly[]
+shutLampoly[1]	= 0
+posShutLam		= 0
+lengthShutLam	= 0
+
+endSegmentDist = 0
+
+! --- Parameters ---------------------------------------------------------------
+
+plateThk	= 0.003								! Thickness of one piece of shutter
+plateDist	= gs_shutLam_segmentWidth - 0.01	! Distance between pieces of shutter
+boxWallThk	= 0.005								! Depth of box wall
+
+unID = 10200
+
+bCurvedWall = 0
+if abs (WIDO_ORIG_DIST) > EPS then bCurvedWall = 1
+
+addx -(rightCornerCorr - leftCornerCorr) / 2
+
+if gs_shutLam_iPlacement = SHUTLAM_ONFACADE | gs_shutLam_iPlacement = SHUTLAM_TOWINDOW then
+	if lod3D_sunShade = LOD3D_SIMPLEPANEL | lod3D_sunShade = LOD3D_DETAILEDPANEL then
+		gosub "fixedOnWindowOrFacade_detailed"
+	else
+		gosub "fixedOnWindowOrFacade_simple"
+	endif
+else
+	if lod3D_sunShade = LOD3D_SIMPLEPANEL | lod3D_sunShade = LOD3D_DETAILEDPANEL then
+		gosub "fixedBehindFacade"
+	else
+		end		! Do not draw anything in simple!
+	endif
+endif
+
+del 1
+! -----------------------------------------------------------------------------
+end posShutLam,
+	lengthShutLam,
+	shutLampoly
+! -----------------------------------------------------------------------------
+
+
+! -----------------------------------------------------------------------------
+"fixedOnWindowOrFacade_simple":
+! -----------------------------------------------------------------------------
+
+	add -boxLength / 2, heightWithoutBox, -EPS
+
+	material gs_shutLam_matBox
+
+	poly_ 4,
+		0,			0,						1,
+		boxLength,	0,						1,
+		boxLength,	gs_shutLam_boxHeight,	1,
+		0,			gs_shutLam_boxHeight,	1
+
+	del 1
+
+return
+
+
+! -----------------------------------------------------------------------------
+"fixedOnWindowOrFacade_detailed":
+! -----------------------------------------------------------------------------
+
+	if gs_shutLam_iPlacement = SHUTLAM_ONFACADE then
+		addz -gs_shutLam_distFromWall
+		posShutLam = -gs_shutLam_distFromWall
+	else
+		addz WIDO_SILL
+		posShutLam = WIDO_SILL
+	endif
+
+	gosub "Draw_Box"
+
+	if gs_shutLam_bRail then gosub "Draw_Rail"
+
+	gosub "Draw_Lamelles"
+
+	del 1
+
+
+return
+
+
+! -----------------------------------------------------------------------------
+"fixedBehindFacade":
+! -----------------------------------------------------------------------------
+
+	addz gs_shutLam_boxWidth + gs_shutLam_coverWidth
+	posShutLam = gs_shutLam_boxWidth + gs_shutLam_coverWidth
+
+	gosub "Draw_Box"
+
+	if gs_shutLam_bRail then gosub "Draw_Rail"
+
+	gosub "Draw_Lamelles"
+
+	del 1
+return
+
+
+! -----------------------------------------------------------------------------
+"Draw_Box":
+! -----------------------------------------------------------------------------
+
+	material gs_shutLam_matBox
+
+	add -boxLength/2, heightWithoutBox, 0
+	roty 90
+
+	if (gs_shutLam_iPlacement <> SHUTLAM_ONFACADE | gs_shutLam_distFromWall < -EPS) & \
+		((gs_shutLam_boxHeight+gs_shutLam_distFromHead) > EPS) then
+
+
+		material WALL_MAT_EDGE
+		wallniche 5, 1, 2+64+128,
+			0, 0, 1, boxLength,
+			0,						-gs_shutLam_distFromHead,		15,
+			gs_shutLam_boxWidth,	-gs_shutLam_distFromHead,		15,
+			gs_shutLam_boxWidth,	 gs_shutLam_boxHeight,			15,
+			0,						 gs_shutLam_boxHeight,			15,
+			0,						-gs_shutLam_distFromHead,		-1
+
+		material gs_shutLam_matBox
+
+		if gs_shutLam_cutWallBehind & gs_shutLam_iPlacement = SHUTLAM_BEHIND then
+			sect_fill	gs_sunShade_insFillType, gs_sunShade_insFillBackPen,
+						gs_sunShade_insFillPen, gs_sunShade_cutLinesPen
+
+			if gs_shutLam_iPlacement = SHUTLAM_TOWINDOW then
+				cutBackDist = WALL_THICKNESS - WIDO_SILL
+			else
+				cutBackDist = WALL_THICKNESS - gs_shutLam_coverWidth - gs_shutLam_boxWidth
+			endif
+
+			if cutBackDist > EPS then
+				if (abs(WALL_INCL) > EPS) then
+					wallIsLeft		= (SYMB_ROTANGLE > EPS) exor WIDO_REVEAL_SIDE
+					bFactor = SYMB_MIRRORED exor WIDO_REVEAL_SIDE exor wallIsLeft
+					incFactor = not(bFactor) - bFactor
+					incX = incFactor * tan(WALL_INCL)
+
+					inclDiff =  -(boxLength / 2) * incX
+				else
+					inclDiff =  0
+				endif
+
+				if WIDO_REVEAL_SIDE then
+					matSide = WALL_MAT_B
+				else
+					matSide = WALL_MAT_A
+				endif
+				matEdge = WALL_MAT_EDGE
+
+				rotx -90
+
+				material matEdge
+				wallniche 5, 1, 2+64+128,
+					0, 0, 1, gs_shutLam_boxHeight,
+					0,								 0,			2+8+16+64,
+					0,								-boxLength,	2+8+16+64,
+					-cutBackDist - 0.1 + inclDiff,	-boxLength,	2+8+16+64,
+					-cutBackDist - 0.1 - inclDiff,	 0,			2+8+16+64,
+					0,								 0,			-1
+
+
+				cprism_ matEdge, matEdge, matSide,
+					5, gs_shutLam_boxHeight,
+					0,							 0,			15+64,
+					0,							-boxLength,	15+64,
+					-cutBackDist + inclDiff,	-boxLength,	8,
+					-cutBackDist - inclDiff,	 0,			13,
+					0,							 0,			-1
+
+				del 1
+			endif
+		endif
+	endif
+
+	sect_fill	gs_sunShade_cutFillType, gs_sunShade_cutFillBackPen,
+				gs_sunShade_cutFillPen, gs_sunShade_cutLinesPen
+
+	material gs_shutLam_matBox
+
+	if gs_shutLam_bOpenBox then
+		for i = 1 to 2
+			if i = 1 then
+				stat = 11
+			else
+				stat = 14
+			endif
+
+			prism_ 7, boxWallThk,
+				0,									0,						stat,
+				boxWallThk,							0,						13,
+				gs_shutLam_boxWidth - boxWallThk,	0,						stat-2,
+				gs_shutLam_boxWidth,				0,						stat,
+				gs_shutLam_boxWidth,				gs_shutLam_boxHeight,	stat,
+				0,									gs_shutLam_boxHeight,	stat,
+				0,									0,						-1
+
+			addz boxLength - boxWallThk
+		next i
+		del 2
+
+		addz boxWallThk
+
+		prism_ 9, boxLength - 2 * boxWallThk,
+			0,									0,									10,
+			boxWallThk,							0,									15,
+			boxWallThk,							gs_shutLam_boxHeight - boxWallThk,	15,
+			gs_shutLam_boxWidth - boxWallThk,	gs_shutLam_boxHeight - boxWallThk,	15,
+			gs_shutLam_boxWidth - boxWallThk,	0,									10,
+			gs_shutLam_boxWidth,				0,									10,
+			gs_shutLam_boxWidth,				gs_shutLam_boxHeight,				10,
+			0,									gs_shutLam_boxHeight,				10,
+			0,									0,									-1
+
+
+		del 1
+
+	else
+
+		prism_ 5, boxLength,
+			0,						0,						15,
+			gs_shutLam_boxWidth,	0,						15,
+			gs_shutLam_boxWidth,	gs_shutLam_boxHeight,	15,
+			0,						gs_shutLam_boxHeight,	15,
+			0,						0,						-1
+	endif
+
+	if gs_shutLam_iPlacement <> SHUTLAM_ONFACADE then
+		lengthShutLam = boxLength
+		if gs_shutLam_bRail then
+			shutLampoly[1] = 0
+			shutLampoly[2] = cutHeightWithoutBox
+			shutLampoly[3] = 0
+			shutLampoly[4] = cutHeightWithoutBox + gs_shutLam_boxHeight
+			shutLampoly[5] = -gs_shutLam_boxWidth
+			shutLampoly[6] = cutHeightWithoutBox + gs_shutLam_boxHeight
+			shutLampoly[7] = -gs_shutLam_boxWidth
+			shutLampoly[8] = cutHeightWithoutBox
+			shutLampoly[9] = -gs_shutLam_boxWidth/2 - sideRailWidth/2
+			shutLampoly[10] = cutHeightWithoutBox
+			shutLampoly[11] = -gs_shutLam_boxWidth/2 - sideRailWidth/2
+			shutLampoly[12] = 0
+			shutLampoly[13] = -gs_shutLam_boxWidth/2 + sideRailWidth/2
+			shutLampoly[14] = 0
+			shutLampoly[15] = -gs_shutLam_boxWidth/2 + sideRailWidth/2
+			shutLampoly[16] = cutHeightWithoutBox
+			shutLampoly[17] = 0
+			shutLampoly[18] = cutHeightWithoutBox
+		else
+			shutLampoly[1] = 0
+			shutLampoly[2] = cutHeightWithoutBox
+			shutLampoly[3] = 0
+			shutLampoly[4] = cutHeightWithoutBox + gs_shutLam_boxHeight
+			shutLampoly[5] = -gs_shutLam_boxWidth
+			shutLampoly[6] = cutHeightWithoutBox + gs_shutLam_boxHeight
+			shutLampoly[7] = -gs_shutLam_boxWidth
+			shutLampoly[8] = cutHeightWithoutBox
+			shutLampoly[9] = 0
+			shutLampoly[10] = cutHeightWithoutBox
+		endif
+	endif
+
+	wallDist = gs_casingThkOnFacade + gs_shutLam_distFromWall
+	if gs_shutLam_iPlacement = SHUTLAM_ONFACADE & wallDist > EPS then
+		for i = 1 to 2
+			if wallDist > 3 * boxWallThk & gs_shutLam_boxHeight > 0.025 then
+				prism_ 7, 0.025,
+					 0,											gs_shutLam_boxHeight,							15,
+					-wallDist,					gs_shutLam_boxHeight,							15,
+					-wallDist,					gs_shutLam_boxHeight - 2 * boxWallThk - 0.025,	15,
+					-wallDist + 2 * boxWallThk,	gs_shutLam_boxHeight - 2 * boxWallThk - 0.025,	15,
+					-wallDist + 2 * boxWallThk,	gs_shutLam_boxHeight - 2 * boxWallThk,			15,
+					 0,											gs_shutLam_boxHeight - 2 * boxWallThk,			15,
+					 0,											gs_shutLam_boxHeight,							-1
+			else
+				prism_ 5, 0.025,
+					 0,							gs_shutLam_boxHeight,					15,
+					-wallDist,	gs_shutLam_boxHeight,					15,
+					-wallDist,	gs_shutLam_boxHeight - 2 * boxWallThk,	15,
+					 0,							gs_shutLam_boxHeight - 2 * boxWallThk,	15,
+					 0,							gs_shutLam_boxHeight,					-1
+
+			endif
+			addz boxLength - 0.025
+		next i
+		del 2
+	endif
+
+	del 2
+
+return
+
+! -----------------------------------------------------------------------------
+"Draw_Rail":
+! -----------------------------------------------------------------------------
+
+	material gs_shutLam_matBox
+
+	for i = 1 to 2
+		rotx -90
+		add boxLength/2, gs_shutLam_boxWidth/2 - sideRailThk/2, 0
+		prism_ 5, heightWithoutBox,
+			 0,				0,				15,
+			-sideRailWidth,	0,				15,
+			-sideRailWidth,	sideRailThk,	15,
+			 0,				sideRailThk,	15,
+			 0,				0,				-1
+
+		if gs_shutLam_iPlacement = SHUTLAM_ONFACADE then
+			prism_ 5, sideRailThk,
+				 0,				 0,																	15,
+				-sideRailWidth,	 0,																	15,
+				-sideRailWidth,	-gs_shutLam_boxWidth/2 + sideRailThk/2 - gs_shutLam_distFromWall,	15,
+				 0,				-gs_shutLam_boxWidth/2 + sideRailThk/2 - gs_shutLam_distFromWall,	15,
+				 0,				 0,																	-1
+		endif
+		del 2
+
+		mulx -1
+	next i
+	del 2
+
+return
+
+! -----------------------------------------------------------------------------
+"Draw_Lamelles":
+! -----------------------------------------------------------------------------
+
+	if gs_shutter_closedHeight < endSegmentDist then gs_shutter_closedHeight = endSegmentDist
+
+	add 0, heightWithoutBox, -gs_shutLam_boxWidth/2
+	hotspot 0, 0, 0, unID, gs_shutter_closedHeight, 1 + 128, gs_shutter_opHeight : unID = unID + 1
+	hotspot 0, -gs_shutter_closedHeight, 0, unID, gs_shutter_closedHeight, 2, gs_shutter_opHeight : unID = unID + 1
+	hotspot 0, 1, 0, unID, gs_shutter_closedHeight, 3, gs_shutter_opHeight : unID = unID + 1
+	del 1
+
+	segmentLength = boxLength - max(sideRailWidth, boxWallThk * gs_shutLam_bOpenBox) * 2
+	endSegmentDist = plateThk*3
+
+	gs_shutter_closedHeight = gs_shutter_closedHeight + (gs_shutLam_bOpenBox * gs_shutLam_boxHeight * 2/3)
+	numberOfPlates = max(0, int((gs_shutter_closedHeight - endSegmentDist) / plateDist))
+
+	if numberOfPlates > 0 then plateDist = (gs_shutter_closedHeight - endSegmentDist)/ numberOfPlates
+
+	add segmentLength/2, heightWithoutBox - plateDist/2 + (gs_shutLam_bOpenBox * gs_shutLam_boxHeight * 2/3), -gs_shutLam_boxWidth/2
+	rotx 90
+	roty -90
+	material gs_shutLam_matLam
+
+	if numberOfPlates > 0 then
+		for i = 1 to numberOfPlates
+			rotz gs_shutLam_rotation
+
+			prism_ 9, segmentLength,
+				plateThk/2, gs_shutLam_segmentWidth/2, 15,
+				plateThk/2-plateThk, gs_shutLam_segmentWidth/2-gs_shutLam_segmentWidth/3, 79,
+				plateThk/2-plateThk, -gs_shutLam_segmentWidth/2+gs_shutLam_segmentWidth/3, 79,
+				plateThk/2, -gs_shutLam_segmentWidth/2, 15,
+			   -plateThk/2, -gs_shutLam_segmentWidth/2, 15,
+			   -plateThk/2-plateThk, -gs_shutLam_segmentWidth/2+gs_shutLam_segmentWidth/3, 79,
+			   -plateThk/2-plateThk,  gs_shutLam_segmentWidth/2-gs_shutLam_segmentWidth/3, 79,
+			   -plateThk/2, gs_shutLam_segmentWidth/2, 15,
+				plateThk/2, gs_shutLam_segmentWidth/2, -1
+
+			del 1
+
+			addx plateDist
+		next i
+	endif
+
+	addx -plateDist/2 + plateThk * 3 - plateThk/2
+
+	prism_ 9, segmentLength,
+		-plateThk, gs_shutLam_segmentWidth/2-plateThk/2, 15,
+		-plateThk, -gs_shutLam_segmentWidth/2+plateThk/2, 15,
+		 0, -gs_shutLam_segmentWidth/2+plateThk/2, 15,
+		 0, -gs_shutLam_segmentWidth/2, 15,
+		 plateThk/2, -gs_shutLam_segmentWidth/2, 15,
+		 plateThk/2,  gs_shutLam_segmentWidth/2, 15,
+		 0,  gs_shutLam_segmentWidth/2, 15,
+		 0,  gs_shutLam_segmentWidth/2-plateThk/2, 15,
+		-plateThk, gs_shutLam_segmentWidth/2-plateThk/2, -1
+
+	del 4 + numberOfPlates
+
+return
+

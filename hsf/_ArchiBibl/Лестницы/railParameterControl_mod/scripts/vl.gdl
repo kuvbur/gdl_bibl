@@ -1,0 +1,167 @@
+﻿! ==============================================================================
+! railParameterControl_m
+! ==============================================================================
+
+
+EPS = 0.0001
+
+
+dim stDetail[3]
+	stDetail[1] = `Откл.`
+	stDetail[2] = `Простой`
+	stDetail[3] = `Детальный`
+
+values "gs_detlevel_3D" stDetail[3], stDetail[2], stDetail[1]
+values "gs_detlevel_3D_m" 2, 1, 0
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+	for hi = 1 to vardim1(stDetail)
+		if gs_detlevel_3D = stDetail[hi] then
+			gs_detlevel_3D_m = hi - 1
+		endif
+	next hi
+	parameters gs_detlevel_3D_m = gs_detlevel_3D_m
+else
+	gs_detlevel_3D = stDetail[max(1, min(gs_detlevel_3D_m+1, vardim1(stDetail)))]
+	parameters gs_detlevel_3D = gs_detlevel_3D
+endif
+
+
+! ==============================================================================
+! General Dimensions
+! ==============================================================================
+
+dim stRailType[3]
+	stRailType[1] = `Прямой`
+	stRailType[2] = `Дл.кривой и радиус`
+	stRailType[3] = `Угол и радиус`
+
+values "ptyp" stRailType
+values "ptyp_m" 1, 2, 3
+
+if GLOB_MODPAR_NAME = "ptyp" then
+	for nRailType = 1 to vardim1(stRailType)
+		if ptyp = stRailType[nRailType] then
+			ptyp_m = nRailType
+		endif
+	next nRailType
+	parameters ptyp_m = ptyp_m
+else
+	ptyp = stRailType[max(1, min(ptyp_m, vardim1(stRailType)))]
+	parameters ptyp = ptyp
+endif
+
+
+dim stInclinationMethod[3]
+	stInclinationMethod[1] = `Нет наклона`
+	stInclinationMethod[2] = `Вертикально`
+	stInclinationMethod[3] = `Перпендикулярно`
+
+if ptyp_m = 1 then
+	values "rom" stInclinationMethod
+	values "iInclinationMethod" 1, 2, 3
+
+	if GLOB_MODPAR_NAME = "rom" then
+		for nInclinationMethod = 1 to vardim1(stInclinationMethod)
+			if rom = stInclinationMethod[nInclinationMethod] then
+				iInclinationMethod = nInclinationMethod
+			endif
+		next nInclinationMethod
+		parameters iInclinationMethod = iInclinationMethod
+	else
+		rom = stInclinationMethod[max(1, min(iInclinationMethod, vardim1(stInclinationMethod)))]
+		parameters rom = rom
+	endif
+	rom_m = 1
+	if iInclinationMethod = 3 then rom_m = 2
+	parameters rom_m = rom_m
+else
+	values "rom" stInclinationMethod[1], stInclinationMethod[2]
+	values "iInclinationMethod" 1, 2
+
+	if GLOB_MODPAR_NAME = "rom" then
+		for nInclinationMethod = 1 to vardim1(stInclinationMethod)
+			if rom = stInclinationMethod[nInclinationMethod] then
+				iInclinationMethod = nInclinationMethod
+			endif
+		next nInclinationMethod
+		parameters iInclinationMethod = iInclinationMethod
+	else
+		rom = stInclinationMethod[max(1, min(iInclinationMethod, vardim1(stInclinationMethod)))]
+		parameters rom = rom
+	endif
+	rom_m = 1
+	parameters rom_m = rom_m
+endif
+
+
+dim stMeasurementMethod[2]
+	stMeasurementMethod[1] = `Вертикально`
+	stMeasurementMethod[2] = `Перпендикулярно наклону`
+
+if ptyp_m <> 1 or abs(ani)<EPS then
+	values "rmm" stMeasurementMethod[1]
+	rmm_m = 1
+	parameters rmm_m = rmm_m
+	if abs(ani) < EPS then
+		lrah = lra
+		parameters lrah = lrah
+	endif
+else
+	if iInclinationMethod = 1 then
+		values "rmm" stMeasurementMethod[1]
+		rmm_m = 1
+		parameters rmm_m = rmm_m
+	else
+		if rom_m = 2 then
+			values "rmm" stMeasurementMethod[2]
+			rmm_m = 2
+			parameters rmm_m = rmm_m
+		else
+			values "rmm" stMeasurementMethod
+			values "rmm_m" 1, 2
+			if GLOB_MODPAR_NAME = "rmm" then
+				rmm_m = 1
+				if rmm = stMeasurementMethod[2] then rmm_m = 2
+				parameters rmm_m = rmm_m
+			else
+				rmm = stMeasurementMethod[1]
+				if rmm_m = 2 then rmm = stMeasurementMethod[2]
+				parameters rmm = rmm
+			endif
+		endif
+	endif
+
+	if rom_m <> 1 then		! inclined types
+		if GLOB_MODPAR_NAME = "lrah" then
+			lra = lrah*cos(ani)
+			parameters lra = lra
+		else
+			lrah = lra/cos(ani)
+			parameters lrah = lrah
+		endif
+	else
+		if GLOB_MODPAR_NAME = "lrah" then
+			lra = lrah
+			parameters lra = lra
+		else
+			lrah = lra
+			parameters lrah = lrah
+		endif
+	endif
+endif
+
+if ptyp_m = 3 then
+	lock "lrah"
+endif
+
+if iInclinationMethod = 1 then
+	lock "ani"
+	hideparameter "ani"
+endif
+
+max_strgh_dist = (((1-0.2)/(100-1))*(rb-1))+0.2
+if GLOB_MODPAR_NAME = "rb" then
+	res = int((2*rb*pi)/max_strgh_dist)
+	parameters res = res
+endif

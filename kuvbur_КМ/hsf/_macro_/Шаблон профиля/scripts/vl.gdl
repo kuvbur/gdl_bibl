@@ -1,0 +1,475 @@
+CALL "Общий шаблон сталь" parameters all
+n = REQUEST ("Name_of_main", "", main_name)
+is_new = (STRSTR(main_name,"универс")<>0)
+if not(is_new) then
+	dim param_name_out_t[] : i=1
+	param_name_out_t[1] = "!!Профиль "+name_prof+"!!"
+	i=i+1 : param_name_out_t[i] = "naen - наименование"
+	i=i+1 : param_name_out_t[i] = "obozn - обозначение"
+	i=i+1 : param_name_out_t[i] = "tip_profile - сечение"
+	i=i+1 : param_name_out_t[i] = "mater - марка стали"
+	parameters param_name_out = param_name_out_t
+	dim param_temp_out_t[] : i=0
+	i=i+1 : param_temp_out_t[i] = "%subpos%"
+	i=i+1 : param_temp_out_t[i] = "%naen%"
+	i=i+1 : param_temp_out_t[i] = "%tip_profile% по %obozn% %mater%"
+	parameters param_temp_out = param_temp_out_t
+endif
+
+values{2} "type_axis" itype_axis, ttype_axis
+values "gs_detlevel_3D" `Простой`,`Детальный`,`Откл.`
+values "gs_resol" range [10,)
+if gs_detlevel_3D=`Простой` then lock "gs_resol"
+
+! --- Rotation Angle -----------------------------------------------------------
+if not(is_new) then 
+	values "ang" range[-90,90]
+	if temp_ang >= 270 and temp_ang <= 360 then parameters temp_ang = 0		!! Bottom
+	if temp_ang < 270 and temp_ang >= 180 then parameters temp_ang = 180
+	if GLOB_MODPAR_NAME = "temp_ang" then
+		parameters ang = temp_ang - 90
+	else
+		parameters temp_ang = ang + 90
+	endif
+	values "gs_cutang1_bot" range(-90,90)
+	values "gs_cutang2_bot" range(-90,90)
+	values "gs_cutang3_up" range(-90,90)
+	values "gs_cutang4_up" range(-90,90)
+	if temp_cutang1_bot > 120 and temp_cutang1_bot < (360-120)/2+120 then parameters temp_cutang1_bot = 120
+	if temp_cutang1_bot < 360 and temp_cutang1_bot >= (360-120)/2+120 then parameters temp_cutang1_bot = 0
+	if temp_cutang2_bot > 120 and temp_cutang2_bot < (360-120)/2+120 then parameters temp_cutang2_bot = 120
+	if temp_cutang2_bot < 360 and temp_cutang2_bot >= (360-120)/2+120 then parameters temp_cutang2_bot = 0
+	if temp_cutang3_up > 120 and temp_cutang3_up < (360-120)/2+120 then parameters temp_cutang3_up = 120
+	if temp_cutang3_up < 360 and temp_cutang3_up >= (360-120)/2+120 then parameters temp_cutang3_up = 0
+	!if temp_cutang4_up > 120 and temp_cutang4_up < (360-120)/2+120 then parameters temp_cutang4_up = 120
+	!if temp_cutang4_up < 360 and temp_cutang4_up >= (360-120)/2+120 then parameters temp_cutang4_up = 0
+	if GLOB_MODPAR_NAME = "temp_cutang1_bot" then
+		parameters gs_cutang1_bot = temp_cutang1_bot - 60
+	else
+		parameters temp_cutang1_bot = gs_cutang1_bot + 60
+	endif
+	if GLOB_MODPAR_NAME = "temp_cutang2_bot" then
+		parameters gs_cutang2_bot = temp_cutang2_bot - 60
+	else
+		parameters temp_cutang2_bot = gs_cutang2_bot + 60
+	endif
+	if GLOB_MODPAR_NAME = "temp_cutang3_up" then
+		parameters gs_cutang3_up = temp_cutang3_up - 60
+	else
+		parameters temp_cutang3_up = gs_cutang3_up + 60
+	endif
+	!if GLOB_MODPAR_NAME = "temp_cutang4_up" then
+	!	parameters gs_cutang4_up = temp_cutang4_up - 60
+	!else
+	!	parameters temp_cutang4_up = gs_cutang4_up + 60
+	!endif
+endif
+!
+!dim var_sort[]
+!var_sort[1] = "Круглая труба"
+!var_sort[2] = "Квадратная труба"
+!var_sort[3] = "Швеллер"
+!var_sort[4] = "Двутавр"
+!var_sort[5] = "Уголок"
+!var_sort[6] = "Лист"
+!var_sort[7] = "Ручной"
+!var_sort[8] = "Уголок гнутый"
+!var_sort[9] = "Швеллер гнутый"
+values "name_prof" sort_data.name_profs, CUSTOM
+
+var = name_prof : arr_t = sort_data.name_profs : gosub "get_inx"
+parameters inx_name_prof = sort_data.inx_name_profs[inx]
+
+!!-------------------- Марка и ГОСТ на сталь --------------
+values "mater" sort_data.stal.values, CUSTOM
+var = mater : arr_t = sort_data.stal.values : gosub "get_inx"
+parameters stal_mat = sort_data.stal.inx_values[inx] : n_stal = sort_data.stal.inx_values[inx]
+parameters stal_gost = sort_data.stal.gost[inx]
+parameters stal_marka = mater
+!!---------------------------------------------------------
+
+!!----------------- Заглушки на торцы ---------------------
+if inx_name_prof <> 2 and is_new then hideparameter "sp1_Z"
+values "z_mater" sort_data.stal.values, CUSTOM
+var = z_mater : arr_t = sort_data.stal.values : gosub "get_inx"
+PARAMETERS z_stal_gost = sort_data.stal.gost[inx]
+PARAMETERS z_obozn = "ГОСТ 19903-74"
+
+values "z_mater_left" sort_data.stal.values, CUSTOM
+var = z_mater_left : arr_t = sort_data.stal.values : gosub "get_inx"
+PARAMETERS z_stal_gost_left = sort_data.stal.gost[inx]
+
+values "z_mater_right" sort_data.stal.values
+var = z_mater_right : arr_t = sort_data.stal.values : gosub "get_inx"
+PARAMETERS z_stal_gost_right = sort_data.stal.gost[inx]
+
+if not(is_z_left) then hideparameter "out_left", "z_th_left", "z_a_left", "z_b_left"
+if not(is_z_right) then hideparameter "out_right", "z_th_right", "z_a_right", "z_b_right"
+!!----------------------------------------------------------
+
+dim tip_p_m[]
+tip_p_m[1] = " "
+dim massiv[][]
+dim vekt[]
+n_sort = 1
+
+var1 = " ": var2 = " ": var3 = " ": var4 = " ": var5 = " "
+ch1 = open("text", "Сортаменты.txt", "separator='\t', mode=ro, LIBRARY")
+i = 2: j = 1
+1:
+n = input (ch1, i, 1, var1, var2, var3, var4, var5)
+if n <> -1 then
+	if var5 = name_prof then
+		massiv[j][1] = var1 + " "
+		massiv[j][2] = var2 + " "
+		massiv[j][3] = var3 + ".txt"
+		massiv[j][4] = var4
+		massiv[j][5] = var5
+		j = j + 1
+	endif
+	i = i + 1
+	goto 1
+else
+	goto "close"
+endif
+"close":
+close ch1
+n = 8
+for i = 1 to VARDIM1(massiv)
+	tip_p_m[i] = massiv[i][1]
+next i
+
+values "tip_p" tip_p_m
+
+for i = 1 to VARDIM1(massiv)
+	if tip_p = massiv[i][1] then n_sort = i
+next i
+if n_sort <= VARDIM1(massiv) then
+	PARAMETERS f_name = massiv[n_sort][3]
+	PARAMETERS sor = massiv[n_sort][4]
+endif
+
+v1 = ""
+szelv = open("text", f_name, "separator='\t', mode=ro, LIBRARY")
+for i = 2 to sor
+	mm = input(szelv, i, 2, v1)
+	vekt[i-1] = v1
+next i
+close szelv
+values "Profile" vekt
+
+var = tip_p : arr_t = sort_data.tip_p[inx_name_prof].values : gosub "get_inx"
+PARAMETERS inx_tip_p = sort_data.tip_p[inx_name_prof].inx_values[inx]
+var = Profile : arr_t = sort_data.tip_p[inx_name_prof].profiles[inx_tip_p].names : gosub "get_inx"
+PARAMETERS inx_Profile = sort_data.tip_p[inx_name_prof].profiles[inx_tip_p].inx_names[inx]
+
+if inx_name_prof <> 6 then
+	for i = 1 to VARDIM1(vekt)
+		if Profile = vekt[i] then
+			n_stroki = i + 1
+		endif
+	next i
+	PARAMETERS n_stroki = n_stroki
+	PARAMETERS lastProfile = Profile  
+	szelv=open("text", f_name, "separator='\t', mode=ro, LIBRARY")
+		n=input(szelv, n_stroki, 3, ves_p, Ase, ds, ws, wt, ft, rr, tr, dbf, ax_y)
+	close szelv
+	parameters ds = ds, ws = ws, wt = wt, ft = ft, rr = rr, tr = tr, dbf = dbf, ves_p = ves_p, Ase = Ase, ax_y = ax_y
+	parameters B = ws/1000
+	parameters ZZYZX = ds/1000
+
+	if not(is_new) then
+		b1 = 0 : add_b1 = 0
+		if gs_cutmode_bot = `Вдоль вертикальной оси` or gs_cutmode_bot = `Перпендикулярно оси` then 
+			b1 = ws / 1000
+			if abs(ang)>EPS and gs_rot_axis=`Вдоль сечения` and gs_cutmode_bot <> `Перпендикулярно оси` then add_b1 = abs((0.5*ds*tan(ang))/1000)
+		endif
+		if gs_cutmode_bot = `Вдоль горизонтальной оси` then b1 = ds / 1000
+		if add_b1>0 then b1 = b1 + abs((0.5*b1)*tan(ang))
+		dop_podrez_1_1 = abs(0.5*tan(gs_cutang1_bot)*b1)*(gs_cutang1_bot<0)
+		dop_podrez_1_2 = abs(0.5*tan(gs_cutang2_bot)*b1)*(gs_cutang2_bot<0)
+		dop_podrez_1 = max(dop_podrez_1_1,dop_podrez_1_2)+add_b1
+		b2 = 0 : add_b2 = 0
+		if gs_cutmode_up = `Вдоль вертикальной оси` or gs_cutmode_bot = `Перпендикулярно оси` then 
+			b2 = ws / 1000
+			if abs(ang)>EPS and gs_rot_axis=`Вдоль сечения` and gs_cutmode_bot <> `Перпендикулярно оси` then add_b2 = abs((0.5*ds*tan(ang))/1000)
+		endif
+		if gs_cutmode_up = `Вдоль горизонтальной оси` then b2 = ds / 1000
+		if add_b2>0 then b2 = b2 + abs((0.5*b2)*tan(ang))
+		dop_podrez_2_1 = abs(0.5*tan(gs_cutang3_up)*b2) * (gs_cutang3_up<0)
+		dop_podrez_2_2 = abs(0.5*tan(gs_cutang4_up)*b2) * (gs_cutang4_up<0)
+		dop_podrez_2 = max(dop_podrez_2_1,dop_podrez_2_2)+add_b2
+	endif
+
+	naen_t = Profile
+	if pm then
+		naen_t = naen_t + " L=п.м."
+	else
+		naen_t = naen_t + " L=" + str("%.0mm", dlin_prof) + "мм." 
+	endif
+	if abs(mun)<EPS then
+		PARAMETERS ves = dlin_prof * ves_p + dlin_prof * ves_p * proc_zap
+		PARAMETERS naen = pref_naen + naen_t
+		if n_sort <= VARDIM1(massiv) then PARAMETERS obozn = massiv[n_sort][2]
+	endif
+endif
+
+if mun = 0 then
+	if n_sort <= VARDIM1(massiv) then PARAMETERS obozn = massiv[n_sort][2]
+	IF strstr(Profile,"L")>0 then 
+		PARAMETERS tip_profile = strsub(Profile,2,strlen(Profile))
+	else
+		PARAMETERS tip_profile = Profile
+	endif
+endif
+
+if inx_name_prof <> 6 and not(is_new) then
+	raw_l = dop_podrez_1 + dop_podrez_2 + A
+	PARAMETERS dlin_prof = raw_l
+endif
+
+!!--------------- Периметры и обогреваемый периметр для разных типов ---------
+values "n_storon" 1,2,3,4
+!"Круглая труба"
+if inx_name_prof = 1 then
+	parameters n_storon = 4 	
+	p = 3.146*ds/1000
+	pf = p
+	s = p*dlin_prof
+endif
+
+!"Квадратная труба"
+if inx_name_prof = 2 then
+	p = (ws+ds)*2/1000
+	s = p*dlin_prof
+	if n_storon = 1 then pf = ds/1000
+	if n_storon = 2 then pf = (ws+ds)/1000
+	if n_storon = 3 then pf = (ws+ds*2)/1000
+	if n_storon = 4 then pf = p
+
+	if not(is_new) then
+		if is_z_left then
+			z_a_left = ws - 2*wt*(abs(out_left)<EPS) + 2*out_left*1000
+			z_b_left = ds - 2*wt*(abs(out_left)<EPS) + 2*out_left*1000
+		else
+			z_a_left = 0
+			z_b_left = 0
+		endif
+		if is_z_right then
+			z_a_right = ws - 2*wt*(abs(out_right)<EPS) + 2*out_right*1000
+			z_b_right = ds - 2*wt*(abs(out_right)<EPS) + 2*out_right*1000
+		else
+			z_a_right = 0
+			z_b_right = 0
+		endif
+		parameters z_a_left = z_a_left/1000, z_b_left = z_b_left/1000, z_a_right = z_a_right/1000, z_b_right = z_b_right/1000
+	endif
+endif
+
+!"Швеллер"
+!"Швеллер гнутый"
+if inx_name_prof = 3 or inx_name_prof = 9 then
+	p = (ws*4+ds*2)/1000
+	s = p*dlin_prof
+	if n_storon = 1 then pf = ds/1000
+	if n_storon = 2 then pf = (ws+ds)/1000
+	if n_storon = 3 then pf = (ws*3+ds*2)/1000
+	if n_storon = 4 then pf = p
+endif
+
+!"Двутавр"
+if inx_name_prof = 4 then
+	p = (ws*4+ds*2)/1000
+	s = p*dlin_prof
+	if n_storon = 1 then pf = ds/1000
+	if n_storon = 2 then pf = (ws+ds)/1000
+	if n_storon = 3 then pf = (ws*3+ds*2)/1000
+	if n_storon = 4 then pf = p
+endif
+
+!"Уголок"
+!"Уголок гнутый"
+if inx_name_prof = 5 or inx_name_prof = 8 then
+	p = (ws*2+ds*2)/1000
+	s = p*dlin_prof
+	if n_storon = 1 then pf = ds/1000
+	if n_storon = 2 then pf = (ws+ds)/1000
+	if n_storon = 3 then pf = (ws+ds*2)/1000
+	if n_storon = 4 then pf = p
+endif
+
+!"Лист"
+if inx_name_prof = 6 then
+	sum = A +  B + zzyzx
+	a_m = min(A, B, zzyzx)
+	c_m = max(A, B, zzyzx)
+	b_m = sum - (a_m + c_m)
+	s = c_m * b_m * 2 + a_m * (c_m + b_m)*2
+	parameters perim = (A + B +ZZYZX) -  max(A,B,ZZYZX)
+	p = perim
+	parameters Ase = (perim - a_m) * a_m
+	dlin_prof = round_int((c_m * b_m)*200)/200
+	if dlin_prof<EPS then dlin_prof = 0.001
+	PARAMETERS dlin_prof = dlin_prof
+	parameters sprof = dlin_prof
+else
+	parameters sprof = pf*dlin_prof, pprof = pf
+endif
+
+
+parameters perim = p
+if uch_pokr then
+	parameters spokr = s + s * 0.03
+else
+	parameters spokr = 0
+endif
+
+!!-------------------------------------------------------------------------
+PARAMETERS control_sum = ""
+
+!!----------------------- Огнезащита --------------------------------------
+dim var_f[]
+success = LIBRARYGLOBAL ("Libraryflobals-km", "fire_type_arr", var_f)
+if inx_name_prof <> 6 then
+	values "fire_prof" var_f
+	priv_t = ""
+	if pf > 0 then 
+		priv_n = Ase/(pf*10)
+		priv_t = str("%.0",INT(priv_n)) + "." + str("%.0",FRA(priv_n)*10)
+		parameters priv_t = priv_t 
+	endif
+	if fire_prof = var_f[7] then 
+		parameters t_pokr_txt = "Обеспечивается металлом", r_fire = 0, n_storon = 0,time_fire="-",perim_txt="-"
+		HIDEPARAMETER "st_prof", "priv_t", "t_pokr_txt", "r_fire","n_storon","time_fire","Ase","perim","perim_txt"
+	else
+		dim var_time[][]
+		var_time[1][1] = 120	:	var_time[1][2] = 90	:	var_time[1][3] = 45	:	var_time[1][4] = 15
+		var_time[2][1] = 120	:	var_time[2][2] = 90	:	var_time[2][3] = 65	:	var_time[2][4] = 45
+		var_time[3][1] = 30	:	var_time[3][2] = 15	:	var_time[3][3] = 15	:	var_time[3][4] = 15
+		var_time[4][1] = 30	:	var_time[4][2] = 15	:	var_time[4][3] = 15	:	var_time[4][4] = 15
+		var_time[5][1] = 60	:	var_time[5][2] = 45	:	var_time[5][3] = 45	:	var_time[5][4] = 15
+		var_time[6][1] = 60	:	var_time[6][2] = 60	:	var_time[6][3] = 45	:	var_time[6][4] = 15
+		var_time[7][1] = 0	:	var_time[7][2] = 0	:	var_time[7][3] = 0	:	var_time[7][4] = 0
+		dim var_st[]
+		i = 0
+		i = i + 1 : var_st[i] = "I"
+		i = i + 1 : var_st[i] = "II"
+		i = i + 1 : var_st[i] = "III"
+		i = i + 1 : var_st[i] = "IV"
+		values "st_prof" var_st
+	
+		for i = 1 to vardim1(var_f)
+			if var_f[i] = fire_prof then n_fire_prof = i
+		next i
+		
+		for i = 1 to vardim1(var_st)
+			if var_st[i] = st_prof then n_st_prof = i
+		next i
+	
+		parameters time_fire = str("%.0",var_time[n_fire_prof][n_st_prof])
+		if var_time[n_fire_prof][n_st_prof] > 15 and pf > 0 then
+			parameters perim_txt = str("%.0",INT(pf*100)) + "." + str("%.0",FRA(pf*100)*100)
+			name_fl = "def" + str("%.0",var_time[n_fire_prof][n_st_prof])+".txt"
+			if Ase/(pf*10) >= 5.8 and not(konstr_zash) then
+				ch1 = OPEN ("text", name_fl, "separator='\t', mode=ro, LIBRARY")
+				i = 1 : temp = 0 : prtf = 0: prt=" " : flag = 0 : tolsh = " " : rash = " "
+				11:
+				t_tolsh = tolsh : t_rash = rash
+				n = INPUT (ch1, i, 1, prt,tolsh,rash)
+				if n <> -1 and vartype(prt)=2 then
+					nn = SPLIT (prt, "%^n", temp)
+					if Ase/(pf*10) < temp and flag = 0 then
+						parameters t_pokr_txt = t_tolsh
+						nn1 = SPLIT (t_rash, "%^n", rash)
+						parameters r_fire = rash * sprof
+						flag = 1
+					endif
+					i = i + 1
+					goto 11
+				else
+					goto "close1"
+				endif
+		"close1":
+				if flag = 0 then 
+					n = INPUT (ch1, i-1, 1, prt,t_tolsh,t_rash)
+					parameters t_pokr_txt = t_tolsh
+					nn1 = SPLIT (t_rash, "%^n", rash)
+					parameters r_fire = 0.9
+				endif
+				close ch1
+			else 
+				parameters r_fire = 0
+				parameters t_pokr_txt = "Конструктивная огнезащита"
+			endif
+		else
+			parameters perim_txt = "-"
+			parameters n_storon = 0
+			parameters r_fire = 0
+			parameters t_pokr_txt = "Обеспечивается металлом"
+		endif
+	endif
+else
+	if inx_name_prof = 6 then
+		parameters fire_prof = "Не требует защиты"
+		parameters perim_txt = "-"
+		parameters n_storon = 0
+		parameters r_fire = 0
+		parameters t_pokr_txt = "Обеспечивается металлом"
+	else
+		if konstr_zash then
+			parameters t_pokr_txt = "Конструктивная огнезащита"
+		else
+			parameters t_pokr_txt = "Обеспечивается металлом"
+		endif
+	endif
+	HIDEPARAMETER "st_prof", "priv_t", "r_fire","n_storon","time_fire","Ase","perim","perim_txt"
+endif
+var = fire_prof : arr_t = var_f : gosub "get_inx"
+parameters fire_mat = inx
+dim fire_keep_type_arr[]
+success = LIBRARYGLOBAL ("Libraryflobals-km", "fire_keep_type_arr", fire_keep_type_arr)
+var = t_pokr_txt : arr_t = fire_keep_type_arr : gosub "get_inx"
+if inx = 99 then inx = 3
+parameters fire_keep_mat = inx
+!!-------------------------------------------------------------------------
+if inx_name_prof <> 6 and not(is_new) then
+	aa = max(ws,ds)/1000
+	bb = min(ws,ds)/1000
+	if sin(ang)<0.0001 then
+		parameters ac_toplevel = aa/2
+		parameters ac_bottomlevel = -aa/2
+	else
+		parameters ac_toplevel = sin(ang)*(dlin_prof-dop_podrez_1)
+		parameters ac_bottomlevel = sin(ang)*(dop_podrez_1)
+	endif
+	parameters ac_symb_display_option = 3
+	parameters ac_symb_show_projection_to = 1
+	parameters ac_special_2d_symbol = 1
+endif
+
+end
+
+"addvar":
+!	str_simv1 = "qwertyuiopasdfghjklzxcvbnm"
+!	str_simv2 = "йцукенгшщзхъфывапролджэячсмитьбю"
+!	str_simv3 = "1234567890"
+!	str_simv = str_simv1 + str_simv2 + str_simv3
+!	if vartype(var) = 1 then var = str("%.0",var)
+!	hash = 0
+!	for i = 1 to strlen(var)
+!		simv = STRSUB (var, i, 1)
+!		n = STRSTR (str_simv, simv)
+!		hash = hash + n
+!	next i
+	control_sum = ""!control_sum+str("%.0",hash)
+return
+
+"get_inx":
+	inx = 1
+	for i=1 to vardim1(arr_t)
+		if var = arr_t[i] then 
+			inx = i
+			i = vardim1(arr_t)
+		endif
+	next i
+return

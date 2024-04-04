@@ -1,0 +1,2367 @@
+
+dict EPS
+EPS.LENGTH	= 0.0001				! 1/10 mm
+EPS.SQUARE	= EPS.LENGTH **2
+EPS.SCALAR	= EPS.SQUARE
+EPS.ANGLE	= ACS(1 - EPS.SCALAR)	! 0.0081°
+
+PI180TH		= PI / 180
+
+dim EMPTYARRAY[]		! empty array for dict member initialization
+
+EDGE_STRAIGHT	= 0
+EDGE_CURVED		= 1
+
+dict BasicGeometry
+BasicGeometry.DIRECTION_POINTS_3D				= 1
+BasicGeometry.MIRROR_VECTOR_2D					= 2
+BasicGeometry.DIRECTION_SEGMENT_2D				= 3
+BasicGeometry.INTERSECT_LINE_LINE_2D			= 4
+BasicGeometry.INTERSECT_CIRCLE_LINE_2D			= 5
+BasicGeometry.INTERSECT_SEGMENT_LINE_2D			= 6
+BasicGeometry.INTERSECT_LINE_POLYGON_2D			= 7
+BasicGeometry.INSERT_POINT_TO_SEGMENT_2D		= 8
+BasicGeometry.SEGMENT_ARC_2D					= 9
+BasicGeometry.INTERSECT_CIRCLE_CIRCLE_2D		= 10
+BasicGeometry.INTERSECT_SEGMENT_CIRCLE_2D		= 11
+BasicGeometry.DISTRIBUTION_POLYLINE_2D			= 12
+BasicGeometry.ROT_Z_TO_VECTOR_3D				= 13
+BasicGeometry.PROJECT_POINTS_LINE_2D			= 14
+BasicGeometry.LOCAL_POINTS_TO_GLOBAL_3D			= 15
+BasicGeometry.GLOBAL_POINTS_TO_LOCAL_3D			= 16
+BasicGeometry.ARC_THROUGH_POINTS_2D				= 17
+BasicGeometry.PROJECT_POINTS_CIRCLE_INNER_2D	= 18
+
+! returned dicts defined in subroutines
+dict	_direction,
+		_vector,
+		_perpendicular,
+		_mirrored,
+		_segment,
+		_arcHalfDirection,
+		_chordHalfDirection,
+		_intersection,
+		_polyline,
+		_inserted,
+		_segmented,
+		_local,
+		_untransformed,
+		_rotation,
+		_projected,
+		_arc
+
+
+if iFunction = BasicGeometry.DIRECTION_POINTS_3D then
+
+	dict _point1, _point2
+	_point1 = pointTo
+	_point2 = pointFrom
+
+	gosub "DIRECTION_POINTS_3D"	! returns _direction, _distance from _point2 to _point1
+
+	end _direction,
+		_distance
+
+endif
+
+if iFunction = BasicGeometry.MIRROR_VECTOR_2D then
+
+	dict _direction, _mirror
+	_direction	= direction
+	_mirror		= mirror
+
+	gosub "MIRROR_VECTOR_2D"	! returns _mirrored (_direction on _mirror)
+
+	end _mirrored
+
+endif
+
+if iFunction = BasicGeometry.DIRECTION_SEGMENT_2D then
+	dict _segment
+	_segment	= segment
+
+	gosub "DIRECTION_SEGMENT_2D"	! sets _segment.begDirection, _segment.endDirection, _segment.arc.center, _segment.arc.radius, _segment.length
+
+	!!!	hotspot2 _segment.begPoint.x, _segment.begPoint.y, 1
+	!!!	hotspot2 _segment.endPoint.x, _segment.endPoint.y, 2
+	!!!
+	!!!	if _segment.type = EDGE_CURVED then
+	!!!		hotspot2 _segment.arc.center.x, _segment.arc.center.y, 3
+	!!!
+	!!!		poly2_ 4, 1,
+	!!!			_segment.begPoint.x, _segment.begPoint.y, 1,
+	!!!			_segment.arc.center.x, _segment.arc.center.y, 901,
+	!!!			0, _segment.arcAngle, 4000,
+	!!!			_segment.begPoint.x, _segment.begPoint.y, -1
+	!!!	else
+	!!!		line2 _segment.begPoint.x, _segment.begPoint.y, _segment.endPoint.x, _segment.endPoint.y
+	!!!	endif
+	!!!
+	!!!	pen 20
+	!!!	add2 _segment.begPoint.x, _segment.begPoint.y
+	!!!	line2 0, 0, _segment.begDirection.ux, _segment.begDirection.uy
+	!!!	del 1
+	!!!
+	!!!	pen 6
+	!!!	add2 _segment.endPoint.x, _segment.endPoint.y
+	!!!	line2 0, 0, _segment.endDirection.ux, _segment.endDirection.uy
+	!!!	del 1
+
+	end _segment.begDirection,
+		_segment.endDirection,
+		_segment.arc.center
+
+endif
+
+if iFunction = BasicGeometry.INTERSECT_LINE_LINE_2D then
+
+	dict _line1, _line2
+	_line1		= lineA
+	_line2		= lineB
+
+	gosub "INTERSECT_LINE_LINE_2D"		! returns _intersection.points[]
+
+	end _intersection
+
+endif
+
+if iFunction = BasicGeometry.INTERSECT_CIRCLE_LINE_2D then
+
+	dict _circle, _line
+	_circle	= circleA
+	_line	= lineA
+
+	gosub "INTERSECT_CIRCLE_LINE_2D"	! returns _intersection.points[]
+
+	end _intersection
+
+endif
+
+if iFunction = BasicGeometry.INTERSECT_SEGMENT_LINE_2D then
+
+	dict _segment, _line
+	_segment	= segment
+	_line		= lineA
+
+	gosub "INTERSECT_SEGMENT_LINE_2D"	 	! returns _intersection.points[], _intersection.points[].tangent
+
+	end _intersection
+
+endif
+
+if iFunction = BasicGeometry.INTERSECT_LINE_POLYGON_2D then
+
+	dict _polygon, _line
+
+	nVert = VARDIM1(polygon.contour.edges)		! without closing point
+	for i = 1 to nVert
+		_polygon.segments[i]				= polygon.contour.edges[i]
+		_polygon.segments[i].endPoint		= polygon.contour.edges[i % nVert + 1].begPoint
+	next i
+
+	_line = lineA
+
+	gosub "INTERSECT_LINE_POLYGON_2D"		! returns _intersection.points[], _intersection.points[].onSegment, _intersection.points[].tangent
+
+	end _intersection
+
+endif
+
+if iFunction = BasicGeometry.INSERT_POINT_TO_SEGMENT_2D then
+
+	dict _segment
+	_segment		= segment
+	_insertionDist	= insertionDist
+
+	gosub "DIRECTION_SEGMENT_2D"	! sets _segment.begDirection, _segment.endDirection, _segment.arc.center, _segment.arc.radius, _segment.length
+	_segment.chord.direction	= _segment.begDirection
+
+	gosub "INSERT_POINT_TO_SEGMENT_2D"	! returns _inserted.point, _inserted.angle
+
+	end _inserted
+
+endif
+
+if iFunction = BasicGeometry.SEGMENT_ARC_2D then
+
+	dict _segment
+	_segment	= segment
+	_tolerDiff	= TolerDiff
+	
+	gosub "SEGMENT_ARC_2D"		! return _segmented.points[]
+
+	end _segmented
+
+endif
+
+if iFunction = BasicGeometry.INTERSECT_CIRCLE_CIRCLE_2D then
+
+	dict _circleA, _circleB
+	_circleA	= circleA
+	_circleB	= circleB
+
+	gosub "INTERSECT_CIRCLE_CIRCLE_2D"	! returns _intersection.points[2], _intersection.count
+
+	end _intersection
+
+endif
+
+if iFunction = BasicGeometry.INTERSECT_SEGMENT_CIRCLE_2D then
+
+	dict _segment, _circle
+	_segment	= segment
+	_circle		= circleA
+
+	gosub "INTERSECT_SEGMENT_CIRCLE_2D"		! returns _intersection.points
+
+	end _intersection
+
+endif
+
+if iFunction = BasicGeometry.DISTRIBUTION_POLYLINE_2D then
+
+	dict _polyline
+
+	nVert = VARDIM1(polyline.contour.edges)
+	_skipEnd = not(polyline.isClosed)
+
+	for i = 1 to nVert - _skipEnd
+		_polyline.segments[i]			= polyline.contour.edges[i]
+		_polyline.segments[i].endPoint	= polyline.contour.edges[i % nVert + 1].begPoint
+	next i
+
+	dict _distribution
+	_distribution	= distribution
+
+	gosub "DISTRIBUTION_POLYLINE_2D"	! returns _segmented.points[]
+
+	end _segmented
+
+endif
+
+if iFunction = BasicGeometry.ROT_Z_TO_VECTOR_3D then
+
+	dict _vector
+	_vector = vector
+
+	gosub "ROT_Z_TO_VECTOR_3D"		! returns _rotation.angle, _rotation.axis
+
+	end _rotation
+endif
+
+if iFunction = BasicGeometry.PROJECT_POINTS_LINE_2D then
+
+	dict _line, _project
+	_line = lineA
+	_project = points2D
+
+	gosub "PROJECT_POINTS_LINE_2D"	! returns _projected.points[]
+
+	end _projected
+
+endif
+
+if iFunction = BasicGeometry.LOCAL_POINTS_TO_GLOBAL_3D then
+
+	dict _transformation, _local
+	_transformation = transformation
+	_local = points3D
+
+	dict _global
+	gosub "LOCAL_POINTS_TO_GLOBAL_3D"	! returns _global.points[]
+
+	end _global
+endif
+
+if iFunction = BasicGeometry.GLOBAL_POINTS_TO_LOCAL_3D then
+
+	dict _transformation, _global
+	_transformation = transformation
+	_global = points3D
+
+	dict _local
+	gosub "GLOBAL_POINTS_TO_LOCAL_3D"	! returns _local.points[]
+
+	end _local
+endif
+
+if iFunction = BasicGeometry.ARC_THROUGH_POINTS_2D then
+
+	dict _points
+	_points = points2D
+
+	gosub "ARC_THROUGH_POINTS_2D"	! returns _arc.exists, _arc.center, _arc.radius, _arc.begAngle, _arc.midAngle, _arc.endAngle
+
+	end _arc
+
+endif
+
+if iFunction = BasicGeometry.PROJECT_POINTS_CIRCLE_INNER_2D then
+
+	dict _project, _circle, _projectFrom
+	_project = points2D
+	_projectFrom = pointFrom
+	_circle = circleA
+
+	gosub "PROJECT_POINTS_CIRCLE_INNER_2D"	! returns _projected.points[]
+
+	end _projected
+
+endif
+
+! =====================================================================================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! =====================================================================================================================================
+
+
+! ===============================================
+"INTERSECT_LINE_POLYGON_2D":
+! -----------------------------------------------
+! Input:
+!	EPS:					epsylon
+!	_polygon				closed polygon
+!		.segments[]
+!	_line
+! Output:
+!	_intersection
+!		.points[]			intersection point array
+!			.onSegment		index of segment which contains the intersection point
+!			.x .y
+!			.tangent		tangent of segment at intersection point
+!				.ux .uy
+! ===============================================
+
+	dict _PolyIntersection
+	_PolyIntersection.points = EMPTYARRAY
+
+	_nIntersectionPoint = 0
+	nSegment = VARDIM1(_polygon.segments)
+
+	for i = 1 to nSegment
+
+		dict _segment
+		_segment = _polygon.segments[i]
+		!_line from input
+
+		gosub "INTERSECT_SEGMENT_LINE_2D"	! returns _intersection.points[], _intersection.points[].tangent
+
+		_nIntersectionPoint = VARDIM1(_PolyIntersection.points)
+
+		if VARDIM1(_intersection.points) > 0 then
+			if _nIntersectionPoint > 0 then	! not first output intersection point
+
+				dict _alreadyfound, _point2
+				_alreadyfound.points[1] = _PolyIntersection.points[_nIntersectionPoint]	! check whether same as previous output point
+				if (i = nSegment) then
+					_alreadyfound.points[2] = _PolyIntersection.points[1]				! check whether same as first output point - possibly at start of first segment
+				endif
+
+				for _newPoint = 1 to VARDIM1(_intersection.points)
+
+					_samePoint = 0
+					dict _point1 : _point1 = _intersection.points[_newPoint]
+
+					for _oldPoint = 1 to vardim1(_alreadyfound.points)
+						_point2 = _alreadyfound.points[_oldPoint]
+						gosub "vectorFromPoints2D"	! returns _vector: _point1 to _point2, sets _vector.length
+
+						if _vector.length < EPS.LENGTH then _samePoint = 1
+					next _oldPoint
+
+					if not(_samePoint) then	! _newPoint is not the same as any of the _alreadyfound.points
+						_nIntersectionPoint = _nIntersectionPoint + 1
+						_PolyIntersection.points[_nIntersectionPoint] = _intersection.points[_newPoint]
+						_PolyIntersection.points[_nIntersectionPoint].onSegment = i
+					endif
+
+				next _newPoint
+
+			else	! first output intersection point, check whether on segment beginning
+
+				for _checkPoint = 1 to VARDIM1(_intersection.points)
+					_nIntersectionPoint = _nIntersectionPoint + 1
+					_PolyIntersection.points[_nIntersectionPoint] = _intersection.points[_checkPoint]
+
+					if (ABS(_segment.begPoint.x - _intersection.points[_checkPoint].x) < EPS.LENGTH) & (ABS(_segment.begPoint.y - _intersection.points[_checkPoint].y) < EPS.LENGTH) then
+						! intersection at beginning point links to previous segment
+						if i = 1 then	! wrap around
+							_PolyIntersection.points[_nIntersectionPoint].onSegment = nSegment
+						else
+							_PolyIntersection.points[_nIntersectionPoint].onSegment = i - 1
+						endif
+					else
+						_PolyIntersection.points[_nIntersectionPoint].onSegment = i
+					endif
+				next _checkPoint
+
+			endif
+		endif
+
+	next i
+
+	dict _intersection
+	_intersection = _PolyIntersection
+
+return
+
+
+! ===============================================
+"INTERSECT_SEGMENT_LINE_2D":
+! -----------------------------------------------
+! Input:
+!	EPS:				epsylon
+!	_line
+!		.point
+!		.direction
+!	_segment
+!		.type
+!		.begPoint
+!		.endPoint
+!		.arcAngle
+! Output:
+!	_intersection		Intersection points
+!		.points[]		0-2 entries
+!			.x .y
+!			.tangent
+!				.ux .uy
+! ===============================================
+
+	! initialize output dict
+	dict _OutputIntersection
+	_OutputIntersection.points = EMPTYARRAY
+
+	if _segment.type = EDGE_STRAIGHT then
+
+		dict _point1, _point2
+		_point1 = _segment.endPoint
+		_point2 = _segment.begPoint
+
+		gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+		_segmentlength = _distance
+
+		dict _line1, _line2
+		_line1				= _line
+		_line2.point		= _segment.begPoint
+		_line2.direction	= _direction
+
+		gosub "INTERSECT_LINE_LINE_2D"		! returns _intersection.points[]
+
+		! looking for intersection point
+		if VARDIM1(_intersection.points) = 1 then
+
+			dict _point1, _point2
+			_point2 = _segment.begPoint
+			_point1 = _intersection.points[1]
+
+			gosub "vectorFromPoints2D"	! returns _vector: _point1 to _point2, sets _vector.length
+			DistS1_IP = _vector.length
+
+
+			dict _point1, _point2
+			_point2 = _segment.endPoint
+			_point1 = _intersection.points[1]
+
+			gosub "vectorFromPoints2D"	! returns _vector: _point1 to _point2, sets _vector.length
+			DistS2_IP = _vector.length
+
+
+			if ((DistS1_IP + DistS2_IP) - _segmentlength) < EPS.LENGTH then		! intersection point lies on segment
+				_OutputIntersection = _intersection
+				_OutputIntersection.points[1].tangent = _line2.direction		! segment direction
+			endif
+		endif
+
+	else				! EDGE_CURVED
+
+		gosub "GetArcCenter"			! returns _chordHalfDirection, sets _segment.arc.center, _segment.arc.radius, _segment.chord
+		gosub "GetArcHalfDirection"		! returns _arcHalfDirection
+
+		!!!		circle2 _segment.arc.center.x, _segment.arc.center.y, _segment.arc.radius
+
+		dict _circle
+		_circle				= _segment.arc	! used as full circle in INTERSECT_CIRCLE_LINE_2D
+		! _line from input
+		gosub "INTERSECT_CIRCLE_LINE_2D"	! returns _intersection.points[]
+
+		dict _CircleLineIntersection
+		_CircleLineIntersection = _intersection
+
+		! initialize output dict
+		dict _OutputIntersection
+		_OutputIntersection.points = EMPTYARRAY	! no intersection point
+												! 1 intersection point (tangential line), not used
+
+		! two intersection points
+		if	VARDIM1(_CircleLineIntersection.points) = 2 then
+
+			! check (a) intersection point
+			if	( (ABS(_segment.begPoint.x - _CircleLineIntersection.points[1].x) < EPS.LENGTH) & (ABS(_segment.begPoint.y - _CircleLineIntersection.points[1].y) < EPS.LENGTH) ) |\
+				( (ABS(_segment.endPoint.x - _CircleLineIntersection.points[1].x) < EPS.LENGTH) & (ABS(_segment.endPoint.y - _CircleLineIntersection.points[1].y) < EPS.LENGTH) ) then
+
+				_OutputIntersection.points[1] = _CircleLineIntersection.points[1]
+
+			else	! not on endpoint of arc
+
+				! get intersection point
+				dict _line1, _line2
+				_line1.point		= _CircleLineIntersection.points[1]
+
+				_direction = _segment.chord.direction
+				_sgnRotation = 1	! ccw
+				gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+				_line1.direction	= _perpendicular
+
+				_line2.point		= _segment.begPoint
+				_line2.direction	= _segment.chord.direction
+
+				gosub "INTERSECT_LINE_LINE_2D"	! returns _intersection.points[]
+				! should always return intersection, ip1 is not on the chord
+
+				! get direction vector
+				dict _point1, _point2
+
+				_point1 = _CircleLineIntersection.points[1]
+				_point2 = _intersection.points[1]
+
+				gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+				_scalar = ( (_arcHalfDirection.ux * _direction.ux) + (_arcHalfDirection.uy * _direction.uy) )
+
+				! if direction vector which shows from segment to circle-line intersection point is same to arc direction then the point lies the arced segment
+				if (ABS(_scalar - 1) < EPS.SCALAR) then	_OutputIntersection.points[1] = _CircleLineIntersection.points[1]
+			endif
+
+			_nextIntersection = VARDIM1(_OutputIntersection.points) + 1
+
+			! check (b) intersection point
+			if	( (ABS(_segment.begPoint.x - _CircleLineIntersection.points[2].x) < EPS.LENGTH) & (ABS(_segment.begPoint.y - _CircleLineIntersection.points[2].y) < EPS.LENGTH) ) |\
+				( (ABS(_segment.endPoint.x - _CircleLineIntersection.points[2].x) < EPS.LENGTH) & (ABS(_segment.endPoint.y - _CircleLineIntersection.points[2].y) < EPS.LENGTH) ) then
+
+				_OutputIntersection.points[_nextIntersection] = _CircleLineIntersection.points[2]
+
+			else	! not on endpoint of arc
+
+				! get intersection point
+				dict _line1, _line2
+				_line1.point		= _CircleLineIntersection.points[2]
+
+				_direction = _segment.chord.direction
+				_sgnRotation = 1	! ccw
+				gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+				_line1.direction	= _perpendicular
+
+				_line2.point		= _segment.begPoint
+				_line2.direction	= _segment.chord.direction
+
+				gosub "INTERSECT_LINE_LINE_2D"	! returns _intersection.points[]
+				! should always return intersection, ip2 is not on the chord
+
+				! get direction vector
+				dict _point1, _point2
+				_point1 = _CircleLineIntersection.points[2]
+				_point2	= _intersection.points[1]
+
+				gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+				_scalar = ( (_arcHalfDirection.ux * _direction.ux) + (_arcHalfDirection.uy * _direction.uy) )
+
+				! if direction vector which shows from segment to circle-line intersection point is same to arc direction
+				if (ABS(_scalar - 1) < EPS.SCALAR) then _OutputIntersection.points[_nextIntersection] = _CircleLineIntersection.points[2]
+			endif
+
+			! tangents at intersections are perpendicular to radius
+			for _iPoint = 1 to vardim1(_OutputIntersection.points)
+				dict _point1, _point2
+				_point2 = _circle.center
+				_point1 = _OutputIntersection.points[_iPoint]
+				gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+				_sgnRotation = 1	! ccw
+				gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+				_OutputIntersection.points[_iPoint].tangent = _perpendicular
+			next _iPoint
+
+		endif
+
+	endif
+
+	_intersection = _OutputIntersection
+
+return
+
+
+! ===============================================
+"DIRECTION_POINTS_2D":
+! -----------------------------------------------
+! Input:
+!	EPS:			epsylon
+!	_point1:		Coordinates of the first point
+!	_point2:		Coordinates of the second point
+! Output:
+!	_direction		unit vector from _point2 towards _point1
+!		.ux
+!		.uy
+!	_distance:		Distance between the two points
+! ===============================================
+
+	gosub "vectorFromPoints2D"	! returns _vector: _point1 to _point2
+
+	gosub "normalizeVector2D"	! returns unitvector _direction along _vector
+	_distance = _vector.length
+
+	! _point2 to _point1
+	gosub "reverseDirection2D"	! returns _direction: -_direction
+
+return
+
+
+! ===============================================
+"DIRECTION_POINTS_3D":
+! -----------------------------------------------
+! Input:
+!	EPS:			epsylon
+!	_point1:		Coordinates of the first point
+!	_point2:		Coordinates of the second point
+! Output:
+!	_direction		unit vector from _point2 towards _point1
+!		.ux
+!		.uy
+!		.uz:
+!	_distance:		Distance between the two points
+! ===============================================
+
+	gosub "vectorFromPoints3D"	! returns _vector: _point1 to _point2
+
+	gosub "normalizeVector3D"	! returns unitvector _direction along _vector
+	_distance = _vector.length
+
+	! _point2 to _point1
+	gosub "reverseDirection3D"	! returns _direction: -_direction
+
+return
+
+
+! ===============================================
+"vectorFromPoints2D":
+! -----------------------------------------------
+! _vector from _point1 to _point2
+! ===============================================
+
+	dict _vector	! reset
+	_vector.dx = _point2.x - _point1.x
+	_vector.dy = _point2.y - _point1.y
+
+	gosub "vectorLength2D"		! sets _vector.length
+
+return
+
+
+! ===============================================
+"vectorFromPoints3D":
+! -----------------------------------------------
+! _vector from _point1 to _point2
+! ===============================================
+
+	dict _vector	! reset
+	_vector.dx = _point2.x - _point1.x
+	_vector.dy = _point2.y - _point1.y
+	_vector.dz = _point2.z - _point1.z
+
+	gosub "vectorLength3D"		! sets _vector.length
+
+return
+
+
+! ===============================================
+"reverseDirection2D":
+! -----------------------------------------------
+! reverse _direction
+! ===============================================
+
+	_direction.ux = -_direction.ux
+	_direction.uy = -_direction.uy
+
+return
+
+
+! ===============================================
+"reverseDirection3D":
+! -----------------------------------------------
+! reverse _direction
+! ===============================================
+
+	gosub "reverseDirection2D"
+	_direction.uz = -_direction.uz
+
+return
+
+
+! ===============================================
+"normalizeVector2D":
+! -----------------------------------------------
+! returns unitvector _direction along _vector
+!	or 0 vector if input length < EPS.SQUARE
+! -----------------------------------------------
+! input:
+!	_vector
+!		.dx
+!		.dy
+!		.length
+! output:
+!	_direction
+!		.ux
+!		.uy
+!       .is0   ( = 1) if _vector was 0 length
+! ===============================================
+
+	dict _direction
+
+	if _vector.length > EPS.SQUARE then
+
+		_direction.ux = _vector.dx / _vector.length
+		_direction.uy = _vector.dy / _vector.length
+
+		gosub "limitUnitVector2D"		! _direction to be in range ([-1, 1], [-1, 1]
+
+	else
+
+		_direction.ux	= 0.0
+		_direction.uy	= 0.0
+		_direction.is0	= 1
+
+	endif
+
+return
+
+
+! ===============================================
+"normalizeVector3D":
+! -----------------------------------------------
+! returns unitvector _direction along _vector
+!	or 0 vector if input length < EPS.SQUARE
+! -----------------------------------------------
+! input:
+!	_vector
+!		.dx
+!		.dy
+!		.dz
+!		.length
+! output:
+!	_direction
+!		.ux
+!		.uy
+!		.uz
+!       .is0   ( = 1) if _vector was 0 length
+! ===============================================
+
+	dict _direction
+
+	if _vector.length > EPS.SQUARE then
+
+		_direction.ux = _vector.dx / _vector.length
+		_direction.uy = _vector.dy / _vector.length
+		_direction.uz = _vector.dz / _vector.length
+
+		gosub "limitUnitVector3D"		! _direction to be in range ([-1, 1], [-1, 1], [-1, 1])
+	else
+
+		_direction.ux	= 0.0
+		_direction.uy	= 0.0
+		_direction.uz	= 0.0
+		_direction.is0	= 1
+
+	endif
+
+return
+
+
+! ===============================================
+"limitUnitVector2D":
+! -----------------------------------------------
+! limits coordinates of _direction to be in range [-1, 1], so they can be used in ACS and ASN
+! they can be above 1 due to calculation errors
+! -----------------------------------------------
+! input, output:
+!	_direction
+!		.ux
+!		.uy
+! ===============================================
+
+	_direction.ux = MIN(1, MAX(-1, _direction.ux))
+	_direction.uy = MIN(1, MAX(-1, _direction.uy))
+
+return
+
+
+! ===============================================
+"limitUnitVector3D":
+! -----------------------------------------------
+! limits coordinates of _direction to be in range [-1, 1], so they can be used in ACS and ASN
+! they can be above 1 due to calculation errors
+! -----------------------------------------------
+! input, output:
+!	_direction
+!		.ux
+!		.uy
+!		.uz
+! ===============================================
+
+	gosub "limitUnitVector2D"
+	_direction.uz = MIN(1, MAX(-1, _direction.uz))
+
+return
+
+
+! ===============================================
+"perpendicularDirection2D":
+! -----------------------------------------------
+! input:
+!	_direction
+!	_sgnRotation	+1 counterclockwise
+!					-1 clockwise
+! output:
+!	_perpendicular	unitvector
+! ===============================================
+
+	dict _perpendicular
+	_perpendicular.ux = -_direction.uy * _sgnRotation
+	_perpendicular.uy =  _direction.ux * _sgnRotation
+
+return
+
+
+! ===============================================
+"perpendicularVector2D":
+! -----------------------------------------------
+! input:
+!	_vector
+!	_sgnRotation	+1 counterclockwise
+!					-1 clockwise
+! output:
+!	_perpendicular	vector
+! ===============================================
+
+	dict _perpendicular
+	_perpendicular.dx = -_vector.dy * _sgnRotation
+	_perpendicular.dy =  _vector.dx * _sgnRotation
+
+return
+
+
+! ===============================================
+"vectorLength2D":
+! -----------------------------------------------
+! length of _vector
+! ===============================================
+
+	_vector.length = SQR(_vector.dx **2 + _vector.dy **2)
+
+return
+
+
+! ===============================================
+"vectorLength3D":
+! -----------------------------------------------
+! length of _vector
+! ===============================================
+
+	_vector.length = SQR(_vector.dx **2 + _vector.dy **2 + _vector.dz **2)
+
+return
+
+
+! ===============================================
+"unTransform2D":
+! -----------------------------------------------
+! given _local.points[] in _local.trafo coordinate system,
+!	return their global coordinates in _untransformed.points[]
+! -----------------------------------------------
+! input:
+!	_local
+!		.trafo			local coordinate system expressed in global coordinates
+!			.origin		origin
+!			.Xaxis		x axis unit vector
+!			.Yaxis		y axis unit vector
+!		.points[]		points in local coordinates
+! output:
+!	_untransformed
+!		.points[]		points in global coordinates
+! ===============================================
+
+	! initialize output
+	dict _untransformed
+	_untransformed.points = EMPTYARRAY
+
+	for _iUntransformPoint = 1 to VARDIM1(_local.points)
+		_untransformed.points[_iUntransformPoint].x = _local.trafo.Xaxis.ux * _local.points[_iUntransformPoint].x + _local.trafo.Yaxis.ux * _local.points[_iUntransformPoint].y + _local.trafo.origin.x
+		_untransformed.points[_iUntransformPoint].y = _local.trafo.Xaxis.uy * _local.points[_iUntransformPoint].x + _local.trafo.Yaxis.uy * _local.points[_iUntransformPoint].y + _local.trafo.origin.y
+	next _iUntransformPoint
+
+return
+
+
+! ===============================================
+"INTERSECT_LINE_LINE_2D":
+! -----------------------------------------------
+! Input:
+!	EPS:				epsylon
+!	line1
+!		.point			Point on the line
+!		.direction		unit vector on line
+!	line2
+!		.point			Point on the line
+!		.direction		unit vector on line
+! Output:
+!	_intersection		intersection point
+!		.points[]		0 or 1 entries
+! ===============================================
+
+	! initialize output dict
+	dict _intersection
+	_intersection.points = EMPTYARRAY
+
+	! check if directions are not null
+	if	(abs(_line1.direction.ux) > EPS.LENGTH | abs(_line1.direction.uy) > EPS.LENGTH) &\
+		(abs(_line2.direction.ux) > EPS.LENGTH | abs(_line2.direction.uy) > EPS.LENGTH) \
+	then
+
+		_scalar = (_line1.direction.ux * _line2.direction.ux) + (_line1.direction.uy * _line2.direction.uy)
+	
+		! _scalar = +-1: parallel lines
+		if NOT(ABS(ABS(_scalar) - 1) < EPS.SCALAR) then
+			! Calculate A1, B1 and C1 parameter
+			! A1, B1 are equal to normal vector
+			A1 = -_line1.direction.uy
+			B1 = _line1.direction.ux
+			C1 = -(A1 * _line1.point.x) - (B1 * _line1.point.y)
+	
+			! Calculate A2, B2 and C2 parameter
+			! A2, B2 are equal to normal vector
+			A2 = -_line2.direction.uy
+			B2 = _line2.direction.ux
+			C2 = -(A2 * _line2.point.x) - (B2 * _line2.point.y)
+	
+			! Calculate coordinates of intersection point
+			dict _point
+			_point.y = ((A1 * C2) - (C1 * A2)) / ((B1 * A2) - (A1 * B2))
+	
+			if ABS(A1) < EPS.LENGTH then
+				_point.x = (-B2 * _point.y - C2) / A2
+			else
+				_point.x = (-B1 * _point.y - C1) / A1
+			endif
+	
+			_intersection.points[1] = _point
+		endif
+	endif
+
+return
+
+! ==============================================================================
+"INTERSECT_CIRCLE_LINE_2D":
+! ------------------------------------------------------------------------------
+! Input:
+!	EPS:				epsylon
+!	_circle
+!		.center			centerpoint
+!		.radius			radius
+!	_line
+!		.point			point on line
+!		.direction		unit vector on line
+! Output:
+!	_intersection		Intersection points
+!		.points[]		0-2 entries
+! ==============================================================================
+
+	! compute perpendicular distance from circle center to line
+	! ---------------------------------------------------------
+
+	dict _line1, _line2
+	_line1				= _line
+	_line2.point		= _circle.center
+
+	! perpendicular direction vector from circle center to line
+	dict _vector
+
+	_direction = _line.direction
+	_sgnRotation = 1	! ccw
+	gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+
+	_line2.direction	= _perpendicular
+
+	!!!	add2 _line1.point.x, _line1.point.y
+	!!!	line2 0, 0, _line1.direction.ux, _line1.direction.uy
+	!!!	del 1
+	!!!
+	!!!	add2 _line2.point.x, _line2.point.y
+	!!!	line2 0, 0, _line2.direction.ux, _line2.direction.uy
+	!!!	del 1
+
+	gosub "INTERSECT_LINE_LINE_2D"	! returns _intersection.points[]
+	! should always return intersection, inputs are perpendicular
+
+	dict _closestPointOnLine
+	_closestPointOnLine = _intersection.points[1]
+
+	!!!	pen 40
+	!!!	hotspot2 _closestPointOnLine.x, _closestPointOnLine.y
+	!!!	circle2 _closestPointOnLine.x, _closestPointOnLine.y, 0.015
+
+	! initialize output dict
+	dict _intersection
+	_intersection.points = EMPTYARRAY
+
+	! compute distance between circle center and closest point on line
+	dict _point1, _point2
+	_point1 = _closestPointOnLine
+	_point2 = _circle.center
+
+	gosub "vectorFromPoints2D"	! returns _vector: _point1 to _point2, sets _vector.length
+
+	if ( ABS(_vector.length - _circle.radius) < EPS.LENGTH ) then		! Tangential intersection
+
+		_intersection.points[1] = _closestPointOnLine
+
+	else
+		if (_vector.length < _circle.radius) then						! Two intersections
+
+			! distance in direction of the line
+			_distOnLine = SQR(_circle.radius **2 - _vector.length **2)
+
+			_intersection.points[1].x = _closestPointOnLine.x + _distOnLine * _line1.direction.ux
+			_intersection.points[1].y = _closestPointOnLine.y + _distOnLine * _line1.direction.uy
+			_intersection.points[2].x = _closestPointOnLine.x - _distOnLine * _line1.direction.ux
+			_intersection.points[2].y = _closestPointOnLine.y - _distOnLine * _line1.direction.uy
+
+		endif
+	endif
+
+	!!!	if VARDIM1(_intersection.points) > 0 then
+	!!!		pen 20
+	!!!		hotspot2 _intersection.points[1].x, _intersection.points[1].y
+	!!!		circle2 _intersection.points[1].x, _intersection.points[1].y, 0.03
+	!!!	endif
+	!!!
+	!!!	if VARDIM1(_intersection.points) > 1 then
+	!!!		pen 6
+	!!!		hotspot2 _intersection.points[2].x, _intersection.points[2].y
+	!!!		circle2 _intersection.points[2].x, _intersection.points[2].y, 0.05
+	!!!	endif
+	!!!
+	!!!	text2 0, -1.5, VARDIM1(_intersection.points)
+return
+
+! ===============================================
+"DIRECTION_SEGMENT_2D":
+! -----------------------------------------------
+! for arced segment the vectors are tangential of arc
+! -----------------------------------------------
+! Input:
+!	_segment
+!		.type
+!		.begPoint:		Segment beginning point
+!		.endPoint:		Segment ending point
+!		.arcAngle:		Angle of arced segment
+! Output:
+!	_segment
+!		.begDirection:		Direction vector in beginning point (inwards)
+!		.endDirection:		Direction vector in ending point (inwards)
+!		.arc
+!			.center			Centerpoint of arced segment
+!			.radius			Radius of arc
+!		.length				Length of segment (on arc when arced)
+! ===============================================
+
+	if _segment.type = EDGE_STRAIGHT then
+
+		_segment.arc.center.x		= 0.0
+		_segment.arc.center.y		= 0.0
+		_segment.arc.radius			= 0.0
+
+		dict _point1, _point2
+		_point1 = _segment.endPoint
+		_point2 = _segment.begPoint
+
+		gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+		_segment.begDirection		= _direction
+		_segment.length				= _distance
+
+		gosub "reverseDirection2D"
+		_segment.endDirection		= _direction
+
+	else
+
+		gosub "GetArcSegmentDirection"		! sets _segment.begDirection, _segment.endDirection, _segment.arc.center, _segment.arc.radius
+
+		_radius = _segment.arc.radius
+		gosub "GetArcDegreeLength"			! returns _degreeLength
+		_segment.length				= _degreeLength * ABS(_segment.arcAngle)
+
+	endif
+
+return
+
+
+! ===============================================
+"GetArcSegmentDirection":
+! -----------------------------------------------
+! Input:
+!	EPS:					epsylon
+!	_segment
+!		.begPoint:			Segment beginning point
+!		.endPoint:			Segment ending point
+!		.arcAngle:			Angle of arced segment
+! Output:
+!	_segment
+!		.begDirection:		Direction vector in beginning point (inwards)
+!		.endDirection:		Direction vector in ending point
+!		.arc
+!			.center			Centerpoint of arced segment
+!			.radius			Radius of arc
+! ===============================================
+
+	gosub "GetArcCenter"	! returns _chordHalfDirection, sets _segment.arc.center, _segment.arc.radius, _segment.chord
+
+	! Set tangential vector on beginning
+	! ------------------------------
+	dict _point1, _point2
+	_point1 = _segment.begPoint
+	_point2 = _segment.arc.center
+	gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+	_sgnRotation = 1	! ccw
+	gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+	_direction = _perpendicular
+
+	__scalar = _chordHalfDirection.ux *_direction.ux + _chordHalfDirection.uy * _direction.uy
+	if not(_segment.arcAngle > -180) | (_segment.arcAngle > 180) then __scalar = -__scalar
+	if sgn(__scalar) = -1 then gosub "reverseDirection2D"	! returns _direction: -_direction
+
+	gosub "limitUnitVector2D"		! _direction to be in range ([-1, 1], [-1, 1], [-1, 1])
+	_segment.begDirection = _direction
+
+	! Set tangential vector on end
+	! ----------------------------
+	dict _mirror
+	_mirror = _chordHalfDirection
+	gosub "MIRROR_VECTOR_2D"		! returns _mirrored (_direction on _mirror)
+
+	_direction = _mirrored
+	gosub "limitUnitVector2D"		! _direction to be in range ([-1, 1], [-1, 1], [-1, 1])
+	_segment.endDirection = _direction
+
+return
+
+
+! ===============================================
+"GetArcCenter":
+! -----------------------------------------------
+! Input:
+!	EPS:					epsylon
+!	_segment
+!		.begPoint:			Segment beginning point
+!		.endPoint:			Segment ending point
+!		.arcAngle:			Angle of arced segment
+! Output:
+!	_segment
+!		.arc
+!			.center			Centerpoint of arced segment
+!			.radius			Radius of arc
+!		.chord
+!			.direction		unit vector from begPoint towards end
+!			.length
+!	_chordHalfDirection		direction of chord halfpoint from arc center
+!							with .arcAngle = +-180 (center on chord), oriented right (cw) from chord
+! ===============================================
+
+	dict _point1, _point2
+	_point1 = _segment.endPoint
+	_point2 = _segment.begPoint
+
+	gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+	_segment.chord.direction	= _direction
+	_segment.chord.length		= _distance
+
+	_halfChord = _segment.chord.length / 2
+
+	_segment.arc.radius = _halfChord / SIN(ABS(_segment.arcAngle / 2))
+
+	! compute _chordHalfDirection
+	_direction = _segment.chord.direction
+
+	if ((_segment.arcAngle < 0) & (_segment.arcAngle > -180)) | (_segment.arcAngle > 180) then
+		_sgnRotation = 1	! ccw
+	else
+		_sgnRotation = -1	! cw
+	endif
+
+	gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+
+	_chordHalfDirection = _perpendicular
+
+	_segment.arc.center.x = _segment.begPoint.x + _halfChord * _segment.chord.direction.ux - (SQR(_segment.arc.radius **2 - _halfChord **2)) *_chordHalfDirection.ux
+	_segment.arc.center.y = _segment.begPoint.y + _halfChord * _segment.chord.direction.uy - (SQR(_segment.arc.radius **2 - _halfChord **2)) *_chordHalfDirection.uy
+
+return
+
+
+! ===============================================
+"GetArcHalfDirection":
+! -----------------------------------------------
+! Input:
+!	_segment
+!		.arcAngle:			Angle of arced segment
+!		.chord.direction	unit vector from arc begPoint to arc end
+! Output:
+!	_arcHalfDirection		direction of arc halfpoint from arc center
+!							vector perpendicular to chord
+! ===============================================
+
+	_direction = _segment.chord.direction
+
+	if _segment.arcAngle < 0 then
+		_sgnRotation = 1	! ccw
+	else
+		_sgnRotation = -1	! cw
+	endif
+
+	gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+
+	_arcHalfDirection = _perpendicular
+
+return
+
+
+! ===============================================
+"GetArcDegreeLength":
+! -----------------------------------------------
+! Input:
+!	EPS:					epsylon
+!	_radius					Radius of arc
+! Output:
+!	_degreeLength			Length of 1° of arc
+! ===============================================
+
+	_degreeLength = _radius * PI180TH
+
+return 
+
+
+! ===============================================
+"MIRROR_VECTOR_2D":
+! -----------------------------------------------
+! Input:
+!	_direction		Unit vector which has to be mirrored
+!	_mirror			Mirroring unit vector
+! Output:
+!	_mirrored:		Mirrored vector
+! ===============================================
+
+	dict _mirrored
+	_mirrored.ux = -_direction.ux + (2 * (_direction.ux * _mirror.ux + _direction.uy * _mirror.uy) * _mirror.ux)
+	_mirrored.uy = -_direction.uy + (2 * (_direction.ux * _mirror.ux + _direction.uy * _mirror.uy) * _mirror.uy)
+
+return
+
+
+! ===============================================
+"INSERT_POINT_TO_SEGMENT_2D":
+! -----------------------------------------------
+! Input:
+!	EPS						epsylon
+!	_segment				segment to insert to
+!		.type
+!		.begPoint
+!		.endPoint
+!		.arcAngle
+!		.chord.direction	either this (straight segment)
+!		.arc				or these (arc)
+!			.center
+!			.radius
+!	_insertionDist			Insertion distance from _segment.begPoint
+! Output:
+! 	_inserted
+!		.point				Inserted point
+!		.angle				Angle between _segment.begPoint and _inserted.point
+! ===============================================
+
+	dict _inserted
+
+	if _segment.type = EDGE_STRAIGHT then
+
+		_inserted.point.x	= _segment.begPoint.x + _segment.chord.direction.ux * _insertionDist
+		_inserted.point.y	= _segment.begPoint.y + _segment.chord.direction.uy * _insertionDist
+		_inserted.angle		= 0.0
+
+	else			! EDGE_CURVED
+
+		! compute inserted point in local coordinate system
+		!	origin:	_segment.arc.center
+		!	x:		radius to _segment.begPoint
+		!	y:		perpendicular
+
+		! angle of inserted point
+		_radius = _segment.arc.radius
+		gosub "GetArcDegreeLength"	! returns _degreeLength
+		_inserted.angle = sgn(_segment.arcAngle) * (_insertionDist / _degreeLength)
+
+		dict _insertedPointLocal
+		_insertedPointLocal.x = _segment.arc.radius * COS(_inserted.angle)
+		_insertedPointLocal.y = _segment.arc.radius * SIN(_inserted.angle)
+
+		! local axes in global coordinates
+		dict _point1, _point2
+		_point1 = _segment.begPoint
+		_point2 = _segment.arc.center
+		gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+		_sgnRotation = 1	! CCW
+		gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+
+		!!!		add2 _segment.arc.center.x, _segment.arc.center.y
+		!!!		line2 0, 0, _direction.ux / 2, _direction.uy / 2
+		!!!		line2 0, 0, _perpendicular.ux / 2, _perpendicular.uy / 2
+		!!!		del 1
+
+		! Transform local point to global coordinate system
+		dict _local
+		_local.trafo.origin	= _segment.arc.center
+		_local.trafo.Xaxis	= _direction
+		_local.trafo.Yaxis	= _perpendicular
+		_local.points[1]	= _insertedPointLocal
+
+		gosub "unTransform2D"	! returns _untransformed.points[]
+		
+		_inserted.point = _untransformed.points[1]
+
+	endif
+
+return
+
+
+! ===============================================
+"SEGMENT_ARC_2D":
+! -----------------------------------------------
+! Input:
+!	EPS:			epsylon
+!	_segment
+!		.begPoint	Beginning point
+!		.endPoint	Ending point
+!		.arcAngle	angle of arc
+!	_tolerDiff		Tolerance of arc
+! Output:
+!	_segmented
+!		.points[]	Array of inserted points
+! ===============================================
+	
+	dict _segmented
+	_segmented.points = EMPTYARRAY
+
+	gosub "DIRECTION_SEGMENT_2D"	! sets _segment.begDirection, _segment.endDirection, _segment.arc.center, _segment.arc.radius, _segment.length
+	
+	if _segment.type = EDGE_CURVED then
+
+		_tolerDiff = min(max(EPS.LENGTH, _tolerDiff), 2 * _segment.arc.radius)	! for acs to be in range [-1, 1)
+		_calculatedSegmentAngle = 2 * ACS(1 - _tolerDiff / _segment.arc.radius)
+
+		if _segment.arcAngle < 0 then
+			_segmentNumber = ABS(INT(_segment.arcAngle / _calculatedSegmentAngle))
+		else
+			_segmentNumber = CEIL(_segment.arcAngle / _calculatedSegmentAngle)
+		endif
+
+		_dInsertion = ABS(_segment.length / _segmentNumber)
+
+		_segmented.points[1] = _segment.begPoint
+
+		for i = 1 to _segmentNumber
+
+			_insertionDist	= _dInsertion * i
+			gosub "INSERT_POINT_TO_SEGMENT_2D"	! returns _inserted.point, _inserted.angle
+			_segmented.points[i + 1] = _inserted.point
+
+		next i
+
+	endif
+
+return
+
+
+! ===============================================
+"INTERSECT_CIRCLE_CIRCLE_2D":
+! -----------------------------------------------
+! Input variables:
+!	EPS:				epsylon
+!	_circleA			Circle A
+!		.center
+!		.radius
+!	_circleB			Circle B
+!		.center
+!		.radius
+! Returned variables:
+!	_intersection		intersection points
+!		.points[]		always 2 entries (invalid points set to (0, 0) or _circleA.center)
+!		.count			valid intersections
+! ===============================================
+
+	! looking for intersection points in local coordinate system
+	!	origin:	_circleA.center
+	!	x:		_circleA.center towards _circleB.center
+	!	y:		perpendicular ccw to _direction
+
+	dict _point1, _point2
+	_point1 = _circleB.center
+	_point2 = _circleA.center
+
+	gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+	! initialize output
+	dict _intersection
+	_intersection.points	= EMPTYARRAY
+	_intersection.count		= 0
+
+	if (_distance > EPS.LENGTH) then
+
+		! intersection points in local coordinate system
+		dict _ip1, _ip2
+		_ip1.x = 0.0
+		_ip1.y = 0.0
+		_ip2.x = 0.0
+		_ip2.y = 0.0
+
+		if	( ABS(_distance - (_circleA.radius + _circleB.radius)) < EPS.LENGTH ) |\
+			( ABS(_distance - ABS(_circleA.radius - _circleB.radius)) < EPS.LENGTH ) then
+
+			_intersection.count = 1
+
+			if ( ABS(_distance - (_circleA.radius + _circleB.radius)) < EPS.LENGTH ) then
+				_ip1.x = _circleA.radius
+				_ip1.y = 0.0
+			else
+				if (_circleA.radius > _circleB.radius) then
+					_ip1.x = _circleA.radius
+					_ip1.y = 0.0
+				else
+					_ip1.x = -_circleA.radius
+					_ip1.y =  0.0
+				endif
+			endif
+		else
+			if ( _distance < (_circleA.radius + _circleB.radius) ) &\
+				( _distance > ABS(_circleA.radius - _circleB.radius) ) then
+
+				_intersection.count = 2
+
+				_ip1.x = (_distance **2 - _circleB.radius **2 + _circleA.radius **2) / (2 * _distance)
+				_ip1.y = SQR(_circleA.radius **2 - _ip1.x **2)
+
+				_ip2.x =  _ip1.x
+				_ip2.y = -_ip1.y
+			endif
+		endif
+
+		! Convert local points to global coordinate system
+		_sgnRotation = 1	 ! ccw
+		gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+
+		dict _local
+		_local.trafo.origin	= _circleA.center
+		_local.trafo.Xaxis	= _direction
+		_local.trafo.Yaxis	= _perpendicular
+		_local.points[1]	= _ip1
+		_local.points[2]	= _ip2		! compatibility: sets _intersection.points[2] to _circleA.center when invalid
+
+		gosub "unTransform2D"	! returns _untransformed.points[]
+		
+		_intersection.points = _untransformed.points
+	else
+		_intersection.points[1].x = 0.0
+		_intersection.points[1].y = 0.0
+		_intersection.points[2].x = 0.0
+		_intersection.points[2].y = 0.0
+	endif
+
+	!!!	pen 6
+	!!!	line2 0, 0, _local.trafo.Xaxis.ux, _local.trafo.Xaxis.uy
+	!!!	pen 20
+	!!!	line2 0, 0, _local.trafo.Yaxis.ux, _local.trafo.Yaxis.uy
+	!!!
+	!!!	pen 20
+	!!!	if _intersection.count = 1 then hotspot2 _intersection.points[1].x, _intersection.points[1].y
+	!!!	pen 6
+	!!!	if _intersection.count = 2 then hotspot2 _intersection.points[2].x, _intersection.points[2].y
+	!!!
+	!!!	text2 -1, 0, _intersection.count
+
+return
+
+
+! ===============================================
+"INTERSECT_SEGMENT_CIRCLE_2D":
+! -----------------------------------------------
+! Input:
+!	EPS:			epsylon
+!	_segment
+!		.type
+!		.begPoint	segment beginning point
+!		.endPoint	segment ending point
+!		.arcAngle	segment angle
+!	_circle			Circle
+!		.center
+!		.radius
+! Output:
+!	_intersection	intersection point array
+!		.points[]	0-2 entries
+! ===============================================
+
+	gosub "DIRECTION_SEGMENT_2D"	! sets _segment.begDirection, _segment.endDirection, _segment.arc.center, _segment.arc.radius, _segment.length
+
+	if _segment.type = EDGE_STRAIGHT then
+
+		!!!		line2 _segment.begPoint.x, _segment.begPoint.y, _segment.endPoint.x, _segment.endPoint.y
+
+		dict _line
+		_line.point		= _segment.begPoint
+		_line.direction	= _segment.begDirection
+		! _circle from input
+		gosub "INTERSECT_CIRCLE_LINE_2D"	! returns _intersection.points[]
+
+		dict _CircleIntersection
+		_CircleIntersection = _intersection
+
+		!!!		text2 0, 0, VARDIM1(_CircleIntersection.points)
+		!!!		if VARDIM1(_CircleIntersection.points) > 0 then circle2 _CircleIntersection.points[1].x, _CircleIntersection.points[1].y, 0.01
+		!!!		if VARDIM1(_CircleIntersection.points) > 1 then circle2 _CircleIntersection.points[1].x, _CircleIntersection.points[1].y, 0.02
+
+		! initialize output parameters
+		dict _intersection
+		_intersection.points = EMPTYARRAY
+
+		! check circle intersection points
+		dict _point1, _point2
+		for i = 1 to VARDIM1(_CircleIntersection.points)
+
+			_nextIntersection = VARDIM1(_intersection.points) + 1
+
+			_point1			= _CircleIntersection.points[i]
+
+			_point2			= _segment.begPoint
+			gosub "vectorFromPoints2D"	! returns _vector: _point1 to _point2, sets _vector.length
+			_distFromBeg	= _vector.length
+
+			_point2			= _segment.endPoint
+			gosub "vectorFromPoints2D"	! returns _vector: _point1 to _point2, sets _vector.length
+			_distToEnd		= _vector.length
+
+			if ( ((_distFromBeg + _distToEnd) - _segment.length) < EPS.LENGTH ) then		! intersection point lies on segment
+				_intersection.points[_nextIntersection] = _CircleIntersection.points[i]
+			endif
+
+		next i
+
+	else				! EDGE_CURVED
+
+		!!!		hotspot2 _segment.arc.center.x, _segment.arc.center.y
+		!!!
+		!!!		poly2_ 4, 1,
+		!!!			_segment.begPoint.x, _segment.begPoint.y, 1,
+		!!!			_segment.arc.center.x, _segment.arc.center.y, 901,
+		!!!			0, _segment.arcAngle, 4000,
+		!!!			_segment.begPoint.x, _segment.begPoint.y, -1
+
+		dict _circleA, _circleB
+		_circleA	= _circle
+		_circleB	= _segment.arc
+		gosub "INTERSECT_CIRCLE_CIRCLE_2D"	! returns _intersection.points[2], _intersection.count
+
+		dict _CircleIntersection
+		_CircleIntersection = _intersection
+
+		!!!		text2 0, 0, _CircleIntersection.count
+		!!!		circle2 _CircleIntersection.points[1].x, _CircleIntersection.points[1].y, 0.01
+		!!!		circle2 _CircleIntersection.points[2].x, _CircleIntersection.points[2].y, 0.02
+
+		! initialize output parameters
+		dict _intersection
+		_intersection.points = EMPTYARRAY
+
+		if _CircleIntersection.count > 0 then
+
+			! Compute vectors from segment center to segment end points
+			dict _segmV1, _segmV2
+
+			dict _point1, _point2
+			_point2 = _segment.arc.center
+
+			_point1 = _segment.begPoint
+			gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+			_segmV1 = _direction
+
+			_point1 = _segment.endPoint
+			gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+			_segmV2 = _direction
+
+			!!!			add2 _segment.arc.center.x, _segment.arc.center.y
+			!!!			line2 0, 0, _segmV1.ux, _segmV1.uy
+			!!!			line2 0, 0, _segmV2.ux, _segmV2.uy
+			!!!			del 1
+
+
+			! Compute vectors from segment center to circle intersection points
+			dict _IPV
+
+			for i = 1 to VARDIM1(_CircleIntersection.points) 
+
+				_nextIntersection = VARDIM1(_intersection.points) + 1
+
+				_point1		= _CircleIntersection.points[i]
+				!_point2	= _segment.arc.center
+				gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+				_IPV		= _direction
+
+				! Compute angle of vectors _segmV1, _IPV
+				_scalar = MAX(-1, MIN(1, ((_segmV1.ux * _IPV.ux) + (_segmV1.uy * _IPV.uy)) ))
+				_angleFromBeg = ACS(_scalar)
+
+				! Compute angle of vectors _segmV2, _IPV
+				_scalar = MAX(-1, MIN(1, ((_segmV2.ux * _IPV.ux) + (_segmV2.uy * _IPV.uy)) ))
+				_angleToEnd = ACS(_scalar)
+
+				!!!			add2 _segment.arc.center.x, _segment.arc.center.y
+				!!!			pen 20
+				!!!			line2 0, 0, _IPV.ux, _IPV.uy
+				!!!			del 1
+				!!!
+				!!!			text2 1, 0, segmAng1
+				!!!			text2 1, 1, segmAng2
+
+				if ( ((_angleFromBeg + _angleToEnd) - ABS(_segment.arcAngle)) < EPS.ANGLE ) then		! intersection point lies on segment
+					_intersection.points[_nextIntersection] = _CircleIntersection.points[i]
+				endif
+
+			next i
+
+		endif
+
+	endif
+
+	!!!	pen 20
+	!!!	if VARDIM1(_intersection.points) > 0 then hotspot2 _intersection.points[1].x, _intersection.points[1].y
+	!!!	pen 6
+	!!!	if VARDIM1(_intersection.points) > 1 then hotspot2 _intersection.points[2].x, _intersection.points[2].y
+	!!!
+	!!!	text2 -1, 0, VARDIM1(_intersection.points)
+
+return
+
+
+! ===============================================
+"DISTRIBUTION_POLYLINE_2D":
+! -----------------------------------------------
+! Input:
+!	EPS:							epsylon
+!	_polyline						open polyline
+!		.segments[]
+!			.type
+!			.begPoint
+!			.endPoint
+!			.arcAngle
+!	_distribution
+!		.begOffset					beginning offset of distribution from polyline begPoint
+!		.endOffset					ending offset of distribution from polyline end
+!		.divisions					number of segments
+! Output:
+!	_segmented
+!		.points[]					distributed point array
+!			.x .y
+!			.onSegment				index of segment which contains the point
+!			.crossing				unit vector cw perpendicular to polyline at point
+!	_polyline						added fields to input
+!		.length
+!		.cumulativeLengthToBeg[]	length from polyline beginning to segment beginning
+!		.segments[]
+!			.length
+!			.begDirection
+!			.endDirection
+!			.arc
+!				.center
+!				.radius
+!	_distribution.offset[]			offset of points from beginning
+! ===============================================
+
+	dict _segmented
+	_segmented.points = EMPTYARRAY
+
+	if _distribution.divisions > 0 then
+
+		_distribution.begOffset	= ABS(_distribution.begOffset)
+		_distribution.endOffset	= ABS(_distribution.endOffset)
+
+		! Compute full length of polyline and lengths by segments
+		! -------------------------------------------------------
+		_nSegments = VARDIM1(_polyline.segments)
+
+		_polyline.length = 0.0
+		_polyline.cumulativeLengthToBeg = EMPTYARRAY
+
+		dict _segment
+		for _iSegment = 1 to _nSegments
+
+			_segment = _polyline.segments[_iSegment]
+			gosub "DIRECTION_SEGMENT_2D"	! sets _segment.begDirection, _segment.endDirection, _segment.arc.center, _segment.arc.radius, _segment.length
+
+			_polyline.segments[_iSegment]					= _segment	! copy returned data
+			_polyline.cumulativeLengthToBeg[_iSegment]	= _polyline.length
+			_polyline.length								= _polyline.length + _segment.length
+
+		next _iSegment
+
+		if (_polyline.length > EPS.LENGTH) & ( _polyline.length > (_distribution.begOffset + _distribution.endOffset) ) then
+
+			_iSegmentedPoint = 0
+			_pointInterval = (_polyline.length - _distribution.begOffset - _distribution.endOffset) / _distribution.divisions
+
+			! Set distributor point distance from beginning of polyline
+			! -----------------------------------------------------
+			_nPoints = _distribution.divisions + 1
+			_distribution.offset[1] = _distribution.begOffset
+			for _iPoint = 2 to _nPoints
+				_distribution.offset[_iPoint] = _distribution.offset[_iPoint - 1] + _pointInterval
+			next _iPoint
+
+			! Set distributor point segments
+			! -----------------------------------------------------
+			_iSegment = 1
+			_cumulativeLengthToSegmentEnd =  _polyline.segments[1].length
+			for _iPoint = 1 to _nPoints
+
+				_insertionOffset = _distribution.offset[_iPoint]
+
+				! find first segment end (if not current) after _insertionOffset
+				while	_cumulativeLengthToSegmentEnd + EPS.LENGTH < _insertionOffset &\
+						_iSegment < _nSegments \
+				do
+					_iSegment = _iSegment + 1
+					_cumulativeLengthToSegmentEnd = _polyline.cumulativeLengthToBeg[_iSegment] + _polyline.segments[_iSegment].length
+				endwhile
+
+				_segmented.points[_iPoint].onSegment = _iSegment
+
+			next _iPoint
+
+			! Placing of distributor points on polyline
+			! -----------------------------------------
+			dict _crossingDV, _thisSegment, _nextSegment
+			for _iPoint = 1 to _nPoints
+
+				_insertionOffset = _distribution.offset[_iPoint]
+				_iSegment = _segmented.points[_iPoint].onSegment
+
+				_segment		= _polyline.segments[_iSegment]
+				_insertionDist	= _insertionOffset - _polyline.cumulativeLengthToBeg[_iSegment]
+
+				_segment.chord.direction	= _segment.begDirection
+				gosub "INSERT_POINT_TO_SEGMENT_2D"	! returns _inserted.point, _inserted.angle
+
+				! Looking for matching point
+				_matchWithPolylineBeg		= (ABS(_insertionOffset) < EPS.LENGTH)
+				_matchWithPolylineEnd		= (ABS(_insertionOffset - _polyline.length) < EPS.LENGTH)
+				_matchWithPolylineCorner	= (ABS(_insertionDist - _polyline.segments[_iSegment].length) < EPS.LENGTH)
+
+				! Compute crossing direction at point
+				if _matchWithPolylineCorner & NOT(_matchWithPolylineBeg | _matchWithPolylineEnd) then	! internal corner
+
+					!!!pen 6
+					!!!circle2 (_segment.begPoint.x + _segment.endPoint.x) / 2, (_segment.begPoint.y + _segment.endPoint.y) / 2, 0.02
+					!!!text2 (_segment.begPoint.x + _segment.endPoint.x) / 2, (_segment.begPoint.y + _segment.endPoint.y) / 2, _segment.arcAngle
+					!!!circle2 _segment.arc.center.x, _segment.arc.center.y, 0.04
+
+					!!!pen 6
+					!!!add2 _segment.endPoint.x, _segment.endPoint.y
+					!!!line2 0, 0, _segment.endDirection.ux / 3, _segment.endDirection.uy / 3
+					!!!del 1
+
+					! internal corners belong to previous segment, so next segment exists
+					dict _nextSegmV
+					_nextSegmV = _polyline.segments[_iSegment + 1].begDirection
+
+					!!!pen 20
+					!!!add2 _segment.endPoint.x, _segment.endPoint.y
+					!!!line2 0, 0, _nextSegmV.ux / 3, _nextSegmV.uy / 3
+					!!!del 1
+
+					dict _vector
+					_vector.dx = (_segment.endDirection.ux + _nextSegmV.ux) / 2
+					_vector.dy = (_segment.endDirection.uy + _nextSegmV.uy) / 2
+					gosub "vectorLength2D"	! sets _vector.length
+
+					if ( ABS(_vector.length) < EPS.LENGTH ) then
+						_direction = _nextSegmV
+						_sgnRotation = -1	! cw
+						gosub "perpendicularDirection2D"
+						_direction = _perpendicular
+					else
+						gosub "normalizeVector2D"		! returns unitvector _direction along _vector
+						! Change direction to positive side
+						_scalar = (_direction.ux * _nextSegmV.uy) + (_direction.uy * (-_nextSegmV.ux))
+						if (_scalar < 0) then gosub "reverseDirection2D"	! returns _direction: -_direction
+					endif
+
+					_crossingDV = _direction
+
+				else
+
+					if _segment.type = EDGE_STRAIGHT then
+
+						_direction = _segment.chord.direction
+						_sgnRotation = -1		! cw
+						gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+
+						_crossingDV = _perpendicular
+
+					else				! EDGE_CURVED
+
+						dict _point1, _point2
+						_point1 = _inserted.point
+						_point2 = _segment.arc.center
+
+						gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+						if _segment.arcAngle < 0 then gosub "reverseDirection2D"	! returns _direction: -_direction
+
+						_crossingDV = _direction
+
+					endif
+
+				endif
+				
+				! copy point fields, copying _inserted.point would delete _segmented.points[_iPoint].onSegment
+				_segmented.points[_iPoint].x		= _inserted.point.x
+				_segmented.points[_iPoint].y		= _inserted.point.y
+				_segmented.points[_iPoint].crossing	= _crossingDV
+
+				!!!pen 38
+				!!!add2 _inserted.point.x, _inserted.point.y
+				!!!circle2 0, 0, 0.02
+				!!!line2 0, 0, 0.2 * _crossingDV.ux, 0.2 * _crossingDV.uy
+				!!!del 1
+
+			next _iPoint
+
+		endif
+	endif
+
+return
+
+
+! ===============================================
+"ROT_Z_TO_VECTOR_3D":
+! -----------------------------------------------
+! Calculates the _rotation.angle and _rotation.axis
+!	that rotates _Z into _vector
+! -----------------------------------------------
+! Input:
+!	EPS:		epsylon
+!	_vector		vector
+! Output:
+!	_rotation
+!		.axis	Rotation axis vector
+!		.angle	Rotation angle around axis
+! ===============================================
+
+	dict _rotation, _inputVector
+	_inputVector = _vector
+
+	! x-y projected length for angle calculation
+	gosub "vectorLength2D"	! sets _vector.length
+	_projectedLength = _vector.length
+
+	! Calculate rotation around the perpendicular axis
+	dict _vector
+	_vector.dx = _projectedLength
+	_vector.dy = _inputVector.dz
+
+	gosub "GetArcusTangent180_2D"	! returns _angle (-180...180]
+	_rotation.angle = _angle - 90
+
+	if ABS(_projectedLength) > EPS.LENGTH then
+		_vector = _inputVector
+		_sgnRotation = -1	! cw
+		gosub "perpendicularVector2D"	! returns _perpendicular (to _vector by _sgnRotation)
+		_rotation.axis		= _perpendicular	! .dx, .dy
+		_rotation.axis.dz	= 0.0
+	else
+		_rotation.axis.dx	= 1.0
+		_rotation.axis.dy	= 0.0
+		_rotation.axis.dz	= 0.0
+	endif
+
+return
+
+
+! ========================================================================
+"PROJECT_POINTS_LINE_2D":
+! ------------------------------------------------------------------------
+! projects _points perpendicularly onto _line
+! input:
+!	_line
+!		.point			point on line
+!		.direction		unit vector on line
+!	_project
+!		.points[]
+!			.x
+!			.y
+! output:
+!	_projected
+!		.points[]		projected points
+!			.x .y
+! ========================================================================
+
+	dict _projected
+
+	if abs(_line.direction.ux) > EPS.length | abs(_line.direction.uy) > EPS.length then
+		! intersect _line with perpendicular lines from each point
+		dict _line1, _line2
+		_line1 = _line
+	
+		_direction = _line.direction
+		_sgnRotation = -1	! cw
+		gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+		_line2.direction = _perpendicular
+	
+		for _iPoint = 1 to vardim1(_project.points)
+	
+			_line2.point = _project.points[_iPoint] 	! use same _line2.direction for all points
+			gosub "INTERSECT_LINE_LINE_2D"				! returns _intersection.points[]
+	
+			_projected.points[_iPoint] = _intersection.points[1]
+	
+		next _iPoint
+	endif
+
+return
+
+
+! ========================================================================
+"PROJECT_POINTS_CIRCLE_INNER_2D":
+! ------------------------------------------------------------------------
+! projects _points radially from inner point _projectFrom onto _circle
+! each input point will have exactly one corresponding projected point
+! input points that are the same as _projectFrom are returned unchanged
+! input:
+!	_circle			Circle
+!		.center
+!		.radius
+!	_projectFrom
+!		.x .y
+!	_project
+!		.points[]
+!			.x
+!			.y
+! output:
+!	_projected
+!		.points[]		projected points
+!			.x .y
+! ========================================================================
+
+	dict _projected
+	_projected.points = EMPTYARRAY
+
+	! check if _projectFrom is inside circle
+	dict _point1, _point2
+	_point1 = _circle.center
+	_point2 = _projectFrom
+	gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+	if _distance < _circle.radius then
+		for _iPoint = 1 to vardim1(_project.points)
+
+			dict _point1, _point2
+			_point1 = _project.points[_iPoint]
+			_point2 = _projectFrom	! overwritten in INTERSECT_SEGMENT_CIRCLE_2D
+			gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+			dict _point3	! add 2 radius to _point2->_point1, so it will be outside circle
+			_point3.x = _point1.x + _direction.ux * _circle.radius * 2
+			_point3.y = _point1.y + _direction.uy * _circle.radius * 2
+
+			dict _segment
+			_segment.begPoint	= _point2
+			_segment.endPoint	= _point3
+			_segment.type		= EDGE_STRAIGHT
+
+			gosub "INTERSECT_SEGMENT_CIRCLE_2D"		! returns _intersection.points
+
+			if vardim1(_intersection.points) = 0 then	! point is _projectFrom
+				_projected.points[_iPoint] = _projectFrom
+			else
+				_projected.points[_iPoint] = _intersection.points[1]
+			endif
+
+		next _iPoint
+	endif
+
+return
+
+
+! ========================================================================
+"ARC_THROUGH_POINTS_2D":
+! ------------------------------------------------------------------------
+! input:
+!	_points
+!		.points[3]		beginning, internal, end
+!			.x .y
+! output:
+!	_arc
+!		.exists			0 if not found (two identical points / three points on a line) - other fields not set
+!		.radius
+!		.center
+!			.x .y
+!		.begAngle		relative to x axis, monotonically in/decreasing in direction of arc
+!								abs() possibly > 360
+!		.midAngle
+!		.endAngle
+! ========================================================================
+
+	dict _arc : _arc.exists = 0
+
+	! center is at intersection of lines perpendicular two two chord's midpoints
+	dict _lineA, _lineB
+
+	dict _direction, _arcEnds, _point1, _point2
+	for _i = 1 to 2
+
+		_point2 = _points.points[_i]
+		_point1 = _points.points[_i + 1]
+		gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+		! rot2 90
+		_arcEnds.radius[_i].direction.ux = -_direction.uy
+		_arcEnds.radius[_i].direction.uy =  _direction.ux
+
+		_arcEnds.radius[_i].point.x = (_points.points[_i].x + _points.points[_i + 1].x) / 2
+		_arcEnds.radius[_i].point.y = (_points.points[_i].y + _points.points[_i + 1].y) / 2
+
+	next _i
+
+	dict _intersection, _line1, _line2
+	_line1 = _arcEnds.radius[1]
+	_line2 = _arcEnds.radius[2]
+	gosub "INTERSECT_LINE_LINE_2D"	! returns _intersection.points[]
+
+	if vardim1(_intersection.points) = 1 then
+
+		AT_BEG	= 1
+		AT_MID	= 2
+		AT_END	= 3
+	
+		_arc.exists = 1
+		_arc.center = _intersection.points[1]
+
+
+		! orientation of points relative to center
+		dim _angles[3], _sgnAngles[3]
+		for _i = 1 to 3
+			dict _direction
+
+			_point2 = _arc.center
+			_point1 = _points.points[_i]
+			gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+			if _i = 1 then _arc.radius = _distance
+
+			dict _vector
+			_vector.dx = _direction.ux
+			_vector.dy = _direction.uy
+			gosub "GetArcusTangent180_2D"	! returns _angle (-180...180]
+			_angles[_i] = _angle
+			_sgnAngles[_i] = 1 - 2 * (_angle < 0)	! <  0 -> -1
+													! >= 0 -> +1
+		next _i
+
+		_arc.begAngle	= _angles[AT_BEG]
+		_arc.endAngle	= _angles[AT_END]
+		_arc.midAngle	= _angles[AT_MID]
+
+
+		! which side of beginning->end chord is middle point?
+		dict _direction, _point1, _point2
+
+		_point2 = _points.points[AT_BEG]
+		_point1 = _points.points[AT_END]
+		gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+
+		dict _line1, _line2
+		_line1.direction = _direction
+		_line1.point = _points.points[AT_BEG]
+
+		! rotate beginning-> end CW
+		_sgnRotation = -1	! cw
+		gosub "perpendicularDirection2D"	! returns _perpendicular (to _direction by _sgnRotation)
+
+		_line2.direction = _perpendicular
+		_line2.point = _points.points[AT_MID]
+
+		dict _intersection
+		gosub "INTERSECT_LINE_LINE_2D"	! returns _intersection.points[]
+
+		! must have intersection, midpoint isn't the same as beginning or end
+		! direction from intersection to midpoint
+		_point2 = _intersection.points[1]
+		_point1 = _points.points[AT_MID]
+		gosub "DIRECTION_POINTS_2D"	! returns _direction, _distance from _point2 to _point1
+		dict _midDir : _midDir = _direction
+
+		! scalar product of _midDir & _line2 direction
+		_scalar = _midDir.ux * _line2.direction.ux + _midDir.uy * _line2.direction.uy
+		_sgnArcDir = sgn(_scalar)	! can't be 0
+
+		! directions opposite -> negative arc
+		! directions parallel -> positive arc
+		if _sgnArcDir > 0 then
+			if _arc.midAngle < _arc.begAngle then _arc.midAngle = _arc.midAngle + 360
+			if _arc.endAngle < _arc.begAngle then _arc.endAngle = _arc.endAngle + 360
+			if _arc.endAngle < _arc.midAngle then _arc.endAngle = _arc.endAngle + 360
+		else
+			if _arc.midAngle > _arc.begAngle then _arc.midAngle = _arc.midAngle - 360
+			if _arc.endAngle > _arc.begAngle then _arc.endAngle = _arc.endAngle - 360
+			if _arc.endAngle > _arc.midAngle then _arc.endAngle = _arc.endAngle - 360
+		endif
+
+	endif
+
+return
+
+
+! ===============================================
+"GetArcusTangent360_2D":
+! -----------------------------------------------
+! Rotation of _vector around (0, 0),
+! beginning from x axis, counterclockwise +
+! -----------------------------------------------
+! Input:
+!	_vector
+! Output:
+!	_angle			degrees, range [0...360)
+! ===============================================
+
+	if ABS(_vector.dx) > 0 then
+		_angle = ATN(_vector.dy / _vector.dx) + 90 * (1 - SGN(_vector.dx))
+	else
+		_angle = SGN(_vector.dy * (ABS(_vector.dy) > 0)) * 90
+	endif
+
+	_angle = (_angle + 360) % 360
+
+return
+
+
+! ===============================================
+"GetArcusTangent180_2D":
+! -----------------------------------------------
+! Rotation of _vector around (0, 0),
+! beginning from x axis, counterclockwise +
+! -----------------------------------------------
+! Input:
+!	_vector
+! Output:
+!	_angle			degrees, range (-180...180]
+! ===============================================
+
+	if ABS(_vector.dx) > 0 then
+		_angle = ATN(_vector.dy / _vector.dx) + 90 * (1 - SGN(_vector.dx)) * (1 - 2 * (SGN(_vector.dy) < 0))
+	else
+		_angle = SGN(_vector.dy * (ABS(_vector.dy) > 0)) * 90
+	endif
+
+return
+
+
+! ===============================================
+"LOCAL_POINTS_TO_GLOBAL_3D":
+! Return coordinates of _local points in global coordinate system
+! Can be used to transform points using _transformation (local coordinates don't change)
+! -----------------------------------------------
+! Input:
+!	_local					points in local coordinates
+!		.points[]
+!			.x .y .z
+!	_transformation			local coordinate system expressed in global coordinates (XFORM style)
+!		.origin
+!			.x .y .z
+!		.XAxis
+!			.dx .dy. .dz
+!		.YAxis
+!		.ZAxis
+! Output:
+!	_global					points in global coordinates
+!		.points[]
+! ===============================================
+
+	dict _global, _point
+
+	! apply transformation on each point
+	for _iPoint = 1 to vardim1(_local.points)
+
+		_point = _local.points[_iPoint]
+		dict _transformedPoint
+		gosub "transformPoint3D"	! returns _transformedPoint
+		_global.points[_iPoint] = _transformedPoint
+
+	next _iPoint
+
+return
+
+
+! ===============================================
+"GLOBAL_POINTS_TO_LOCAL_3D":
+! Return coordinates of _global points in local coordinate system
+! Can be used to reverse-transform points
+!	by inverse of _transformation (local coordinates don't change)
+! -----------------------------------------------
+! Input:
+!	_global					points in global coordinates
+!		.points[]
+!			.x .y .z
+!	_transformation			local coordinate system expressed in global coordinates (XFORM style)
+!		.origin
+!			.x .y .z
+!		.XAxis
+!			.dx .dy. .dz
+!		.YAxis
+!		.ZAxis
+! Output:
+!	_local					points in local coordinates
+!		.points[]
+! ===============================================
+
+	dict _local, _point
+
+	dict _inverseTransformation
+	gosub "invertTransformation3D"	! returns _inverseTransformation
+
+	! apply inverse transformation on each point
+	_transformation = _inverseTransformation
+	for _iPoint = 1 to vardim1(_global.points)
+
+		_point = _global.points[_iPoint]
+		dict _transformedPoint
+		gosub "transformPoint3D"	! returns _transformedPoint
+		_local.points[_iPoint] = _transformedPoint
+
+	next _iPoint
+
+return
+
+
+! ===============================================
+"invertTransformation3D":
+! -----------------------------------------------
+! input:
+!	_transformation			XFORM style transformation matrix
+!		.origin
+!			.x .y .z
+!		.XAxis
+!			.dx .dy. .dz
+!		.YAxis
+!		.ZAxis
+! output:
+!	_inverseTransformation	(identity in case of singular _transformation)
+! ===============================================
+
+	_determinant =	+_transformation.XAxis.dx * _transformation.YAxis.dy * _transformation.ZAxis.dz \
+					+_transformation.YAxis.dx * _transformation.ZAxis.dy * _transformation.XAxis.dz \
+					+_transformation.ZAxis.dx * _transformation.XAxis.dy * _transformation.YAxis.dz \
+					-_transformation.XAxis.dx * _transformation.ZAxis.dy * _transformation.YAxis.dz \
+					-_transformation.YAxis.dx * _transformation.XAxis.dy * _transformation.ZAxis.dz \
+					-_transformation.ZAxis.dx * _transformation.YAxis.dy * _transformation.XAxis.dz
+
+	dict _inverseTransformation
+
+	if abs(_determinant) > EPS.SQUARE then
+
+		_determinantReciprok = 1 / _determinant
+
+		_inverseTransformation.Xaxis.dx =  (- _transformation.ZAxis.dy * _transformation.YAxis.dz  + _transformation.YAxis.dy * _transformation.ZAxis.dz) * _determinantReciprok
+		_inverseTransformation.Xaxis.dy =  (+ _transformation.ZAxis.dy * _transformation.XAxis.dz  - _transformation.XAxis.dy * _transformation.ZAxis.dz) * _determinantReciprok
+		_inverseTransformation.Xaxis.dz =  (- _transformation.YAxis.dy * _transformation.XAxis.dz  + _transformation.XAxis.dy * _transformation.YAxis.dz) * _determinantReciprok
+
+		_inverseTransformation.Yaxis.dx =  (+ _transformation.ZAxis.dx * _transformation.YAxis.dz  - _transformation.YAxis.dx * _transformation.ZAxis.dz) * _determinantReciprok
+		_inverseTransformation.Yaxis.dy =  (- _transformation.ZAxis.dx * _transformation.XAxis.dz  + _transformation.XAxis.dx * _transformation.ZAxis.dz) * _determinantReciprok
+		_inverseTransformation.Yaxis.dz =  (+ _transformation.YAxis.dx * _transformation.XAxis.dz  - _transformation.XAxis.dx * _transformation.YAxis.dz) * _determinantReciprok
+
+		_inverseTransformation.Zaxis.dx =  (- _transformation.ZAxis.dx * _transformation.YAxis.dy  + _transformation.YAxis.dx * _transformation.ZAxis.dy) * _determinantReciprok
+		_inverseTransformation.Zaxis.dy =  (+ _transformation.ZAxis.dx * _transformation.XAxis.dy  - _transformation.XAxis.dx * _transformation.ZAxis.dy) * _determinantReciprok
+		_inverseTransformation.Zaxis.dz =  (- _transformation.YAxis.dx * _transformation.XAxis.dy  + _transformation.XAxis.dx * _transformation.YAxis.dy) * _determinantReciprok
+
+		_inverseTransformation.origin.x =  (+ _transformation.YAxis.dx * _transformation.origin.y * _transformation.ZAxis.dz	\
+											- _transformation.YAxis.dx * _transformation.ZAxis.dy * _transformation.origin.z	\
+											+ _transformation.ZAxis.dx * _transformation.YAxis.dy * _transformation.origin.z	\
+											- _transformation.ZAxis.dx * _transformation.origin.y * _transformation.YAxis.dz	\
+											+ _transformation.origin.x * _transformation.ZAxis.dy * _transformation.YAxis.dz	\
+											- _transformation.origin.x * _transformation.YAxis.dy * _transformation.ZAxis.dz	) * _determinantReciprok
+
+		_inverseTransformation.origin.y =  (+ _transformation.XAxis.dx * _transformation.origin.z * _transformation.ZAxis.dy	\
+											- _transformation.XAxis.dx * _transformation.ZAxis.dz * _transformation.origin.y	\
+											+ _transformation.ZAxis.dx * _transformation.XAxis.dz * _transformation.origin.y	\
+											- _transformation.ZAxis.dx * _transformation.origin.z * _transformation.XAxis.dy	\
+											+ _transformation.origin.x * _transformation.ZAxis.dz * _transformation.XAxis.dy	\
+											- _transformation.origin.x * _transformation.XAxis.dz * _transformation.ZAxis.dy	) * _determinantReciprok
+
+		_inverseTransformation.origin.z =  (+ _transformation.XAxis.dx * _transformation.origin.y * _transformation.YAxis.dz	\
+											- _transformation.XAxis.dx * _transformation.YAxis.dy * _transformation.origin.z	\
+											+ _transformation.YAxis.dx * _transformation.XAxis.dy * _transformation.origin.z	\
+											- _transformation.YAxis.dx * _transformation.origin.y * _transformation.XAxis.dz	\
+											+ _transformation.origin.x * _transformation.YAxis.dy * _transformation.XAxis.dz	\
+											- _transformation.origin.x * _transformation.XAxis.dy * _transformation.YAxis.dz	) * _determinantReciprok
+
+	else
+
+		! singular _transformation, return identity matrix
+		_inverseTransformation.Xaxis.dx = 1
+		_inverseTransformation.Xaxis.dy = 0
+		_inverseTransformation.Xaxis.dz = 0
+
+		_inverseTransformation.Yaxis.dx = 0
+		_inverseTransformation.Yaxis.dy = 1
+		_inverseTransformation.Yaxis.dz = 0
+
+		_inverseTransformation.Zaxis.dx = 0
+		_inverseTransformation.Zaxis.dy = 0
+		_inverseTransformation.Zaxis.dz = 1
+
+		_inverseTransformation.origin.x = 0
+		_inverseTransformation.origin.y = 0
+		_inverseTransformation.origin.z = 0
+
+	endif
+
+return
+
+
+! ===============================================
+"transformPoint3D":
+! Return coordinates of local _point in global coordinate system
+! Can be used to transform point using _transformation (local coordinates don't change)
+! -----------------------------------------------
+! Input:
+!	_point					in local coordinates
+!		.x .y .z
+!	_transformation			local coordinate system expressed in global coordinates (XFORM style)
+!		.origin
+!			.x .y .z
+!		.XAxis
+!			.dx .dy. .dz
+!		.YAxis
+!		.ZAxis
+! Output:
+!	_transformedPoint		in global coordinates
+! ===============================================
+
+	dict _transformedPoint
+
+	_transformedPoint.x = _transformation.XAxis.dx * _point.x + _transformation.YAxis.dx * _point.y + _transformation.ZAxis.dx * _point.z + _transformation.origin.x
+	_transformedPoint.y = _transformation.XAxis.dy * _point.x + _transformation.YAxis.dy * _point.y + _transformation.ZAxis.dy * _point.z + _transformation.origin.y
+	_transformedPoint.z = _transformation.XAxis.dz * _point.x + _transformation.YAxis.dz * _point.y + _transformation.ZAxis.dz * _point.z + _transformation.origin.z
+
+return

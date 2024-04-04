@@ -1,0 +1,846 @@
+dict EPS
+EPS.LENGTH	= 0.0001				! 1/10 mm
+EPS.SQUARE	= EPS.LENGTH **2
+EPS.SCALAR	= EPS.SQUARE
+EPS.ANGLE	= ACS(1 - EPS.SCALAR)	! 0.0081°
+
+! initialize unset optional edgeinfo
+if bPolyOpDict & not(bProfileToPolyOp) then
+
+	_useEdgeInfo = 1
+	if haskey(PolyOpPolygon.useEdgeInfo) then
+		_useEdgeInfo = PolyOpPolygon.useEdgeInfo
+	else	! not set, don't use
+		_useEdgeInfo = 0
+	endif
+
+else
+	! initialize unset edgeinfo
+	if vardim1(edgeinfo) # vardim1(polygon) then
+
+		! handle empty array
+		if vardim1(edgeinfo) = 0 then dim edgeinfo[]
+		iStart = max(1, vardim1(edgeinfo))
+
+		for i = iStart to vardim1(polygon)
+			edgeinfo[i] = 0
+		next i
+	endif
+
+endif
+
+if bPolyOpDict then
+	
+	if bProfileToPolyOp then
+		! ===========================================================================
+		! usage:
+		!		dim outflat[]
+		!		call "ProfileConverter" parameters	bProfileToPolyOp	= 1,
+		!											bPolyOpDict			= 1,
+		!											polygon				= ProfilePolygon,
+		!											edgeinfo			= edgeinfo,	! optional
+		!								returned_parameters PolyOpPolygon
+		!
+		!		!PolyOpPolygon:
+		!		!	.contour					closing point always included
+		!		!		.isClosed				auto-detected with EPS precision of start and endpoints of first contour
+		!		!		.edges[]
+		!		!			.type				0 straight	1 curved
+		!		!			.begPoint
+		!		!				.x .y
+		!		!			.arcAngle			only for curved edges
+		!		!			.edgeInfo
+		!		!	.holes[]					optional, closing point always included
+		! ===========================================================================
+		
+		
+		dict PolyOpPolygon
+		gosub "ProfileToPolyOpDict"
+
+		end PolyOpPolygon
+
+	else	! PolyOp to profile
+
+		! ===========================================================================
+		! usage:
+		!		!PolyOpPolygon:
+		!		!	.useEdgeInfo			bool
+		!		!	.isCLosed
+		!		!	.contour				closing point auto-detected
+		!		!		.edges[]
+		!		!			.type			0 straight	1 curved
+		!		!			.begPoint
+		!		!				.x .y
+		!		!			.arcAngle		only for curved edges
+		!		!			.edgeInfo
+		!		!	.holes[]				optional, closing points auto-detected
+		!
+		!		dim outflat[]
+		!		call "ProfileConverter" parameters	bProfileToPolyOp	= 0,
+		!											bPolyOpDict			= 1,
+		!											PolyOpPolygon		= PolyOpPolygon,
+		!								returned_parameters nOut,
+		!													outflat		! closing point always included
+		!
+		!		dim outpoly[][3], edgeinfo[]
+		!		nCoords = 3 * nOut
+		!		for i = 1 to nOut
+		!			k = (i - 1) * 3
+		!			outpoly[i][1] = outflat[k + 1]
+		!			outpoly[i][2] = outflat[k + 2]
+		!			outpoly[i][3] = outflat[k + 3]
+		!			edgeinfo[i] = outflat[nCoords + i]
+		!		next i
+		!		
+		! ===========================================================================
+
+
+		dim outflat[], edgeinfoout[]
+		gosub "PolyOpDictToProfile"
+
+		end nOut - 1,
+			outflat,
+			edgeinfoout
+
+	endif
+
+else
+
+	if bProfileToPolyOp then
+
+		! ===========================================================================
+		! usage:
+		!		dim outflat[]
+		!		call "ProfileConverter" parameters	bProfileToPolyOp	= 1,
+		!											polygon				= ProfilePolygon,
+		!											edgeinfo			= edgeinfo,	! optional
+		!								returned_parameters nOut,
+		!													outflat
+		!
+		!		dim outpoly[][3], edgeinfo[], contourends[]
+		!		nCoords = 3 * nOut
+		!		for i = 1 to nOut
+		!			k = (i - 1) * 3
+		!			outpoly[i][1] = outflat[k + 1]
+		!			outpoly[i][2] = outflat[k + 2]
+		!			outpoly[i][3] = outflat[k + 3]
+		!			edgeinfo[i] = outflat[nCoords + i]
+		!		next i
+		!		nCoords = 4 * nOut
+		!		for i = 1 to vardim1(outflat) - nCoords
+		!			contourends[i] = outflat[nCoords + i]
+		!		next i
+		! ===========================================================================
+
+
+		dim outflat[], edgeinfoout[], contourends[]
+		gosub "ProfileToPolyOp"
+
+		end nOut - 1,
+			outflat,
+			edgeinfoout,
+			contourends
+
+	else	! PolyOp to profile
+
+		! ===========================================================================
+		! usage:
+		!		dim outflat[]
+		!		call "ProfileConverter" parameters	bProfileToPolyOp	= 0,
+		!											polygon				= PolyOpPolygon,
+		!											edgeinfo			= edgeinfo,	! optional
+		!											contourends			= contourends,
+		!								returned_parameters nOut,
+		!													outflat
+		!
+		!		dim outpoly[][3], edgeinfo[]
+		!		nCoords = 3 * nOut
+		!		for i = 1 to nOut
+		!			k = (i - 1) * 3
+		!			outpoly[i][1] = outflat[k + 1]
+		!			outpoly[i][2] = outflat[k + 2]
+		!			outpoly[i][3] = outflat[k + 3]
+		!			edgeinfo[i] = outflat[nCoords + i]
+		!		next i
+		! ===========================================================================
+
+		dim outflat[], edgeinfoout[]
+		gosub "PolyOpToProfile"
+
+		end nOut - 1,
+			outflat,
+			edgeinfoout
+	endif
+endif
+
+! ===============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ===============================================================================
+
+
+! ===============================================================================
+! status-coded profile to PolyOperations dictionary polygon
+!
+	"ProfileToPolyOpDict":
+! -------------------------------------------------------------------------------
+! input:
+!	polygon[][3]		x, y, status
+!							should contain one polygon only, possibly with holes
+!							closing points always needed
+!		status			additionalStatus
+!						-1, 0, 900, 3000, 4000 (+ 0-100)
+!							others not supported
+!
+!	edgeinfo[]			can be used to pair visibility status codes, materials
+! output:
+!	PolyOpPolygon
+!		.isClosed
+!		.contour				closing point always included
+!			.edges[]
+!				.type			0 straight	1 curved
+!				.begPoint
+!					.x .y
+!				.arcAngle		only for curved edges
+!				.edgeInfo
+!		.holes[]				optional, closing points always included
+! ===============================================================================
+
+	dict PolyOpPolygon
+	dim EMPTYARRAY[]
+	PolyOpPolygon.isClosed = 1
+	PolyOpPolygon.contour.edges = EMPTYARRAY
+
+	dim _rotatedvector[2]
+
+	nIn = 1
+	nOut = 1
+	nHole = 0
+
+	dim _center[2]
+	_center[1] = 0
+	_center[2] = 0
+	dict _contour
+	while nIn <= vardim1(polygon) do
+		iStatus = int(polygon[nIn][3])	! real-to integer conversion
+		if (iStatus > 0) then iStatus = iStatus - iStatus % 100	! drop status 1-99
+
+		if iStatus = 0 | iStatus = -1 then			! normal vertex
+
+			_contour.edges[nOut].edgeInfo	= edgeinfo[nIn]		! edgeinfo
+			_contour.edges[nOut].type		= 0					! straight/unknown
+			_contour.edges[nOut].begPoint.x = polygon[nIn][1]	! x
+			_contour.edges[nOut].begPoint.y = polygon[nIn][2]	! y
+
+			if iStatus = -1 or nIn = vardim1(polygon)  then
+				! store _contour
+				if nHole = 0 then
+					PolyOpPolygon.contour = _contour
+
+					gosub "hasClosingPoint"	! returns _hasClosingPoint from _contour
+					PolyOpPolygon.isClosed = _hasClosingPoint
+				else
+					PolyOpPolygon.holes[nHole] = _contour
+				endif
+
+				! next contour
+				dict _contour
+				nOut = 0
+				nHole = nHole + 1
+			endif
+
+			nOut = nOut + 1
+		endif
+
+		if iStatus = 900 then					! set centerpoint
+
+			! store center for later use
+			_center[1]	= polygon[nIn][1]
+			_center[2]	= polygon[nIn][2]
+
+			! no output
+		endif
+
+		if iStatus = 3000 then					! arc using centerpoint and point on the final radius
+
+			! radius using previous point and center
+			_dx = _contour.edges[nOut - 1].begPoint.x - _center[1]
+			_dy = _contour.edges[nOut - 1].begPoint.y - _center[2]
+			_r = sqr(_dx **2 + _dy **2)
+			gosub "atan2_180"
+			_startOrient = _atan2
+
+			! end radius vector using this point
+			_dx = polygon[nIn][1] - _center[1]
+			_dy = polygon[nIn][2] - _center[2]
+			gosub "atan2_180"
+			_endOrient = _atan2
+			! normalize length to radius of arc
+			_norm = _r / sqr(_dx **2 + _dy **2)
+			_dx = _dx * _norm
+			_dy = _dy * _norm
+			
+			_contour.edges[nOut].edgeInfo		= edgeinfo[nIn]		! edgeinfo
+			_contour.edges[nOut].type			= 0					! straight/unknown
+			_contour.edges[nOut].begPoint.x 	= _center[1] + _dx	! x
+			_contour.edges[nOut].begPoint.y 	= _center[2] + _dy	! y
+
+			! copy angle from this vertex to previous vertex
+			_angle = _endOrient - _startOrient
+			if _angle > 180 then _angle = _angle - 360
+			if _angle < -180 then _angle = _angle + 360
+
+			_contour.edges[nOut - 1].type		= 1					! curved
+			_contour.edges[nOut - 1].arcAngle	= _angle			! angle
+
+			nOut = nOut + 1
+		endif
+
+		if iStatus = 4000 then					! arc using centerpoint and angle
+				
+			! start radius vector using previous point
+			_dx = _contour.edges[nOut - 1].begPoint.x - _center[1]
+			_dy = _contour.edges[nOut - 1].begPoint.y - _center[2]
+			! rotation from this vertex
+			_angle = polygon[nIn][2]
+			gosub "rotateVector"
+
+			! copy angle from this vertex to previous vertex
+			_contour.edges[nOut - 1].type		= 1					! curved
+			_contour.edges[nOut - 1].arcAngle	= _angle			! angle
+
+			! add returned end radius vector to centerpoint
+			_contour.edges[nOut].edgeInfo		= edgeinfo[nIn]		! edgeinfo
+			_contour.edges[nOut].type			= 0					! straight/unknown
+			_contour.edges[nOut].begPoint.x 	= _center[1] + _rotatedvector[1]	! x
+			_contour.edges[nOut].begPoint.y 	= _center[2] + _rotatedvector[2]	! y
+
+			nOut = nOut + 1
+		endif
+
+		! next input point
+		nIn = nIn + 1
+
+	endwhile
+
+return
+
+
+! ===============================================================================
+! status-coded profile to PolyOperations profile
+!
+	"ProfileToPolyOp":
+! -------------------------------------------------------------------------------
+! input:
+!	polygon[][3]		x, y, status
+!							should contain one polygon only, possibly with holes, with closing points
+!		status			additionalStatus 
+!						-1, 0, 900, 3000, 4000 (+ 0-100)
+!							others not supported
+!
+!	edgeinfo[]			can be used to pair visibility status codes, materials
+! output:
+!	nOut				number of points in result polygon, closed
+!	outflat[]			x, y, angle,
+!						x, y, angle,
+!						...
+!	edgeinfoout[]		can be used to pair visibility status codes, materials
+!	contourends[]		end index of each contour in outflat
+! ===============================================================================
+
+	dim outflat[], edgeinfoout[], contourends[]
+	dim _rotatedvector[2]
+
+	nIn = 1
+	nOut = 1
+	nOutFlat = 1
+	nContour = 1
+
+	dim _center[2]
+	_center[1] = 0
+	_center[2] = 0
+
+	nContourSize = 0
+	while nIn <= vardim1(polygon) do
+		iStatus = int(polygon[nIn][3])	! real-to integer conversion
+		if (iStatus > 0) then iStatus = iStatus - iStatus % 100	! drop status 1-99
+		nContourSize = nContourSize + 1
+
+		if iStatus = 0 | iStatus = -1 then			! normal vertex
+
+			! copy vertex
+			edgeinfoout[nOut]		= edgeinfo[nIn]		! edgeinfo
+			outflat[nOutFlat]		= polygon[nIn][1]	! x
+			outflat[nOutFlat + 1]	= polygon[nIn][2]	! y
+			outflat[nOutFlat + 2]	= 0					! angle
+
+			if iStatus = -1 or nIn = vardim1(polygon) then
+				! save contour size
+				contourends[nContour] = nOut
+				nContourSize = 0
+				nContour = nContour + 1
+			endif
+
+			nOut = nOut + 1
+			nOutFlat = nOutFlat + 3
+		endif
+
+		if iStatus = 900 then					! set centerpoint
+
+			! store center for later use
+			_center[1]	= polygon[nIn][1]
+			_center[2]	= polygon[nIn][2]
+
+			! no output
+		endif
+
+		if iStatus = 3000 then					! arc using centerpoint and point on the final radius
+
+			! radius using previous point and center
+			_dx = outflat[nOutFlat - 3] - _center[1]
+			_dy = outflat[nOutFlat - 2] - _center[2]
+			_r = sqr(_dx **2 + _dy **2)
+			gosub "atan2_180"
+			_startOrient = _atan2
+
+			! end radius vector using this point
+			_dx = polygon[nIn][1] - _center[1]
+			_dy = polygon[nIn][2] - _center[2]
+			gosub "atan2_180"
+			_endOrient = _atan2
+			! normalize length to radius of arc
+			_norm = _r / sqr(_dx **2 + _dy **2)
+			_dx = _dx * _norm
+			_dy = _dy * _norm
+			
+			edgeinfoout[nOut] 		= edgeinfo[nIn]		! edgeinfo from this vertex
+			outflat[nOutFlat]		= _center[1] + _dx 	! x
+			outflat[nOutFlat + 1]	= _center[2] + _dy	! y
+			outflat[nOutFlat + 2]	= 0					! angle
+
+			! copy angle from this vertex to previous vertex
+			_angle = _endOrient - _startOrient
+			if _angle > 180 then _angle = _angle - 360
+			if _angle < -180 then _angle = _angle + 360
+			outflat[nOutFlat - 1]	= _angle
+
+			nOut = nOut + 1
+			nOutFlat = nOutFlat + 3
+		endif
+
+		if iStatus = 4000 then					! arc using centerpoint and angle
+				
+			! start radius vector using previous point
+			_dx = outflat[nOutFlat - 3] - _center[1]
+			_dy = outflat[nOutFlat - 2] - _center[2]
+			! rotation from this vertex
+			_angle = polygon[nIn][2]
+			gosub "rotateVector"
+
+			! copy angle from this vertex to previous vertex
+			outflat[nOutFlat - 1]	= _angle
+
+			! add returned end radius vector to centerpoint
+			edgeinfoout[nOut] 		= edgeinfo[nIn]						! edgeinfo from this vertex
+			outflat[nOutFlat]		= _center[1] + _rotatedvector[1] 	! x
+			outflat[nOutFlat + 1]	= _center[2] + _rotatedvector[2]	! y
+			outflat[nOutFlat + 2]	= 0									! angle
+				
+			nOut = nOut + 1
+			nOutFlat = nOutFlat + 3
+
+		endif
+
+		! next input point
+		nIn = nIn + 1
+
+	endwhile
+
+return
+
+
+! ===============================================================================
+! PolyOperations dictionary polygon to status-coded profile
+!
+	"PolyOpDictToProfile":
+! -------------------------------------------------------------------------------
+! input:
+!	_useEdgeInfo
+!	PolyOpPolygon
+!		.isClosed
+!		.contour				closing point auto-detected
+!			.edges[]
+!				.type			0 straight	1 curved
+!				.begPoint
+!					.x .y
+!				.arcAngle		only for curved edges
+!				.edgeInfo		used only if _useEdgeInfo = 1, otherwise defaults to 0
+!		.holes[]				optional, closing point auto-detected
+! output:
+!	nOut				number of points in result polygon, closed
+!	outflat[]			x, y, status,
+!						x, y, status,
+!						...
+!		status			-1, 0, 900, 4000
+!							others not used
+!	edgeinfoout[]		can be used to pair visibility status codes or materials
+! ===============================================================================
+
+
+	dim outflat[], edgeinfoout[]
+
+	nOut = 1
+	nOutFlat = 1
+
+	if haskey(PolyOpPolygon.holes) then
+		nContour = vardim1(PolyOpPolygon.holes)
+	else
+		nContour = 0
+	endif
+
+	for nHole = 0 to nContour
+
+		dict _contour
+		if nHole = 0 then
+			_contour = PolyOpPolygon.contour
+		else
+			_contour = PolyOpPolygon.holes[nHole]
+		endif
+
+		_nEdges = vardim1(_contour.edges)
+		if PolyOpPolygon.isClosed then	! add closing point if needed
+
+			gosub "hasClosingPoint"	! returns _hasClosingPoint from _contour
+
+			if not(_hasClosingPoint) then
+				_nEdges = _nEdges + 1
+				_contour.edges[_nEdges] = _contour.edges[1]	! assume first point is normal point (status < 100)
+				_contour.edges[_nEdges].type = 0			! straight
+			endif
+
+		endif
+
+		bPrevCurved = 0
+	
+		for nIn = 1 to _nEdges
+
+			dict _edge : _edge = _contour.edges[nIn]
+
+			if not(bPrevCurved) then
+
+				! copy vertex, status 0
+				if _useEdgeInfo then
+					edgeinfoout[nOut] 	= _edge.edgeinfo
+				else
+					edgeinfoout[nOut]	= 0
+				endif
+				outflat[nOutFlat]		= _edge.begPoint.x
+				outflat[nOutFlat + 1]	= _edge.begPoint.y
+				outflat[nOutFlat + 2]	= 0					! status
+
+				nOut = nOut + 1
+				nOutFlat = nOutFlat + 3
+
+			endif
+
+
+			if _edge.type = 0 then		! straight
+
+				if nIN = _nEdges then
+
+					! close contour
+					if not(bPrevCurved) then					! nOutFlat already incremented
+						outflat[nOutFlat - 1]	= -1			! status
+					else
+						outflat[nOutFlat]		= outflat[1]	! assume first point is normal point (status < 100)
+						outflat[nOutFlat + 1]	= outflat[2]
+						outflat[nOutFlat + 2]	= -1
+						edgeinfoout[nOut] 		= 0				! invisible vertex
+						nOut = nOut + 1
+					endif
+
+				endif
+
+				bPrevCurved = 0
+			else						! curved
+				dict _nextEdge : _nextEdge = _contour.edges[nIn + 1]
+
+				! centerpoint calculation
+				_edgeStartXCoord = _edge.begPoint.x
+				_edgeStartYCoord = _edge.begPoint.y
+				_alpha = _edge.arcAngle
+				_edgeEndXCoord = _nextEdge.begPoint.x
+				_edgeEndYCoord = _nextEdge.begPoint.y
+				gosub "calculateArchCenter"
+
+				! centerpoint, status 900
+				edgeinfoout[nOut] 		= 0					! invisible vertex
+				outflat[nOutFlat]		= _centerX			! x
+				outflat[nOutFlat + 1]	= _centerY			! y
+				outflat[nOutFlat + 2]	= 900				! status
+
+				nOut = nOut + 1
+				nOutFlat = nOutFlat + 3
+
+				! arc, status 4000
+				if _useEdgeInfo then
+					edgeinfoout[nOut] 	= _nextEdge.edgeinfo! edgeinfo of end vertex
+				else
+					edgeinfoout[nOut]	= 0
+				endif
+				outflat[nOutFlat]		= 0					! 0
+				outflat[nOutFlat + 1]	= _edge.arcAngle	! angle
+				outflat[nOutFlat + 2]	= 4000				! status
+
+				nOut = nOut + 1
+				nOutFlat = nOutFlat + 3
+
+
+edgeinfoout[nOut] 		= 0		! edgeinfo
+outflat[nOutFlat]		= _nextEdge.begPoint.x
+outflat[nOutFlat + 1]	= _nextEdge.begPoint.y
+outflat[nOutFlat + 2]	= 0					! statu
+
+nOut = nOut + 1
+nOutFlat = nOutFlat + 3
+
+
+				bPrevCurved = 1
+			endif
+
+		next nIn
+
+	next nHole
+
+return
+
+! ===============================================================================
+! PolyOperations profile to status-coded profile
+!
+	"PolyOpToProfile":
+! -------------------------------------------------------------------------------
+! input:
+!	polygon[][3]		x, y, angle
+!							should contain one polygon only, possibly with holes, with closing points
+!	contourends[]		number of vertices in each contour
+!	edgeinfo[]			can be used to pair visibility status codes or materials
+! output:
+!	nOut				number of points in result polygon, closed
+!	outflat[]			x, y, status,
+!						x, y, status,
+!						...
+!		status			-1, 0, 900, 4000
+!							others not used
+!	edgeinfoout[]		can be used to pair visibility status codes or materials
+! ===============================================================================
+
+
+	dim outflat[], edgeinfoout[]
+
+	nIn = 1
+	nOut = 1
+	nOutFlat = 1
+	nContour = 1
+	bPrevCurved = 0
+
+	while nIn <= vardim1(polygon) do
+
+		if not(bPrevCurved) then
+
+			! copy vertex, status 0
+			edgeinfoout[nOut] 		= edgeinfo[nIn]		! edgeinfo
+			outflat[nOutFlat]		= polygon[nIn][1]	! x
+			outflat[nOutFlat + 1]	= polygon[nIn][2]	! y
+			outflat[nOutFlat + 2]	= 0					! status
+
+			nOut = nOut + 1
+			nOutFlat = nOutFlat + 3
+
+		endif
+
+
+		if abs(polygon[nIn][3]) < EPS.ANGLE then		! straight edge
+
+			if nIn = contourends[nContour] then
+				! close contour
+				if not(bPrevCurved) then
+					outflat[nOutFlat - 1]	= -1		! status
+				else
+					outflat[nOutFlat]		= outflat[1]	! assume first point is normal point (status < 100)
+					outflat[nOutFlat + 1]	= outflat[2]
+					outflat[nOutFlat + 2]	= -1
+					edgeinfoout[nOut] 		= 0				! invisible vertex
+					nOut = nOut + 1
+				endif
+
+				nContour = nContour + 1
+			endif
+
+			bPrevCurved = 0
+		else									! curved edge
+
+			! centerpoint calculation
+			_edgeStartXCoord = polygon[nIn][1]
+			_edgeStartYCoord = polygon[nIn][2]
+			_alpha = polygon[nIn][3]
+			_edgeEndXCoord = polygon[nIn + 1][1]
+			_edgeEndYCoord = polygon[nIn + 1][2]
+			gosub "calculateArchCenter"
+
+			! centerpoint, status 900
+			edgeinfoout[nOut] 		= 0					! invisible vertex
+			outflat[nOutFlat]		= _centerX			! x
+			outflat[nOutFlat + 1]	= _centerY			! y
+			outflat[nOutFlat + 2]	= 900				! status
+
+			nOut = nOut + 1
+			nOutFlat = nOutFlat + 3
+
+			! arc, status 4000
+			edgeinfoout[nOut] 		= edgeinfo[nIn + 1]	! edgeinfo of end vertex
+			outflat[nOutFlat]		= 0					! 0
+			outflat[nOutFlat + 1]	= polygon[nIn][3]	! angle
+			outflat[nOutFlat + 2]	= 4000				! status
+
+			nOut = nOut + 1
+			nOutFlat = nOutFlat + 3
+
+
+! arc, status 4000
+edgeinfoout[nOut] 		= edgeinfo[nIn]		! edgeinfo
+outflat[nOutFlat]		= polygon[nIn][1]	! x
+outflat[nOutFlat + 1]	= polygon[nIn][2]	! y
+outflat[nOutFlat + 2]	= 0					! status
+
+nOut = nOut + 1
+nOutFlat = nOutFlat + 3
+
+
+
+
+			bPrevCurved = 1
+		endif
+
+		nIn = nIn + 1
+	endwhile
+
+return
+
+
+! ===============================================================================
+! Is last point of _contour a closing point?
+!
+"hasClosingPoint":
+! -------------------------------------------------------------------------------
+! input:
+!	_contour.edges[]
+! output:
+!	_hasClosingPoint
+! ===============================================================================
+
+	dict _firstEdge, _lastEdge
+	_firstEdge	= _contour.edges[1]
+	_lastEdge	= _contour.edges[vardim1(_contour.edges)]
+	_hasClosingPoint = (abs(_lastEdge.begPoint.x - _firstEdge.begPoint.x) < EPS.LENGTH &\
+						abs(_lastEdge.begPoint.y - _firstEdge.begPoint.y) < EPS.LENGTH )
+	if _hasClosingPoint & _lastEdge.type = 1 then	! curved edge
+		! ending curve begPoint is closing point only if arcAngle is small
+		_hasClosingPoint = (abs(_lastEdge.arcAngle) < EPS.ANGLE)
+	endif
+
+return
+
+
+! ===============================================================================
+! 2D rotate vector by _angle
+!
+	"rotateVector":
+! -------------------------------------------------------------------------------
+! input:
+!	_dx
+!	_dy
+!	_angle				in degrees, counterclockwise+
+! output:
+!	_rotatedvector[2]	x, y
+! ===============================================================================
+	
+	gosub "calculateEdgeAngleAndLength"
+
+	_rotatedvector[1] = _dLength * cos(_dAngle + _angle)
+	_rotatedvector[2] = _dLength * sin(_dAngle + _angle)
+
+return
+
+
+! ==============================================================================
+! calculate arched vector center and radius
+!
+	"calculateArchCenter":
+! ------------------------------------------------------------------------------
+! Input:
+! 	_alpha				range (0, +-360), +: right, -: left
+!	_edgeStartXCoord
+!	_edgeStartYCoord
+!	_edgeEndXCoord
+!	_edgeEndYCoord
+! Output:
+!	_centerX
+!	_centerY
+!	_radius
+! ==============================================================================
+
+	_halfX = (_edgeStartXCoord + _edgeEndXCoord) / 2
+	_halfY = (_edgeStartYCoord + _edgeEndYCoord) / 2
+	_dx = _edgeEndXCoord - _edgeStartXCoord
+	_dy = _edgeEndYCoord - _edgeStartYCoord
+	gosub "calculateEdgeAngleAndLength"		! returns _dLength, _dAngle
+
+	_radius = (_dLength / 2) / sin(_alpha / 2)
+	_dHalf	= _radius * cos(_alpha / 2)
+	_centerX = _halfX - _dHalf * sin(_dAngle)
+	_centerY = _halfY + _dHalf * cos(_dAngle)
+
+!print "(", _edgeStartXCoord, _edgeStartYCoord, ")-(", _edgeEndXCoord, _edgeEndXCoord, "): ", _centerX, _centerY
+
+return
+
+
+! ==============================================================================
+! Calculate Vector Angle and Length
+!
+	"calculateEdgeAngleAndLength":
+! ------------------------------------------------------------------------------
+! input:
+!	_dx
+!	_dy
+! output:
+!	_dLength
+!	_dAngle		0: right
+! ==============================================================================
+
+	_dLength = sqr(_dx **2 + _dy **2)
+	gosub "atan2_180"
+	_dAngle = _atan2
+
+return
+
+
+! ===============================================================================
+! rotation of (_x, _y) around (0, 0), starting from x axis, counterclockwise +
+!
+	"atan2_180":
+! -------------------------------------------------------------------------------
+! input:
+!	_dx
+!	_dy
+! output:
+!	_atan2		degrees, range (-180...180]
+! ===============================================================================
+
+	if abs(_dx) > 0 then
+		_atan2 = atn(_dy / _dx) + 90 * (1 - sgn(_dx)) * (1 - 2 * (sgn(_dy) < 0))
+	else
+		_atan2 = sgn(_dy * (abs(_dy) > 0)) * 90
+	endif
+
+return
+

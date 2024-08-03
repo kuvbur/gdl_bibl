@@ -1,0 +1,129 @@
+
+call "FM_types" parameters all
+
+values "gs_detlevel_3D"	stDetLevel
+values "iDetlevel3D"	DETLEVEL_DETAILED, DETLEVEL_SIMPLE, DETLEVEL_OFF
+
+values "end_mode"		stEndMode
+values "iEndMode"		ENDMODE_PERPENDICULAR, ENDMODE_HORIZONTAL, ENDMODE_CUSTOM
+
+values "edit_mode"		stEditMode
+values "iEditMode"		EDITMODE_ANGLELENGTH, EDITMODE_COORDINATES
+
+values "GAMMA"			range [0,360]
+values "radius_1" 		range (0,]
+
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+	iDetlevel3D = DETLEVEL_DETAILED
+	if gs_detlevel_3D = stDetLevel[2] then iDetlevel3D = DETLEVEL_SIMPLE
+	if gs_detlevel_3D = stDetLevel[3] then iDetlevel3D = DETLEVEL_OFF
+	parameters iDetlevel3D = iDetlevel3D
+else
+	iDetlevel3D = max(1, min(iDetlevel3D, vardim1(stDetLevel)))
+	gs_detlevel_3D = stDetLevel[iDetlevel3D]
+	parameters gs_detlevel_3D = gs_detlevel_3D, iDetlevel3D = iDetlevel3D
+endif
+
+if GLOB_MODPAR_NAME = "end_mode" then
+	iEndMode = ENDMODE_PERPENDICULAR
+	if end_mode = stEndMode[2] then iEndMode = ENDMODE_HORIZONTAL
+	if end_mode = stEndMode[3] then iEndMode = ENDMODE_CUSTOM
+	parameters iEndMode = iEndMode
+else
+	iEndMode = max(1, min(iEndMode, vardim1(stEndMode)))
+	end_mode = stEndMode[iEndMode]
+	parameters end_mode = end_mode, iEndMode = iEndMode
+endif
+
+if GLOB_MODPAR_NAME = "edit_mode" then
+	iEditMode = EDITMODE_ANGLELENGTH
+	if edit_mode = stEditMode[2] then iEditMode = EDITMODE_COORDINATES
+	parameters iEditMode = iEditMode
+else
+	iEditMode = max(1, min(iEditMode, vardim1(stEditMode)))
+	edit_mode = stEditMode[iEditMode]
+	parameters edit_mode = edit_mode, iEditMode = iEditMode
+endif
+
+if iEndMode = ENDMODE_HORIZONTAL | iEndMode = ENDMODE_PERPENDICULAR then hideparameter "angle_1","angle_2"
+
+if gs_cont_pen = 0	then parameters gs_cont_pen = 2
+if gs_fill_pen = 0	then parameters gs_fill_pen = 91
+If gs_resol < 3		then parameters gs_resol = 3
+
+lock "a","b"
+if iDetlevel3D = DETLEVEL_SIMPLE then lock "gs_resol"
+if abs(gamma-90)>=eps & abs(gamma-270)>=eps then lock "gs_fill_pen"
+
+if GLOB_MODPAR_NAME = "radius_1"	then parameters radius_1_gc	= radius_1 * cos(90 - gamma)
+if GLOB_MODPAR_NAME = "radius_1_gc"	then parameters radius_1	= radius_1_gc / cos(90 - gamma)
+
+if GLOB_MODPAR_NAME = "radius_2"	then parameters radius_2_gc	= radius_2 * cos(90-gamma)
+if GLOB_MODPAR_NAME = "radius_2_gc"	then parameters radius_2	= radius_2_gc / cos(90-gamma)
+
+if GLOB_MODPAR_NAME = "gamma"		then parameters radius_1_gc	= radius_1 * cos(90 - gamma), radius_2_gc = radius_2 * cos(90-gamma)
+
+
+if iEditMode = EDITMODE_COORDINATES then
+	if abs(dist_x) < eps & abs(dist_y) < eps then
+		gamma	= 90
+		beta	= 0
+	else
+		gamma	= atn(zzyzx/(sqr(dist_x^2+dist_y^2)))
+
+		if abs(dist_x) >= eps & abs(dist_y) >= eps then
+			if dist_x > 0 then
+				if dist_y > 0 then
+					beta = atn(dist_y/dist_x)
+				else
+					beta = 360 - atn(abs(dist_y)/dist_x)
+				endif
+			else
+				if dist_y > 0 then
+					beta = 180 - atn(dist_y/abs(dist_x))
+				else
+					beta = 180 + atn(abs(dist_y)/abs(dist_x))
+				endif
+			endif
+		else
+			if abs(dist_x) < eps then
+				if dist_y > 0 then
+					beta = 90
+				else
+					beta = 270
+				endif
+			else
+				if dist_x > 0 then
+					beta = 0
+				else
+					beta = 180
+				endif
+			endif
+		endif
+	endif
+
+	!! Length on the Center
+	length = sqr(dist_x^2+dist_y^2+zzyzx^2)
+
+	parameters	gamma	= gamma,
+				beta	= beta,
+				length	= length,
+				a		= 2 * radius_1,
+				b		= 2 * radius_1
+
+	lock "gamma","length"
+else
+	!! Length on the Center
+	parameters	zzyzx	= length * sin(gamma),
+				a		= length * cos(gamma),
+				b		= max(2 * radius_1, 2 * radius_2),
+				dist_x	= length * cos(gamma),
+				dist_y	= 0
+
+	lock "zzyzx","dist_x","dist_y"
+endif
+
+
+
+

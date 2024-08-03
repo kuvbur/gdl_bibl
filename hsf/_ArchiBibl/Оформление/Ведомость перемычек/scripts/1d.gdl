@@ -1,0 +1,193 @@
+!2014
+!kuvbur@gmail.com
+otobr = 0
+if annot[1] = 0 then 
+	otobr = 1
+else
+	for i=1 to vardim1(annot)
+		if annot[i] = GLOB_SCALE then otobr = 1
+	next i
+endif
+
+mul2 glob_scale, glob_scale
+
+n_unic_m = 1
+dim unic_marka[][]
+n_unic_p = 1
+dim unic_perem[][]
+dim out[][]
+
+nn=REQUEST ("DateTime", "%H:%M:%S", n_time_s)
+PARAMETERS rez_1="ОШИБКА"
+ch6=OPEN("TEXT",name_file,"SEPARATOR=';',MODE=RO,LIBRARY")
+if ch6>0 then
+	PARAMETERS rez_1="успешно "+n_time_s
+else
+	PARAMETERS rez_1="ОШИБКА"
+endif
+
+i = 1 : n = 1
+"nxts":
+if n <> -1 then
+	n=INPUT(ch6,i,1,layers,marka,tip_el,pos_on_spec,pos_on_marka,otm_ved,
+					koord_11,koord_12,koord_13,koord_14,koord_15,koord_16,koord_17,
+					koord_21,koord_22,koord_23,koord_24,koord_25,koord_26,koord_27,
+					n_el,id)
+	if vartype(tip_el) = 1 then tip_el = str("%.0",tip_el)
+	if tip_el = "60" then 
+!gosub "debug1"
+		flag = 0
+		if n_unic_m = 1 then
+			gosub "tounic_m"
+		else
+			for k = 1 to n_unic_m
+				m = unic_marka[k][1]
+				if VARTYPE(m) = 1 then m = str("%.0",m)
+				if marka = m then flag = k
+			next k
+			if flag = 0 then
+				gosub "tounic_m"
+			else
+				flag_otm = 0
+				for l = 2 to 28
+					if vartype(unic_marka[flag][l]) = 2 then
+						if unic_marka[flag][l] = otm_ved then flag_otm  = 1
+					else
+						n_otm = l
+						goto 30
+					endif
+				next l
+30:
+				if flag_otm = 0 then
+					unic_marka[flag][n_otm] = otm_ved
+					unic_marka[flag][30] = n_otm
+				endif
+			endif
+		endif
+
+		cs_perem = marka + str("%.0",pos_on_marka) + str("%.0",pos_on_spec)
+		flag = 0
+		if n_unic_p = 1 then
+			gosub "tounic_p"
+		else
+			for k = 1 to n_unic_p-1
+				if unic_perem[k][1] = cs_perem then flag = 1
+			next k
+			if flag = 0 then gosub "tounic_p"
+		endif
+	endif
+	i = i + 1
+	goto "nxts"
+else
+	close (ch6)
+endif
+n_unic_m = n_unic_m - 1
+n_unic_p = n_unic_p - 1
+n = 1
+
+DEFINE STYLE "шапка" Shrift, Shrift_razm+0.3, 5, Shrift_tip
+DEFINE STYLE "поз" Shrift, Shrift_razm, 5, Shrift_tip
+s1 = -0.03
+if otobr then
+	for i = 1 to n_unic_m
+		r_max = 0
+		h_max = 0
+		for j = 1 to n_unic_p
+			if unic_marka[i][1] = unic_perem[j][2] then
+				n_t = unic_perem[j][12]
+				otstup = unic_perem[j][19]
+				for k = 1 to n_t
+					put unic_perem[j][k+5],unic_perem[j][k+12]
+					r_max = max(r_max, unic_perem[j][k+5])
+					h_max = max(h_max, unic_perem[j][k+12])
+				next k
+				pen 21
+				POLY2 NSP/2,1+2+4, get(NSP)
+				SET STYLE "поз"
+				text2 (unic_perem[j][6]+unic_perem[j][8])/2,(unic_perem[j][13]+unic_perem[j][15])/2,unic_perem[j][3]
+			endif
+		next j
+		n_otm = unic_marka[i][30]
+		add2 r_max,0
+		pen 1
+		for j = 2 to n_otm
+			call 'macro_otm' parameters dlin_vin=0.005, 
+										h_polki=Shrift_razm*j/500, 
+										h_strelki=Shrift_razm/1500,
+										dlin_polki=0.01,
+										vistup_strelki=0,
+										polozh = "Вправо-вверх",
+										otmetka_v = unic_marka[i][j],
+										otmetka_n = " ",
+										Shrift_razm = Shrift_razm
+		next j
+		del 1
+		h_str = max(Shrift_razm*n_otm/500,h_max)+3/100
+		add2 0,-h_str
+	next i
+endif	
+
+goto 20
+"tounic_m":
+	m = marka
+	if VARTYPE(m) = 1 then m = str("%.0",m)
+	unic_marka[n_unic_m][1] = m
+	unic_marka[n_unic_m][2] = otm_ved
+	unic_marka[n_unic_m][30] = 2
+	n_unic_m = n_unic_m + 1
+return
+
+"tounic_p":
+	k = 5
+	unic_perem[n_unic_p][1] = cs_perem
+	unic_perem[n_unic_p][2] = marka
+	unic_perem[n_unic_p][3] = pos_on_spec
+	unic_perem[n_unic_p][4] = pos_on_marka
+	unic_perem[n_unic_p][5] = otm_ved
+	unic_perem[n_unic_p][6] = koord_11/(1000*k)
+	unic_perem[n_unic_p][7] = koord_12/(1000*k)
+	unic_perem[n_unic_p][8] = koord_13/(1000*k)
+	unic_perem[n_unic_p][9] = koord_14/(1000*k)
+	unic_perem[n_unic_p][10] = koord_15/(1000*k)
+	unic_perem[n_unic_p][11] = koord_16/(1000*k)
+	unic_perem[n_unic_p][12] = koord_17/1000
+	unic_perem[n_unic_p][13] = koord_21/(1000*k)
+	unic_perem[n_unic_p][14] = koord_22/(1000*k)
+	unic_perem[n_unic_p][15] = koord_23/(1000*k)
+	unic_perem[n_unic_p][16] = koord_24/(1000*k)
+	unic_perem[n_unic_p][17] = koord_25/(1000*k)
+	unic_perem[n_unic_p][18] = koord_26/(1000*k)
+	unic_perem[n_unic_p][19] = koord_27/1000
+	unic_perem[n_unic_p][20] = id
+	n_unic_p = n_unic_p + 1
+return
+
+"debug1":
+	strtxt = layers
+	strtxt = strtxt + marka + ", "
+	strtxt = strtxt + tip_el + "-tip_el, "
+	strtxt = strtxt + str("%.0",pos_on_spec) + "-pos_on_spec, "
+	strtxt = strtxt + str("%.0",pos_on_marka) + "-pos_on_marka, "
+	strtxt = strtxt + otm_ved + "-otm_ved, "
+	strtxt = strtxt + str("%.0",koord_11) + "-11, "
+	strtxt = strtxt + str("%.0",koord_12) + "-12, "
+	strtxt = strtxt + str("%.0",koord_13) + "-13, "
+	strtxt = strtxt + str("%.0",koord_14) + "-14, "
+	strtxt = strtxt + str("%.0",koord_15) + "-15, "
+	strtxt = strtxt + str("%.0",koord_16) + "-16, "
+	strtxt = strtxt + str("%.0",koord_17) + "-17, "
+	strtxt = strtxt + str("%.0",koord_21) + "-21, "
+	strtxt = strtxt + str("%.0",koord_22) + "-22, "
+	strtxt = strtxt + str("%.0",koord_23) + "-23, "
+	strtxt = strtxt + str("%.0",koord_24) + "-24, "
+	strtxt = strtxt + str("%.0",koord_25) + "-25, "
+	strtxt = strtxt + str("%.0",koord_26) + "-26, "
+	strtxt = strtxt + str("%.0",koord_27) + "-27, "
+	strtxt = strtxt + n_el + "-n_el, "
+	strtxt = strtxt + id + "-id"
+	text2 0,-i,strtxt
+return
+20:
+
+
+

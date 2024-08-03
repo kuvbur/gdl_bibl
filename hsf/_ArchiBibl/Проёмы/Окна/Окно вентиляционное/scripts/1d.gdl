@@ -1,0 +1,187 @@
+call "Параметры окна" parameters all, WALL_COMPS_NAME_ = WALL_COMPS_NAME,WALL_SKINS_NUMBER_ = WALL_SKINS_NUMBER, WALL_SKINS_PARAMS_ = WALL_SKINS_PARAMS, WALL_THICKNESS_ = WALL_THICKNESS 
+if GLOB_SCRIPT_TYPE = 2 or GLOB_SCRIPT_TYPE = 3 and GLOB_PREVIEW_MODE = 0 then
+	success = LIBRARYGLOBAL ("Libraryflobals-as", "show_empty_wind", show_empty_wind)
+	if (GLOB_STRUCTURE_DISPLAY = upr_n or show_empty_wind) then end
+	success = LIBRARYGLOBAL ("Libraryflobals-as", "show_asotv", show_asotv)
+	success = LIBRARYGLOBAL ("Libraryflobals-as", "min_h_otv", min_h_otv)
+	success = LIBRARYGLOBAL ("Libraryflobals-as", "min_b_otv", min_b_otv)
+	if asotv and ((B+porog)<min_h_otv) and (A<min_b_otv) then end
+	if asotv and not(show_asotv) then end
+endif
+EPS = 0.0001
+
+	EPS = 0.0001
+	if GLOB_SCRIPT_TYPE = 7 | GLOB_SCRIPT_TYPE = 8 then goto "MasterEnd"	! forward migration, backward migration
+	! =============================================================================
+	! Main Definitions
+	! =============================================================================
+	gs_IsCurved			= 0
+	bParalellInCurvedWalls = 0
+	bDisabeMirroring	= 0
+	iWindowShape		= 0		! SHAPE_RECTANGULAR	
+	gs_fillFr	= gs_fillFr * gs_bFills
+	gs_fillSash	= gs_fillSash * gs_bFills
+	bCornerWindow	= (ac_cw_function & ac_corner_window)
+	! gs_optype_m
+	SASH_FIXED			= 1		! Fixed Glass
+	! =============================================================================
+	! Casement IDs
+	! =============================================================================
+	dim CasementIDArray[3][3]
+		CasementIDArray[1][1]	= 0
+		CasementIDArray[1][2]	= 0
+		CasementIDArray[1][3]	= 0
+		CasementIDArray[2][1]	= 0
+		CasementIDArray[2][2]	= 1
+		CasementIDArray[2][3]	= 0
+		CasementIDArray[3][1]	= 0
+		CasementIDArray[3][2]	= 0
+		CasementIDArray[3][3]	= 0
+	
+	DET2D_OFF				= 0
+	DET2D_SCALESENS			= -1
+	DET2D_SIMPLE_ONE		= 11
+	DET2D_SIMPLE_TWO		= 12
+	DET2D_MIDDLE			= 21
+	DET2D_MIDDLE_USA		= 22
+	DET2D_DETAILED			= 30
+	DET2D_DETAILED_FIX_GRID	= 31
+	DET2D_DETAILED_USA		= 32
+	DET2D_SIMPLE_CHI		= 51
+	DET2D_DETAILED_CHI		= 52
+	
+	
+	! =============================================================================
+	! Localization
+	! =============================================================================
+	
+	dim stOpeningDir[2]
+		stOpeningDir[1] = `Внутри`
+		stOpeningDir[2] = `Снаружи`
+	
+	dim stDetail[6]
+		stDetail[1] = `Зависит от масштаба`
+		stDetail[2] = `Детальный`
+		stDetail[3] = `Простой`
+		stDetail[4] = `Откл.`
+		stDetail[5] = `Китайский простой`
+		stDetail[6] = `Китайский детальный`
+	
+	dim gs_stParamLevel[2]
+		gs_stParamLevel[1] = `Высокий`
+		gs_stParamLevel[2] = `Низкий`
+	
+	dim stFrameElemJoin[2]
+		stFrameElemJoin[1] = `Угловое соединение`
+		stFrameElemJoin[2] = `Стыковое соединение`
+	
+	dim stDemolitionOrNew[3]	! gs_DemolitionOrNew
+		stDemolitionOrNew[1] = `Нет`
+		stDemolitionOrNew[2] = `Разборка `
+		stDemolitionOrNew[3] = `Новая конструкция`
+	
+	! =============================================================================
+	
+	iDemolitionOrNew = 0													! Off
+	if gs_DemolitionOrNew = stDemolitionOrNew[2] then iDemolitionOrNew = 1	! Demolition
+	if gs_DemolitionOrNew = stDemolitionOrNew[3] then iDemolitionOrNew = 2	! New
+	
+	gs_SashText_typ_num = 1
+	if gs_SashText_typ = stFrameElemJoin[2] then gs_SashText_typ_num = 2
+	
+	gs_opening_dir_num = 1
+	if gs_opening_dir = stOpeningDir[2] then gs_opening_dir_num = 2		! Outside
+	
+	bOpeningDirection = (gs_opening_dir = stOpeningDir[2])
+	
+	
+	if grill = `Стиль 1` then grill_num=2
+	if grill = `Стиль 2` then grill_num=3
+	
+	
+	osl = 0
+	osr = 0
+	gs_trim_thk = 0
+	
+	
+	if gs_trim_inside or gs_trim_outside then gs_trim_thko=gs_trim_thk else gs_trim_thko=0
+	
+	
+	if ac_cw_function and ac_corner_window then
+		hideparameter "gs_right_oversize"
+	endif
+	
+	
+	
+	
+	! --- CORNER OSize ---
+	
+	if ac_cw_function and ac_corner_window then
+		osr=0
+	endif
+	
+	
+	wlj=WIDO_LEFT_JAMB  ! Window jamb on the left gs_cavity_side
+	wi=WALL_INCL ! Inclination of the wall surfaces
+	
+	
+	ew=ac_corner_angle
+	if ac_cw_function and ac_corner_window then
+		if ac_diff_con_wall_thk and abs(0-(ac_corner_angle-(int((ac_corner_angle+EPS)/180)*180)))<EPS then	!!!(ac_corner_angle mod 180 <> 0)
+			acc=ac_corner_angle
+			if ac_corner_angle <180 then
+				oad=(ac_con_wall_thk-WALL_THICKNESS)/sin(acc)
+			else
+				oad=(-1)*(ac_con_wall_thk-WALL_THICKNESS)/sin(acc-180)
+			endif
+		else
+			oad=0
+		endif
+	else
+		oad=0
+	endif
+	
+	
+	!Straight or Inclined Wall
+	
+	if abs(WIDO_SILL-(WALL_THICKNESS-WIDO_FRAME_THICKNESS))<EPS then tim=1
+	if abs(WIDO_SILL)<EPS then     tom=4
+	
+	!Curved Wall
+	
+	if (WIDO_ORIG_DIST<0 and WIDO_REVEAL_SIDE>0) or (WIDO_ORIG_DIST>0 and WIDO_REVEAL_SIDE<=0) then
+		btim1=11
+		btim2=14
+		btim3=14
+		btim4=11
+	else
+		btim1=14
+		btim2=11
+		btim3=11
+		btim4=14
+	endif
+	
+	
+	!! GRIDS IN 2D !!
+	hgnn = ac_unit_width-2*gs_sash_width-gs_frame_width     ! Glasspane width between grids
+	
+	
+	
+	
+	
+	if gs_trim_inside then
+		if gs_tw_bottom_in<gs_trim_thk then  parameters gs_tw_bottom_in=gs_trim_thk
+		if gs_tw_right_in<gs_trim_thk then  parameters gs_tw_right_in=gs_trim_thk
+		if gs_tw_left_in<gs_trim_thk then  parameters gs_tw_left_in=gs_trim_thk
+		if gs_tw_top_in<gs_trim_thk then  parameters gs_tw_top_in=gs_trim_thk
+	endif
+	
+	if gs_trim_outside then
+		if gs_tw_bottom_out<gs_trim_thk then  parameters gs_tw_bottom_out=gs_trim_thk
+		if gs_tw_right_out<gs_trim_thk then  parameters gs_tw_right_out=gs_trim_thk
+		if gs_tw_left_out<gs_trim_thk then  parameters gs_tw_left_out=gs_trim_thk
+		if gs_tw_top_out<gs_trim_thk then  parameters gs_tw_top_out=gs_trim_thk
+	endif
+	if not(WIDO_REVEAL_SIDE) and abs(SYMB_ROTANGLE-180)<EPS or WIDO_REVEAL_SIDE and abs(SYMB_ROTANGLE)<EPS then sszi=90
+	"MasterEnd":
+

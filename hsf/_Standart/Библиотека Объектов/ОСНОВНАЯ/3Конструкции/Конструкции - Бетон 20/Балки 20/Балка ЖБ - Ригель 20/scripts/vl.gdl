@@ -1,0 +1,143 @@
+
+hideparameter all "A", "B", "Zzyzx" 
+
+call "FM_types" parameters all
+
+values{2} "gs_detlevel_3D_m" 	DLEV3D_DETAILED, `Детальный`,
+								DLEV3D_OFF, `Откл.`
+values{2} "iDet2D" 	DETLEVEL_2D_DETAILED, `Детальный`,
+					DETLEVEL_2D_SIMPLE, `Простой`
+
+VALUES "a" RANGE (0.3, )
+LOCK "b"
+VALUES "angy" RANGE (-90, 90)
+VALUES "lbeam_w1" RANGE [lbeam_w2+0.05, )
+VALUES "lbeam_w2" RANGE [0.05, lbeam_w1-0.05]
+VALUES "lbeam_h1" RANGE [0.05, zzyzx-0.1]
+VALUES "zzyzx" RANGE [0.2, )
+VALUES "pos_2Dx" RANGE (zzyzx, a)
+VALUES "B2" RANGE [(lbeam_w2+0.05)/2, )
+
+if GLOB_MODPAR_NAME ="B2" then
+	lbeam_w1 = B2*2
+	PARAMETERS lbeam_w1 = lbeam_w1
+else
+	B2 = lbeam_w1/2
+	PARAMETERS B2 = B2
+endif
+
+if LibraryLangCode = "USA" then
+	VALUES "lbeam_sectype" "18LBxx", "20LBxx", "26LBxx", "Custom"
+
+	if lbeam_sectype="18LBxx" then
+		VALUES "lbeam_type" "18LB18/8",
+			"18LB24/12",
+			"18LB32/20",
+			"18LB36/20",
+			"18LB36/24"
+	endif
+
+	if lbeam_sectype="20LBxx" then
+		VALUES "lbeam_type" "20LB20/12",
+			"20LB24/12",
+			"20LB28/16",
+			"20LB32/20",
+			"20LB36/24",
+			"20LB40/24",
+			"20LB44/28",
+			"20LB48/32",
+			"20LB52/36",
+			"20LB56/40",
+			"20LB60/44"
+	endif
+
+	if lbeam_sectype="26LBxx" then
+		VALUES "lbeam_type" "20LB26/12",
+			"26LB24/12",
+			"26LB28/16",
+			"26LB32/20",
+			"26LB36/24",
+			"26LB40/24",
+			"26LB44/28",
+			"26LB48/32",
+			"26LB52/36",
+			"26LB56/40",
+			"26LB60/44"
+	endif
+
+	if lbeam_sectype="Custom" then
+		lock "lbeam_type"
+	endif
+
+	if GLOB_MODPAR_NAME = "lbeam_type" or GLOB_MODPAR_NAME = "lbeam_sectype" then
+		if lbeam_sectype<>"Custom" then
+			qq0= ""
+			qq1= ""
+			qq= SPLIT (lbeam_type, "%n%s%n%s%n", xx, qq0, yy, qq1, hh)
+			zzyzx = yy*0.0254
+			lbeam_w1 = xx*0.0254
+			lbeam_w2 = xx*0.0254-8"
+			lbeam_h1 = hh*0.0254
+			parameters zzyzx = zzyzx, lbeam_w1 = lbeam_w1, lbeam_w2 = lbeam_w2, lbeam_h1 = lbeam_h1
+		endif
+	endif
+
+	! set back to custom if main parameters are changed
+	if lbeam_sectype <> "Custom" then
+		if GLOB_MODPAR_NAME = "ZZYZX" or GLOB_MODPAR_NAME = "lbeam_w1" or \
+			GLOB_MODPAR_NAME = "lbeam_w2" or GLOB_MODPAR_NAME = "lbeam_h1" then
+			lbeam_sectype = "Custom"
+			parameters lbeam_sectype = lbeam_sectype
+		endif
+	endif
+else
+	hideparameter "lbeam_sectype", "lbeam_type"
+endif
+
+if not(axis) then
+	parameters only_axis=0
+	lock "only_axis", "axis_line_type", "axis_pen"
+endif
+if not(showsect) then
+	lock "cross_fill"
+endif
+if axis and only_axis then
+	lock	"gs_fill_type",
+				"gs_fill_pen",
+				"gs_back_pen",
+				"showsect",
+				"cross_fill",
+				"iDet2D",
+				"DetailLineType",
+				"gs_cont_pen"
+endif
+
+if iDet2D = DETLEVEL_2D_SIMPLE OR ABS(angy)<EPS then	!! angy=0
+	lock "DetailLineType"
+endif
+
+FOR w=1 TO NSP/3
+	PUT GET (2)
+	qq= GET (1)
+NEXT w
+IF NSP>0 THEN
+	PUT 1
+	PUT GET (NSP-1)
+ENDIF
+
+IF gs_cont_pen=0 then parameters gs_cont_pen=10
+IF gs_fill_pen=0 then parameters gs_fill_pen=19
+
+es_length = a
+es_surface = (b*zzyzx-lbeam_h1*abs(lbeam_w2-lbeam_w1))
+es_volume = es_surface*es_length
+PARAMETERS es_length=es_length,
+		   es_surface = es_surface,
+		   es_volume = es_volume
+
+CALL "Precast_quantity_calc" parameters A = A,
+	bMetricDimension = bMetricDimension,
+	es_density		= es_density,
+	es_density_us	= es_density_us,
+	es_volume		= es_volume,
+	es_surface		= es_surface

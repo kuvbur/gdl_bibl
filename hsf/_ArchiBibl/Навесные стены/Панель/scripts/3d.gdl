@@ -1,0 +1,254 @@
+CALL "GS панель навесной стены_daimoon" parameters all
+
+if not(gs_shadow) then SHADOW OFF
+
+nCorners = vardim1 (AC_PanelCoords)
+nCorners_in = vardim1 (AC_clampFreeRegionCoords)
+
+if tip <> 'Ж/б панель' then
+	bSucceed = request{2} ("Building_Material_info", panelBMat, "gs_bmat_surface", _matPanel)
+	pen gs_cont_pen
+	sect_attrs{2} gs_cut_pen, lineTypeCut
+	building_material panelBMat
+	material matCoating
+	if prof and fille_prof <> "Откл" then
+		x = 0: y = 0: s = 0: var = " ": nr = 4: i = 1
+		szelv=open("text", fille_prof, "separator='\t', mode=ro, LIBRARY")
+		while n <> -1 do
+			n = input(szelv, i, 1, var)
+			nn = SPLIT (var, "%n,%n,%n", x, d, y, d, s, d)
+			if i = 1 and first_zero = 1 then
+				zero_x = x
+				zero_y = y
+			endif
+			i = i + 1
+			xx = x + x_o - zero_x
+			yy = y + y_o - zero_y
+			ss = s + 14 * (s = 1)
+			put xx, yy, ss
+		endwhile
+		close szelv
+		GROUP "prof"
+			del top
+			addx leftSide_X
+			addy downSide_Y
+			rotx 90
+			if rtx then
+				roty 90
+				PRISM_ nsp/3, ac_width, get (nsp)
+			else
+				PRISM_ nsp/3, -ac_height, get (nsp)
+			endif
+		ENDGROUP
+		GROUP "ogr"
+			for i = 1 to nCorners
+				put AC_PanelCoords[i][1], AC_PanelCoords [i][2], 15
+			next i
+			prism_ nCorners, panelThk,get(nsp)
+		ENDGROUP
+		result_2 = ISECTGROUP("prof", "ogr")
+		PLACEGROUP result_2
+		model wire
+		PLACEGROUP result_2
+		KILLGROUP result_2
+		KILLGROUP "prof"
+		KILLGROUP "ogr"
+	else
+		if GLOB_CONTEXT=6 then 
+			if zerk_sh then roty 180
+			matInsideLayer = matCoating
+			offset_l = 0
+			lin_ 0,0,0,b_pan,0,0
+			lin_ 0,dlin,0,b_pan,dlin,0
+			lin_ 0,0,0,0,dlin,0
+			lin_ b_pan,0,0,b_pan,dlin,0
+			lin_ 0,0,panelThk,b_pan,0,panelThk
+			lin_ 0,dlin,panelThk,b_pan,dlin,panelThk
+			lin_ 0,0,panelThk,0,dlin,panelThk
+			lin_ b_pan,0,panelThk,b_pan,dlin,panelThk
+			HOTLINE 0,0,0,b_pan,0,0,1
+			HOTLINE 0,dlin,0,b_pan,dlin,0,2
+			HOTLINE 0,0,0,0,dlin,0,3
+			HOTLINE b_pan,0,0,b_pan,dlin,0,4
+			HOTLINE 0,0,panelThk,b_pan,0,panelThk,5
+			HOTLINE 0,dlin,panelThk,b_pan,dlin,panelThk,6
+			HOTLINE 0,0,panelThk,0,dlin,panelThk,7
+			HOTLINE b_pan,0,panelThk,b_pan,dlin,panelThk,8
+			hotspot 0,0,0
+			hotspot b_pan,0,0
+			hotspot b_pan,dlin,0
+			hotspot 0,dlin,0
+			hotspot 0,0,panelThk
+			hotspot b_pan,0,panelThk
+			hotspot b_pan,dlin,panelThk
+			hotspot 0,dlin,panelThk
+		endif
+		ch = INITADDONSCOPE ("PolyOperations", "", "")
+		PREPAREFUNCTION ch, "CreateContainer", "mySourceContainer", ""
+		PREPAREFUNCTION ch, "CreateContainer", "myDestinationContainer", ""
+		PREPAREFUNCTION ch, "SetSourceContainer",		"mySourceContainer", ""
+		PREPAREFUNCTION ch, "SetDestinationContainer",	"myDestinationContainer", ""
+		nVertices = nCorners
+		nContours = 1
+		dim vertArray[][]
+		dim contourArray[]
+		for i=1 to nCorners
+			vertArray[i][1] = AC_PanelCoords[i][1]
+			vertArray[i][2] = AC_PanelCoords[i][2]
+			vertArray[i][3] = 0
+			hotspot AC_PanelCoords[i][1], AC_PanelCoords[i][2], 0
+			hotspot AC_PanelCoords[i][1], AC_PanelCoords[i][2], panelThk
+		next i
+		contourArray[1] = nCorners+1
+		PREPAREFUNCTION ch, "Store", "poly1", nVertices, nContours, vertArray, contourArray
+		itemIdx=1
+		PREPAREFUNCTION  ch, "OffsetParams", "", itemIdx, offset_l
+		dim resPolyIDArray[]
+		numPoly = CALLFUNCTION (ch, "ResizeContour", "poly1", resPolyIDArray)
+		polygonID = resPolyIDArray[1]
+		gosub 100	! Get one polygon contour data (without contours)
+		group "body"
+		if nsp > 0 then
+			bSucceed = request{2} ("Building_Material_info", panelBMat, "gs_bmat_surface", _matPanel)
+			pen gs_cont_pen
+			sect_attrs{2} gs_cut_pen, lineTypeCut
+			building_material panelBMat
+			material _matPanel
+			model solid
+			CPRISM_ matCoating,matInsideLayer,_matPanel, nsp/3, panelThk, use(nsp)
+			x1=get(1) :	y1=get(1) :	s1=get(1)
+			for i=1 to nsp step 3
+				x2=get(1) :	y2=get(1) :	s2=get(1)
+				if s2=15 then 
+					if s1=15 then
+						plane 4, x1,y1,0, x1,y1,panelThk, x2,y2, panelThk, x2,y2, 0
+					endif
+					x1=x2 : y1=y2 : s1=s2
+				endif
+			next i
+		endif
+		endgroup
+		group "dummy"
+			lin_ 0,0,0,0,0,0
+		endgroup
+		Group_out = SUBGROUP("body", "dummy")
+		placegroup Group_out
+		killgroup Group_out
+		killgroup "body"
+		killgroup "dummy"
+		CLOSEADDONSCOPE (ch)
+	endif
+else
+	for i = 1 to nCorners
+		put AC_PanelCoords[i][1], AC_PanelCoords [i][2], 15
+	next i
+	if n_sloi_p>0 then
+		for i = 1 to n_sloi_p
+			addz -t_sloi[i]
+		next i
+	endif
+	
+	for j=1 to n_sloi
+		material mat_sloi[j]
+		sect_fill fill_sloi[j], 19, 1, 21
+		prism_ nCorners_in, t_sloi[j], USE (nsp)
+		addz t_sloi[j]
+	next j
+endif
+
+end	
+
+100:
+! ==============================================================================
+! Get GDL Polygon
+! ------------------------------------------------------------------------------
+! Input variables:
+!	ch:				Channel ID
+!	polygonID:		Polygon ID
+!
+! Returned variables:
+!	GDL stack:			GDL polygon
+! ==============================================================================
+
+	dim resVertices[]
+	numVertices = CALLFUNCTION (ch, "GetVertices", polygonID, resVertices)
+	numVertices = numVertices / 3
+
+	dim contArr[]
+	numContours = CALLFUNCTION (ch, "GetContourEnds", polygonID, contArr)
+
+	for contIndex = 1 to numContours
+
+		if contIndex = 1 then
+			begIdx = 0
+		else
+			begIdx = contArr[contIndex] - 1
+		endif
+		if contIndex = numContours then
+			endIdx = numVertices - 1
+		else
+			endIdx = contArr[contIndex + 1] - 2
+		endif
+
+		bClosed = 0
+		bStartWithLast = 0
+
+		index = endIdx * 3
+		lastVertX = resVertices[index + 1]
+		lastVertY = resVertices[index + 2]
+		lastVertA = resVertices[index + 3]
+
+		if abs(lastVertA) > EPS then
+			put lastVertX, lastVertY, 1
+			bStartWithLast = 1
+		endif
+
+		for vertIndex = begIdx to endIdx
+			index = vertIndex * 3
+			actVertX = resVertices[index + 1]
+			actVertY = resVertices[index + 2]
+			actVertA = resVertices[index + 3]
+
+			if vertIndex = begIdx then
+				if bStartWithLast then
+					ac2gdl_spx = lastVertX
+					ac2gdl_spy = lastVertY
+				else
+					ac2gdl_spx = actVertX
+					ac2gdl_spy = actVertY
+				endif
+			endif
+
+			if abs(lastVertA) > EPS then
+				ac2gdl_mx = (actVertX + lastVertX) / 2
+				ac2gdl_my = (actVertY + lastVertY) / 2
+				ac2gdl_ratio = 1 / 2 / tan (lastVertA / 2)
+
+				ac2gdl_cx = ac2gdl_mx - ac2gdl_ratio * (actVertY - lastVertY)	! Arc center
+				ac2gdl_cy = ac2gdl_my + ac2gdl_ratio * (actVertX - lastVertX)
+
+				put ac2gdl_cx,	ac2gdl_cy,	900,
+					0,			lastVertA,	4001
+			endif
+
+			if vertIndex > begIdx & abs(ac2gdl_spx - actVertX) < EPS & abs(ac2gdl_spy - actVertY) < EPS then
+				put actVertX, actVertY, -1
+				bClosed = 1
+			else
+				if vertIndex < endIdx | not(bStartWithLast) then
+					put actVertX, actVertY, 15
+				endif
+			endif
+
+			lastVertX = actVertX
+			lastVertY = actVertY
+			lastVertA = actVertA
+
+		next vertIndex
+
+		if not(bClosed) then	! Close the polygon if it has holes
+			put ac2gdl_spx, ac2gdl_spy, -1
+		endif
+
+	next contIndex
+return

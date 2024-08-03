@@ -1,0 +1,174 @@
+if use_cat then
+	if ConType_1 = "Прямоугольный" then
+		if max(ConWidth_1,ConDepth_1)>1 then
+			PARAMETERS MEP_BendRadius = 0.3 + ConWidth_1/2 + ConWallThickness_1
+		else
+			PARAMETERS MEP_BendRadius = 0.15 + ConWidth_1/2 + ConWallThickness_1
+		endif
+	else
+		if MEP_BendAngle<>90 then
+			PARAMETERS MEP_BendRadius = 0.39*(ConWidth_1 + ConWallThickness_1)
+		else
+			PARAMETERS MEP_BendRadius = ConWidth_1 + ConWallThickness_1
+		endif
+	endif
+endif
+
+EPS = 0.00001
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+	PARAMETERS gs_detlevel_3D_m = gs_detlevel_3D_m
+ENDIF
+
+DIM BendStyleStr_dim[2]
+	BendStyleStr_dim[1] = `Радиус Определен`
+	BendStyleStr_dim[2] = `Длина Перехвата Определена`
+
+DIM BendTypeStr_dim[]
+
+isBendTypeQuery = APPLICATION_QUERY ("MEPBEND", "GetBendTypeNames()", BendTypeStr_dim)
+
+IF isBendTypeQuery THEN
+
+	! ********* set bend types to shape type *********
+
+	IF ABS(MEP_NumConnectionData[1][21] - 1) < EPS THEN PUT 1, 2, 3, 4, 5, 6, 7
+	IF ABS(MEP_NumConnectionData[1][21] - 2) < EPS THEN PUT 8, 9, 10, 11
+	IF ABS(MEP_NumConnectionData[1][21] - 3) < EPS THEN PUT 1, 3, 10, 11
+
+	DIM BendTypesStrToShapeTypes_dim[]
+	DIM BendTypesIDToShapeTypes_dim[]
+
+	BendTypesStrToShapeTypes_dim[1] = ""
+	BendTypesIDToShapeTypes_dim[1] = 0
+
+	FOR i = 1 TO NSP
+		id = GET(1)
+		BendTypesStrToShapeTypes_dim[i] = BendTypeStr_dim[id]
+		BendTypesIDToShapeTypes_dim[i] = id
+	NEXT i
+
+	IF setProgram THEN
+		isInvalidBendTypeID = 1
+		numBendTypesID = VARDIM1(BendTypesIDToShapeTypes_dim)
+		FOR i = 1 TO numBendTypesID
+			IF ABS(BendTypesIDToShapeTypes_dim[i] - MEP_BendTypeID) < EPS THEN
+				isInvalidBendTypeID = 0
+				i = numBendTypesID
+			ENDIF
+		NEXT i
+
+		IF isInvalidBendTypeID THEN
+			IF ABS(MEP_NumConnectionData[1][21] - 1) < EPS THEN MEP_BendTypeID = 1
+
+			IF ABS(MEP_NumConnectionData[1][21] - 2) < EPS THEN MEP_BendTypeID = 8
+
+			IF ABS(MEP_NumConnectionData[1][21] - 3) < EPS THEN MEP_BendTypeID = 1
+
+			PARAMETERS MEP_BendTypeID = MEP_BendTypeID
+		ENDIF
+	ENDIF
+
+
+	! ********* control bend type and bend type ID *********
+
+	num = VARDIM1(BendTypesStrToShapeTypes_dim)
+	IF GLOB_MODPAR_NAME = "ConType_1" THEN
+		false = 1
+		FOR i = 1 TO num
+			IF MEP_BendType = BendTypesStrToShapeTypes_dim[i] THEN
+				false = 0
+				i = num
+			ENDIF
+		NEXT i
+		IF false THEN
+			MEP_BendType = BendTypesStrToShapeTypes_dim[1]
+			PARAMETERS MEP_BendType = MEP_BendType
+
+			MEP_BendTypeID = BendTypesIDToShapeTypes_dim[1]
+			PARAMETERS MEP_BendTypeID = MEP_BendTypeID
+		ENDIF
+	ENDIF
+	IF GLOB_MODPAR_NAME = "MEP_BendType" THEN
+		FOR i = 1 TO num
+			IF MEP_BendType = BendTypesStrToShapeTypes_dim[i] THEN
+				MEP_BendTypeID = BendTypesIDToShapeTypes_dim[i]
+				PARAMETERS MEP_BendTypeID = MEP_BendTypeID
+				i = num
+			ENDIF
+		NEXT i
+	ENDIF
+	IF MEP_BendType <> BendTypeStr_dim[MEP_BendTypeID] THEN
+		MEP_BendType = BendTypeStr_dim[MEP_BendTypeID]
+		PARAMETERS MEP_BendType = MEP_BendType
+
+		MEP_BendStyleID = MEP_BendAttrs[MEP_BendTypeID][1]
+		PARAMETERS MEP_BendStyleID = MEP_BendStyleID
+
+		MEP_HeelSegments = MEP_BendAttrs[MEP_BendTypeID][4]
+		PARAMETERS MEP_HeelSegments = MEP_HeelSegments
+
+		MEP_ThroatSegments = MEP_BendAttrs[MEP_BendTypeID][5]
+		PARAMETERS MEP_ThroatSegments = MEP_ThroatSegments
+	ENDIF
+
+
+		! ********* set bend type attributes *********
+
+	IF GLOB_MODPAR_NAME = "ConType_1" OR GLOB_MODPAR_NAME = "MEP_BendType" THEN
+		MEP_BendStyleID = MEP_BendAttrs[MEP_BendTypeID][1]
+		PARAMETERS MEP_BendStyleID = MEP_BendStyleID
+
+		MEP_HeelSegments = MEP_BendAttrs[MEP_BendTypeID][4]
+		PARAMETERS MEP_HeelSegments = MEP_HeelSegments
+
+		MEP_ThroatSegments = MEP_BendAttrs[MEP_BendTypeID][5]
+		PARAMETERS MEP_ThroatSegments = MEP_ThroatSegments
+	ENDIF
+
+	IF ABS(MEP_BendAttrs[MEP_BendTypeID][2]-MEP_BendAttrs[MEP_BendTypeID][3]) < EPS THEN
+		MEP_BendAngle = MEP_BendAttrs[MEP_BendTypeID][2]
+		PARAMETERS MEP_BendAngle = MEP_BendAngle
+		LOCK "MEP_BendAngle"
+	ELSE
+		VALUES "MEP_BendAngle" RANGE (MEP_BendAttrs[MEP_BendTypeID][2], MEP_BendAttrs[MEP_BendTypeID][3])
+	ENDIF
+
+	IF MEP_BendAttrs[MEP_BendTypeID][7] < EPS THEN HIDEPARAMETER "MEP_Vanes", "MEP_VanesNum"
+
+	IF ABS(MEP_BendAttrs[MEP_BendTypeID][6] - 1) < EPS THEN
+		MEP_HeelSegments = MEP_ThroatSegments
+		PARAMETERS MEP_HeelSegments = MEP_HeelSegments
+	ENDIF
+
+
+	! ********* control bend style and bend style ID *********
+
+	IF GLOB_MODPAR_NAME = "MEP_BendStyle" THEN
+		FOR i = 1 TO 2
+			IF MEP_BendStyle = BendStyleStr_dim[i] THEN
+				MEP_BendStyleID = i
+				PARAMETERS MEP_BendStyleID = MEP_BendStyleID
+			ENDIF
+		NEXT i
+	ENDIF
+	IF MEP_BendStyle <> BendStyleStr_dim[MEP_BendStyleID] THEN
+		MEP_BendStyle = BendStyleStr_dim[MEP_BendStyleID]
+		PARAMETERS MEP_BendStyle = MEP_BendStyle
+	ENDIF
+ENDIF
+
+CALL "MEP_m_Duct_Bend_4" PARAMETERS ALL
+
+
+						! ---------------------------- !
+						! --- Top and Bottom Level --- !
+						! ---------------------------- !
+
+z = MEP_Position[1][3] + MEP_Position[2][3]*(MEP_BendRadius*TAN(MEP_BendAngle/2))
+PARAMETERS ac_toplevel 		= z
+PARAMETERS ac_bottomlevel 	= z
+call "common_param" PARAMETERS ALL

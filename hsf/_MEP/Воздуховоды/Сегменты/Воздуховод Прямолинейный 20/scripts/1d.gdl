@@ -1,0 +1,217 @@
+EPS = 0.00001
+call "common_param" PARAMETERS ALL
+
+! --- set connection style one for holes ---------------------------------------
+
+IF MEP_NumberConnections > 2 THEN
+	DIM StyleStr[][]
+	DIM StyleID[][]
+
+	ConToolType = ConToolType_1
+	queryStr = "GetConnectionTypes (" + STR(ConToolType, 1, 0) + ")"
+	isStyleQuery = APPLICATION_QUERY ("MEPConnectionType", queryStr, StyleStr)
+
+	IF isStyleQuery THEN
+		num = VARDIM2(StyleStr)/2
+
+		queryStr = "GetConnectionTypeStyle (" + STR(ConToolType, 1, 0) + ")"
+		zz = APPLICATION_QUERY ("MEPConnectionType", queryStr, StyleID)
+
+		isStyleOne = 0
+		styleGUID = ""
+		FOR i = 1 TO num
+			IF StyleID[1][i] = 1 THEN
+				styleGUID = StyleStr[1][i*2-1]
+				isStyleOne = 1
+				i = num
+			ENDIF
+		NEXT i
+
+		IF isStyleOne THEN
+			FOR i = 3 TO MEP_NumberConnections
+				MEP_StrConnectionData[i][1] = styleGUID
+				PARAMETERS MEP_StrConnectionData[i][1] = MEP_StrConnectionData[i][1]
+			NEXT i
+		ENDIF
+	ENDIF
+ENDIF
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+DIM stDisplayOptions[5]
+	stDisplayOptions[1] = `Сечение и Низ`
+	stDisplayOptions[2] = `Сечение и Верх`
+	stDisplayOptions[3] = `Символический Вид`
+	stDisplayOptions[4] = `Только Контуры`
+	stDisplayOptions[5] = `Вся Проекция`
+
+IF GLOB_MODPAR_NAME = "gs_symb_display_option" OR gs_symb_display_option_ID = -1 THEN
+	gs_symb_display_option_ID = 1	! Projected
+	IF gs_symb_display_option = stDisplayOptions[2] THEN gs_symb_display_option_ID = 2
+	IF gs_symb_display_option = stDisplayOptions[3] THEN gs_symb_display_option_ID = 3
+	IF gs_symb_display_option = stDisplayOptions[4] THEN gs_symb_display_option_ID = 4
+	IF gs_symb_display_option = stDisplayOptions[5] THEN gs_symb_display_option_ID = 5
+
+	PARAMETERS gs_symb_display_option_ID = gs_symb_display_option_ID
+ELSE
+	IF gs_symb_display_option_ID = 1 THEN gs_symb_display_option = stDisplayOptions[1]
+	IF gs_symb_display_option_ID = 2 THEN gs_symb_display_option = stDisplayOptions[2]
+	IF gs_symb_display_option_ID = 3 THEN gs_symb_display_option = stDisplayOptions[3]
+	IF gs_symb_display_option_ID = 4 THEN gs_symb_display_option = stDisplayOptions[4]
+	IF gs_symb_display_option_ID = 5 THEN gs_symb_display_option = stDisplayOptions[5]
+
+	PARAMETERS gs_symb_display_option = gs_symb_display_option
+ENDIF
+
+!IF gs_symb_display_option = stDisplayOptions[1] THEN
+!	AC_AutoOnStoryVisibility = 1
+!ELSE
+!	AC_AutoOnStoryVisibility = 0
+!ENDIF
+
+						! ---------------- !
+						! --- Rotation --- !
+						! ---------------- !
+
+connected = 0
+FOR i = 1 TO MEP_NumberConnections
+	connected = connected + MEP_NumConnectionData[i][18]
+NEXT i
+
+IF GLOB_MODPAR_NAME = "RotationAroundWAxis" THEN
+	DIM tMatrix[3][3]
+
+	tMatrix[1][1] = COS(RotationAroundWAxis)
+	tMatrix[1][2] = 0
+	tMatrix[1][3] = SIN(RotationAroundWAxis)
+
+	tMatrix[2][1] = 0
+	tMatrix[2][2] = 1
+	tMatrix[2][3] = 0
+
+	tMatrix[3][1] = -SIN(RotationAroundWAxis)
+	tMatrix[3][2] = 0
+	tMatrix[3][3] = COS(RotationAroundWAxis)
+
+	PUT 1, 0, 0
+	PUT 0, 1, 0
+
+	Coordinates = NSP/3
+
+	DIM inCoords[20][3]
+
+	FOR cnum = 1 TO Coordinates
+		inCoords[cnum][1] = GET(1)
+		inCoords[cnum][2] = GET(1)
+		inCoords[cnum][3] = GET(1)
+	NEXT cnum
+
+
+	! --- the Matrix Operation, what make the Output-Coordinates
+
+	DIM outCoords[20][3]
+
+	FOR cnum = 1 TO Coordinates
+		MEP_Position[cnum+1][1] = inCoords[cnum][1]*tMatrix[1][1]+inCoords[cnum][2]*tMatrix[2][1]+inCoords[cnum][3]*tMatrix[3][1]
+		PARAMETERS MEP_Position[cnum+1][1] = MEP_Position[cnum+1][1]
+		MEP_Position[cnum+1][2] = inCoords[cnum][1]*tMatrix[1][2]+inCoords[cnum][2]*tMatrix[2][2]+inCoords[cnum][3]*tMatrix[3][2]
+		PARAMETERS MEP_Position[cnum+1][2] = MEP_Position[cnum+1][2]
+		MEP_Position[cnum+1][3] = inCoords[cnum][1]*tMatrix[1][3]+inCoords[cnum][2]*tMatrix[2][3]+inCoords[cnum][3]*tMatrix[3][3]
+		PARAMETERS MEP_Position[cnum+1][3] = MEP_Position[cnum+1][3]
+	NEXT cnum
+ENDIF
+
+CALL "MEP_m_Duct_4" PARAMETERS ALL
+
+
+IF connected  > 1 THEN LOCK "MEP_StraightLength"
+
+IF useSysMat AND MEP_StrConnectionData[1][2] <> "0" THEN LOCK "gs_DuctMat", "gs_InsMat"
+
+IF MEP_StrConnectionData[1][2] = "0" THEN LOCK "useSysMat"
+
+
+						! ---------------------------- !
+						! --- Top and Bottom Level --- !
+						! ---------------------------- !
+
+z1 = MEP_Position[1][3]
+z2 = z1+MEP_Position[2][3]*MEP_StraightLength
+
+IF ABS(MEP_Position[2][3]) < EPS OR ABS(ABS(MEP_Position[2][3]) - 1) < EPS THEN
+	IF z2 < z1 THEN
+		PARAMETERS ac_toplevel 		= z1
+		PARAMETERS ac_bottomlevel 	= z2
+	ELSE
+		PARAMETERS ac_toplevel 		= z2
+		PARAMETERS ac_bottomlevel 	= z1
+	ENDIF
+ELSE
+	! --- x,y,z coordinates of 1st point ---
+
+	rx1 = MEP_Position[1][1]
+	ry1 = MEP_Position[1][2]
+	rz1 = MEP_Position[1][3]
+
+
+	! --- x,y,z coordinates of 2nd point ---
+
+	rx2 = rx1+MEP_Position[2][1]*MEP_StraightLength
+	ry2 = ry1+MEP_Position[2][2]*MEP_StraightLength
+	rz2 = rz1+MEP_Position[2][3]*MEP_StraightLength
+
+	dx = rx2-rx1
+	dy = ry2-ry1
+	dz = rz2-rz1
+
+	IF ABS(dx) < EPS THEN dx = 0
+	IF ABS(dy) < EPS THEN dy = 0
+	IF ABS(dz) < EPS THEN dz = 0
+
+
+	ductHalfWidthA			= MEP_NumConnectionData[1][12]/2+MEP_NumConnectionData[1][14]
+	ductHalfHeightA			= MEP_NumConnectionData[1][13]/2+MEP_NumConnectionData[1][14]
+	connectorLengthA		= MEP_NumConnectionData[1][14]
+	connectorHalfWidthA		= ductHalfWidthA+MEP_NumConnectionData[1][15]
+	connectorHalfHeightA	= ductHalfHeightA+MEP_NumConnectionData[1][15]
+	shapeTypeA 				= MEP_NumConnectionData[1][21]
+
+	ductHalfWidthB			= MEP_NumConnectionData[2][12]/2+MEP_NumConnectionData[1][14]
+	ductHalfHeightB			= MEP_NumConnectionData[2][13]/2+MEP_NumConnectionData[1][14]
+	connectorLengthB		= connectorLengthA
+	connectorHalfWidthB		= ductHalfWidthB+MEP_NumConnectionData[2][15]
+	connectorHalfHeightB	= ductHalfHeightB+MEP_NumConnectionData[2][15]
+
+
+	Length=SQR(dx^2+dy^2)
+	ar = ABS(dz)/MEP_StraightLength
+	br = Length/MEP_StraightLength
+
+	IF ABS(shapeTypeA - 2) < EPS THEN
+		decreaseLenA = MAX((ductHalfWidthA+MEP_InsThickness)*br*MEP_InsShow, connectorHalfWidthA*br+connectorLengthA*2*ar)
+		decreaseLenB = MAX((ductHalfWidthA+MEP_InsThickness)*br*MEP_InsShow, connectorHalfWidthB*br+connectorLengthA*2*ar)
+	ELSE
+		decreaseLenA = MAX((ductHalfHeightA+MEP_InsThickness)*br*MEP_InsShow, connectorHalfHeightA*br+connectorLengthA*2*ar)
+		decreaseLenB = MAX((ductHalfHeightA+MEP_InsThickness)*br*MEP_InsShow, connectorHalfHeightB*br+connectorLengthA*2*ar)
+	ENDIF
+
+	decreaseLen = MAX(decreaseLenA, decreaseLenB)
+
+	IF z2 < z1 THEN
+		z1 = z1 - decreaseLen
+		z2 = z2 + decreaseLen
+	ELSE
+		z1 = z1 + decreaseLen
+		z2 = z2 - decreaseLen
+	ENDIF
+
+	IF z2 < z1 THEN
+		PARAMETERS ac_toplevel 		= z1
+		PARAMETERS ac_bottomlevel 	= z2
+	ELSE
+		PARAMETERS ac_toplevel 		= z2
+		PARAMETERS ac_bottomlevel 	= z1
+	ENDIF
+ENDIF

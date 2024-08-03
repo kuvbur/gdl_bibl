@@ -1,0 +1,230 @@
+
+EPS = 0.00001
+
+!iRampType
+RAMP_CURVED = 1
+RAMP_STRAIGHT = 2
+
+
+!------------ Floor Plan Display type integer definitions ----------------------
+
+dim stFloorPlanDisplayType[5]
+	stFloorPlanDisplayType[1] = `Сечение и Низ`
+	stFloorPlanDisplayType[2] = `Сечение и Верх`
+	stFloorPlanDisplayType[3] = `Символический`
+	stFloorPlanDisplayType[4] = `Только Контуры`
+	stFloorPlanDisplayType[5] = `Вся Проекция`
+
+DISPLAY_PROJECTED					= 1
+DISPLAY_OVERHEAD_PROJ				= 2
+DISPLAY_SYMBOLIC					= 3
+DISPLAY_OUTLINES					= 4
+DISPLAY_OVERHEAD_ALL				= 5
+
+! iCalculationMethod
+METHOD_RATIO 		= 1
+METHOD_PERCENTAGE 	= 2
+METHOD_DIMENSIONS 	= 3
+
+! iTextType1, iTextType2
+TEXT_PERCENTAGE 	= 1
+TEXT_RATIO 			= 2
+TEXT_SEGMENTLENGTH 	= 3
+TEXT_FULLLENGTH 	= 4
+TEXT_CUSTOM			= 0
+
+! iWalkingLineType
+WALKINGLINE_SIMPLE 		= 1
+WALKINGLINE_TRIANGLE 	= 2
+
+if GLOB_MODPAR_NAME = "ZZYZX" then
+	_actZZYZX = ZZYZX - (heightAscent * 2 * bAscent)	! Height without Height of Ascent
+else
+	_actA = A - (lengthAscent * 2 * bAscent)			! Length without Length of Ascent
+endif
+
+
+breaklineWidth	= 0.05
+breaklineAngle	= 30
+
+if not(bAscent) then
+	_tempA = A
+else
+	_tempA = A - 2 * lengthAscent
+endif
+
+if not(bDiffSides) then
+	_BLeft = b - ((widthSideFlange1 * bSideFlange1) + (widthSideFlange2 * bSideFlange2)) * 2
+	_BRight = b - ((widthSideFlange1 * bSideFlange1) + (widthSideFlange2 * bSideFlange2)) * 2
+else
+	_BLeft = b - ((widthSideFlange1_left * bSideFlange1_left) + (widthSideFlange2_left * bSideFlange2_left)) * 2
+	_BRight = b - ((widthSideFlange1_right * bSideFlange1_right) + (widthSideFlange2_right * bSideFlange2_right)) * 2
+endif
+
+if not(bReverse) then
+	_XLeft = (_BLeft/4) 	/ (1/ tan (breaklineAngle) + _BLeft / (2 * _tempA))
+	_XRight = (_BRight /4) / (1/ tan (breaklineAngle) -  _BRight  / (2 * _tempA))
+else
+	_XLeft = (_BLeft/4) / (1/ tan (breaklineAngle) - _BLeft / (2 * _tempA))
+	_XRight = (_BRight /4) / (1/ tan (breaklineAngle) +  _BRight  / (2 * _tempA))
+endif
+
+_YLeft = 1/ tan (breaklineAngle) * _XLeft
+_YRight = 1/ tan (breaklineAngle) * _XRight
+
+
+if iCalculationMethod = METHOD_RATIO then
+	if GLOB_MODPAR_NAME = "ZZYZX" then
+		A = _actZZYZX / ratioHeight * ratioLength + (lengthAscent * 2 * bAscent)
+		parameters A = A
+	else
+		ZZYZX = _actA / ratioLength * ratioHeight + (heightAscent * 2 * bAscent)
+		parameters ZZYZX = ZZYZX
+	endif
+
+	if bAscent then
+		if GLOB_MODPAR_NAME = "heightAscent" then
+			lengthAscent = heightAscent / ratioAscentHeight * ratioAscentLength
+			parameters lengthAscent = lengthAscent
+		else
+			heightAscent = lengthAscent / ratioAscentLength * ratioAscentHeight
+			parameters heightAscent = heightAscent 
+		endif
+	endif
+else
+	if iCalculationMethod = METHOD_PERCENTAGE then
+		if GLOB_MODPAR_NAME = "ZZYZX" then
+			A = _actZZYZX/ percentage * 100 + (lengthAscent * 2 * bAscent)
+			parameters A = A
+		else
+			ZZYZX = _actA * percentage / 100 + (heightAscent * 2 * bAscent)
+			parameters ZZYZX = ZZYZX
+		endif
+
+		if bAscent then
+			if GLOB_MODPAR_NAME = "heightAscent" then
+				lengthAscent = heightAscent / ascentPercentage * 100
+				parameters lengthAscent = lengthAscent
+			else
+				heightAscent = lengthAscent * ascentPercentage / 100
+				parameters heightAscent = heightAscent 
+			endif
+		endif
+	endif
+endif
+
+if GLOB_MODPAR_NAME = "ZZYZX" then
+	_actA = A - (lengthAscent * 2 * bAscent)			! Length without Length of Ascent
+else
+	_actZZYZX = ZZYZX - (heightAscent * 2 * bAscent)	! Height without Height of Ascent
+endif
+
+! Greatest common divisor for Ratio calculation
+if iCalculationMethod <> METHOD_RATIO then
+	dim  GCDArray[]
+	if _actZZYZX > _actA then
+		GCDArray[1] = _actZZYZX
+		GCDArray[2] = _actA
+	else
+		if _actZZYZX < _actA then
+			GCDArray[1] = _actA
+			GCDArray[2] = _actZZYZX
+		else	! if they are equal
+			_gcd = _actZZYZX * 1000
+		endif
+	endif
+	
+	if abs(_actZZYZX - _actA) > eps then
+		i = 2
+		_found = 0
+		while not(_found) do
+			i = i + 1
+			GCDArray[i] = GCDArray[i-2] - int(GCDArray[i-2] / GCDArray[i-1]) * GCDArray[i-1]
+			if abs(GCDArray[i]) < eps then 
+				_found = 1
+				_gcd = GCDArray[i-1]
+			endif
+		endwhile
+	endif
+
+	if bAscent then
+		_actheightAscent 	= heightAscent 		! Height without Height of Ascent
+		_actlengthAscent 	= lengthAscent 		! Length without Length of Ascent
+	
+		dim  GCDArray[]
+		if _actheightAscent > _actlengthAscent then
+			GCDArray[1] = _actheightAscent 
+			GCDArray[2] = _actlengthAscent 
+		else
+			if _actheightAscent < _actlengthAscent then
+				GCDArray[1] = _actlengthAscent 
+				GCDArray[2] = _actheightAscent 
+			else	! if they are equal
+				_gcdAscent = _actheightAscent
+			endif
+		endif
+		
+		if abs(_actheightAscent - _actlengthAscent ) > eps then
+			i = 2
+			_found = 0
+			while not(_found) do
+				i = i + 1
+				GCDArray[i] = GCDArray[i-2] - int(GCDArray[i-2] / GCDArray[i-1]) * GCDArray[i-1]
+				if abs(GCDArray[i]) < eps then 
+					_found = 1
+					_gcdAscent = GCDArray[i-1]
+				endif
+			endwhile
+		endif
+	endif	
+endif
+
+if iCalculationMethod = METHOD_RATIO then
+	percentage = _actZZYZX / _actA * 100
+	parameters percentage = percentage
+
+	if bAscent then
+		ascentPercentage = INT(heightAscent / lengthAscent * 100)
+		parameters ascentPercentage = ascentPercentage
+	endif
+else
+	if iCalculationMethod = METHOD_PERCENTAGE then
+		ratioLength = _actA / _gcd
+		parameters ratioLength = ratioLength 
+
+		ratioHeight = _actZZYZX / _gcd
+		parameters ratioHeight = ratioHeight 
+
+		if bAscent then
+			ratioAscentLength = lengthAscent / _gcdAscent
+			parameters ratioAscentLength = ratioAscentLength
+
+			ratioAscentHeight = heightAscent / _gcdAscent
+			parameters ratioAscentHeight = ratioAscentHeight
+		endif
+	else	! METHOD_DIMENSIONS
+		if GLOB_MODPAR_NAME = "ZZYZX" or GLOB_MODPAR_NAME = "A" or GLOB_MODPAR_NAME = "heightAscent" or GLOB_MODPAR_NAME = "lengthAscent" then
+			percentage = _actZZYZX / _actA * 100
+			parameters percentage = percentage
+
+			ratioLength = _actA / _gcd
+			parameters ratioLength = ratioLength 
+
+			ratioHeight = _actZZYZX / _gcd
+			parameters ratioHeight = ratioHeight 
+		endif
+		if bAscent then
+			if GLOB_MODPAR_NAME = "heightAscent" or GLOB_MODPAR_NAME = "lengthAscent" then
+				ascentPercentage = INT(heightAscent / lengthAscent * 100)
+				parameters ascentPercentage = ascentPercentage
+
+				ratioAscentLength = lengthAscent / _gcdAscent
+				parameters ratioAscentLength = ratioAscentLength
+
+				ratioAscentHeight = heightAscent / _gcdAscent
+				parameters ratioAscentHeight = ratioAscentHeight
+			endif
+		endif
+	endif
+endif
+

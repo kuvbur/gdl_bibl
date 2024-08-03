@@ -1,0 +1,191 @@
+
+! ==============================================================================
+! Floor Plan View
+! ==============================================================================
+! ----- Display with floorplan cutplane ------------------------------------
+gs_cutplane_height	= GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[1]
+gs_top_range_height	= GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[2]
+if AC_symb_show_projection_to = PROJECTION_FLOOR_PLAN_RANGE then
+	gs_bottom_range_height = GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV + GLOB_CUTPLANES_INFO[3]	! To Floor Plan Range
+else
+	gs_bottom_range_height = GLOB_CUTPLANES_INFO[4]	! Absolute Display Limit
+endif
+
+doCutplane = (ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_OVERHEAD_PROJ)
+
+! ==============================================================================
+! Hotspots
+! ==============================================================================
+hLineID = 1000
+unID = 1
+
+hotline2 -eaveOverhang,	0,	tieBeamLength,	0, hLineID : hLineID = hLineID + 1
+hotline2 tieBeamLength,	0,	tieBeamLength,	B, hLineID : hLineID = hLineID + 1
+hotline2 tieBeamLength,	B,	-eaveOverhang,	B, hLineID : hLineID = hLineID + 1
+hotline2 -eaveOverhang,	B,	-eaveOverhang,	0, hLineID : hLineID = hLineID + 1
+
+hotspot2 0,				B/2, unID, tieBeamLength, 1+256	: unID=unID+1
+hotspot2 -1,			B/2, unID, tieBeamLength, 3		: unID=unID+1
+hotspot2 tieBeamLength,	B/2, unID, tieBeamLength, 2		: unID=unID+1
+
+hotspot2 -eaveOverhang,	0,	unID, B, 1+256	: unID=unID+1
+hotspot2 -eaveOverhang,	-1,	unID, B, 3		: unID=unID+1
+hotspot2 -eaveOverhang,	B,	unID, B, 2		: unID=unID+1
+
+hotspot2 tieBeamLength,	0,	unID, B, 1+256	: unID=unID+1
+hotspot2 tieBeamLength,	-1,	unID, B, 3		: unID=unID+1
+hotspot2 tieBeamLength,	B,	unID, B, 2		: unID=unID+1
+
+_eaveOverhang = crh / sin(ang)
+
+dx = (tieBeamLength + _eaveOverhang)/nn/numDivisions
+add2 -_eaveOverhang, 0
+for s=1 to nn*numDivisions
+	hotspot2 dx, B/2, unID : unID=unID+1
+	add2 dx, 0
+next s
+del s
+
+
+! ==============================================================================
+! Axis
+! ==============================================================================
+if ac_symb_display_option <> DISPLAY_OUTLINES & gs_axis = 1 then
+	line_type gs_axis_line
+	pen gs_axis_line_pen
+
+	line2 -eaveOverhang, B/2, tieBeamLength, B/2
+	hotline2 -eaveOverhang, B/2, tieBeamLength, B/2, hLineID : hLineID = hLineID + 1
+else
+	hLineID = hLineID + 1
+endif
+
+! ==============================================================================
+! Floor Plan View
+! ==============================================================================
+pen gs_cont_pen
+line_type gs_cont_line
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC then
+
+	rect2 -eaveOverhang, 0, tieBeamLength, B
+
+	fill gs_fill_type
+	poly2_b 5, 2+64, gs_fill_pen, gs_back_pen,
+			-eaveOverhang, 0, 0,
+			-eaveOverhang, B, 1,
+			tieBeamLength, B, 1,
+			tieBeamLength, 0, 1,
+			-eaveOverhang, 0, -1
+
+	if std then
+		add2 0, B
+		project2{3} 4, 270, 2, 4+8, 0, 0, 0, 0, parameters gs_detlevel_3D_m = DETLEVEL3D_DETAILED
+		del 1
+
+		add2 - _eaveOverhang, 0
+		if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+			for s=1 to nn
+				hotspot2 numDivisions*s*dx,	B,			unID, zzyzx, 1+128	: unID=unID+1
+				hotspot2 numDivisions*s*dx,	-1,			unID, zzyzx, 3		: unID=unID+1
+				hotspot2 numDivisions*s*dx,	B + zzyzx,	unID, zzyzx, 2		: unID=unID+1
+			next s
+		endif
+
+		if iDimensionSetMode = DIM_WIDTH_ANGLE | iDimensionSetMode = DIM_WIDTH_PROPORTION then
+			for s=1 to nn
+				hotspot2 numDivisions*s*dx,b+zzyzx,unID : unID=unID+1
+			next s
+		endif
+		del 1
+
+		if iDimensionSetMode = DIM_WIDTH_ANGLE then
+			rafterLength = (sqr(tieBeamLength^2 + (zzyzx*nn - crh/cos(ang))^2))/nn
+
+			hotspot2 rafterLength/2,			B,								unID, ang, 4+128	: unID=unID+1
+			hotspot2 0,							B,								unID, ang, 6 		: unID=unID+1
+			hotspot2 (rafterLength/2)*cos(ang),	B + (rafterLength/2)*sin(ang),	unID, ang, 5		: unID=unID+1
+		endif
+	endif
+else
+
+	! ----- View Edges ---------------------------------------------------------
+	pen gs_cont_pen
+	line_type gs_cont_line
+
+	if ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+		pen gs_overhead_pen
+		line_type gs_overhead_linetype
+	endif
+
+	project2{3} 3,270,2 + 32 * (ac_symb_display_option = DISPLAY_OVERHEAD_ALL | not(gs_use_3D_view_attributes)), 8,
+		parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+					gs_2D_projection		= doCutplane,
+					gs_2D_projection_type	= 1,
+					gs_cutplane_height		= gs_cutplane_height,
+					gs_top_range_height		= gs_top_range_height,
+					gs_bottom_range_height	= gs_bottom_range_height
+
+
+	if ac_symb_display_option <> DISPLAY_OVERHEAD_ALL then
+		! ----- View Polygons --------------------------------------------------
+		pen gs_fill_pen
+		fill gs_fill_type
+
+		project2{3} 3,270,3+32+1024+2048, 4,
+						gs_back_pen,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= doCutplane,
+						gs_2D_projection_type	= 2,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+
+
+	if ac_symb_display_option = DISPLAY_OVERHEAD_PROJ then
+
+		! ----- Overhead View -----------------------------------------------------
+		pen gs_overhead_pen
+		line_type gs_overhead_linetype
+
+		project2{3} 3,270,2+32, 2+8,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= doCutplane,
+						gs_2D_projection_type	= 3,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+
+	if doCutplane then
+
+		! ----- Cut Lines ---------------------------------------------------------
+		pen gs_cut_pen
+		line_type gs_cut_linetype
+		line_property 2
+
+		project2{3} 3,270,2+16+32+256+4096, 2,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= 1,
+						gs_2D_projection_type	= 4,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+
+
+		! ----- Cut Polygons ------------------------------------------------------
+		pen gs_cut_fill_pen
+		fill gs_cut_fill_type
+
+		project2{3} 3,270,3+32+512, 1,
+						gs_cut_back_pen,
+			parameters	gs_detlevel_3D_m		= DETLEVEL3D_DETAILED,
+						gs_2D_projection		= 1,
+						gs_2D_projection_type	= 5,
+						gs_cutplane_height		= gs_cutplane_height,
+						gs_top_range_height		= gs_top_range_height,
+						gs_bottom_range_height	= gs_bottom_range_height
+	endif
+endif
+

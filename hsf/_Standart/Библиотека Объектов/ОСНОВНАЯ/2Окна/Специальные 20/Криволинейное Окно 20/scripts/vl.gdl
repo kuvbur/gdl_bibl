@@ -1,0 +1,376 @@
+
+! Contact person: <SzL, NJ>
+
+minUnitWidth	= 2 * gs_frame_width + 0.01
+minUnitHeight	= 2 * gs_frame_width + 0.01
+glassWidth		= ac_unit_width - 2 * gs_frame_width
+glassHeight		= ac_unit_height - 2 * gs_frame_width
+PanelGlassArea	= glassWidth * glassHeight
+
+if iGrill = MULLION_HVGRID then
+	grilWidth				= gw
+	NumHorGrills			= hgn - 1
+	NumVerGrills			= vgn - 1
+	totalGrillSectionArea	= NumHorGrills * NumVerGrills * grilWidth^2
+	totalVerGrillArea		= grilWidth * glassHeight * NumVerGrills
+	totalHorGrillArea		= grilWidth * glassWidth * NumHorGrills
+	summaGrillArea			= totalVerGrillArea + totalHorGrillArea - totalGrillSectionArea
+
+	PanelGlassArea			= PanelGlassArea - summaGrillArea
+endif
+
+! =============================================================================
+! Total Glazed Area Listing Parameters
+! =============================================================================
+if NOT(gs_list_glassarea_override) then
+	if GLOB_MODPAR_NAME = "gs_list_glassarea" then
+		gs_list_glassarea_tmp = gs_list_glassarea
+		parameters gs_list_glassarea_tmp = gs_list_glassarea_tmp
+	else
+		gs_list_glassarea = gs_list_glassarea_tmp
+		parameters gs_list_glassarea = gs_list_glassarea
+	endif
+
+	gs_list_glassarea = PanelGlassArea
+	parameters gs_list_glassarea = gs_list_glassarea
+	lock "gs_list_glassarea"
+else
+	if GLOB_MODPAR_NAME = "gs_list_glassarea" then
+		gs_list_glassarea_tmp = gs_list_glassarea
+		parameters gs_list_glassarea_tmp = gs_list_glassarea_tmp
+	else
+		gs_list_glassarea = gs_list_glassarea_tmp
+		parameters gs_list_glassarea = gs_list_glassarea
+	endif
+endif
+! =============================================================================
+! GS Window Functions
+! =============================================================================
+
+call "GS Window Functions",
+	parameters all	iWindowShape			= iWindowShape,
+					iWindowType				= 18,				! WIN_Curved
+					gs_IsCurved				= gs_IsCurved,
+					bParalellInCurvedWalls	= bParalellInCurvedWalls,
+					bDisabeMirroring		= bDisabeMirroring,
+					minUnitWidth			= minUnitWidth,
+					minUnitHeight			= minUnitHeight,
+					gs_sunShade_typeDisableByObject = 64,
+					bDisable2DOverride		= 1,
+					bDisable3DOverride		= 1
+
+! =============================================================================
+! Window Specific Parameters
+! =============================================================================
+
+values "gs_sash_thk"	range (0, ]
+values "gs_sash_width"	range (0, ]
+values "gs_glass_thk"	range (0, )
+
+values "gs_parapet_inset_thk" range [0, ]
+
+values{2} "gs_SashText_typ_num" 	MITERED_JOINT, `Угловое Соединение`,
+									BUTT_JOINT, `Стыковое Соединение`
+
+
+! ==============================================================================
+! Uniform Surfaces
+! ==============================================================================
+
+dim	surfaceParNames[7]						:	dim	surfaceParameters[7]
+	surfaceParNames[1]	= "gs_frame_mat"	:		surfaceParameters[1]	= gs_frame_mat
+	surfaceParNames[2]	= "gs_frame_mat2"	:		surfaceParameters[2]	= gs_frame_mat2
+	surfaceParNames[3]	= "gs_sash_mat"		:		surfaceParameters[3]	= gs_sash_mat
+	surfaceParNames[4]	= "gs_grill_mat"	:		surfaceParameters[4]	= gs_grill_mat
+	surfaceParNames[5]	= "gs_grill_mat2"	:		surfaceParameters[5]	= gs_grill_mat2
+	surfaceParNames[6]	= "gs_panel_mat"	:		surfaceParameters[6]	= gs_panel_mat
+	surfaceParNames[7]	= "gs_panel_mat2"	:		surfaceParameters[7]	= gs_panel_mat2
+
+_lastModSurfaceParameter = gs_frame_mat
+
+if stored_material[1][1] <> -9999 then
+	for i = 1 to vardim1(surfaceParNames)
+		if GLOB_MODPAR_NAME = surfaceParNames[i] then
+			_lastModSurfaceParameter	= surfaceParameters[i]
+			stored_material[1][i]	= surfaceParameters[i]
+			stored_material[2][i]	= 1
+
+			for j = 1 to i-1
+				stored_material[2][j]	= 0
+				parameters stored_material[2][j]	= stored_material[2][j]
+			next j
+
+			for k = i+1 to vardim1(surfaceParNames)
+				stored_material[2][k]	= 0
+				parameters stored_material[2][k]	= stored_material[2][k]
+			next k
+		endif
+
+		parameters	stored_material[1][i]	= stored_material[1][i],
+					stored_material[2][i]	= stored_material[2][i]
+
+		if stored_material[2][i] = 1 then
+			_lastModSurfaceParameter = stored_material[1][i]
+		endif
+	next i
+else
+	gosub "preloadSurfaces"
+endif
+
+if bLinkSurfacesFrameSash then
+	parameters	gs_frame_mat	= _lastModSurfaceParameter,
+				gs_frame_mat2	= _lastModSurfaceParameter,
+				gs_sash_mat		= _lastModSurfaceParameter,
+				gs_grill_mat	= _lastModSurfaceParameter,
+				gs_grill_mat2	= _lastModSurfaceParameter,
+				gs_panel_mat	= _lastModSurfaceParameter,
+				gs_panel_mat2	= _lastModSurfaceParameter
+else
+	if GLOB_MODPAR_NAME = "bLinkSurfacesFrameSash" then
+		parameters	gs_frame_mat	= stored_material[1][1],
+					gs_frame_mat2	= stored_material[1][2],
+					gs_sash_mat		= stored_material[1][3],
+					gs_grill_mat	= stored_material[1][4],
+					gs_grill_mat2	= stored_material[1][5],
+					gs_panel_mat	= stored_material[1][6],
+					gs_panel_mat2	= stored_material[1][7]
+	else
+		gosub "preloadSurfaces"
+	endif
+endif
+
+
+! =============================================================================
+! Orientation
+! =============================================================================
+
+values{2} "gs_list_orientationDef_m"	0, `Автоматически`,
+										1, `Специальная`
+
+if gs_list_orientationDef_m = 0 then
+	ac_OpeningSide = ""
+	parameters ac_OpeningSide = ac_OpeningSide
+
+	lock "ac_OpeningSide"
+	hideparameter "ac_OpeningSide"
+endif
+
+
+! =============================================================================
+! IFC Parameters
+! =============================================================================
+
+if abs(WIDO_ORIG_DIST) > EPS & gs_IsCurved then
+	ifc_optype = 10		! WIN_OP_Single
+else
+	ifc_optype = 1		! WIN_OP_USER_DEFINED
+endif
+parameters ifc_optype = ifc_optype
+call "IFC_optype_window" parameters ifc_optype = ifc_optype
+
+lock "ifc_optypestr"
+
+ifc_LiningDepth = WIDO_FRAME_THICKNESS
+parameters ifc_LiningDepth = ifc_LiningDepth
+
+ifc_LiningThickness = gs_frame_width
+parameters ifc_LiningThickness = ifc_LiningThickness
+
+dim ifc_WindowPanel[][4]
+	ifc_WindowPanel[1][1] = 0
+	ifc_WindowPanel[1][2] = 0
+if ifc_optype = 10 then		! WIN_OP_USER_DEFINED
+	ifc_WindowPanel[1][3] = 0		! NOTDEFINED
+	ifc_WindowPanel[1][4] = 0		! NOTDEFINED
+else
+	ifc_WindowPanel[1][3] = 12 		! FIXEDCASEMENT
+	ifc_WindowPanel[1][4] = 2		! MIDDLE
+endif
+parameters ifc_WindowPanel = ifc_WindowPanel
+
+
+! =============================================================================
+! FM Types
+! =============================================================================
+
+call "FM_types" parameters all
+
+
+! =============================================================================
+
+values "grill" stSashType[1], stSashType[2], stSashType[15]				!!!, stSashType[3], stSashType[4]
+values "iGrill" MULLION_NONE, MULLION_HVGRID, MULLION_SOLID_PANEL		!!!, MULLION_EDITABLEGRID, MULLION_CUSTOM
+
+if GLOB_MODPAR_NAME = "grill" then
+	iGrill = MULLION_NONE
+	if grill = stSashType[2] then iGrill = MULLION_HVGRID
+!	if grill = stSashType[3] then iGrill = MULLION_EDITABLEGRID
+!	if grill = stSashType[4] then iGrill = MULLION_CUSTOM
+	if grill = stSashType[15] then iGrill = MULLION_SOLID_PANEL
+	parameters iGrill = iGrill
+else
+	grill  = stSashType[iGrill]
+	parameters grill  = grill
+endif
+
+if hgn = 1 and vgn = 1 then hideparameter "gs_grill_mat","gs_grill_mat2"
+
+! LIMITATIONs of PARAMETER
+values "gs_frame_width" range [0,)
+values "gs_frame_thk" range [0,)
+
+!!!values "a"	RANGE ((2*gs_frame_width),)
+
+values{2} "iMullionPosition" 	MULLION_OUTSIDE, `Снаружи`,
+								MULLION_INSIDE, `Внутри`,
+								MULLION_THROUGHOUT, `Посередине`
+values "hgn" range [1,)
+values "vgn" range [1,)
+if gw < 0.0001 then parameters gw = 0.0001
+if gth < 0.0001 then parameters gth = 0.0001
+
+
+
+! =============================================================================
+! 3D Detail Level
+! =============================================================================
+
+if gs_3DDetEnable =0 then
+
+    values{2} "iDWDet3D" 	DETLEVEL_DW3D_DETAILED,		`Детальный`,
+						    DETLEVEL_DW3D_SIMPLE,		`Простой`,
+						    DETLEVEL_DW3D_OFF,			`Откл.`
+
+else
+	dim n3DScaleValueMask[]
+	dim n3DScaleValueMask_m[]
+
+	i=1
+	if bittest( gs_3DDetEnable, 0) then                                              ! Scale Sensitive in Value list, 1
+				n3DScaleValueMask[i] = stDetail[1]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_SCALESENS
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 1) then                                              ! Detailed in Value list,2
+				n3DScaleValueMask[i] = stDetail[2]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_DETAILED
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 2) then                                              ! Simple in Value list,4
+				n3DScaleValueMask[i] = stDetail[3]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_SIMPLE
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 3) then                                              ! Off in Value list,8
+				n3DScaleValueMask[i] = stDetail[4]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_OFF
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 4) then                                              ! Chinese Simple in Value list,16
+				n3DScaleValueMask[i] = stDetail[5]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_CHI_SIMPLE
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 5) then                                              ! Chinese Detailed in Value list,32
+				n3DScaleValueMask[i] = stDetail[6]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_CHI_DETAILED
+				i = i + 1
+	endif
+
+	values{2} "iDWDet3D" n3DScaleValueMask_m, n3DScaleValueMask
+endif
+
+
+! =============================================================================
+! Swedish list parameter control
+! =============================================================================
+
+if gs_SWE_listParams_contr > 0 then
+	call "SWE_ListParameters_control" parameters gs_SWE_listParams_contr = gs_SWE_listParams_contr,
+			swe_list_f1	= swe_list_f1
+endif
+
+! =============================================================================
+! Japanese list parameter control
+! =============================================================================
+
+if gs_JPN_listParams_contr then
+	call "ListValuesJPN" parameters all gs_JPNObjectType = 2,		!COMMPARS_INTWINDOWS
+			gs_is_p2	= 0,
+			gs_is_p6	= 0
+endif
+
+
+! =============================================================================
+! SWE Label sash ID handling
+! =============================================================================
+
+	call "winDoorCasIDmacro" parameters 	isSweDoorWindow			= 0,
+											sashRowNum				= 0,
+											sashColumnNum			= 0,
+											iWindowType				= 18,			!WIN_Curved
+											iWindowClass			= 0,
+											gs_bLeftSLight			= 0,
+											gs_bSLight				= 0,
+											gs_UTrans				= 0,
+											gs_LTrans				= 0,
+											gs_UTrans_Div			= 0,
+											gs_LTrans_Div			= 0,
+											nDinamicSash			= 0
+
+! --- Locking Parameters ---
+
+if iGrill = MULLION_NONE | iGrill = MULLION_CUSTOM | iGrill = MULLION_SOLID_PANEL then
+	lock "vgn", "hgn", "gw", "gth", "gs_grill_mat", "gs_grill_mat2"
+	hideparameter "vgn", "hgn", "gw", "gth", "gs_grill_mat", "gs_grill_mat2"
+endif
+
+if iGrill <> MULLION_EDITABLEGRID then
+	lock			"ghe"
+	hideparameter	"ghe"
+endif
+
+lock "iMullionPosition"
+
+if iGrill = MULLION_CUSTOM then
+	lock "gs_glass_mat", "gs_glass_pen", "gs_sash_mat"
+	hideparameter "gs_glass_mat", "gs_glass_pen", "gs_sash_mat"
+endif
+
+if iGrill = MULLION_SOLID_PANEL then
+	lock "gs_glass_mat", "gs_glass_pen", "gs_sash_mat"
+	hideparameter "gs_glass_mat", "gs_glass_pen", "gs_sash_mat"
+else
+	lock "gs_panel_mat", "gs_panel_mat2"
+	hideparameter "gs_panel_mat", "gs_panel_mat2"
+endif
+
+! =============================================================================
+! Sash
+! =============================================================================
+
+if iGrill = MULLION_NONE | iGrill = MULLION_CUSTOM then
+	lock	"gs_fillSash",
+			"gs_penSash_bg",
+			"gs_penSash_fg",
+			"gs_sash_pen"
+
+	hideparameter	"gs_fillSash",
+					"gs_penSash_bg",
+					"gs_penSash_fg",
+					"gs_sash_pen"
+endif
+
+parameters gs_optype_m_01 = SASH_FIXED
+
+end
+
+"preloadSurfaces":
+	parameters	stored_material[1][1]	= gs_frame_mat,
+				stored_material[1][2]	= gs_frame_mat2,
+				stored_material[1][3]	= gs_sash_mat,
+				stored_material[1][4]	= gs_grill_mat,
+				stored_material[1][5]	= gs_grill_mat2,
+				stored_material[1][6]	= gs_panel_mat,
+				stored_material[1][7]	= gs_panel_mat2
+return

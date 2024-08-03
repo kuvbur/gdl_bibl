@@ -1,0 +1,191 @@
+
+!<TZs>
+if round_int(ac_wall_slant_angle2) = 0 and round_int(ac_wall_slant_angle1) = 0 then
+	ac_wall_slant_angle1 = 90
+	ac_wall_slant_angle2 = 90
+endif
+
+if not(isComposite) | not(b3DRepresentation) then
+	end
+endif
+
+! ==============================================================================
+! For Skin Separator Line at Composite Wall
+! ==============================================================================
+
+numSkin = 1
+for i = 1 to 2
+	if WALL_SKINS_PARAMS[numSkin][SKIN_CONT_PEN] < eps then
+		if WALL_SKINS_PARAMS[numSkin][SKIN_FILL_BACK_PEN] > eps then
+			WALL_SKINS_PARAMS[numSkin][SKIN_CONT_PEN] = WALL_SKINS_PARAMS[numSkin][SKIN_FILL_BACK_PEN]
+		else
+			WALL_SKINS_PARAMS[numSkin][SKIN_CONT_PEN] = WALL_VIEW_PEN
+		endif
+	endif
+	numSkin = WALL_SKINS_NUMBER
+next i
+
+! ==============================================================================
+
+bBottomLine = 1
+bTopLine = 1
+elevation = 0
+if AC_fit_to_wall_height then
+	ZZYZX = WALL_HEIGHT
+	elevation = -GLOB_ELEVATION / sin (ac_wall_slant_angle1)
+else
+	if GLOB_ELEVATION > EPS then
+		bBottomLine = 0
+	endif
+	if GLOB_ELEVATION + ZZYZX < WALL_HEIGHT - EPS then
+		bTopLine = 0
+	endif
+endif
+
+if turnLast then
+	thick3D = WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][SKIN_THICKNESS]
+	if nExtendedSkins then
+		yDivLine = WALL_SKINS_PARAMS[1][SKIN_THICKNESS]
+	else
+		yDivLine = 0
+	endif
+else
+	thick3D = WALL_SKINS_PARAMS[1][SKIN_THICKNESS]
+	if nExtendedSkins then
+		yDivLine = WALL_THICKNESS - WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][SKIN_THICKNESS]
+	else
+		yDivLine = WALL_THICKNESS
+	endif
+endif
+
+dim trafo_array[][]
+
+rotz -90
+numTrafo = 1
+trafo_array[numTrafo][1] = TRAFO_ROT_Z
+trafo_array[numTrafo][2] = -90
+
+addz elevation
+numTrafo = numTrafo + 1
+trafo_array[numTrafo][1] = TRAFO_ADD_Z
+trafo_array[numTrafo][2] = elevation
+
+pen WALL_VIEW_PEN
+resol WALL_RESOL
+
+! ------------------------------------------------------------------------------
+! Cut wallhole for wall end body
+! ------------------------------------------------------------------------------
+
+call "SkinRect" PARAMETERS trafo_array = trafo_array, numTrafo = numTrafo, gs_useWallMat = 1,
+		startX = 0, startY = 0,
+		endX = thick3D, endY = WALL_THICKNESS,
+		innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+		incAngle = wallIncl, trapType = 1,
+		bDoCut = 1, height = ZZYZX
+
+if abs(wallIncl) > EPS or abs(ac_wall_slant_angle1 - ac_wall_slant_angle2) > EPS then
+	trapezoidCoreSkin = 0
+	for j = 1 to WALL_SKINS_NUMBER
+		if abs(WALL_SKINS_PARAMS [j][SKIN_THICKEN_TRAPEZOID] - 1) < EPS then
+			trapezoidCoreSkin = j
+		endif
+	next j
+	if bTurnRefSide then
+		if not(SYMB_MIRRORED) then
+			firstTrapType = 1
+			secTrapType = 0
+		else
+			firstTrapType = 0
+			secTrapType = 1
+		endif
+	else
+		if not(SYMB_MIRRORED) then
+			if 1 = trapezoidCoreSkin then
+				firstTrapType = 1
+				secTrapType = 2
+			else
+				if WALL_SKINS_NUMBER = trapezoidCoreSkin then
+					firstTrapType = 0
+					secTrapType = 1
+				else
+					firstTrapType = 0
+					secTrapType = 2
+				endif
+			endif
+		else
+			if 1 = trapezoidCoreSkin then
+				firstTrapType = 1
+				secTrapType = 0
+			else
+				if WALL_SKINS_NUMBER = trapezoidCoreSkin then
+					firstTrapType = 2
+					secTrapType = 1
+				else
+					firstTrapType = 2
+					secTrapType = 0
+				endif
+			endif
+		endif
+	endif
+else
+	firstTrapType = 0
+	secTrapType = 0
+endif
+
+
+! ------------------------------------------------------------------------------
+! Draw wall end body to outsides turned skins according to bTurnRefSide
+! ------------------------------------------------------------------------------
+
+_bShowEntireWall = (GLOB_STRUCTURE_DISPLAY = STRUCTURE_ENTIRE_STRUCTURE)
+
+_turnedFirstSkin = 1
+_bShowTurnedFirstSkin  = _bShowEntireWall |\
+						(GLOB_STRUCTURE_DISPLAY = STRUCTURE_CORE_ONLY & abs(WALL_SKINS_PARAMS[_turnedFirstSkin][SKIN_CORE_STATUS]) > EPS) |\
+						(GLOB_STRUCTURE_DISPLAY = STRUCTURE_WITHOUT_FINISHES & abs(WALL_SKINS_PARAMS[_turnedFirstSkin][SKIN_FINISH_STATUS]-1) > EPS)
+
+if _bShowTurnedFirstSkin then
+	sect_fill 	WALL_SKINS_PARAMS[_turnedFirstSkin][SKIN_FILL], WALL_SKINS_PARAMS[_turnedFirstSkin][SKIN_FILL_BACK_PEN], \
+				WALL_SKINS_PARAMS[_turnedFirstSkin][SKIN_FILL_PEN], WALL_SKINS_PARAMS[_turnedFirstSkin][SKIN_CONT_PEN]
+
+	call "SkinRect" PARAMETERS trafo_array = trafo_array, numTrafo = numTrafo, gs_useWallMat = 1,
+			startX = 0, startY = 0,
+			endX = thick3D, endY = yDivLine,
+			innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+			incAngle = wallIncl, trapType = firstTrapType,
+			ac_wall_slant_angle1 = ac_wall_slant_angle1, ac_wall_slant_angle2 = ac_wall_slant_angle2,
+			bDoCut = 0, height = ZZYZX,
+			edge1 = bBottomLine + 2 + 8, edge2 = 0 + 8, edge3 = bTopLine + 8, edge4 = 7 + 8,
+			matLeft = WALL_MAT_A, matRight = WALL_MAT_A, matVert = WALL_MAT_A, matHoriz = WALL_MAT_A
+endif
+
+
+_turnedLastSkin = WALL_SKINS_NUMBER
+_bShowTurnedLastSkin  = _bShowEntireWall |\
+						(GLOB_STRUCTURE_DISPLAY = STRUCTURE_CORE_ONLY & abs(WALL_SKINS_PARAMS[_turnedLastSkin][SKIN_CORE_STATUS]) > EPS) |\
+						(GLOB_STRUCTURE_DISPLAY = STRUCTURE_WITHOUT_FINISHES & abs(WALL_SKINS_PARAMS[_turnedLastSkin][SKIN_FINISH_STATUS]-1) > EPS)
+
+if _bShowTurnedLastSkin then
+	sect_fill 	WALL_SKINS_PARAMS[_turnedLastSkin][SKIN_FILL], WALL_SKINS_PARAMS[_turnedLastSkin][SKIN_FILL_BACK_PEN], \
+				WALL_SKINS_PARAMS[_turnedLastSkin][SKIN_FILL_PEN], WALL_SKINS_PARAMS[_turnedLastSkin][SKIN_CONT_PEN]
+
+	call "SkinRect" PARAMETERS trafo_array = trafo_array, numTrafo = numTrafo, gs_useWallMat = 1,
+			startX = 0, startY = yDivLine,
+			endX = thick3D, endY = WALL_THICKNESS,
+			innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+			incAngle = wallIncl, trapType = secTrapType,
+			ac_wall_slant_angle1 = ac_wall_slant_angle1, ac_wall_slant_angle2 = ac_wall_slant_angle2,
+			bDoCut = 0, height = ZZYZX,
+			edge1 = 2 + 4*bBottomLine + 8, edge2 = 0 + 8, edge3 = 4*bTopLine + 8, edge4 = 7 + 8,
+			matLeft = WALL_MAT_B, matRight = WALL_MAT_B, matVert = WALL_MAT_B, matHoriz = WALL_MAT_B
+endif
+
+! --- replace AC hotspots at the ends ---
+if _bShowTurnedFirstSkin | _bShowTurnedLastSkin then
+	call "Resize Wall End" PARAMETERS ZZYZX = ZZYZX,
+			GS_HotspotUnIDBegin = 20000,
+			cutWidthAngle = cutWidthAngle, AC_CutWidth = AC_CutWidth,
+			r0 = r0, wallIncl = wallIncl, onWallBeg = onWallBeg
+endif
+del 2

@@ -1,0 +1,599 @@
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+CALL "RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, sMat
+
+IF gs_shadow=0 THEN SHADOW OFF
+IF gs_shadow=1 THEN SHADOW ON
+
+
+IF bShowMEP THEN
+
+	IF useSysMat AND MEP_StrConnectionData[1][2] <> "0" THEN
+		HVAC_matPlenum = sMat
+		HVAC_matGrille = sMat
+	ENDIF
+
+				! --- TRANSFORMATION --- !
+
+	XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+			MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+			MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+ENDIF
+
+addStatus = 0
+addStatus1 = 0
+isCutting = 1
+IF GLOB_CONTEXT > 40 AND GLOB_CONTEXT < 50 THEN
+	addStatus = 3
+	addStatus1 = 1
+	isCutting = 0
+ENDIF
+
+hotspot 0,0,0
+hotspot 0,0,Nh+PlenumHeight
+IF iPlenumType < 3 THEN !**** Cube, Prism
+	HOTSPOT  PlenumWidth/2, PlenumLength/2, Nh+PlenumHeight
+	HOTSPOT  PlenumWidth/2,-PlenumLength/2, Nh+PlenumHeight
+	HOTSPOT -PlenumWidth/2, PlenumLength/2, Nh+PlenumHeight
+	HOTSPOT -PlenumWidth/2,-PlenumLength/2, Nh+PlenumHeight
+
+	HOTSPOT  PanelOuterWidth/2, PanelOuterLength/2, 0
+	HOTSPOT  PanelOuterWidth/2,-PanelOuterLength/2, 0
+	HOTSPOT -PanelOuterWidth/2, PanelOuterLength/2, 0
+	HOTSPOT -PanelOuterWidth/2,-PanelOuterLength/2, 0
+ELSE
+	HOTSPOT  PlenumWidth/2,0, Nh+PlenumHeight
+	HOTSPOT -PlenumWidth/2,0, Nh+PlenumHeight
+	HOTSPOT 0, PlenumWidth/2, Nh+PlenumHeight
+	HOTSPOT 0,-PlenumWidth/2, Nh+PlenumHeight
+
+	HOTSPOT  PanelOuterWidth/2, 0, 0
+	HOTSPOT -PanelOuterWidth/2, 0, 0
+	HOTSPOT 0, PanelOuterWidth/2, 0
+	HOTSPOT 0,-PanelOuterWidth/2, 0
+ENDIF
+
+
+MATERIAL HVAC_matGrille
+PEN gs_cont_pen
+RESOL 1.5*res
+
+!******* Diffuser
+
+IF gs_detlevel_3D_m = 2 THEN
+	GOSUB 100+iDiffType
+ELSE
+	GOSUB 10
+ENDIF
+
+
+!******* Neck
+
+MATERIAL HVAC_matPlenum
+
+IF iPlenumType < 3 THEN !**** Cube, Prism
+	EXTRUDE 5, 0, 0, Nh, addStatus+16+32,
+		-NeckWidth/2, -NeckLength/2, 0,
+		NeckWidth/2, -NeckLength/2, 0,
+		NeckWidth/2, NeckLength/2, 0,
+		-NeckWidth/2, NeckLength/2, 0,
+		-NeckWidth/2, -NeckLength/2, -1
+	edgeSize = (PlenumWidth-NeckWidth)/2
+	edgeSize2 = (PlenumLength-NeckLength)/2
+	ADDz Nh
+	POLY_ 10,
+		-NeckWidth/2-edgeSize, -NeckLength/2-edgeSize2, 1,
+		NeckWidth/2+edgeSize, -NeckLength/2-edgeSize2, 1,
+		NeckWidth/2+edgeSize, NeckLength/2+edgeSize2, 1,
+		-NeckWidth/2-edgeSize, NeckLength/2+edgeSize2, 1,
+		-NeckWidth/2-edgeSize, -NeckLength/2-edgeSize2, -1,
+		-NeckWidth/2, -NeckLength/2, 1,
+		NeckWidth/2, -NeckLength/2, 1,
+		NeckWidth/2, NeckLength/2, 1,
+		-NeckWidth/2, NeckLength/2, 1,
+		-NeckWidth/2, -NeckLength/2, -1
+	DEL 1
+ELSE					 !**** Cylinder
+	ROTy -90
+	REVOLVE 2,360,addStatus+16,
+		0,NeckWidth/2,0,
+		Nh,NeckWidth/2,0
+	REVOLVE 2,360,addStatus+16,
+		Nh,NeckWidth/2,0,
+		Nh,PlenumWidth/2,0
+	DEL 1
+ENDIF
+
+
+!******* Plenum Box
+
+RESOL res
+IF iPlenumType < 3 THEN !**** Cube, Prism
+	ADD 0, ConPosY_1, ConPosZ_1
+	ROTy 90 !-180*SYMB_MIRRORED
+	IF isCutting THEN
+		IF ABS(MEP_NumConnectionData[1][21]-1) < EPS THEN
+			CUTFORM 4, 1, 1,
+				0, 0, 1, 1,
+
+				ConHalfH, ConHalfW, 15,
+				-ConHalfH, ConHalfW, 15,
+				-ConHalfH, -ConHalfW, 15,
+				ConHalfH, -ConHalfW, 15
+		ELSE
+			CUTFORM 2, 1, 1,
+				0, 0, 1, 1,
+
+				0, 0, 979,
+				PlmE/2, 360, 4079
+		ENDIF
+	ENDIF
+	DEL 2
+
+	ADDz Nh
+	EXTRUDE 5, 0, 0, PlenumHeight, addstatus1+2+16+32,
+		-PlenumWidth/2, -PlenumLength/2, 0,
+		PlenumWidth/2, -PlenumLength/2, 0,
+		PlenumWidth/2, PlenumLength/2, 0,
+		-PlenumWidth/2, PlenumLength/2, 0,
+		-PlenumWidth/2, -PlenumLength/2, -1
+	DEL 1
+	IF isCutting THEN CUTEND
+ELSE
+	ROTy -90
+	addx Nh
+	addx ConPosZ_1-Nh
+	roty 180
+	IF isCutting THEN
+		IF ABS(MEP_NumConnectionData[1][21]-1) < EPS THEN
+			CUTFORM 4, 1, 1,
+				0, 0, 1, 1,
+
+				ConHalfH, ConHalfW, 15,
+				-ConHalfH, ConHalfW, 15,
+				-ConHalfH, -ConHalfW, 15,
+				ConHalfH, -ConHalfW, 15
+		ELSE
+			CUTFORM 2, 1, 1,
+				0, 0, 1, 1,
+
+				0, 0, 979,
+				PlmE/2, 360, 4079
+		ENDIF
+	ENDIF
+	del 2
+	RESOL 1.5*res
+	REVOLVE 3,360,addStatus+16,
+		0,PlenumWidth/2,0,
+		PlenumHeight,PlenumWidth/2,2,
+		PlenumHeight,0,2
+	IF isCutting THEN CUTEND
+
+	addx ConPosZ_1-Nh
+	roty 90
+	CUTPOLYA 2,1,0,
+		0,0,979,
+		PlenumWidth/2,360, 4079
+	RESOL res
+	ROTy 90
+	IF ABS(MEP_NumConnectionData[1][21]-1) < EPS THEN
+		EXTRUDE 4, 0, 0, PlenumWidth/2, addStatus+4,
+			ConHalfH, ConHalfW, 0,
+			-ConHalfH, ConHalfW, 0,
+			-ConHalfH, -ConHalfW, 0,
+			ConHalfH, -ConHalfW, 0
+	ELSE
+		EXTRUDE 2, 0, 0, PlenumWidth/2, addStatus+4,
+			0, 0, 901,
+			PlmE/2, 360, 4001
+	ENDIF
+	DEL 1
+	CUTEND
+	DEL 4
+ENDIF
+
+
+				! --- CONNECTIONS --- !
+
+RESOL res
+IF PlenumType = PlenumType_dim[1] THEN
+	ConEdit_1 = 17
+	ConEdgeVisible_1 = 1
+ELSE
+	ConEdit_1 = 14
+	ConEdgeVisible_1 = 0
+ENDIF
+
+CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		MEP_NumberConnections = MEP_NumberConnections,
+		MEP_NumConnectionData = gs_Connections,
+		gs_AddConnections = gs_AddConnections,
+		cShow3D = 1,
+		gs_ConMat = HVAC_matPlenum,
+		MEP_InsShow = 0,
+		MEP_cline_show_3D = 0,
+		gs_cont_pen = gs_cont_pen,
+		ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = ConEdit_1, ConEdgeVisible_1 = ConEdgeVisible_1
+DEL TOP
+
+
+END
+
+10:
+	IF PlenumType = PlenumType_dim[1] THEN !**** Rectangular
+		PRISM_ 5, -gtck,
+			-PanelOuterWidth/2,-PanelOuterWidth/2,15,
+			-PanelOuterWidth/2, PanelOuterWidth/2,15,
+			 PanelOuterWidth/2, PanelOuterWidth/2,15,
+			 PanelOuterWidth/2,-PanelOuterWidth/2,15,
+			-PanelOuterWidth/2,-PanelOuterWidth/2,-1
+	ENDIF
+	IF PlenumType = PlenumType_dim[2] THEN !**** Circular
+		PRISM_ 2, -gtck,
+			0,0,979,
+			PanelOuterWidth/2,360, 4079
+	ENDIF
+RETURN
+
+20:
+	IF iPlenumType < 3 THEN !**** Cube, Prism
+		PUT -PanelOuterWidth/2,-PanelOuterWidth/2,15
+		PUT -PanelOuterWidth/2, PanelOuterWidth/2,15
+		PUT PanelOuterWidth/2, PanelOuterWidth/2,15
+		PUT PanelOuterWidth/2,-PanelOuterWidth/2,15
+		PUT -PanelOuterWidth/2,-PanelOuterWidth/2,79
+		PUT -PanelOuterWidth/2,-PanelOuterWidth/2,-1
+		IF addStatus < 0.5 THEN
+			PUT 0,0,979
+			PUT GrilleWidth/2,360, 4079
+		ENDIF
+
+		PRISM_ NSP/3, -gtck,
+			GET(NSP)
+	ELSE					!**** Circular
+		PUT 0,0,979
+		PUT PanelOuterWidth/2,360, 4079
+		IF addStatus < 0.5 THEN
+			PUT 0,0,979
+			PUT GrilleWidth/2,360, 4079
+		ENDIF
+
+		PRISM_ NSP/3, -gtck,
+			GET(NSP)
+	ENDIF
+	IF addStatus < 0.5 THEN
+		ROTy -90
+		REVOLVE 2, 360, 16,
+			0, GrilleWidth/2, 0,
+			tck, GrilleWidth/2, 0
+		DEL 1
+	ENDIF
+RETURN
+
+21:
+	PUT -PanelOuterWidth/2,-PanelOuterLength/2,15
+	PUT -PanelOuterWidth/2, PanelOuterLength/2,15
+	PUT  PanelOuterWidth/2, PanelOuterLength/2,15
+	PUT  PanelOuterWidth/2,-PanelOuterLength/2,15
+	PUT -PanelOuterWidth/2,-PanelOuterLength/2,-1
+	IF addStatus < 0.5 THEN
+		PUT -GrilleWidth/2,-GrilleLength/2,15
+		PUT -GrilleWidth/2, GrilleLength/2,15
+		PUT GrilleWidth/2, GrilleLength/2,15
+		PUT GrilleWidth/2,-GrilleLength/2,15
+		PUT -GrilleWidth/2,-GrilleLength/2,-1
+	ENDIF
+
+	PRISM_ NSP/3, -gtck,
+		GET(NSP)
+
+	IF addStatus < 0.5 THEN
+		EXTRUDE 5, 0, 0, tck, 16+32,
+			-GrilleWidth/2+EPS,-GrilleLength/2+EPS,0,
+			-GrilleWidth/2+EPS, GrilleLength/2-EPS,0,
+			 GrilleWidth/2-EPS, GrilleLength/2-EPS,0,
+			 GrilleWidth/2-EPS,-GrilleLength/2+EPS,0,
+			-GrilleWidth/2+EPS,-GrilleLength/2+EPS,-1
+	ENDIF
+RETURN
+
+101:
+	GOSUB 20
+
+	IF addStatus < 0.5 THEN
+		MUL PanelOuterWidth, PanelOuterWidth, 1
+		CONE 0.02,0.1,0,90,90
+		ROTz 270
+		ROTy -90
+		FOR i=1 TO 3
+			REVOLVE 2,360,16+32,
+				0, (0.1*i+0.1), 1,
+				0.02,0.1*i,1
+		NEXT i
+		DEL 3
+	ENDIF
+RETURN
+
+102:
+	GOSUB 20
+
+	IF addStatus < 0.5 THEN
+		ceil_wdt = GrilleWidth
+		ceil_len = GrilleWidth
+		gs_ceil_thk = tck/2
+
+		lou_thk=1.5*gs_ceil_thk
+		lou_wdt=ceil_wdt
+		lou_len=ceil_len
+		lou_rad=min(lou_wdt,lou_len)/2-lou_thk/2
+		lou_num=int(lou_rad/lou_thk)
+
+		ROTZ 270
+
+		mask=0
+		ROTy -90
+		For z=1 To lou_num
+			revolve 4, 360, 0,
+					0, lou_rad, mask,
+					0, lou_rad-lou_thk/4, 2,
+					3/4*lou_thk, lou_rad-lou_thk, 2,
+					lou_thk, lou_rad-lou_thk, 2
+
+			mask=2
+			lou_rad=lou_rad-lou_thk
+		Next z
+		DEL 2
+	ENDIF
+RETURN
+
+103:
+	GOSUB 20
+
+	IF addStatus < 0.5 THEN
+		ceil_wdt = GrilleWidth
+		ceil_len = GrilleWidth
+		gs_ceil_thk = tck
+
+		lou_thk=gs_ceil_thk
+		lou_wdt=ceil_wdt
+		lou_len=ceil_len
+		lou_rad=min(lou_wdt,lou_len)/2
+		lou_num=int(lou_rad/lou_thk)
+		hgt=lou_thk
+
+		extrude 2, 0, 0, hgt, 1+2+16+32,
+				0, 0, 901,
+				lou_rad/3, 360, 4001
+
+		For z=1 to 24
+			plane_	5,
+					lou_rad/3*1.05, 0, 0, 1,
+					lou_rad*0.98, 0, 0, 1,
+					lou_rad*0.98*cos(24), lou_rad*0.98*sin(24), hgt, 1,
+					lou_rad/3*1.05*cos(24), lou_rad/3*1.05*sin(24), hgt/3, 1,
+					lou_rad/3*1.05, 0, 0, -1
+			rotz 360/24
+		next z
+		DEL 24
+	ENDIF
+RETURN
+
+104:
+	GOSUB 21
+
+	IF addStatus < 0.5 THEN
+		ceil_wdt = GrilleWidth
+		ceil_len = GrilleLength
+		gs_ceil_thk = tck/2
+
+		lou_thk=1.5*gs_ceil_thk
+		lou_wdt=ceil_wdt
+		lou_len=ceil_len
+		lou_num=min(lou_wdt,lou_len)/(2*lou_thk)
+
+		For z=1 To lou_num
+
+			For j=1 To 2
+				plane_	5,
+						-lou_wdt/2, -lou_len/2, 0, 1,
+						lou_wdt/2, -lou_len/2, 0, 0,
+						lou_wdt/2-lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						-lou_wdt/2, -lou_len/2, 0, -1
+
+				plane_	5,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						lou_wdt/2-lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						lou_wdt/2-lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, -1
+
+				IF ABS(lou_wdt-lou_thk*2) > EPS THEN
+					plane_	5,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, lou_thk, 1,
+						lou_wdt/2-lou_thk, -lou_len/2+lou_thk, lou_thk, 1,
+						lou_wdt/2-lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, -1
+				ENDIF
+				muly -1
+			Next j
+			del 2
+
+			For j=1 To 2
+				plane_	5,
+						-lou_wdt/2, -lou_len/2, 0, 1,
+						-lou_wdt/2, lou_len/2, 0, 0,
+						-lou_wdt/2+lou_thk/4, lou_len/2-lou_thk/4, 0, 1,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						-lou_wdt/2, -lou_len/2, 0, -1
+
+				plane_	5,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						-lou_wdt/2+lou_thk/4, lou_len/2-lou_thk/4, 0, 1,
+						-lou_wdt/2+lou_thk, lou_len/2-lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, -1
+
+				IF ABS(lou_len-lou_thk*2) > EPS THEN
+					plane_	5,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, lou_thk, 1,
+						-lou_wdt/2+lou_thk, lou_len/2-lou_thk, lou_thk, 1,
+						-lou_wdt/2+lou_thk, lou_len/2-lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, -1
+				ENDIF
+				mulx -1
+			Next j
+			del 2
+
+			lou_wdt=lou_wdt-2*lou_thk
+			lou_len=lou_len-2*lou_thk
+		Next z
+	ENDIF
+RETURN
+
+105:
+	GOSUB 21
+
+	IF addStatus < 0.5 THEN
+		ceil_wdt = GrilleWidth
+		ceil_len = GrilleLength
+		gs_ceil_thk = tck/2
+
+		lou_thk=1.5*gs_ceil_thk
+		lou_wdt=ceil_wdt
+		lou_len=ceil_len
+		lou_num=3
+
+		For z=1 To lou_num
+			For j=1 To 2
+				plane_	5,
+						-lou_wdt/2, -lou_len/2, 0, 1,
+						lou_wdt/2, -lou_len/2, 0, 0,
+						lou_wdt/2-lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						-lou_wdt/2, -lou_len/2, 0, -1
+
+				plane_	5,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						lou_wdt/2-lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						lou_wdt/2-lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, -1
+
+				plane_	5,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, lou_thk, 1,
+						lou_wdt/2-lou_thk, -lou_len/2+lou_thk, lou_thk, 1,
+						lou_wdt/2-lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, -1
+				muly -1
+			Next j
+			del 2
+
+			For j=1 To 2
+				plane_	5,
+						-lou_wdt/2, -lou_len/2, 0, 1,
+						-lou_wdt/2, lou_len/2, 0, 0,
+						-lou_wdt/2+lou_thk/4, lou_len/2-lou_thk/4, 0, 1,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						-lou_wdt/2, -lou_len/2, 0, -1
+
+				plane_	5,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, 1,
+						-lou_wdt/2+lou_thk/4, lou_len/2-lou_thk/4, 0, 1,
+						-lou_wdt/2+lou_thk, lou_len/2-lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 0, -1
+
+				plane_	5,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, lou_thk, 1,
+						-lou_wdt/2+lou_thk, lou_len/2-lou_thk, lou_thk, 1,
+						-lou_wdt/2+lou_thk, lou_len/2-lou_thk, 3/4*lou_thk, 1,
+						-lou_wdt/2+lou_thk, -lou_len/2+lou_thk, 3/4*lou_thk, -1
+				mulx -1
+			Next j
+			del 2
+			lou_wdt=lou_wdt-2*lou_thk
+			lou_len=lou_len-2*lou_thk
+		Next z
+
+		extrude 5, 0, 0, lou_thk, 1+4+16+32,
+				-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, 1,
+				 lou_wdt/2-lou_thk/4, -lou_len/2+lou_thk/4, 1,
+				 lou_wdt/2-lou_thk/4,  lou_len/2-lou_thk/4, 1,
+				-lou_wdt/2+lou_thk/4,  lou_len/2-lou_thk/4, 1,
+				-lou_wdt/2+lou_thk/4, -lou_len/2+lou_thk/4, -1
+	ENDIF
+RETURN
+
+106:
+	GOSUB 21
+
+	IF addStatus < 0.5 THEN
+		ceil_wdt = GrilleWidth
+		ceil_len = GrilleLength
+
+		lou_grl=0.01
+		lou_wdt=ceil_wdt
+		lou_len=ceil_len
+
+		poly_	10,
+				-lou_wdt/2, -lou_len/2, 1,
+				 lou_wdt/2, -lou_len/2, 1,
+				 lou_wdt/2,  lou_len/2, 1,
+				-lou_wdt/2,  lou_len/2, 1,
+				-lou_wdt/2, -lou_len/2, -1,
+
+				-lou_wdt/2+lou_grl, -lou_len/2+lou_grl, 1,
+				 lou_wdt/2-lou_grl, -lou_len/2+lou_grl, 1,
+				 lou_wdt/2-lou_grl,  lou_len/2-lou_grl, 1,
+				-lou_wdt/2+lou_grl,  lou_len/2-lou_grl, 1,
+				-lou_wdt/2+lou_grl, -lou_len/2+lou_grl, -1
+
+		lou_wdt=ceil_wdt-beam_wdt-2*lou_grl
+		lou_len=ceil_len-beam_wdt-2*lou_grl
+
+		lou_x=int(lou_wdt/(2*lou_grl))
+		lou_gap=(lou_wdt-lou_grl*lou_x)/(lou_x+1)
+
+		addx -lou_wdt/2-lou_grl/2
+		For i=1 To lou_x
+			addx lou_grl+lou_gap
+			poly_	5,
+					-lou_grl/2, -lou_len/2, 0,
+					 lou_grl/2, -lou_len/2, 1,
+					 lou_grl/2,  lou_len/2, 0,
+					-lou_grl/2,  lou_len/2, 1,
+					-lou_grl/2, -lou_len/2, -1
+		Next i
+		del lou_x+1
+
+		lou_y=int(lou_len/(2*lou_grl))
+		lou_gap=(lou_len-lou_grl*lou_y)/(lou_y+1)
+
+		add 0,-lou_len/2-lou_grl/2,0.001
+		For i=1 To lou_y
+			addy lou_grl+lou_gap
+			poly_	5,
+					-lou_wdt/2, lou_grl/2, 1,
+					lou_wdt/2, lou_grl/2, 0,
+					lou_wdt/2, -lou_grl/2, 1,
+					-lou_wdt/2, -lou_grl/2, 0,
+					-lou_wdt/2, lou_grl/2, -1
+		Next i
+		del lou_y+1
+	ENDIF
+RETURN

@@ -1,0 +1,259 @@
+
+! Cable Ladder Wye
+
+
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, gs_fill_type, gs_fill_pen, gs_back_pen, MEP_cline_type, MEP_cline_pen
+
+PEN gs_cont_pen
+IF gs_fill_pen THEN SET FILL gs_fill_type
+
+ADD2 MEP_Position[1][1], MEP_Position[1][2]
+HOTSPOT2 outCoords[10][1], outCoords[10][2], HptsUnIDBeginForConnEnds
+HOTLINE2 outCoords[1][1], outCoords[1][2], outCoords[4][1], outCoords[4][2]
+HOTLINE2 outCoords[7][1], outCoords[7][2], outCoords[10][1], outCoords[10][2]
+
+IF ABS(ABS(dZz)-1) > EPS THEN
+	HOTSPOT2 outCoords[1][1], outCoords[1][2], hceID_1
+	HOTSPOT2 outCoords[4][1], outCoords[4][2], hceID_2
+	HOTSPOT2 outCoords[7][1], outCoords[7][2], hceID_3
+ENDIF
+DEL 1
+
+IF MEP_cline_show THEN			! -----> center line <----- !
+	PEN MEP_cline_pen
+	SET LINE_TYPE MEP_cline_type
+
+	ADD2 MEP_Position[1][1], MEP_Position[1][2]
+	LINE2 outCoords[1][1], outCoords[1][2], outCoords[4][1], outCoords[4][2]
+	LINE2 outCoords[7][1], outCoords[7][2], outCoords[10][1], outCoords[10][2]
+	DEL 1
+
+	PEN gs_cont_pen
+	SET LINE_TYPE SYMB_LINETYPE
+ENDIF
+
+IF rot_conn THEN
+	IF rot_conn = 1 THEN
+		dist_x = gs_Connections[3][1]+gs_Connections[3][23]*gs_Connections[3][4]
+		dist_y = gs_Connections[3][2]
+	ELSE
+		DIM inCoords[20][3]
+		DIM outCoords[20][3]
+
+		DIM cMatrix[3][3]
+
+		cMatrix[1][1] = gs_Connections[rot_conn][4]
+		cMatrix[1][2] = gs_Connections[rot_conn][5]
+		cMatrix[1][3] = gs_Connections[rot_conn][6]
+
+		cMatrix[2][1] = gs_Connections[rot_conn][7]
+		cMatrix[2][2] = gs_Connections[rot_conn][8]
+		cMatrix[2][3] = gs_Connections[rot_conn][9]
+
+		cMatrix[3][1] = -cMatrix[2][2]*cMatrix[1][3]+cMatrix[2][3]*cMatrix[1][2]
+		cMatrix[3][2] = -cMatrix[2][3]*cMatrix[1][1]+cMatrix[2][1]*cMatrix[1][3]
+		cMatrix[3][3] = -cMatrix[2][1]*cMatrix[1][2]+cMatrix[2][2]*cMatrix[1][1]
+
+
+		DIM tMatrix[3][3]
+
+		tMatrix[1][1] = cMatrix[1][1]
+		tMatrix[1][2] = cMatrix[2][1]
+		tMatrix[1][3] = cMatrix[3][1]
+
+		tMatrix[2][1] = cMatrix[1][2]
+		tMatrix[2][2] = cMatrix[2][2]
+		tMatrix[2][3] = cMatrix[3][2]
+
+		tMatrix[3][1] = cMatrix[1][3]
+		tMatrix[3][2] = cMatrix[2][3]
+		tMatrix[3][3] = cMatrix[3][3]
+
+
+								!!! +++ Input Coordinates +++ !!!
+
+		cx = gs_Connections[rot_conn][1]+gs_Connections[rot_conn][23]*gs_Connections[rot_conn][4]
+		cy = gs_Connections[rot_conn][2]+gs_Connections[rot_conn][23]*gs_Connections[rot_conn][5]
+		cz = gs_Connections[rot_conn][3]+gs_Connections[rot_conn][23]*gs_Connections[rot_conn][6]
+
+		PUT cx, cy, cz
+
+		Coordinates = NSP/3
+
+		FOR cnum = 1 TO Coordinates
+			inCoords[cnum][1] = GET(1)
+			inCoords[cnum][2] = GET(1)
+			inCoords[cnum][3] = GET(1)
+		NEXT cnum
+
+
+		! --- the Matrix Operation, what make the Output-Coordinates
+
+		FOR cnum = 1 TO Coordinates
+			outCoords[cnum][1] = inCoords[cnum][1]*tMatrix[1][1]+inCoords[cnum][2]*tMatrix[2][1]+inCoords[cnum][3]*tMatrix[3][1]
+			outCoords[cnum][2] = inCoords[cnum][1]*tMatrix[1][2]+inCoords[cnum][2]*tMatrix[2][2]+inCoords[cnum][3]*tMatrix[3][2]
+			outCoords[cnum][3] = inCoords[cnum][1]*tMatrix[1][3]+inCoords[cnum][2]*tMatrix[2][3]+inCoords[cnum][3]*tMatrix[3][3]
+		NEXT cnum
+
+		dist_x = outCoords[1][1]
+		dist_y = -outCoords[1][2]
+	ENDIF
+
+	CALL "MEP_m_object_rotator" PARAMETERS 	rot_conn = rot_conn,
+											MEP_Position = MEP_Position,
+											dist_x = dist_x,
+											dist_y = dist_y,
+											Rotation = Rotation,
+											symbRotangle = SYMB_ROTANGLE,
+											gs_Connections = gs_Connections,
+											MEP_NumberConnections = MEP_NumberConnections,
+											MEP_NumConnectionData = MEP_NumConnectionData,
+											MEP_NumConnectedConnectionData = MEP_NumConnectedConnectionData,
+											defaultMatrix = defaultMatrix
+ENDIF
+
+IF ABS(ABS(dZz)-1) < EPS THEN
+	 aa = MEP_Position[2][1]
+	 bb = MEP_Position[2][2]
+
+	 arCosVal = aa/1
+	IF ABS(arCosVal) > 1 AND SGN(arCosVal) = -1 THEN arCosVal = -1
+	IF ABS(arCosVal) > 1 AND SGN(arCosVal) = 1 THEN arCosVal = 1
+	alpha = ACS(arCosVal)
+	IF SGN(bb) = -1 THEN alpha = 360-alpha
+
+	ADD2 MEP_Position[1][1], MEP_Position[1][2]
+	ROT2 alpha
+	MUL2 1, SGN(dZz)
+
+	ladderNum = MAX(4, INT(MEP_StraightLength/(0.75*ConWidth_1)))
+	ladderDist = MEP_StraightLength/ladderNum
+	ladderHalfDist = ladderDist/2
+	ladderThk = MAX(0.03*(ladderDist > 0.06), (0.75*ConWidth_1)/10)
+	FOR i = 1 TO ladderNum						! -----> main ladders <----- !
+		ADD2 ladderHalfDist+ladderDist*(i-1), 0
+		PUT ladderThk/2, cableTrayHalfWidth, 1
+		PUT -ladderThk/2, cableTrayHalfWidth, 1
+		PUT -ladderThk/2, -cableTrayHalfWidth, 1
+		PUT ladderThk/2, -cableTrayHalfWidth, 1
+		PUT ladderThk/2, cableTrayHalfWidth, -1
+
+		POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+			GET (NSP)
+
+		DEL 1
+	NEXT i
+
+	ladderNum = MAX(1.5, INT(ConLength_3/(0.75*ConWidth_3))+0.5)
+	ladderDist = ConLength_3/ladderNum
+	ladderNum = INT(ladderNum)
+	ladderThk = MAX(0.03*(ladderDist > 0.06), (0.75*ConWidth_3)/12)
+	ADD2 0, cableTrayHalfWidth						! -----> branch ladders <----- !
+	IF ABS(MEP_WyeTypeID - 1) < EPS THEN
+		distX = ConPosX_3-cableTrayHalfWidthB/SIN(MEP_BranchAngle)-MEP_BranchRadius*TAN(MEP_BranchAngle/2)
+		PUT distX, 0, 1
+		PUT distX, MEP_BranchRadius, 901
+		IF (MEP_BranchRadius-ladderThk) > -EPS THEN
+			PUT distX+SQR(MEP_BranchRadius^2-(MEP_BranchRadius-ladderThk)^2), ladderThk, 3001
+		ELSE
+			PUT distX+MEP_BranchRadius*SIN(MEP_BranchAngle), MEP_BranchRadius*(1-COS(MEP_BranchAngle)), 3001
+			PUT distX+MEP_BranchRadius*SIN(MEP_BranchAngle)+(ladderThk-MEP_BranchRadius*(1-COS(MEP_BranchAngle)))/TAN(MEP_BranchAngle), ladderThk, 1
+		ENDIF
+		PUT ConPosX_3+cableTrayHalfWidthB/SIN(MEP_BranchAngle)+ladderThk/TAN(MEP_BranchAngle), ladderThk, 1
+		PUT ConPosX_3+cableTrayHalfWidthB/SIN(MEP_BranchAngle), 0, 1
+		PUT distX, 0, -1
+	ELSE
+		PUT ConPosX_3-cableTrayHalfWidthB/SIN(MEP_BranchAngle), 0, 1
+		PUT ConPosX_3-cableTrayHalfWidthB/SIN(MEP_BranchAngle)+ladderThk/TAN(MEP_BranchAngle), ladderThk, 1
+		PUT ConPosX_3+cableTrayHalfWidthB/SIN(MEP_BranchAngle)+ladderThk/TAN(MEP_BranchAngle), ladderThk, 1
+		PUT ConPosX_3+cableTrayHalfWidthB/SIN(MEP_BranchAngle), 0, 1
+		PUT ConPosX_3-cableTrayHalfWidthB/SIN(MEP_BranchAngle), 0, -1
+	ENDIF
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+	DEL 1
+
+	ADD2 MEP_BranchOffset+cableTrayHalfWidth/TAN(MEP_BranchAngle), cableTrayHalfWidth
+	ROT2 -90+MEP_BranchAngle
+	cd = cableTrayHalfWidthB/TAN(MEP_BranchAngle)
+
+	FOR i = 1 TO ladderNum+1
+		dd = ladderDist*(i-1)-(ladderThk/SIN(MEP_BranchAngle))*(i > 1)
+		ADD2 0, ladderDist*(i-1)+(ladderThk/SIN(MEP_BranchAngle))*(i = 1)
+
+		xx = dd*TAN(MEP_BranchAngle)
+		xx2 = (dd+ladderThk)*TAN(MEP_BranchAngle)
+		IF xx > cableTrayHalfWidthB THEN xx = cableTrayHalfWidthB
+		IF xx2 > cableTrayHalfWidthB THEN xx2 = cableTrayHalfWidthB
+
+		PUT xx, 0, 1
+		IF dd < cd AND cd < dd+ladderThk THEN PUT cableTrayHalfWidthB, cd-dd, 1
+		PUT xx2, ladderThk, 1
+		PUT -cableTrayHalfWidthB, ladderThk, 1
+		PUT -cableTrayHalfWidthB, 0, 1
+		PUT xx, 0, -1
+
+		POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+			GET (NSP)
+		DEL 1
+	NEXT i
+	DEL 2
+
+	endBranchX = ConPosX_3+ConLength_3*COS(MEP_BranchAngle)
+	endBranchY = ConPosY_3+ConLength_3*SIN(MEP_BranchAngle)
+	IF ABS(MEP_WyeTypeID - 1) < EPS THEN
+		PUT 0, cableTrayHalfWidth, 1
+		distX = ConPosX_3-cableTrayHalfWidthB/SIN(MEP_BranchAngle)-MEP_BranchRadius*TAN(MEP_BranchAngle/2)
+		PUT distX, cableTrayHalfWidth, 1
+		PUT distX, cableTrayHalfWidth+MEP_BranchRadius, 901
+		PUT distX+MEP_BranchRadius*SIN(MEP_BranchAngle), cableTrayHalfWidth+MEP_BranchRadius*(1-COS(MEP_BranchAngle)), 3001
+		PUT endBranchX-cableTrayHalfWidthB*SIN(MEP_BranchAngle), endBranchY+cableTrayHalfWidthB*COS(MEP_BranchAngle), MEP_CoveredCableTray
+		PUT endBranchX+cableTrayHalfWidthB*SIN(MEP_BranchAngle), endBranchY-cableTrayHalfWidthB*COS(MEP_BranchAngle), 1
+		PUT ConPosX_3+cableTrayHalfWidthB/SIN(MEP_BranchAngle), cableTrayHalfWidth, 1
+		PUT MEP_StraightLength, cableTrayHalfWidth, MEP_CoveredCableTray
+		PUT MEP_StraightLength, -cableTrayHalfWidth, 1
+		PUT 0, -cableTrayHalfWidth, MEP_CoveredCableTray
+		PUT 0, cableTrayHalfWidth, 1
+	ELSE
+		PUT 0, cableTrayHalfWidth, 1
+		PUT ConPosX_3-cableTrayHalfWidthB/SIN(MEP_BranchAngle), cableTrayHalfWidth, 1
+		PUT endBranchX-cableTrayHalfWidthB*SIN(MEP_BranchAngle), endBranchY+cableTrayHalfWidthB*COS(MEP_BranchAngle), MEP_CoveredCableTray
+		PUT endBranchX +cableTrayHalfWidthB*SIN(MEP_BranchAngle), endBranchY-cableTrayHalfWidthB*COS(MEP_BranchAngle), 1
+		PUT ConPosX_3+cableTrayHalfWidthB/SIN(MEP_BranchAngle), cableTrayHalfWidth, 1
+		PUT MEP_StraightLength, cableTrayHalfWidth, MEP_CoveredCableTray
+		PUT MEP_StraightLength, -cableTrayHalfWidth, 1
+		PUT 0, -cableTrayHalfWidth, MEP_CoveredCableTray
+		PUT 0, cableTrayHalfWidth, 1
+	ENDIF
+
+	POLY2_B NSP/3, 1 + 2*MEP_CoveredCableTray + 4 + 64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+
+	CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+			MEP_NumberConnections = MEP_NumberConnections,
+			MEP_NumConnectionData = gs_Connections,
+			gs_AddConnections = gs_AddConnections,
+			DrawingNum = 1,
+			MEP_InsShow = 0,
+			MEP_cline_show = 0,
+			gs_cont_pen = gs_cont_pen,
+			gs_fill_type=gs_fill_type,
+			gs_fill_pen=gs_fill_pen,
+			gs_back_pen=gs_back_pen,
+			ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConShow_1 = 0, ConEdit_1 = 0,
+			ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConShow_2 = 0, ConEdit_2 = 0,
+			ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConShow_3 = 0, ConEdit_3 = 1
+
+	DEL 3
+ELSE
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN PEN gs_fill_pen
+	PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0, PARAMETERS cable_carrier_show = 1, MEP_cline_show_3D = 0, gs_detlevel_3D_m = 2
+	PEN gs_cont_pen
+	PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0, PARAMETERS cable_carrier_show = 1, MEP_cline_show_3D = 0, gs_detlevel_3D_m = 2
+ENDIF

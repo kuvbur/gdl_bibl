@@ -1,0 +1,624 @@
+
+
+PEN gs_cont_pen
+LINE_TYPE gs_line_type
+FILL gs_fill_type
+unID=gs_unID
+
+if gs_gutter_ds_profile_num = 1 then
+	add2 0, - (dis_wall - gs_gutter_dd)
+else
+	add2 0, - (dis_wall - gs_gutter_bb)
+endif
+
+ACCUTPLANEHEIGHT = (GLOB_CSTORY_ELEV + GLOB_CUTPLANES_INFO [1]) - GLOB_HSTORY_ELEV - vertical_offset
+
+if gs_gutter_ds_profile_num=1 then										! Round Profile
+	temp_aa=gs_gutter_dd
+	_tempDepth = gs_gutter_dd
+else
+	temp_aa=gs_gutter_aa
+	_tempDepth = gs_gutter_bb
+endif
+
+! ------ OFFSET 2D Contour ------
+call "m_DSProfiles" parameters 	gs_gutter_ds_profile_num	= gs_gutter_ds_profile_num, 
+								gs_gutter_aa				= gs_gutter_aa,
+								gs_gutter_bb				= gs_gutter_bb,
+								gs_gutter_dd				= gs_gutter_dd
+
+add2 0, -gs_gutter_os_off
+rot2 180
+
+if ACCUTPLANEHEIGHT < -EPS and vertical_offset < EPS then
+		! ------ Above the cut plane ------
+	if iFloorPlanDisplayType = DISPLAY_OVERHEAD_PROJ then
+
+		gs_line_type = overhead_Line_Type
+		cut_pen = gs_cont_pen
+		gs_gutter_os_l_ang = 0
+
+		gosub "Cut_lower_tube_O"
+		gosub "Cut_lower_tube_PR"
+	endif
+
+else
+	_lowerCornerAngle = (gs_gutter_os_ang - gs_gutter_os_l_ang) / 2
+	_lowerCorner_HH = _tempDepth * sin(_lowerCornerAngle) / cos(gs_gutter_os_ang - _lowerCornerAngle)
+
+	_upperCornerAngle = (gs_gutter_os_ang + gs_gutter_os_u_ang) / 2
+	_upperCorner_HH = _tempDepth * sin(_upperCornerAngle) / cos(gs_gutter_os_ang - _upperCornerAngle)
+
+	! -----------------------------------------------------------------------------
+	! Projected
+	! -----------------------------------------------------------------------------
+	if iFloorPlanDisplayType = DISPLAY_PROJECTED then
+
+		! ------ Cut the LOWER tube ------
+		if  ACCUTPLANEHEIGHT <= gs_gutter_os_l_lgth - _lowerCorner_HH then
+			gosub "Cut_lower_tube_PR"
+		endif
+
+		! ------ Cut the LOWER Corner ------
+		if  ACCUTPLANEHEIGHT > gs_gutter_os_l_lgth - _lowerCorner_HH and \
+			ACCUTPLANEHEIGHT < gs_gutter_os_l_lgth + _lowerCorner_HH then
+			gosub "Cut_lower_corner_PR"
+		endif
+
+		! ------ Cut the MIDDLE tube ------
+		if  ACCUTPLANEHEIGHT >= gs_gutter_os_l_lgth + _lowerCorner_HH and \
+			ACCUTPLANEHEIGHT <= zzyzx - gs_gutter_os_u_lgth - _upperCorner_HH then
+			gosub "Cut_middle_tube_PR"
+		endif
+
+		! ------ Cut the UPPER Corner ------
+		if  ACCUTPLANEHEIGHT > zzyzx - gs_gutter_os_u_lgth - _upperCorner_HH and \
+			ACCUTPLANEHEIGHT < zzyzx - gs_gutter_os_u_lgth + _upperCorner_HH then
+			gosub "Cut_upper_corner_PR"
+		endif
+
+		! ------ Cut the UPPER tube ------
+		if  ACCUTPLANEHEIGHT >= zzyzx - gs_gutter_os_u_lgth + _upperCorner_HH and \
+			ACCUTPLANEHEIGHT < zzyzx  then
+			gosub "Cut_upper_tube_PR"
+		endif
+
+		! ------ OVERHEAD ------
+		if  ACCUTPLANEHEIGHT >= zzyzx then
+			gosub "hor_offset_hotspots"
+			gosub "Overhead_PR"
+		endif
+	endif
+
+	! -----------------------------------------------------------------------------
+	! Projected With Overhead
+	! -----------------------------------------------------------------------------
+	if iFloorPlanDisplayType = DISPLAY_OVERHEAD_PROJ then
+		gosub "hor_offset_hotspots"
+
+		! ------ Cut the LOWER tube ------
+		if  ACCUTPLANEHEIGHT <= gs_gutter_os_l_lgth - _lowerCorner_HH then
+			gosub "Cut_lower_tube_O"
+			gosub "Cut_lower_tube_PR"
+		endif
+
+		! ------ Cut the LOWER Corner ------
+		if  ACCUTPLANEHEIGHT > gs_gutter_os_l_lgth - _lowerCorner_HH and \
+			ACCUTPLANEHEIGHT < gs_gutter_os_l_lgth + _lowerCorner_HH then
+			gosub "Cut_lower_tube_O"
+			gosub "Cut_lower_corner_PR"
+		endif
+
+		! ------ Cut the MIDDLE tube ------
+		if  ACCUTPLANEHEIGHT >= gs_gutter_os_l_lgth + _lowerCorner_HH and \
+			ACCUTPLANEHEIGHT <= zzyzx - gs_gutter_os_u_lgth - _upperCorner_HH then
+			gosub "Cut_middle_tube_O"
+			gosub "Cut_middle_tube_PR"
+		endif
+
+		! ------ Cut the UPPER Corner ------
+		if  ACCUTPLANEHEIGHT > zzyzx - gs_gutter_os_u_lgth - _upperCorner_HH and \
+			ACCUTPLANEHEIGHT < zzyzx - gs_gutter_os_u_lgth + _upperCorner_HH then
+			gosub "Cut_upper_tube_O"
+			gosub "Cut_upper_corner_PR"
+		endif
+
+		! ------ Cut the UPPER tube ------
+		if  ACCUTPLANEHEIGHT >= zzyzx - gs_gutter_os_u_lgth + _upperCorner_HH and \
+			ACCUTPLANEHEIGHT < zzyzx  then
+			gosub "Cut_upper_tube_O"
+			gosub "Cut_upper_tube_PR"
+		endif
+
+		! ------ OVERHEAD ------
+		if  ACCUTPLANEHEIGHT >= zzyzx then
+			gosub "Overhead_PR"
+		endif
+	endif
+endif
+
+! -----------------------------------------------------------------------------
+! Symbolic
+! -----------------------------------------------------------------------------
+if iFloorPlanDisplayType = DISPLAY_SYMBOLIC then
+	gs_gutter_os_l_ang = 0
+	_frame_fill = 1+2+4+64
+	gosub "lower_end"
+endif
+
+! -----------------------------------------------------------------------------
+! Outlines Only
+! -----------------------------------------------------------------------------
+if iFloorPlanDisplayType = DISPLAY_OUTLINES then
+	gosub "hor_offset_hotspots"
+	gosub "Overhead_PR"
+endif
+
+! -----------------------------------------------------------------------------
+! Overhead All
+! -----------------------------------------------------------------------------
+if iFloorPlanDisplayType = DISPLAY_OVERHEAD_ALL then
+
+	gosub "hor_offset_hotspots"
+
+	gs_line_type = overhead_Line_Type
+	cut_pen = gs_cont_pen
+	gs_gutter_os_l_ang = 0
+
+	gosub "Cut_lower_tube_O"
+	gosub "Cut_lower_tube_PR"
+endif
+
+del 2
+del 1
+end
+! =============================================================================
+!END	!END	!END	!END	!END	!END	!END	!END	!END	!END
+! =============================================================================
+
+! -----------------------------------------------------------------------------
+"lower_end":
+! -----------------------------------------------------------------------------
+	ADD2 0, -gs_gutter_os_off + (gs_gutter_os_l_lgth * TAN(gs_gutter_os_l_ang))
+		atfog = 1/ COS(gs_gutter_os_l_ang - gs_gutter_l_end_ang)
+		IF gs_gutter_os_l_ang > 0 THEN MUL2 1, atfog * COS(gs_gutter_l_end_ang)
+
+	! ------ Lower End Hotspots ------
+	IF gs_HtpsMacro=0 THEN !!!***(Hotspots not used in  Downspout Complex)
+		IF gs_gutter_ds_profile_num=1 THEN						! Round Profile
+			HOTSPOT2 gs_gutter_dd, 0,  unID : unID = unID+1
+			HOTSPOT2 0, gs_gutter_dd,  unID : unID = unID+1
+			HOTSPOT2 0, -gs_gutter_dd,  unID : unID = unID+1
+			HOTSPOT2 -gs_gutter_dd, 0,  unID : unID = unID+1
+
+		unID_ = unID
+		unID = 2000
+
+			FOR kk=1 to 4
+				!!! *** RADIUS
+				HOTSPOT2 0, 0, unID, gs_gutter_dd, 1+128, gs_gutter_dd2 : unID=unID+1
+				HOTSPOT2 -1, 0, unID, gs_gutter_dd, 3, gs_gutter_dd2 : unID=unID+1
+				HOTSPOT2 gs_gutter_dd, 0, unID, gs_gutter_dd, 2, gs_gutter_dd2 : unID=unID+1
+				ROT2 90
+				NEXT kk
+			DEL 4
+
+			add2 0, -dis_wall
+				HOTSPOT2  0,	 0,			unID, dis_wall, 1+128, 	dis_wall	:	unID=unID+1
+				HOTSPOT2  0,	 dis_wall,	unID, dis_wall, 2, 		dis_wall	:	unID=unID+1
+				HOTSPOT2  0,	 -1,		unID, dis_wall, 3, 		dis_wall	:	unID=unID+1
+			del 1
+		
+			unID = unID_
+
+		ELSE
+			HOTSPOT2 gs_gutter_aa, gs_gutter_bb,  unID : unID = unID+1
+			HOTSPOT2 -gs_gutter_aa, gs_gutter_bb,  unID : unID = unID+1
+			HOTSPOT2 -gs_gutter_aa, -gs_gutter_bb,  unID : unID = unID+1
+			HOTSPOT2 gs_gutter_aa, -gs_gutter_bb,  unID : unID = unID+1
+
+			unID_ = unID
+			unID = 4000
+
+			!!! *** Width
+			ADD2 0,gs_gutter_bb
+				HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+				HOTSPOT2 -1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+				HOTSPOT2 gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+
+				HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+				HOTSPOT2 1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+				HOTSPOT2 -gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+			DEL 1
+			ADD2 0,-gs_gutter_bb
+				HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+				HOTSPOT2 -1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+				HOTSPOT2 gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+
+				HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+				HOTSPOT2 1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+				HOTSPOT2 -gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+			DEL 1
+
+			!!! *** Length
+			ADD2 gs_gutter_aa,0
+				HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+				HOTSPOT2 0, -1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+				HOTSPOT2 0, gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+
+				HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+				HOTSPOT2 0, 1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+				HOTSPOT2 0, -gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+			DEL 1
+			ADD2 -gs_gutter_aa,0
+				HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+				HOTSPOT2 0, -1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+				HOTSPOT2 0, gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+
+				HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+				HOTSPOT2 0, 1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+				HOTSPOT2 0, -gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+			DEL 1
+
+			add2 0, -dis_wall
+				HOTSPOT2  0,	 0,			unID, dis_wall, 1+128, 	dis_wall	:	unID=unID+1
+				HOTSPOT2  0,	 dis_wall,	unID, dis_wall, 2, 		dis_wall	:	unID=unID+1
+				HOTSPOT2  0,	 -1,		unID, dis_wall, 3, 		dis_wall	:	unID=unID+1
+			del 1
+	
+			unID = unID_
+
+		ENDIF
+	ENDIF
+
+		POLY2_B nsp/3, _frame_fill, gs_fill_pen, gs_back_pen,
+			use(nsp)
+
+		IF gs_gutter_os_l_ang > 0 THEN DEL 1
+	DEL 1
+return
+
+
+! -----------------------------------------------------------------------------
+"lower_tube":
+! -----------------------------------------------------------------------------
+	if sin (gs_gutter_os_l_ang) > EPS then
+		POLY2_B 4, _frame_fill, gs_fill_pen, gs_back_pen,
+			-temp_aa,	-gs_gutter_os_off + (gs_gutter_os_l_lgth * TAN (gs_gutter_os_l_ang)), 0,
+			 temp_aa,	-gs_gutter_os_off + (gs_gutter_os_l_lgth * TAN (gs_gutter_os_l_ang)), 1,
+			temp_aa, -gs_gutter_os_off , 0,
+			-temp_aa,	-gs_gutter_os_off , 1
+	endif
+return
+
+
+! -----------------------------------------------------------------------------
+"lower_break":
+! -----------------------------------------------------------------------------
+	add2 0, -gs_gutter_os_off
+	if ABS(gs_gutter_os_ang + gs_gutter_os_l_ang) - 180 < EPS then
+		atfog2 = 1 / COS( ((gs_gutter_os_ang+gs_gutter_os_l_ang)/2) )
+		mul2 1, atfog2 * COS( - gs_gutter_os_ang + (gs_gutter_os_ang+gs_gutter_os_l_ang)/2)
+
+			POLY2_B nsp/3, _frame_fill, gs_fill_pen, gs_back_pen, use(nsp)
+		del 1
+	endif
+	del 1
+return
+
+
+! -----------------------------------------------------------------------------
+"middle_tube":
+! -----------------------------------------------------------------------------
+	POLY2_B 4, _frame_fill, gs_fill_pen, gs_back_pen,
+		-temp_aa, 0, 0,
+		temp_aa, 0, 1,
+		temp_aa, -gs_gutter_os_off, 0,
+		-temp_aa,-gs_gutter_os_off, 1
+return
+
+
+! -----------------------------------------------------------------------------
+"upper_break":
+! -----------------------------------------------------------------------------
+	if ABS(gs_gutter_os_ang + gs_gutter_os_u_ang) - 180 < EPS then
+		atfog3 = 1 / COS( gs_gutter_os_u_ang - ((gs_gutter_os_ang+gs_gutter_os_u_ang)/2) )
+		mul2 1, atfog3 * COS( (gs_gutter_os_ang+gs_gutter_os_u_ang)/2)
+
+			POLY2_B nsp/3, _frame_fill, gs_fill_pen, gs_back_pen, use(nsp)
+		del 1
+	endif
+return
+
+
+! -----------------------------------------------------------------------------
+"upper_tube":
+! -----------------------------------------------------------------------------
+	if sin (gs_gutter_os_u_ang) > EPS then
+		POLY2_B 4, _frame_fill, gs_fill_pen, gs_back_pen,
+			-temp_aa, 0, 0,
+			temp_aa, 0, 1,
+			temp_aa, gs_gutter_os_u_lgth * TAN(gs_gutter_os_u_ang) , 0,
+			-temp_aa,gs_gutter_os_u_lgth * TAN(gs_gutter_os_u_ang) , 1
+	endif
+return
+
+
+! -----------------------------------------------------------------------------
+"upper_end":
+! -----------------------------------------------------------------------------
+	add2 0, gs_gutter_os_u_lgth * TAN(gs_gutter_os_u_ang)
+		atfog = 1/ COS(gs_gutter_os_u_ang - gs_gutter_u_end_ang)
+		if gs_gutter_os_u_ang > 0 then mul2 1, atfog * COS(gs_gutter_u_end_ang)
+
+		! --- Upper End Hotspots ---
+		HOTSPOT2 0,0, unID : unID = unID+1 	!!Centerpoint
+		if gs_gutter_ds_profile_num=1 then						! Round Profile
+			HOTSPOT2 gs_gutter_dd, 0,  unID : unID = unID+1
+			HOTSPOT2 0, gs_gutter_dd,  unID : unID = unID+1
+			HOTSPOT2 0, -gs_gutter_dd,  unID : unID = unID+1
+			HOTSPOT2 -gs_gutter_dd, 0,  unID : unID = unID+1
+		else
+			HOTSPOT2 gs_gutter_aa, gs_gutter_bb,  unID : unID = unID+1
+			HOTSPOT2 -gs_gutter_aa, gs_gutter_bb,  unID : unID = unID+1
+			HOTSPOT2 -gs_gutter_aa, -gs_gutter_bb,  unID : unID = unID+1
+			HOTSPOT2 gs_gutter_aa, -gs_gutter_bb,  unID : unID = unID+1
+		endif
+
+		POLY2_B nsp/3, _frame_fill, gs_fill_pen, gs_back_pen,
+			use(nsp)
+
+		if gs_gutter_os_u_ang > 0 then del 1
+	del 1
+return
+
+
+! -----------------------------------------------------------------------------
+"Cut_lower_tube_PR":
+! -----------------------------------------------------------------------------
+	if sin (gs_gutter_os_l_ang) > EPS then
+		line_type gs_line_type
+		pen gs_cont_pen
+
+		drawindex 10
+		_frame_fill = 1+2+4+64
+		gosub "lower_end"
+
+		add2 0, -gs_gutter_os_off + (gs_gutter_os_l_lgth-ACCUTPLANEHEIGHT) * tan (gs_gutter_os_l_ang)
+
+		drawindex 10
+		POLY2_B 4, 1+2+4+64, gs_fill_pen, gs_back_pen,
+			-temp_aa,	ACCUTPLANEHEIGHT * tan (gs_gutter_os_l_ang), 0,
+			 temp_aa,	ACCUTPLANEHEIGHT * tan (gs_gutter_os_l_ang), 1,
+			 temp_aa,	0 , 0,
+			-temp_aa,	0 , 1
+
+		pen cut_pen
+		mul2 1, 1 / cos(gs_gutter_os_l_ang)
+		drawindex 30
+			POLY2_B nsp/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+				use(nsp)
+		del 2
+	else
+		line_type gs_line_type
+		pen cut_pen
+
+		drawindex 30
+		_frame_fill = 1+2+4+64
+		gosub "lower_end"
+		gosub "lower_break"
+	endif
+return
+
+
+! -----------------------------------------------------------------------------
+"Cut_lower_corner_PR":
+! -----------------------------------------------------------------------------
+	line_type gs_line_type
+	pen gs_cont_pen
+	drawindex 10
+		_frame_fill = 1+2+4+64
+		gosub "lower_end"
+		gosub "lower_tube"
+
+	add2 0, -gs_gutter_os_off
+
+	add2 0, (gs_gutter_os_l_lgth - ACCUTPLANEHEIGHT) * tan (gs_gutter_os_l_ang) + (ACCUTPLANEHEIGHT - gs_gutter_os_l_lgth + _lowerCorner_HH) * (tan(gs_gutter_os_ang) + tan(gs_gutter_os_l_ang)) / 2
+
+	line_type gs_line_type
+	pen cut_pen
+	mul2 1, (1 / cos(gs_gutter_os_l_ang)) + (ACCUTPLANEHEIGHT - (gs_gutter_os_l_lgth - _lowerCorner_HH)) * (tan(gs_gutter_os_ang) + tan(gs_gutter_os_l_ang)) / (2 * _tempDepth)
+	DRAWINDEX 30
+	POLY2_B nsp/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+		use(nsp)
+	del 2
+return
+
+
+! -----------------------------------------------------------------------------
+"Cut_middle_tube_PR":
+! -----------------------------------------------------------------------------
+	line_type gs_line_type
+	pen gs_cont_pen
+	drawindex 10
+		_frame_fill = 1+2+4+64
+		gosub "lower_end"
+		gosub "lower_break"
+		gosub "lower_tube"
+
+	add2 0, -gs_gutter_os_off
+
+	line_type gs_line_type
+	pen gs_cont_pen
+	drawindex 10
+		POLY2_B 4, 1+2+4+64, gs_fill_pen, gs_back_pen,
+			-temp_aa,	(ACCUTPLANEHEIGHT-gs_gutter_os_l_lgth) * tan (gs_gutter_os_ang), 0,
+			 temp_aa,	(ACCUTPLANEHEIGHT-gs_gutter_os_l_lgth) * tan (gs_gutter_os_ang), 1,
+			 temp_aa,	0 , 0,
+			-temp_aa,	0 , 1
+
+	add2 0, (ACCUTPLANEHEIGHT-gs_gutter_os_l_lgth) * tan (gs_gutter_os_ang)
+
+	line_type gs_line_type
+	pen cut_pen
+	mul2 1, 1 / cos(gs_gutter_os_ang)
+	DRAWINDEX 30
+	POLY2_B nsp/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+		use(nsp)
+	del 2
+return
+
+
+! -----------------------------------------------------------------------------
+"Cut_upper_corner_PR":
+! -----------------------------------------------------------------------------
+	line_type gs_line_type
+	pen gs_cont_pen
+	drawindex 10
+		_frame_fill = 1+2+4+64
+		gosub "lower_end"
+		gosub "lower_tube"
+		gosub "lower_break"
+		gosub "middle_tube"
+
+	add2 0, -(zzyzx - gs_gutter_os_u_lgth - ACCUTPLANEHEIGHT) * tan (gs_gutter_os_u_ang) - (zzyzx - gs_gutter_os_u_lgth + _upperCorner_HH - ACCUTPLANEHEIGHT) * (tan(gs_gutter_os_ang) - tan(gs_gutter_os_u_ang)) / 2
+
+	line_type gs_line_type
+	pen cut_pen
+	mul2 1, (1 / cos(gs_gutter_os_u_ang)) + (zzyzx - gs_gutter_os_u_lgth + _upperCorner_HH - ACCUTPLANEHEIGHT) * (tan(gs_gutter_os_ang) - tan(gs_gutter_os_u_ang)) / (2 * _tempDepth)
+	DRAWINDEX 30
+	POLY2_B nsp/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+		use(nsp)
+	del 2
+return
+
+
+! -----------------------------------------------------------------------------
+"Cut_upper_tube_PR":
+! -----------------------------------------------------------------------------
+	line_type gs_line_type
+	pen gs_cont_pen
+		_frame_fill = 1+2+4+64
+		drawindex 10
+		gosub "lower_end"
+		gosub "lower_tube"
+		gosub "lower_break"
+		gosub "middle_tube"
+		gosub "upper_break"
+
+	if sin (gs_gutter_os_u_ang) > EPS then
+		add2 0, (ACCUTPLANEHEIGHT-(zzyzx-gs_gutter_os_u_lgth)) * tan (gs_gutter_os_u_ang)
+		drawindex 10
+		POLY2_B 4, 1+2+4+64, gs_fill_pen, gs_back_pen,
+			-temp_aa,	-(ACCUTPLANEHEIGHT-(zzyzx-gs_gutter_os_u_lgth)) * tan (gs_gutter_os_u_ang), 0,
+			 temp_aa,	-(ACCUTPLANEHEIGHT-(zzyzx-gs_gutter_os_u_lgth)) * tan (gs_gutter_os_u_ang), 1,
+			 temp_aa,	0 , 0,
+			-temp_aa,	0 , 1
+
+		pen cut_pen
+		mul2 1, 1 / cos(gs_gutter_os_u_ang)
+		drawindex 30
+		POLY2_B nsp/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+			use(nsp)
+		del 2
+	else
+		line_type gs_line_type
+		pen cut_pen
+		drawindex 30
+		_frame_fill = 1+2+4+64
+		gosub "upper_end"
+	endif
+return
+
+
+! -----------------------------------------------------------------------------
+"Overhead_PR":
+! -----------------------------------------------------------------------------
+	line_type gs_line_type
+	pen gs_cont_pen
+		_frame_fill = 1+2+4+64
+		gosub "lower_tube"
+		gosub "lower_break"
+		gosub "lower_end"
+		gosub "middle_tube"
+		gosub "upper_break"
+		gosub "middle_tube"
+		gosub "upper_break"
+		gosub "upper_tube"
+		gosub "upper_end"
+return
+
+
+! -----------------------------------------------------------------------------
+"Cut_lower_tube_O":
+! -----------------------------------------------------------------------------
+	line_type overhead_Line_Type
+	pen gs_cont_pen
+	drawindex 20
+	_frame_fill = 1+4
+	gosub "lower_break"
+	gosub "lower_tube"
+	gosub "upper_end"
+	gosub "upper_break"
+	gosub "upper_tube"
+	gosub "middle_tube"
+return
+
+
+! -----------------------------------------------------------------------------
+"Cut_middle_tube_O":
+! -----------------------------------------------------------------------------
+	line_type overhead_Line_Type
+	pen gs_cont_pen
+
+	_frame_fill = 1+4
+	gosub "upper_break"
+	gosub "upper_end"
+	gosub "upper_tube"
+
+	drawindex 20
+	POLY2_B 5, 1, gs_fill_pen, gs_back_pen,
+		-temp_aa,	-gs_gutter_os_off+(ACCUTPLANEHEIGHT-gs_gutter_os_l_lgth) * tan (gs_gutter_os_ang), 0,
+		 temp_aa,	-gs_gutter_os_off+(ACCUTPLANEHEIGHT-gs_gutter_os_l_lgth) * tan (gs_gutter_os_ang), 1,
+		 temp_aa,	0 , 0,
+		-temp_aa,	0 , 1,
+		-temp_aa,	-gs_gutter_os_off+(ACCUTPLANEHEIGHT-gs_gutter_os_l_lgth) * tan (gs_gutter_os_ang), 1
+
+return
+
+
+! -----------------------------------------------------------------------------
+"Cut_upper_tube_O":
+! -----------------------------------------------------------------------------
+	if sin (gs_gutter_os_u_ang) > EPS then
+		line_type overhead_Line_Type
+
+		_frame_fill = 1+4
+		drawindex 10
+		gosub "upper_end"
+		gosub "upper_break"
+
+		add2 0, (ACCUTPLANEHEIGHT-(zzyzx-gs_gutter_os_u_lgth)) * tan (gs_gutter_os_u_ang)
+
+		POLY2_B 4, 1+4, gs_fill_pen, gs_back_pen,
+			-temp_aa,	(zzyzx-ACCUTPLANEHEIGHT) * tan (gs_gutter_os_u_ang), 0,
+			 temp_aa,	(zzyzx-ACCUTPLANEHEIGHT) * tan (gs_gutter_os_u_ang), 1,
+			 temp_aa,	0 , 0,
+			-temp_aa,	0 , 1
+		del 1
+	endif
+return
+
+
+! -----------------------------------------------------------------------------
+"hor_offset_hotspots":
+! -----------------------------------------------------------------------------
+!add2 0, +gs_gutter_os_off
+	rot2 -180
+	add2 0, gs_gutter_os_off
+
+	HOTSPOT2 0, 0,					unID, gs_gutter_os_off, 1+256	: unID = unID+1		! Base
+	HOTSPOT2 0, -gs_gutter_os_off,	unID, gs_gutter_os_off, 2		: unID = unID+1		! Move
+	HOTSPOT2 0, 1, unID, gs_gutter_os_off, 3	: unID = unID+1
+	del 2
+return

@@ -1,0 +1,188 @@
+
+! Hood and Vent
+
+if bStorySensitive then
+	if GLOB_CSTORY_ELEV <= GLOB_HSTORY_ELEV then	! home story or lower
+		hood_line_type = overhead_line_type
+	else											! upper home story
+		hood_line_type = gs_line_Type
+	endif
+else
+	hood_line_type = gs_line_type
+endif
+
+! --------- Hotspots --------
+unID = 1
+hotspot2 A/2,B, unID: unID=unID+1
+
+if type_m = 1 or type_m = 2 then ! under cabinet 1-2
+	add2 0,b
+	for i = 1 to 2
+		hotspot2 0, 0,				unID,  depthCabinet,  1+128		: unID=unID+1
+		hotspot2 0, -depthCabinet,	unID,  depthCabinet,  2			: unID=unID+1
+		hotspot2 0, 1,				unID,  depthCabinet,  3			: unID=unID+1
+	add2 a, 0
+	next i
+	del 3
+endif
+
+if (GLOB_HSTORY_ELEV + GLOB_HSTORY_HEIGHT) >= GLOB_CSTORY_ELEV then
+	call "Resize_A_B_ZZYZX" parameters ALL
+endif
+
+! --- 2D ----------------------------------------------------------------
+pen gs_cont_pen
+fill gs_fill_type
+line_type hood_line_type
+
+if bStorySensitive then
+	if (GLOB_HSTORY_ELEV + GLOB_HSTORY_HEIGHT) >= GLOB_CSTORY_ELEV then				! home story, or home story +1
+		gosub "hood_2d"
+	endif
+else
+	gosub "hood_2d"
+endif
+
+! --- start of modifying to Shaft
+
+DrawingNum = 1
+
+IF bShowMEP THEN
+
+	PEN gs_cont_pen
+
+				! --- OTHER VIEWS --- !
+
+	ROT2 -SYMB_ROTANGLE * (DrawingNum > 1 AND NOT(SYMB_MIRRORED))+SYMB_ROTANGLE * (DrawingNum > 1 AND SYMB_MIRRORED)
+
+	IF DrawingNum = 2 THEN PROJECT2 -3, 90, 2	! Bottom
+	IF DrawingNum = 3 THEN PROJECT2 4, 270, 2	! Front
+	IF DrawingNum = 4 THEN PROJECT2 4, 90, 2	! Back
+	IF DrawingNum = 5 THEN PROJECT2 4, 180*(SYMB_MIRRORED), 2		! Right
+	IF DrawingNum = 6 THEN PROJECT2 4, 180*NOT(SYMB_MIRRORED), 2	! Left
+
+
+				! --- CONNECTIONS --- !
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		ui_current_con = ui_current_con,
+		MEP_NumberConnections = MEP_NumberConnections,
+		MEP_NumConnectionData = gs_Connections,
+		gs_AddConnections = gs_AddConnections,
+		DrawingNum = DrawingNum,
+		MEP_InsShow = 0,
+		MEP_cline_show = 0,
+		gs_cont_pen = gs_cont_pen,
+		gs_line_type = hood_line_type,
+		gs_fill_type=gs_fill_type,
+		gs_fill_pen=gs_fill_pen,
+		gs_back_pen=gs_back_pen,
+		ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConLength_1=ConLength_1, ConEdit_1 = ConEdit_1
+	DEL 1
+ENDIF
+
+! --- end of modifying to Shaft
+
+end
+! =============================================================================
+!END	!END	!END	!END	!END	!END	!END	!END	!END	!END
+! =============================================================================
+
+! -----------------------------------------------------------------------------
+"contour":
+! -----------------------------------------------------------------------------
+poly2_b 5, 1+2+4+64, gs_fill_pen, gs_back_pen,
+		0,     b,      1,
+		a,     b,      1,
+		a,     0,      1,
+		0,     0,      1,
+		0,     b,     -1
+return
+
+! -----------------------------------------------------------------------------
+"under_cabinet_1":
+! -----------------------------------------------------------------------------
+	gosub "contour"
+
+	line2 a/2+3",	b-4"-1/4",				a/2-3",	b-4"-1/4"
+	line2 a/2,		b-4"-1/4"+3",			a/2,	b-4"-1/4"-3"
+	line2 0,		b-depthCabinet,			a,		b-depthCabinet
+	hotspot2 a/2, b-4"-1/4", unID: unID=unID+1
+	ConEdit_1 = 1
+return
+
+! -----------------------------------------------------------------------------
+"under_cabinet_2":
+! -----------------------------------------------------------------------------
+	gosub "contour"
+
+	line2 0, b-depthCabinet, a, b-depthCabinet
+return
+
+! -----------------------------------------------------------------------------
+"inside_cabinet_1_2":
+! -----------------------------------------------------------------------------
+	gosub "contour"
+
+	add2 A/2, B
+	poly2_ 4,1+4,
+				aa2/2,     0,      1,
+				aa2/2,     -bb2,      1,
+				-aa2/2,     -bb2,      1,
+				-aa2/2,    0,     1
+
+	if not(bShowMEP) then
+		add2 0, -0.02-aa3/2
+		hotspot2 0, 0, unID: unID=unID+1
+		circle2  0,0, aa3/2
+		del 1
+	endif
+
+	line2 -a/2,  -b+0.02, a/2,  -b+0.02
+	del 1
+	ConEdit_1 = 0
+return
+
+! -----------------------------------------------------------------------------
+"inside_cabinet_3":
+! -----------------------------------------------------------------------------
+	gosub "contour"
+
+	hotspot2 0, b/2, unID: unID=unID+1
+	hotspot2 a, b/2, unID: unID=unID+1
+
+	rect2 0.02, 0.08, a-0.02, b-0.02
+	rect2 a/2+0.1, b-0.02, a/2-0.1, b-0.15
+	line2 0.02, 0.08, a/2-0.1, b-0.15
+	line2 a-0.02, 0.08, a/2+0.1, b-0.15
+
+	if not(bShowMEP) then
+		hotspot2 a/2, b-0.08, unID: unID=unID+1
+		circle2 a/2, b-0.08, 0.06
+	endif
+	ConEdit_1 = 0
+return
+
+! -----------------------------------------------------------------------------
+"hood_2d":
+! -----------------------------------------------------------------------------
+		! --- Under Cabinet 1 ---
+		if type_m = 1 then
+			gosub "under_cabinet_1"
+		endif
+
+		! --- Under Cabinet 2 ---
+		if type_m = 2 then
+			gosub "under_cabinet_2"
+		endif
+
+		! --- Inside Cabinet 1 --- and --- Inside Cabinet 2 ---
+		if type_m = 3 or type_m = 4 then
+			gosub "inside_cabinet_1_2"
+		endif
+
+		! --- Inside Cabinet 3 ---
+		if type_m = 5 then
+			gosub "inside_cabinet_3"
+		endif
+return

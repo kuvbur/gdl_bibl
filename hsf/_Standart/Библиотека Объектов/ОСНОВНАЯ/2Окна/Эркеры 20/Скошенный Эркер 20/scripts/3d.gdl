@@ -1,0 +1,1718 @@
+
+! =============================================================================
+! Block for operator mode
+! =============================================================================
+
+if GLOB_CONTEXT > 40 & GLOB_CONTEXT < 50 then
+	prism_ 4, WIDO_FRAME_THICKNESS,
+		-ac_unit_width/2, 0, 15,
+		 ac_unit_width/2, 0, 15,
+		 ac_unit_width/2, ac_unit_height, 15,
+		-ac_unit_width/2, ac_unit_height, 15
+endif
+
+! =============================================================================
+
+if (GLOB_VIEW_TYPE = 9 & GLOB_PREVIEW_MODE = 0) then	! in case of Surface IS Calculation
+	lod3D = 2	! Detailed
+else
+	lod3D = 0											! Don't draw anything
+	if iDWDet3D = DETLEVEL_DW3D_SIMPLE then lod3D = 1	! Simple
+	if iDWDet3D = DETLEVEL_DW3D_DETAILED then lod3D = 2	! Detailed
+	if iDWDet3D = DETLEVEL_DW3D_CHI_SIMPLE | iDWDet3D = DETLEVEL_DW3D_CHI_DETAILED then
+		if (GLOB_CONTEXT = 4 | GLOB_CONTEXT = 24 | GLOB_CONTEXT = 6) then
+			lod3D = 5								! Chinese
+		else
+			lod3D = 2
+		endif
+	endif
+endif
+
+gs_fillFr		= gs_bFills * gs_fillFr
+gs_penFr_fg		= gs_bFills * gs_penFr_fg
+gs_penFr_bg		= gs_bFills * gs_penFr_bg
+
+gs_fillSash		= gs_bFills * gs_fillSash
+gs_penSash_fg	= gs_bFills * gs_penSash_fg
+gs_penSash_bg	= gs_bFills * gs_penSash_bg
+
+if not(gs_shadow) then shadow off
+
+
+! =============================================================================
+! GS Corner Window Functions
+! =============================================================================
+
+call "GS Window Functions",
+	parameters all	gs_RevealTypeEnable		= gs_RevealTypeEnable,
+					iWindowShape			= iWindowShape,
+					gs_IsCurved				= gs_IsCurved,
+					bParalellInCurvedWalls	= bParalellInCurvedWalls,
+					lod3D					= lod3D,
+					bDisabeMirroring		= bDisabeMirroring,
+					bEnableSill				= 0,
+					bEnableBoard			= 0,
+	returned_parameters	ac_unit_width,
+						ac_unit_height,
+						gs_frame_ovhg_left_out,
+						gs_frame_ovhg_right_out,
+						gs_frame_ovhg_top_out,
+						gs_frame_ovhg_bottom_out,
+						gs_frame_ovhg_left_in,
+						gs_frame_ovhg_right_in,
+						gs_frame_ovhg_top_in,
+						gs_frame_ovhg_bottom_in,
+						bMirrored,
+						xform11, xform12, xform13, xform14,
+						xform21, xform22, xform23, xform24,
+						xform31, xform32, xform33, xform34,
+
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen,
+						bShowAddHotspots, bShowAddHotspotsForIS, bShowUnitHotspots
+
+
+if lod3D = 0 then end
+
+
+A = ac_unit_width
+B = ac_unit_height
+
+
+! ==============================================================================
+! Draw window frame and sash
+! ==============================================================================
+
+if lod3D = 5 then	! Chinese
+	fr_sect_fill_type	= gs_fillShCover
+	fr_sect_fill_fg		= gs_penShCov_fg
+	fr_sect_fill_bg		= gs_penShCov_bg
+
+	sh_sect_fill_type	= gs_fillShCover
+	sh_sect_fill_fg		= gs_penShCov_fg
+	sh_sect_fill_bg		= gs_penShCov_bg
+
+	iUndercloakType		= 1
+	iRoofType			= 1
+else
+	fr_sect_fill_type	= gs_fillFr
+	fr_sect_fill_fg		= gs_penFr_fg
+	fr_sect_fill_bg		= gs_penFr_bg
+
+	sh_sect_fill_type	= gs_fillSash
+	sh_sect_fill_fg		= gs_penSash_fg
+	sh_sect_fill_bg		= gs_penSash_bg
+endif
+
+if bShowUnitHotspots then
+
+	addz WIDO_FRAME_THICKNESS * WIDO_REVEAL_SIDE
+
+	!!! "Associative" hotspots
+	if bUndercloak then
+		unID=2000
+		hotspot  a/2+uclsill, -uclh, 0, unID	: unID=unID+1
+		hotspot -a/2-uclsill, -uclh, 0, unID	: unID=unID+1
+	ENDIF
+	if bRoof then
+		unID=2010
+		hotspot  a/2+rlsill, b+rolh, 0, unID	: unID=unID+1
+		hotspot -a/2-rlsill, b+rolh, 0, unID	: unID=unID+1
+	ENDIF
+
+	del 1
+
+	! ==============================================================================
+	! --- Unit Hotspots ---
+	! ==============================================================================
+	unID=100
+	hotspot a/2, 0, 0, unID		:unID=unID+1
+	hotspot -a/2, 0, 0, unID	:unID=unID+1
+	hotspot a/2, 0, gs_frame_thk, unID		:unID=unID+1
+	hotspot -a/2, 0, gs_frame_thk, unID	:unID=unID+1
+
+	hotspot a/2, b, 0, unID		:unID=unID+1
+	hotspot -a/2, b, 0, unID	:unID=unID+1
+	hotspot a/2, b, gs_frame_thk, unID		:unID=unID+1
+	hotspot -a/2, b, gs_frame_thk, unID
+
+
+endif
+
+pen gs_frame_pen
+
+! ==============================================================================
+! Sill
+! ==============================================================================
+
+if not (WIDO_REVEAL_SIDE) then     ! Flip
+	addz -WIDO_SILL
+else
+	addz WIDO_SILL - WALL_THICKNESS + WIDO_FRAME_THICKNESS
+endif
+
+if WIDO_REVEAL_SIDE then
+	mulz -1
+	addz -WALL_THICKNESS
+endif
+
+if gs_sill_outside & lod3D <> 5 then
+	sect_fill gs_sill_fill, gs_sill_pen_bg, gs_sill_pen_fg, gs_sill_pen_sectcont
+	material gs_sill_mat
+	rotx -90
+
+	prism_ 9, gs_sill_thk,
+		-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0, 15,
+		-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0, 15,
+		-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd, 15,
+		 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd, 15,
+		 a/2+(gs_frame_thk/2)/SIN(bang)+bafd, 0, 15,
+		 a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0, 15,
+		 ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing, 15,
+		-ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing, 15,
+		-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0, -1
+	del 1
+endif
+
+if gs_board_inside & lod3D <> 5 then
+	sect_fill gs_board_fill, gs_board_pen_bg, gs_board_pen_fg, gs_board_pen_sectcont
+	material gs_board_mat
+
+	if abs (bang-90) > EPS then
+		rotx 90
+		addz -gs_sill_thk
+
+		prism_ 9, gs_sill_thk,
+			-a/2, gs_frame_thk, 15,
+			-a/2+(gs_frame_thk/2/COS(bang)-gs_frame_thk)*TAN(90-bang), gs_frame_thk, 15,
+			-ami/2-bafd, -byd+gs_frame_thk, 15,
+			 ami/2+bafd, -byd+gs_frame_thk, 15,
+			 a/2-(gs_frame_thk/2/COS(bang)-gs_frame_thk)*TAN(90-bang), gs_frame_thk, 15,
+			 a/2,  gs_frame_thk, 15,
+			 a/2,  WALL_THICKNESS+gs_board_nosing, 15,
+			-a/2,  WALL_THICKNESS+gs_board_nosing, 15,
+			-a/2,  gs_frame_thk, -1
+
+		del 2
+	else
+		rotx 90
+		addz -gs_sill_thk
+		prism_ 5, gs_sill_thk,
+			-a/2,  WALL_THICKNESS+gs_board_nosing, 15,
+			-a/2, -byd+gs_frame_thk, 15,
+			a/2, -byd+gs_frame_thk, 15,
+			a/2,  WALL_THICKNESS+gs_board_nosing, 15,
+			-a/2,  WALL_THICKNESS+gs_board_nosing, -1
+		del 2
+	endif
+endif
+
+if WIDO_REVEAL_SIDE then del 2
+
+del 1
+
+! ==============================================================================
+! FRAME
+! ==============================================================================
+
+kezdmod = gs_frame_thk * sin(bang / 2) + 0.002
+vegmod  = gs_frame_thk * sin(bang / 2) + 0.002
+
+group "frame"
+
+	if gs_frame_pen_cont < 1 then gs_frame_pen_cont = SYMB_SECT_PEN
+	if fr_sect_fill_type < 1 then fr_sect_fill_type = SYMB_FILL
+	if fr_sect_fill_bg < 1 then fr_sect_fill_bg = SYMB_FBGD_PEN
+	if fr_sect_fill_bg < 1 then fr_sect_fill_bg = SYMB_FILL_PEN
+
+	sect_fill fr_sect_fill_type, fr_sect_fill_bg, fr_sect_fill_fg, gs_frame_pen_cont
+	material gs_frame_mat
+
+		if not (WIDO_REVEAL_SIDE) then ! Flip
+			addz -WIDO_SILL
+		else
+			addz WIDO_SILL - WALL_THICKNESS + WIDO_FRAME_THICKNESS
+		endif
+
+		if WIDO_REVEAL_SIDE then
+			mulz -1
+			addz -WALL_THICKNESS
+		endif
+
+		if gs_UTrans then		! Transom Editing by Hotspot
+
+			if bShowUnitHotspots then
+
+				unID=1300
+				hotspot  a/2,  0,			0, unID, gs_UTrans_h, 1+128	: unID = unID+1
+				hotspot  a/2, -1,			0, unID, gs_UTrans_h, 3		: unID = unID+1
+				hotspot  a/2,  gs_UTrans_h, 0, unID, gs_UTrans_h, 2
+
+				unID=1310
+				hotspot -a/2,  0,			0, unID, gs_UTrans_h, 1+128	: unID = unID+1
+				hotspot -a/2, -1,			0, unID, gs_UTrans_h, 3		: unID = unID+1
+				hotspot -a/2,  gs_UTrans_h, 0, unID, gs_UTrans_h, 2
+
+			endif
+
+		endif
+
+
+! --- Handling Inner-Outer Materials -------------------------------------------
+
+	if gs_frame_mat = gs_frame_mat2 then				! One body, in case of similar materials
+		in_out_cikl = 1
+
+		gs_frame_mat2 = gs_frame_mat
+		side_mat = gs_frame_mat
+
+		out_thk = 0
+		part_thk =gs_frame_thk
+	else												! two bodies
+		in_out_cikl = 2
+
+		if lod3D = 2 then								! Detailed
+			out_thk = gs_sash_thk/2
+			part_thk = out_thk
+			side_mat = gs_frame_mat
+		else											! Simple
+			out_thk = gs_sash_thk/2+gs_glass_thk/2
+			part_thk = out_thk
+			side_mat = gs_frame_mat
+		endif
+	endif
+
+! --- Front Frame ---
+
+	add -ami/2 - bafd, 0, -byd + gs_frame_thk
+	roty -90 + bang/2
+	cutplane
+	del 2
+
+
+	add ami/2 + bafd, 0, -byd + gs_frame_thk
+	roty 90 - bang/2
+	cutplane
+	del 2
+
+	addz -byd
+
+FOR ijk = 1 to in_out_cikl
+	MATERIAL gs_frame_mat
+
+	! --- Mitered Joint ---
+	if gs_SashText_typ_num = MITERED_JOINT then
+		IF not(gs_UTrans) THEN       ! without transom
+	base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+			-ami/2-kezdmod,				-oslo,15,
+			-ami/2-kezdmod,				b+osup,8,
+			-ami/2+gs_frame_width,		b-gs_frame_width,15,
+			-ami/2+gs_frame_width,		gs_frame_width,8
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+
+	base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+			ami/2+vegmod,				-oslo,13,
+			ami/2+vegmod,				b+osup,8,
+			ami/2-gs_frame_width,		b-gs_frame_width,15,
+			ami/2-gs_frame_width,		gs_frame_width,8
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+
+		hsas=0
+	if nsa>1 then
+		for I=1 to nsa-1
+			base
+			cprism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+				-ami/2-bafd+gs_frame_width+hsa+hsas,					gs_frame_width,10,
+				-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width/2,	-oslo,8,
+				-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		gs_frame_width,15,
+				-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		b-gs_frame_width,10,
+				-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width/2,	b+osup,8,
+				-ami/2-bafd+gs_frame_width+hsa+hsas,					b-gs_frame_width,15
+			vert 0, 0, 0
+			vert 0, 1, 0
+			vert 1, 0, 0
+			vert 0, 0, 1
+			coor 2, -1, -2, -3, -4
+			body 1
+			hsas=hsas+hsa+gs_frame_width
+		next I
+	endif
+
+	ELSE				! With Transom
+
+		base
+		CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+			-ami/2-kezdmod,			-oslo,15,
+			-ami/2-kezdmod,			b+osup,10,
+			-ami/2+gs_frame_width,	b-gs_frame_width,15,
+			-ami/2+gs_frame_width,	gs_UTrans_h,10,
+			-ami/2+gs_frame_width,	gs_UTrans_h-gs_UTrans_w,15,
+			-ami/2+gs_frame_width,	gs_frame_width,10
+
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+
+		base
+		CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+			ami/2+vegmod,			-oslo,15,
+			ami/2+vegmod,			b+osup,10,
+			ami/2-gs_frame_width,	b-gs_frame_width,15,
+			ami/2-gs_frame_width,	gs_UTrans_h,10,
+			ami/2-gs_frame_width,	gs_UTrans_h-gs_UTrans_w,15,
+			ami/2-gs_frame_width,	gs_frame_width,10
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+
+		hsas=0
+		if nsa>1 then
+			FOR I=1 TO nsa-1
+				base
+				CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+						8,part_thk,
+						-ami/2-bafd+gs_frame_width+hsa+hsas,					gs_frame_width,10,
+						-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		gs_frame_width,15,
+						-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		gs_UTrans_h-gs_UTrans_w,10,
+						-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		gs_UTrans_h,15,
+						-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		b-gs_frame_width,10,
+						-ami/2-bafd+gs_frame_width+hsa+hsas, 					b-gs_frame_width, 15,
+						-ami/2-bafd+gs_frame_width+hsa+hsas,					gs_UTrans_h,10,
+						-ami/2-bafd+gs_frame_width+hsa+hsas,					gs_UTrans_h-gs_UTrans_w,15
+				vert 0, 0, 0
+				vert 0, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+					coor 2, -1, -2, -3, -4
+				body 1
+
+				hsas=hsas+hsa+gs_frame_width
+			NEXT I
+		endif
+
+		hsas=0
+		FOR I=1 TO nsa
+		kezd=gs_frame_width/2
+		veg=gs_frame_width/2
+		if i=1 then
+			kezd=gs_frame_width+kezdmod
+			kzdmsk=15
+		endif
+		if i=nsa then
+			veg=gs_frame_width+vegmod
+			vegmsk=10
+		endif
+		! Transom
+		CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+			-ami/2-bafd+gs_frame_width+hsa+hsas,	gs_UTrans_h-gs_UTrans_w,10,
+			-ami/2-bafd+gs_frame_width+hsa+hsas,	gs_UTrans_h,15,
+			-ami/2-bafd+gs_frame_width+hsas,		gs_UTrans_h,10,
+			-ami/2-bafd+gs_frame_width+hsas,		gs_UTrans_h-gs_UTrans_w,15
+		hsas=hsas+hsa+gs_frame_width
+	NEXT I
+
+	ENDIF
+
+	!!!Both in with and without Transom
+	hsas=0
+	FOR I=1 TO nsa
+		kzdmsk=13
+		vegmsk=8
+		kezd=gs_frame_width/2
+		veg=gs_frame_width/2
+		kezinmod=gs_frame_width/2
+		veginmod=gs_frame_width/2
+		if i=1 then
+			kezd=gs_frame_width+kezdmod
+			kezinmod=0
+			kzdmsk=15
+		endif
+		if i=nsa then
+			veg=gs_frame_width+vegmod
+			veginmod=0
+			vegmsk=10
+		endif
+
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+			-ami/2-bafd+gs_frame_width+hsas-kezd,			-oslo-overhangBottom,kzdmsk,
+			-ami/2-bafd+gs_frame_width+hsa+hsas+veg,		-oslo-overhangBottom,vegmsk,
+			-ami/2-bafd+gs_frame_width+hsa+hsas+veginmod,	gs_frame_width,10,
+			-ami/2-bafd+gs_frame_width+hsa+hsas, 			gs_frame_width,15,
+			-ami/2-bafd+gs_frame_width+hsas,				gs_frame_width,10,
+			-ami/2-bafd+gs_frame_width+hsas-kezinmod,		gs_frame_width,10
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+			-ami/2-bafd+gs_frame_width+hsas-kezd,			b+osup+overhangTop,kzdmsk,
+			-ami/2-bafd+gs_frame_width+hsa+hsas+veg,		b+osup+overhangTop,vegmsk,
+			-ami/2-bafd+gs_frame_width+hsa+hsas+veginmod,	b-gs_frame_width,10,
+			-ami/2-bafd+gs_frame_width+hsa+hsas,			b-gs_frame_width,15,
+			-ami/2-bafd+gs_frame_width+hsas,				b-gs_frame_width,10,
+			-ami/2-bafd+gs_frame_width+hsas-kezinmod,		b-gs_frame_width,10
+	hsas=hsas+hsa+gs_frame_width
+	NEXT i
+endif			!end of type 1
+
+
+		! --- Butt Joint ---
+if gs_SashText_typ_num = BUTT_JOINT then
+		IF not(gs_UTrans) THEN       ! without transom
+	base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+			-ami/2-kezdmod,			gs_frame_width,13,
+			-ami/2-kezdmod,			b-gs_frame_width,8,
+			-ami/2+gs_frame_width,	b-gs_frame_width,15,
+			-ami/2+gs_frame_width,	gs_frame_width,10
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+
+	base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+			ami/2+vegmod,			gs_frame_width,13,
+			ami/2+vegmod,			b-gs_frame_width,8,
+			ami/2-gs_frame_width,	b-gs_frame_width,15,
+			ami/2-gs_frame_width,	gs_frame_width,10
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+
+		hsas=0
+	if nsa>1 then
+	FOR I=1 TO nsa-1
+	base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+			-ami/2-bafd+gs_frame_width+hsa+hsas,					gs_frame_width,10,
+			-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		gs_frame_width,15,
+			-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		b-gs_frame_width,10,
+			-ami/2-bafd+gs_frame_width+hsa+hsas,					b-gs_frame_width,15
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+	hsas=hsas+hsa+gs_frame_width
+	NEXT I
+	endif
+
+	ELSE				! With Transom
+		base
+		CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+			-ami/2-kezdmod,				gs_frame_width,13,
+			-ami/2-kezdmod,				b-gs_frame_width,8,
+			-ami/2+gs_frame_width,		b-gs_frame_width,15,
+			-ami/2+gs_frame_width,		gs_UTrans_h,10,
+			-ami/2+gs_frame_width,		gs_UTrans_h-gs_UTrans_w,15,
+			-ami/2+gs_frame_width,		gs_frame_width,10
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+
+	base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+			ami/2+vegmod,			gs_frame_width,13,
+			ami/2+vegmod,			b-gs_frame_width,8,
+			ami/2-gs_frame_width,	b-gs_frame_width,15,
+			ami/2-gs_frame_width,	gs_UTrans_h,10,
+			ami/2-gs_frame_width,	gs_UTrans_h-gs_UTrans_w,15,
+			ami/2-gs_frame_width,	gs_frame_width,10
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+
+		hsas=0
+	if nsa>1 then
+		FOR I=1 TO nsa-1
+			base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				8,part_thk,
+				-ami/2-bafd+gs_frame_width+hsa+hsas,					gs_frame_width,10,
+				-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		gs_frame_width,15,
+				-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		gs_UTrans_h-gs_UTrans_w,10,
+				-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		gs_UTrans_h,15,
+				-ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,		b-gs_frame_width,10,
+				-ami/2-bafd+gs_frame_width+hsa+hsas, 					b-gs_frame_width, 15,
+				-ami/2-bafd+gs_frame_width+hsa+hsas,					gs_UTrans_h,10,
+				-ami/2-bafd+gs_frame_width+hsa+hsas,					gs_UTrans_h-gs_UTrans_w,15
+			vert 0, 0, 0
+			vert 0, 1, 0
+			vert 1, 0, 0
+			vert 0, 0, 1
+			coor 2, -1, -2, -3, -4
+			body 1
+			hsas=hsas+hsa+gs_frame_width
+		NEXT I
+	endif
+
+	hsas=0
+	FOR I=1 TO nsa
+		kezd=gs_frame_width/2
+		veg=gs_frame_width/2
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+			-ami/2-bafd+gs_frame_width+hsa+hsas,		gs_UTrans_h-gs_UTrans_w,10,
+			-ami/2-bafd+gs_frame_width+hsa+hsas,  		gs_UTrans_h, 15,
+			-ami/2-bafd+gs_frame_width+hsas,			gs_UTrans_h,10,
+			-ami/2-bafd+gs_frame_width+hsas,			gs_UTrans_h-gs_UTrans_w,15
+		hsas=hsas+hsa+gs_frame_width
+	NEXT I
+
+	ENDIF
+
+	! Both in without and with Transom
+	IF nsa>1 THEN
+	hsas=0
+	FOR I=1 TO nsa-1
+	PUT  -ami/2-bafd+gs_frame_width+hsa+hsas,					gs_frame_width,10,
+		 -ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,	gs_frame_width,15
+	hsas=hsas+hsa+gs_frame_width
+	NEXT i
+	hsas=0
+	FOR I=1 TO nsa-1
+	PUT  -ami/2-bafd+gs_frame_width+hsa+hsas,					b-gs_frame_width,10,
+		 -ami/2-bafd+gs_frame_width+hsa+hsas+gs_frame_width,	b-gs_frame_width,15
+	hsas=hsas+hsa+gs_frame_width
+	NEXT i
+	ENDIF
+
+	IF nsa>1 THEN
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6+nsp/2/3,part_thk,
+			-ami/2-kezdmod,				gs_frame_width,8,
+			-ami/2+gs_frame_width,		gs_frame_width,15,
+			GET(nsp/2),
+			ami/2-gs_frame_width,		gs_frame_width,10,
+			ami/2+vegmod,				gs_frame_width,13,
+			ami/2+vegmod,				-oslo,15,
+			-ami/2-kezdmod,				-oslo,15
+
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6+nsp/3,part_thk,
+			-ami/2-kezdmod,				b-gs_frame_width,8,
+			-ami/2+gs_frame_width,		b-gs_frame_width,15,
+			GET(nsp),
+			ami/2-gs_frame_width,		b-gs_frame_width,10,
+			ami/2+vegmod,				b-gs_frame_width,13,
+			ami/2+vegmod,				b+osup,15,
+			-ami/2-kezdmod,				b+osup,15
+	ELSE
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+			-ami/2-kezdmod,				gs_frame_width,8,
+			-ami/2+gs_frame_width,		gs_frame_width,15,
+			ami/2-gs_frame_width,		gs_frame_width,10,
+			ami/2+vegmod,				gs_frame_width,13,
+			ami/2+vegmod,				-oslo,15,
+			-ami/2-kezdmod,				-oslo,15
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+			-ami/2-kezdmod,				b-gs_frame_width,8,
+			-ami/2+gs_frame_width,		b-gs_frame_width,15,
+			ami/2-gs_frame_width,		b-gs_frame_width,10,
+			ami/2+vegmod,				b-gs_frame_width,13,
+			ami/2+vegmod,				b+osup,15,
+			-ami/2-kezdmod,				b+osup,15
+	ENDIF
+
+endif		! end of type 2
+
+	ADDz part_thk
+	part_thk= gs_frame_thk-out_thk
+
+	var_mater = gs_frame_mat2
+	var_mater2 = gs_frame_mat2
+
+	side_mat = gs_frame_mat2
+
+NEXT ijk
+DEL in_out_cikl
+
+	DEL 1
+CUTEND
+CUTEND
+
+
+
+! --- Turn Skin on Side FRAME -----------------------------------------------------
+FOR H=1 TO 2
+
+
+ADD -ami/2-bafd, 0, -byd+gs_frame_thk
+ROTY 90+bang/2
+CUTPLANE        ! Cutting plane at corner
+DEL 2
+
+
+ROTX -90
+CUTPOLY 3,
+	-a/2,  0,
+	-2*a,  0,
+	-a/2, -2*a
+DEL 1
+
+
+ADDZ gs_frame_thk
+CUTPLANE
+DEL 1
+
+
+	ADD -a/2-bafd, 0, 0
+	ROTY bang
+	ADDZ -gs_frame_thk/2
+
+! --- Handling Inner-Outer Materials -------------------------------------------
+
+	if gs_frame_mat = gs_frame_mat2 then				! One body, in case of similar materials
+		in_out_cikl = 1
+
+		gs_frame_mat2 = gs_frame_mat
+		side_mat = gs_frame_mat
+
+		out_thk = 0
+		part_thk =gs_frame_thk
+	else												! two bodies
+		in_out_cikl = 2
+
+		if lod3D = 2 then								! Detailed
+			out_thk = gs_sash_thk/2
+			part_thk = out_thk
+			side_mat = gs_frame_mat
+		else											! Simple
+			out_thk = gs_sash_thk/2+gs_glass_thk/2
+			part_thk = out_thk
+			side_mat = gs_frame_mat
+		endif
+	endif
+
+	side_mat = gs_frame_mat
+
+FOR ijk = 1 to in_out_cikl
+	MATERIAL gs_frame_mat
+
+	! Mitered Joint
+	if gs_SashText_typ_num = MITERED_JOINT then
+	IF not(gs_UTrans) THEN       ! without transom
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+				-kezdmod,  						-oslo,15,
+				-kezdmod, 						b+osup,8,
+				gs_frame_width+gs_tolerance_bay, 	b-gs_frame_width,15,
+				gs_frame_width+gs_tolerance_bay,  	gs_frame_width,8
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,  			-oslo,13,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod, 			b+osup,8,
+		(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 			b-gs_frame_width, 15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,  	gs_frame_width,8
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+	ELSE			! With Transom
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+				-kezdmod,  					-oslo,15,
+				-kezdmod,					b+osup, 10,
+				gs_frame_width+gs_tolerance_bay, b-gs_frame_width, 15,
+				gs_frame_width+gs_tolerance_bay, gs_UTrans_h, 10,
+				gs_frame_width+gs_tolerance_bay, gs_UTrans_h-gs_UTrans_w,15,
+				gs_frame_width+gs_tolerance_bay, gs_frame_width,10
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,  			-oslo,15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,			b+osup,10,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	b-gs_frame_width,15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	gs_UTrans_h, 10,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	gs_UTrans_h-gs_UTrans_w, 15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	gs_frame_width, 10
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+				gs_frame_width+gs_tolerance_bay, 												gs_UTrans_h,10,
+				gs_frame_width+gs_tolerance_bay, 												gs_UTrans_h-gs_UTrans_w, 15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	gs_UTrans_h-gs_UTrans_w,10,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,  	gs_UTrans_h,15
+		vert 0, 0, 0
+		vert 1, 0, 0
+		vert 0, 1, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+	ENDIF
+
+		!!!!Both in without Transom and in with Transom
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+				-kezdmod,  																	-oslo,8,
+				gs_frame_width+gs_tolerance_bay, 												gs_frame_width, 15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,  	gs_frame_width,8,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,  			-oslo,15
+		vert 0, 0, 0
+		vert 1, 0, 0
+		vert 0, 1, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+				-kezdmod, 																	b+osup,10,
+				gs_frame_width+gs_tolerance_bay, 												b-gs_frame_width,15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	b-gs_frame_width,8,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod, 			b+osup,15
+		vert 0, 0, 0
+		vert 1, 0, 0
+		vert 0, 1, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+	endif		!!end of type 1
+
+
+	! --- Butt Joint -----------------------------------------------------------
+	if gs_SashText_typ_num = BUTT_JOINT then
+	IF not(gs_UTrans) THEN       ! without transom
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+				-kezdmod,  						gs_frame_width,15,
+				-kezdmod, 						b-gs_frame_width,8,
+				gs_frame_width+gs_tolerance_bay, 	b-gs_frame_width,15,
+				gs_frame_width+gs_tolerance_bay,  	gs_frame_width,8
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,  			gs_frame_width,13,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod, 			b-gs_frame_width,8,
+		(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 			b-gs_frame_width, 15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,  	gs_frame_width,8
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+	ELSE				!!!With Transom
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+				-kezdmod,  						gs_frame_width,13,
+				-kezdmod, 						b-gs_frame_width,8,
+				gs_frame_width+gs_tolerance_bay, 	b-gs_frame_width, 15,
+				gs_frame_width+gs_tolerance_bay,  	gs_UTrans_h,10,
+				gs_frame_width+gs_tolerance_bay,  	gs_UTrans_h-gs_UTrans_w,15,
+				gs_frame_width+gs_tolerance_bay,  	gs_frame_width,10
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,  			gs_frame_width,13,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod, 			b-gs_frame_width,8,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	b-gs_frame_width,15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,	gs_UTrans_h,10,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	gs_UTrans_h-gs_UTrans_w, 15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,  	gs_frame_width,8
+		vert 0, 0, 0
+		vert 0, 1, 0
+		vert 1, 0, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				4,part_thk,
+				gs_frame_width+gs_tolerance_bay, 												gs_UTrans_h,10,
+				gs_frame_width+gs_tolerance_bay,	 												gs_UTrans_h-gs_UTrans_w, 15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	gs_UTrans_h-gs_UTrans_w,10,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	gs_UTrans_h,15
+		vert 0, 0, 0
+		vert 1, 0, 0
+		vert 0, 1, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+	ENDIF
+
+		!!!Both in without Transom and in with Transom
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+				-kezdmod,  																	-oslo,15,
+				-kezdmod, 																	gs_frame_width,8,
+				gs_frame_width+gs_tolerance_bay,  												gs_frame_width,15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,  	gs_frame_width,10,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,			gs_frame_width,13,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,  			-oslo,15
+		vert 0, 0, 0
+		vert 1, 0, 0
+		vert 0, 1, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+		base
+			CPrism_ gs_frame_mat2,gs_frame_mat,side_mat,
+				6,part_thk,
+				-kezdmod, 																	b+osup,15,
+				-kezdmod,																	b-gs_frame_width,8,
+				gs_frame_width+gs_tolerance_bay, 												b-gs_frame_width, 15,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 	b-gs_frame_width,10,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod,			b-gs_frame_width,13,
+				(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)+vegmod, 			b+osup,15
+		vert 0, 0, 0
+		vert 1, 0, 0
+		vert 0, 1, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body 1
+	endif		! end of type 2
+
+	ADDz part_thk
+	part_thk= gs_frame_thk-out_thk
+
+	var_mater = gs_frame_mat2
+	var_mater2 = gs_frame_mat2
+
+	side_mat = gs_frame_mat2
+
+NEXT ijk
+DEL in_out_cikl
+
+
+	DEL 3
+CUTEND
+CUTEND
+CUTEND
+
+MULX -1
+NEXT H
+DEL 2
+
+
+if WIDO_REVEAL_SIDE then
+	del 2
+endif
+
+del 1
+
+endgroup
+
+
+!! END OF FRAME !!
+
+if lod3D = 2 then	! Detailed
+	group "harcsibald"
+
+	IF WIDO_REVEAL_SIDE THEN
+		MATERIAL gs_frame_mat2
+	ELSE
+		MATERIAL gs_frame_mat
+	ENDIF
+
+	IF GLOB_CONTEXT = 4 | GLOB_CONTEXT = 6 THEN
+		PEN gs_frame_pen_cont
+	ELSE
+		PEN gs_frame_pen
+	ENDIF
+
+	sect_fill fr_sect_fill_type, fr_sect_fill_bg, fr_sect_fill_fg, gs_frame_pen_cont
+
+		if not(WIDO_REVEAL_SIDE) then mulz -1
+		ADDz -(-byd-WIDO_SILL)-gs_rebate_depth
+		IF WIDO_REVEAL_SIDE THEN ADDZ gs_rebate_depth
+
+		IF gs_optype_m_01 <> SASH_FIXED THEN
+
+			FOR i = 1 to nsa
+				PRISM_ 4,gs_rebate_depth,
+					-ami/2+gs_frame_width-gs_rebate_width-bafd, 			gs_frame_width-gs_rebate_width, 15,
+					-ami/2+gs_frame_width-gs_rebate_width-bafd,				gs_UTrans_h-gs_frame_width+gs_rebate_width+not(gs_UTrans)*(b-gs_UTrans_h), 15,
+					-ami/2+gs_frame_width+gs_rebate_width+hsa-bafd,  		gs_UTrans_h-gs_frame_width+gs_rebate_width+not(gs_UTrans)*(b-gs_UTrans_h),15,
+					-ami/2+gs_frame_width+gs_rebate_width+hsa-bafd,  		gs_frame_width-gs_rebate_width,15
+				ADD hsa+gs_frame_width, 0, 0
+			NEXT i
+			DEL nsa
+		ENDIF
+
+		IF gs_UTrans AND gs_optype_m_02 <> SASH_FIXED THEN
+			ADDy gs_UTrans_h-gs_rebate_width
+
+			FOR i = 1 to nsa
+				PRISM_ 4,gs_rebate_depth,
+					-ami/2+gs_frame_width-gs_rebate_width-bafd, 			b-gs_UTrans_h-gs_frame_width+2*gs_rebate_width, 15,
+					-ami/2+gs_frame_width-gs_rebate_width-bafd,				0, 15,
+					-ami/2+gs_frame_width+gs_rebate_width+hsa-bafd,  		0,15,
+					-ami/2+gs_frame_width+gs_rebate_width+hsa-bafd,  		b-gs_UTrans_h-gs_frame_width+2*gs_rebate_width,15
+				ADD hsa+gs_frame_width, 0, 0
+			NEXT i
+			DEL nsa + 1
+		ENDIF
+
+		DEL 2
+	endgroup
+ENDIF
+
+PEN gs_frame_pen
+sect_fill fr_sect_fill_type, fr_sect_fill_bg, fr_sect_fill_fg, gs_frame_pen_cont
+
+if lod3D = 2 then	! Detailed
+	placegroup subgroup("frame","harcsibald")
+	killgroup "harcsibald"
+else
+	placegroup "frame"
+endif
+
+killgroup "frame"
+
+
+
+
+! ------------------------------------------------------------------------------
+! --- Casements ---
+! ------------------------------------------------------------------------------
+
+if not (WIDO_REVEAL_SIDE) then
+	addz -WIDO_SILL
+else
+	addz WIDO_SILL-WALL_THICKNESS+WIDO_FRAME_THICKNESS    ! Flip
+endif
+
+if WIDO_REVEAL_SIDE then
+	mulz -1
+	addz -WALL_THICKNESS
+endif
+
+temp_sash_mat=gs_sash_mat2
+gs_sash_mat2=gs_sash_mat
+gs_sash_mat=temp_sash_mat
+
+temp_grill_mat=gs_grill_mat2
+gs_grill_mat2=gs_grill_mat
+gs_grill_mat=temp_grill_mat
+
+
+! iMullionPosition
+if not((iMullionPosition = MULLION_THROUGHOUT) | WIDO_REVEAL_SIDE) then
+	if iMullionPosition = MULLION_OUTSIDE then
+		iMullionPosition = MULLION_INSIDE
+	else
+		iMullionPosition = MULLION_OUTSIDE
+	endif
+endif
+
+if not (gs_UTrans) then
+	bwtr = B - gs_UTrans_h
+	widthMod = gs_frame_width
+else
+	bwtr = 0
+	widthMod = gs_UTrans_w
+endif
+
+
+! --- Detailed -----------------------------------------------------------------
+
+if lod3D = 2 then	! Detailed
+	for h = 1 to 2
+		add -a/2 - bafd, 0, 0
+		roty bang
+
+! --- Side Lower Panel ---
+
+		sh_unID = 1000 + (h - 1) * 1000
+		add ((byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2))/2+gs_tolerance_bay/2, gs_frame_width-gs_rebate_width, gs_frame_thk/2-gs_rebate_depth	!gs_frame_thk/2
+		if not(WIDO_REVEAL_SIDE) then mulz -1
+
+		call "Casement_b" parameters a	= (byd - gs_frame_thk/2) / sin(bang) - gs_frame_thk/2 * tan(bang/2) - gs_tolerance_bay - 2 * gs_frame_width + 2 * gs_rebate_width,
+				b						= gs_UTrans_h + bwtr - 	widthMod - gs_frame_width + 2 * gs_rebate_width,
+				ctreed					= 0,
+				gs_frame_width			= gs_frame_width,
+				gs_frame_thk			= gs_frame_thk,
+				gs_sash_thk				= gs_sash_thk,
+				gs_sash_width			= gs_sash_width,
+				gs_rebate_width			= gs_rebate_width,
+				gs_rebate_depth			= gs_rebate_depth,
+				iMullionStyle			= iMullionStyle,
+				iMullionPosition		= iMullionPosition,
+				gw						= gw,
+				gth						= gth,
+				gs_glass_thk			= gs_glass_thk,
+				vgn						= vgn2,
+				hgn						= hgn2,
+				gs_glass_pen			= gs_glass_pen,
+				vergridl				= vergridl,
+				horgridl				= horgridl,
+				ghe						= ghe,
+				hid						= 1000,
+				gs_frame_pen			= gs_sash_pen,
+				gs_frame_mat			= gs_sash_mat,
+				gs_frame_mat2			= gs_sash_mat2,
+				gs_grill_mat			= gs_grill_mat,
+				gs_grill_mat2			= gs_grill_mat2,
+				gs_glass_mat			= gs_glass_mat,
+				gs_full_edit			= gs_full_edit,
+				opa_b					= 0,
+				rots_b					= 100,
+				gs_shadow				= gs_shadow,
+				gs_fillSash				= sh_sect_fill_type,
+				gs_penSash_bg			= sh_sect_fill_bg,
+				gs_penSash_fg			= sh_sect_fill_fg,
+				gs_frame_pen_cont		= gs_frame_pen_cont,
+				gs_SashText_typ_num		= gs_SashText_typ_num,
+				gs_cust_panel			= gs_cust_panel2,
+				sh_unID					= sh_unID,
+				lod3D					= lod3D,
+				bOplines3d				= bOplines3d,
+				opLineType3dIn			= opLineType3dIn,
+				opLineType3dOut			= opLineType3dOut,
+				gs_opline_style_m		= gs_opline_style_m,
+				gs_opLinePen			= gs_opLinePen,
+				gs_panel_mat			= gs_panel_mat,
+				gs_panel_mat2			= gs_panel_mat2
+
+
+! --- Side Upper Panel ---
+
+		if gs_UTrans then
+			addy gs_UTrans_h - gs_frame_width
+			sh_unID = 1010 + (h - 1) * 1000
+			call "Casement_d" parameters a	= (byd - gs_frame_thk/2) / sin(bang) - gs_frame_thk / 2 * tan(bang/2) - gs_tolerance_bay - 2 * gs_frame_width + 2 * gs_rebate_width,
+					b						= b - gs_UTrans_h + 2 * gs_rebate_width - gs_frame_width,
+					ctreed					= 0,
+					gs_frame_width			= gs_frame_width,
+					gs_frame_thk			= gs_frame_thk,
+					gs_sash_thk				= gs_sash_thk,
+					gs_sash_width			= gs_sash_width,
+					gs_rebate_width			= gs_rebate_width,
+					gs_rebate_depth			= gs_rebate_depth,
+					iMullionStyle			= iMullionStyle,
+					iMullionPosition		= iMullionPosition,
+					gw						= gw,
+					gth						= gth,
+					gs_glass_thk			= gs_glass_thk,
+					vgn						= vgn4,
+					hgn						= hgn4,
+					gs_glass_pen			= gs_glass_pen,
+					vergridx				= vergridx,
+					horgridx				= horgridx,
+					ghe						= ghe,
+					hid						= 3000,
+					gs_frame_pen			= gs_sash_pen,
+					gs_frame_mat			= gs_sash_mat,
+					gs_frame_mat2			= gs_sash_mat2,
+					gs_grill_mat			= gs_grill_mat,
+					gs_grill_mat2			= gs_grill_mat2,
+					gs_glass_mat			= gs_glass_mat,
+					gs_full_edit			= gs_full_edit,
+					rots_d					= 100,
+					gs_shadow				= gs_shadow,
+					gs_fillSash				= sh_sect_fill_type,
+					gs_penSash_bg			= sh_sect_fill_bg,
+					gs_penSash_fg			= sh_sect_fill_fg,
+					gs_frame_pen_cont		= gs_frame_pen_cont,
+					gs_SashText_typ_num		= gs_SashText_typ_num,
+					gs_cust_panel			= gs_cust_panel4,
+					sh_unID					= sh_unID,
+					lod3D					= lod3D,
+					bOplines3d				= bOplines3d,
+					opLineType3dIn			= opLineType3dIn,
+					opLineType3dOut			= opLineType3dOut,
+					gs_opline_style_m		= gs_opline_style_m,
+					gs_opLinePen			= gs_opLinePen,
+					gs_panel_mat			= gs_panel_mat,
+					gs_panel_mat2			= gs_panel_mat2
+			del 1
+		endif
+		if not(WIDO_REVEAL_SIDE) then del 1
+
+		del 3
+		mulx -1
+	next h
+	del 2
+
+	if not(WIDO_REVEAL_SIDE) then
+		mulz -1
+		addz 2 * byd - gs_frame_thk
+	endif
+
+	for i = 1 to nsa
+
+! --- Front Upper Panel ---
+
+		if gs_UTrans then
+			sh_unID = 1020 + (i - 1) * 20
+			add -ami/2-bafd+gs_frame_width+hsa/2, gs_UTrans_h-gs_rebate_width, gs_frame_thk-gs_rebate_depth-byd
+			call "Casement_d" parameters a	= hsa + 2 * gs_rebate_width,
+					b						= b - gs_UTrans_h - gs_frame_width + 2 * gs_rebate_width,
+					ctreed					= 0,
+					gs_frame_width			= gs_frame_width,
+					gs_frame_thk			= gs_frame_thk,
+					gs_sash_thk				= gs_sash_thk,
+					gs_sash_width			= gs_sash_width,
+					gs_rebate_width			= gs_rebate_width,
+					gs_rebate_depth			= gs_rebate_depth,
+					iMullionStyle			= iMullionStyle,
+					iMullionPosition		= iMullionPosition,
+					gw						= gw,
+					gth						= gth,
+					gs_glass_thk			= gs_glass_thk,
+					vgn						= vgn,
+					hgn						= hgn,
+					gs_glass_pen			= gs_glass_pen,
+					vergridx				= vergrid,
+					horgridx				= horgrid,
+					ghe						= ghe,
+					gs_full_edit			= gs_full_edit,
+					rots_d					= rots_d,
+					opa_d					= opa_d,
+					gs_shadow				= gs_shadow,
+					gs_frame_pen			= gs_sash_pen,
+					gs_frame_mat			= gs_sash_mat,
+					gs_frame_mat2			= gs_sash_mat2,
+					gs_grill_mat			= gs_grill_mat,
+					gs_grill_mat2			= gs_grill_mat2,
+					gs_glass_mat			= gs_glass_mat,
+					gs_fillSash				= sh_sect_fill_type,
+					gs_penSash_bg			= sh_sect_fill_bg,
+					gs_penSash_fg			= sh_sect_fill_fg,
+					gs_frame_pen_cont		= gs_frame_pen_cont,
+					gs_SashText_typ_num		= gs_SashText_typ_num,
+					opa_d2					= opa_d2,
+					gs_cust_panel			= gs_cust_panel,
+					sh_unID					= sh_unID,
+					lod3D					= lod3D,
+					bOplines3d				= bOplines3d,
+					opLineType3dIn			= opLineType3dIn,
+					opLineType3dOut			= opLineType3dOut,
+					gs_opline_style_m		= gs_opline_style_m,
+					gs_opLinePen			= gs_opLinePen,
+					gs_panel_mat			= gs_panel_mat,
+					gs_panel_mat2			= gs_panel_mat2
+			del 1
+		endif
+
+		if gs_optype_m_01 = SASH_SIDE_HUNG then
+			if fra(i/2)=0 then rots_a=3		!! Even Number of No. of Sashes Front
+			if fra(i/2)<>0 then rots_a=1		!! Add Number of No. of Sashes Front
+		endif
+		if gs_optype_m_01 = SASH_SIDE_HUNG_M then
+			if fra(i/2)=0 then rots_a=1		!! Even Number of No. of Sashes Front
+			if fra(i/2)<>0 then rots_a=3		!! Add Number of No. of Sashes Front
+		endif
+		if gs_optype_m_01 = SASH_TILT_TURN then
+			if fra(i/2)=0 then rots_a=31		!! Even Number of No. of Sashes Front
+			if fra(i/2)<>0 then rots_a=30		!! Add Number of No. of Sashes Front
+		endif
+		if gs_optype_m_01 = SASH_TILT_TURN_M then
+			if fra(i/2)=0 then rots_a=30		!! Even Number of No. of Sashes Front
+			if fra(i/2)<>0 then rots_a=31		!! Add Number of No. of Sashes Front
+		endif
+
+
+! --- Front Lower Panel ---
+
+		sh_unID = 1030 + (i - 1) * 20
+		add -ami/2-bafd+gs_frame_width+hsa/2, gs_frame_width-gs_rebate_width, gs_frame_thk-gs_rebate_depth-byd
+		call "Casement_a" parameters a	= hsa + 2 * gs_rebate_width,
+				b						= gs_UTrans_h - widthMod - gs_frame_width + 2 * gs_rebate_width + bwtr,
+				ctreed					= 0,
+				gs_frame_width			= gs_frame_width,
+				gs_frame_thk			= gs_frame_thk,
+				gs_sash_thk				= gs_sash_thk,
+				gs_sash_width			= gs_sash_width,
+				gs_rebate_width			= gs_rebate_width,
+				gs_rebate_depth			= gs_rebate_depth,
+				iMullionStyle			= iMullionStyle,
+				iMullionPosition		= iMullionPosition,
+				gw						= gw,
+				gth						= gth,
+				gs_glass_thk			= gs_glass_thk,
+				vgn						= vgn3,
+				hgn						= hgn3,
+				gs_glass_pen			= gs_glass_pen,
+				vergrid					= vergridr,
+				horgrid					= horgridr,
+				ghe						= ghe,
+				hid						= 2000,
+				gs_full_edit			= gs_full_edit,
+				rots_a					= rots_a,
+				opa_a					= opa_a,
+				opa_a2					= opa_a2,
+				gs_shadow				= gs_shadow,
+				gs_frame_pen			= gs_sash_pen,
+				gs_frame_mat			= gs_sash_mat,
+				gs_frame_mat2			= gs_sash_mat2,
+				gs_grill_mat			= gs_grill_mat,
+				gs_grill_mat2			= gs_grill_mat2,
+				gs_glass_mat			= gs_glass_mat,
+				gs_fillSash				= sh_sect_fill_type,
+				gs_penSash_bg			= sh_sect_fill_bg,
+				gs_penSash_fg			= sh_sect_fill_fg,
+				gs_frame_pen_cont		= gs_frame_pen_cont,
+				gs_SashText_typ_num		= gs_SashText_typ_num,
+				gs_cust_panel			= gs_cust_panel3,
+				sh_unID					= sh_unID,
+				lod3D					= lod3D,
+				bOplines3d				= bOplines3d,
+				opLineType3dIn			= opLineType3dIn,
+				opLineType3dOut			= opLineType3dOut,
+				gs_opline_style_m		= gs_opline_style_m,
+				gs_opLinePen			= gs_opLinePen,
+				gs_panel_mat			= gs_panel_mat,
+				gs_panel_mat2			= gs_panel_mat2
+		del 1
+		addx hsa + gs_frame_width
+	next i
+	del nsa
+
+	if not(WIDO_REVEAL_SIDE) then del 2
+endif
+
+if lod3D = 1 | lod3D = 5 then	! Simple
+	SolXmod = 0
+	SolYmod = 0
+	if iMullionStyle <> MULLION_SOLID_PANEL then
+		iMullionStyle = MULLION_NONE
+		SolXmod = gs_sash_width
+		SolYmod = gs_frame_thk/2
+	else
+		SolXmod = gs_rebate_width
+	endif
+
+	for h = 1 to 2
+		add -a/2-bafd, 0, 0
+		roty bang
+		sh_unID = 1000 + (h - 1) * 1000
+		add ((byd-gs_frame_thk/2)/sin(bang)-gs_frame_thk/2*tan(bang/2))/2+gs_tolerance_bay/2, gs_frame_width-SolXmod, -SolYmod
+
+! --- Side Lower Panel ---
+		call "Casement_b" parameters a	= (byd - gs_frame_thk/2) / sin(bang)-gs_frame_thk/2*tan(bang/2)-gs_tolerance_bay-2*gs_frame_width+2*SolXmod,
+				b						= gs_UTrans_h+bwtr-widthMod-gs_frame_width+2*SolXmod, ctreed=1, gs_frame_width=gs_frame_width,
+				gs_sash_width			= gs_sash_width,
+				gs_sash_thk				= gs_sash_thk,
+				gs_frame_thk			= gs_frame_thk,
+				iMullionStyle			= iMullionStyle,
+				iMullionPosition		= iMullionPosition,
+				gw						= gw,
+				gth						= gth,
+				gs_glass_thk			= gs_glass_thk,
+				gs_rebate_width			= gs_rebate_width,
+				gs_rebate_depth			= gs_rebate_depth,
+				vgn						= vgn2,
+				hgn						= hgn2,
+				gs_glass_pen			= gs_glass_pen,
+				gs_full_edit			= 0,
+				rots_b					= 100,
+				gs_frame_pen			= gs_sash_pen,
+				gs_frame_mat			= gs_sash_mat,
+				gs_frame_mat2			= gs_sash_mat2,
+				gs_grill_mat			= gs_grill_mat,
+				gs_grill_mat2			= gs_grill_mat2,
+				gs_glass_mat			= gs_glass_mat,
+				gs_fillSash				= sh_sect_fill_type,
+				gs_penSash_bg			= sh_sect_fill_bg,
+				gs_penSash_fg			= sh_sect_fill_fg,
+				gs_frame_pen_cont		= gs_frame_pen_cont,
+				gs_SashText_typ_num		= gs_SashText_typ_num,
+				gs_shadow				= gs_shadow,
+				gs_cust_panel			= gs_cust_panel2,
+				sh_unID					= sh_unID,
+				lod3D					= lod3D,
+				bOplines3d				= bOplines3d,
+				opLineType3dIn			= opLineType3dIn,
+				opLineType3dOut			= opLineType3dOut,
+				gs_opline_style_m		= gs_opline_style_m,
+				gs_opLinePen			= gs_opLinePen,
+				gs_panel_mat			= gs_panel_mat,
+				gs_panel_mat2			= gs_panel_mat2
+
+		if gs_UTrans=1 then
+			addy gs_UTrans_h - gs_frame_width
+			sh_unID = 1010 + (h - 1) * 1000
+
+! --- Side Upper Panel ---
+
+			call "Casement_d" parameters a	= (byd - gs_frame_thk/2) / sin(bang) - gs_frame_thk/2 * tan(bang/2) - gs_tolerance_bay - 2 * gs_frame_width + 2 * SolXmod,
+					b						= b - gs_UTrans_h - gs_frame_width + 2 * SolXmod,
+					ctreed					= 1,
+					gs_frame_width			= gs_frame_width,
+					gs_sash_width			= gs_sash_width,
+					gs_sash_thk				= gs_sash_thk,
+					gs_frame_thk			= gs_frame_thk,
+					iMullionStyle			= iMullionStyle,
+					iMullionPosition		= iMullionPosition,
+					gw						= gw,
+					gth						= gth,
+					gs_glass_thk			= gs_glass_thk,
+					gs_rebate_width			= gs_rebate_width,
+					gs_rebate_depth			= gs_rebate_depth,
+					vgn						= vgn4, hgn=hgn4,
+					gs_glass_pen			= gs_glass_pen,
+					gs_full_edit			= 0,
+					rots_d					= 100,
+					gs_frame_pen			= gs_sash_pen,
+					gs_frame_mat			= gs_sash_mat,
+					gs_frame_mat2			= gs_sash_mat2,
+					gs_grill_mat			= gs_grill_mat,
+					gs_grill_mat2			= gs_grill_mat2,
+					gs_glass_mat			= gs_glass_mat,
+					gs_fillSash				= sh_sect_fill_type,
+					gs_penSash_bg			= sh_sect_fill_bg,
+					gs_penSash_fg			= sh_sect_fill_fg,
+					gs_frame_pen_cont		= gs_frame_pen_cont,
+					gs_SashText_typ_num		= gs_SashText_typ_num,
+					gs_shadow				= gs_shadow,
+					gs_cust_panel			= gs_cust_panel4,
+					sh_unID					= sh_unID,
+					lod3D					= lod3D,
+					bOplines3d				= bOplines3d,
+					opLineType3dIn			= opLineType3dIn,
+					opLineType3dOut			= opLineType3dOut,
+					gs_opline_style_m		= gs_opline_style_m,
+					gs_opLinePen			= gs_opLinePen,
+					gs_panel_mat			= gs_panel_mat,
+					gs_panel_mat2			= gs_panel_mat2
+			del 1
+		endif
+		del 3
+		mulx -1
+	next H
+	del 2
+
+	for i = 1 to nsa
+		if gs_UTrans then
+			sh_unID = 1020 + (i - 1) * 20
+
+! --- Front Upper Panel ---
+
+			SolXmod = 0
+			SolYmod = 0
+			if iMullionStyle <> MULLION_SOLID_PANEL then
+				SolXmod = gs_sash_width
+			else
+				SolXmod = gs_rebate_width * (rots_d = 100)
+				SolYmod = gs_frame_thk/2 * (rots_d = 100)
+			endif
+
+			add -ami/2 - bafd + gs_frame_width + hsa/2, gs_UTrans_h - SolXmod, -byd + SolYmod
+
+			call "Casement_a" parameters a	= hsa + 2 * SolXmod,
+					b						= b - gs_UTrans_h - gs_frame_width + 2 * SolXmod,
+					ctreed					= 1,
+					gs_frame_width			= gs_frame_width,
+					gs_frame_thk			= gs_frame_thk,
+					iMullionStyle			= iMullionStyle,
+					iMullionPosition		= iMullionPosition,
+					gw						= gw,
+					gth						= gth,
+					gs_glass_thk			= gs_glass_thk,
+					gs_rebate_width			= gs_rebate_width,
+					gs_rebate_depth			= gs_rebate_depth,
+					gs_sash_width			= gs_sash_width,
+					gs_sash_thk				= gs_sash_thk,
+					vgn						= vgn,
+					hgn						= hgn,
+					vergrid					= vergrid,
+					horgrid					= horgrid,
+					gs_glass_pen			= gs_glass_pen,
+					gs_full_edit			= 0,
+					rots_a					= rots_d,
+					gs_shadow				= gs_shadow,
+					gs_frame_pen			= gs_sash_pen,
+					gs_frame_mat			= gs_sash_mat,
+					gs_frame_mat2			= gs_sash_mat2,
+					gs_grill_mat			= gs_grill_mat,
+					gs_grill_mat2			= gs_grill_mat2,
+					gs_glass_mat			= gs_glass_mat,
+					gs_fillSash				= sh_sect_fill_type,
+					gs_penSash_bg			= sh_sect_fill_bg,
+					gs_penSash_fg			= sh_sect_fill_fg,
+					gs_frame_pen_cont		= gs_frame_pen_cont,
+					gs_SashText_typ_num		= gs_SashText_typ_num,
+					opa_a2					= opa_d2,
+					gs_cust_panel			= gs_cust_panel,
+					sh_unID					= sh_unID,
+					lod3D					= lod3D,
+					bOplines3d				= bOplines3d,
+					opLineType3dIn			= opLineType3dIn,
+					opLineType3dOut			= opLineType3dOut,
+					gs_opline_style_m		= gs_opline_style_m,
+					gs_opLinePen			= gs_opLinePen,
+					gs_panel_mat			= gs_panel_mat,
+					gs_panel_mat2			= gs_panel_mat2
+
+			del 1
+		endif
+
+! --- Front Lower Panel ---
+
+
+		if gs_optype_m_01 = SASH_SIDE_HUNG then
+			if fra(i/2)=0 then rots_a=3		!! Even Number of No. of Sashes Front
+			if fra(i/2)<>0 then rots_a=1		!! Add Number of No. of Sashes Front
+		endif
+		if gs_optype_m_01 = SASH_SIDE_HUNG_M then
+			if fra(i/2)=0 then rots_a=1		!! Even Number of No. of Sashes Front
+			if fra(i/2)<>0 then rots_a=3		!! Add Number of No. of Sashes Front
+		endif
+		if gs_optype_m_01 = SASH_TILT_TURN then
+			if fra(i/2)=0 then rots_a=31		!! Even Number of No. of Sashes Front
+			if fra(i/2)<>0 then rots_a=30		!! Add Number of No. of Sashes Front
+		endif
+		if gs_optype_m_01 = SASH_TILT_TURN_M then
+			if fra(i/2)=0 then rots_a=30		!! Even Number of No. of Sashes Front
+			if fra(i/2)<>0 then rots_a=31		!! Add Number of No. of Sashes Front
+		endif
+
+		SolXmod = 0
+		SolYmod = 0
+		if iMullionStyle <> MULLION_SOLID_PANEL then
+			SolXmod = gs_sash_width
+		else
+			SolXmod = gs_rebate_width * (rots_a = 100)
+			SolYmod = gs_frame_thk/2 * (rots_a = 100)
+		endif
+
+		sh_unID = 1030 + (i - 1) * 20
+		add -ami/2-bafd+gs_frame_width+hsa/2, gs_frame_width-SolXmod, -byd + SolYmod
+
+		call "Casement_c" parameters a	= hsa+2*SolXmod,
+				b						= gs_UTrans_h + bwtr - widthMod - gs_frame_width + 2 * SolXmod,
+				ctreed					= 1,
+				gs_frame_width			= gs_frame_width,
+				gs_frame_thk			= gs_frame_thk,
+				iMullionStyle			= iMullionStyle,
+				iMullionPosition		= iMullionPosition,
+				gw						= gw,
+				gth						= gth,
+				gs_glass_thk			= gs_glass_thk,
+				gs_rebate_width			= gs_rebate_width,
+				gs_rebate_depth			= gs_rebate_depth,
+				gs_sash_width			= gs_sash_width,
+				gs_sash_thk				= gs_sash_thk,
+				vgn						= vgn3,
+				hgn						= hgn3,
+				horgridr				= horgridr,
+				vergridr				= vergridr,
+				gs_glass_pen			= gs_glass_pen,
+				gs_full_edit			= 0,
+				rots_c					= rots_a,
+				gs_shadow				= gs_shadow,
+				gs_frame_pen			= gs_sash_pen,
+				gs_frame_mat			= gs_sash_mat,
+				gs_frame_mat2			= gs_sash_mat2,
+				gs_grill_mat			= gs_grill_mat,
+				gs_grill_mat2			= gs_grill_mat2,
+				gs_glass_mat			= gs_glass_mat,
+				gs_fillSash				= sh_sect_fill_type,
+				gs_penSash_bg			= sh_sect_fill_bg,
+				gs_penSash_fg			= sh_sect_fill_fg,
+				gs_frame_pen_cont		= gs_frame_pen_cont,
+				gs_SashText_typ_num		= gs_SashText_typ_num,
+				gs_cust_panel			= gs_cust_panel3,
+				sh_unID					= sh_unID,
+				lod3D					= lod3D,
+				bOplines3d				= bOplines3d,
+				opLineType3dIn			= opLineType3dIn,
+				opLineType3dOut			= opLineType3dOut,
+				gs_opline_style_m		= gs_opline_style_m,
+				gs_opLinePen			= gs_opLinePen,
+				gs_panel_mat			= gs_panel_mat,
+				gs_panel_mat2			= gs_panel_mat2
+		del 1
+		addx hsa + gs_frame_width
+	next I
+	del nsa
+endif
+
+
+if WIDO_REVEAL_SIDE then del 2
+
+del 1
+
+
+! ------------------------------------------------------------------------------
+! --- Undercloak ---
+! ------------------------------------------------------------------------------
+
+material ucmat
+
+if not (WIDO_REVEAL_SIDE) then	! Flip
+	addz -WIDO_SILL
+else
+	addz WIDO_SILL - WALL_THICKNESS + WIDO_FRAME_THICKNESS
+endif
+
+if WIDO_REVEAL_SIDE then
+	mulz -1
+	addz -WALL_THICKNESS
+endif
+
+if bUndercloak then
+	rotx -90
+	addz -uclh
+	prism_ 5, uclh,
+		-a/2-(uclsill+gs_frame_thk/2)/SIN(bang)-bafd, 0, 15,
+		 a/2+(uclsill+gs_frame_thk/2)/SIN(bang)+bafd, 0, 15,
+		 ami/2+(gs_frame_thk+uclsill)*TAN(bang/2)+bafd, byd+uclsill, 15,
+		-ami/2-(gs_frame_thk+uclsill)*TAN(bang/2)-bafd, byd+uclsill, 15,
+		-a/2-(uclsill+gs_frame_thk/2)/SIN(bang)-bafd, 0, -1
+	del 2
+endif
+
+if iUndercloakType = 2 then			! Pitched
+	rotx -90
+	addz -uclh
+	ruled 4, 2+4+16+32+64,
+		-a/2-(ucsill+gs_frame_thk/2)/SIN(bang)-bafd, 0, 0,
+		 a/2+(ucsill+gs_frame_thk/2)/SIN(bang)+bafd, 0, 0,
+		 ami/2+(gs_frame_thk+ucsill)*TAN(bang/2)+bafd, byd+ucsill, 0,
+		-ami/2-(gs_frame_thk+ucsill)*TAN(bang/2)-bafd, byd+ucsill, 0,
+
+		min(0, -ami/2-(gs_frame_thk+ucsill)*TAN(bang/2)+(byd+ucsill)/TAN(90-bang/2))-bafd, 0, -uch,
+		max(0, ami/2+(gs_frame_thk+ucsill)*TAN(bang/2)-(byd+ucsill)/TAN(90-bang/2))+bafd, 0, -uch,
+		max(0, ami/2+(gs_frame_thk+ucsill)*TAN(bang/2)-(byd+ucsill)/TAN(90-bang/2))+bafd, 0, -uch,
+		min(0, -ami/2-(gs_frame_thk+ucsill)*TAN(bang/2)+(byd+ucsill)/TAN(90-bang/2))-bafd, 0, -uch
+	del 2
+endif
+
+if WIDO_REVEAL_SIDE then del 2
+
+del 1
+
+
+! ------------------------------------------------------------------------------
+! --- Roof ---
+! ------------------------------------------------------------------------------
+material rfmat
+
+if not (WIDO_REVEAL_SIDE) then   ! Flip
+	addz -WIDO_SILL
+else
+	addz WIDO_SILL - WALL_THICKNESS + WIDO_FRAME_THICKNESS
+endif
+
+if WIDO_REVEAL_SIDE then
+	mulz -1
+	addz -WALL_THICKNESS
+endif
+
+if bRoof then
+	rotx -90
+	addz b
+	prism_ 5, rolh,
+		-a/2-(rlsill+gs_frame_thk/2)/SIN(bang)-bafd, 0, 15,
+		 a/2+(rlsill+gs_frame_thk/2)/SIN(bang)+bafd, 0, 15,
+		 ami/2+(gs_frame_thk+rlsill)*TAN(bang/2)+bafd, byd+rlsill, 15,
+		-ami/2-(gs_frame_thk+rlsill)*TAN(bang/2)-bafd, byd+rlsill, 15,
+		-a/2-(rlsill+gs_frame_thk/2)/SIN(bang)-bafd, 0, -1
+	del 2
+endif
+
+if iRoofType = 2 then	! Pitched
+	rotx -90
+	addz b+rolh
+	ruled 4, 2+4+16+32+64,
+		-a/2-(rsill+gs_frame_thk/2)/SIN(bang)-bafd, 0, 0,
+		 a/2+(rsill+gs_frame_thk/2)/SIN(bang)+bafd, 0, 0,
+		 ami/2+(gs_frame_thk+rsill)*TAN(bang/2)+bafd, byd+rsill, 0,
+		-ami/2-(gs_frame_thk+rsill)*TAN(bang/2)-bafd, byd+rsill, 0,
+
+		min(0, -ami/2-(gs_frame_thk+rsill)*TAN(bang/2)+(byd+rsill)/TAN(90-bang/2))-bafd, 0, roh,
+		max(0, ami/2+(gs_frame_thk+rsill)*TAN(bang/2)-(byd+rsill)/TAN(90-bang/2))+bafd, 0, roh,
+		max(0, ami/2+(gs_frame_thk+rsill)*tan(bang/2)-(byd+rsill)/tan(90-bang/2))+bafd, 0, roh,
+		min(0, -ami/2-(gs_frame_thk+rsill)*TAN(bang/2)+(byd+rsill)/TAN(90-bang/2))-bafd, 0, roh
+	del 2
+endif
+
+if WIDO_REVEAL_SIDE then del 2
+
+del 1
+
+end

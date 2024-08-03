@@ -1,0 +1,317 @@
+
+
+! =============================================================================
+! GS Skylight Functions
+! =============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= 0,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+	returned_parameters	iLoD3D,
+						lod3D_Casing,
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen
+
+
+if ac_edge_lower_type = 0 then alphaL = ac_roofang
+if ac_edge_lower_type = 1 then alphaL = 0
+if ac_edge_lower_type = 2 then alphaL = -90 + ac_roofang
+if ac_edge_lower_type = 3 then alphaL = 90 - ac_edge_lower_angle
+
+if ac_edge_upper_type = 0 then alphaU = ac_roofang
+if ac_edge_upper_type = 1 then alphaU = 0
+if ac_edge_upper_type = 2 then alphaU = 90 - ac_roofang
+if ac_edge_upper_type = 3 then alphaU = -90 + ac_edge_upper_angle
+
+if abs(ac_roofang) > EPS then
+	top_oversize = ac_roofthk * tan(alphaU)
+	bottom_oversize = ac_roofthk * tan(alphaL)
+else
+	top_oversize = 0
+	bottom_oversize = 0
+endif
+
+! ==============================================================================
+
+rotx ac_roofang
+
+! ==============================================================================
+! Wallhole
+! ==============================================================================
+
+bSectionElevationContext = ((GLOB_VIEW_TYPE = 4) | (GLOB_VIEW_TYPE = 5) | (GLOB_PREVIEW_MODE = 2))
+ShowUpContLines = 1	! not(bSectionElevationContext)
+
+resWeight = (2*atn(min(1,(iLoD3D/4)))) / 90
+gs_resol = max(12,4*int(resWeight * gs_resol/4))
+resol gs_resol
+
+if SHELLBASE_VIEW_PEN > 0 then
+	pen SHELLBASE_VIEW_PEN
+else
+	pen 1
+endif
+
+if SHELLBASE_MAT_OPPOSITE > 0 then
+	material SHELLBASE_MAT_OPPOSITE
+else
+	material 1
+endif
+
+unID = 200
+if AC_Custom_3D_Hole then
+	addy B/2
+	hotspot	0, 0,  0,						unID, gs_hole_outside_depth, 1+128 : unID=unID+1
+	hotspot	0, 0, -1,						unID, gs_hole_outside_depth, 3     : unID=unID+1
+	hotspot	0, 0,  gs_hole_outside_depth,	unID, gs_hole_outside_depth, 2     : unID=unID+1
+	del 1
+
+	if (GLOB_VIEW_TYPE = 3 & GLOB_FEEDBACK_MODE = 1) then
+		model wire
+		prism_ 2, gs_hole_outside_depth,
+			0,	B/2, 995,
+			A/2,360,4095
+		model solid
+	endif
+	wallniche 2, 1, 2,
+		0,0,1,	gs_hole_outside_depth,
+		0,	B/2, 995,
+		A/2,360,4095
+else
+	wallniche 2, 1, 2+16,
+		0,0,-1,	0,
+		0,	B/2, 995,
+		A/2,360,4095
+endif
+
+if SHELLBASE_MAT_REFERENCE > 0 then
+	material SHELLBASE_MAT_REFERENCE
+else
+	material 1
+endif
+
+if AC_Custom_3D_Hole then
+	addy B/2
+	hotspot	0, 0,  0,						unID, gs_hole_inside_depth, 1+128 : unID=unID+1
+	hotspot	0, 0, 1,						unID, gs_hole_inside_depth, 3     : unID=unID+1
+	hotspot	0, 0,  -gs_hole_inside_depth,	unID, gs_hole_inside_depth, 2     : unID=unID+1
+	del 1
+
+	mulz -1
+	if (GLOB_VIEW_TYPE = 3 & GLOB_FEEDBACK_MODE = 1) then
+		model wire
+		prism_ 2, gs_hole_inside_depth,
+			0,	B/2, 979 + 16 * ShowUpContLines,
+			A/2,360,4079 + 16 * ShowUpContLines
+		model solid
+	endif
+	wallniche 2, 1, 2,
+		0,0,1,	gs_hole_inside_depth,
+		0,	B/2, 979 + 16 * ShowUpContLines,
+		A/2,360,4079 + 16 * ShowUpContLines
+	del 1
+else
+	wallniche 2, 1, 2+16,
+		0,0,1,	0,
+		0,	B/2, 979 + 16 * ShowUpContLines,
+		A/2,360,4079 + 16 * ShowUpContLines
+endif
+
+pen gs_cont_pen
+
+! ==============================================================================
+! Frame and Glass
+! ==============================================================================
+
+addy a/2
+
+unID=1
+if iLoD3D > SYMBS_3D_OFF then
+	angle=0
+	for i=1 to 4
+		hotspot r*cos(angle),r*sin(angle),0,unID,ac_curb_height,1+128 : unID=unID+1
+		hotspot r*cos(angle),r*sin(angle),-1,unID,ac_curb_height,3 : unID=unID+1
+		hotspot r*cos(angle),r*sin(angle),ac_curb_height,unID,ac_curb_height,2 : unID=unID+1
+		angle=i*360/4
+	next i
+
+	hotspot 0,0,ac_curb_height+gs_frame_thk,unID,gs_dome_height,1+128 : unID=unID+1
+	hotspot 0,0,ac_curb_height+gs_frame_thk-1,unID,gs_dome_height,3 : unID=unID+1
+	hotspot 0,0,ac_curb_height+gs_frame_thk+gs_dome_height,unID,gs_dome_height,2 : unID=unID+1
+else
+	hotspot r,0,0,unID: unID=unID+1
+	hotspot -r,0,0,unID: unID=unID+1
+	hotspot 0,-r,0,unID: unID=unID+1
+	hotspot 0,r,0,unID: unID=unID+1
+endif
+
+if iLoD3D = SYMBS_3D_OFF then							end
+if iLoD3D = SYMBS_3D_S_1 then							gosub "singlePlane"
+if iLoD3D = SYMBS_3D_S_2 then							gosub "windowPoligons"
+if iLoD3D = SYMBS_3D_M_1 then							gosub "midDetail"
+if iLoD3D = SYMBS_3D_D_1 | iLoD3D = SYMBS_3D_D_2 then	gosub "fullDetail"
+
+del 1
+
+
+! ==============================================================================
+! Lining
+! ==============================================================================
+
+if lod3D_Casing = 1 & gs_egde_cover then
+
+	material gs_edge_mat
+	sect_fill gs_edge_cover_fill_type, gs_edge_cover_fill_pen_bg, gs_edge_cover_fill_pen_fg, SYMB_SECT_PEN
+
+	addz -ac_roofthk
+
+	prism_ 3, ac_roofthk,
+		0,b/2,979,
+		a/2,360,4079,
+		(a/2-gs_edge_cover_thk),360,4079
+
+	del 1
+endif
+
+
+del 1
+
+
+end
+
+
+! ==============================================================================
+! Subroutine
+! ==============================================================================
+
+"fullDetail":
+
+	! --- Curb
+
+	material gs_curb_mat
+	prism_  8, ac_curb_height,
+			0, -r, 15+64,
+			0, 0, 915+64,
+			r, 360-0.001, 4015+64,
+			0, -r, -1,
+			0, -r+gs_curb_thk, 15+64,
+			0, 0, 915+64,
+			r-gs_curb_thk, 360-0.001, 4015+64,
+			0, -r+gs_curb_thk, -1
+
+	addz ac_curb_height
+
+	! --- Frame
+
+	material gs_frame_mat
+	prism_  8, gs_frame_thk,
+			0, -r-gs_frame_thk, 11+64,
+			0, 0, 911+64,
+			r+gs_frame_thk, 360-0.001, 4015+64,
+				0, -r-gs_frame_thk, -1,
+			0, -r+gs_frame_thk*2, 15+64,
+			0, 0, 915+64,
+			r-gs_frame_thk*2, 360-0.001, 4015+64,
+			0, -r+gs_frame_thk*2, -1
+
+	addz gs_frame_thk
+	prism_  8, gs_frame_thk,
+			0, -r-gs_frame_thk, 14+64,
+			0, 0, 914+64,
+			r+gs_frame_thk, 360-0.001, 4015+64,
+			0, -r-gs_frame_thk, -1,
+			0, -r, 15+64,
+			0, 0, 915+64,
+			r, 360-0.001, 4015+64,
+			0, -r, -1
+
+	! --- Glass
+
+	body -1
+	material gs_glass_mat
+
+	roty -90
+	revolve 3, 360, 0,
+			gs_dome_height, 0, 1,
+			0, 1, 801,
+			0, a/2, 1001
+	del 3
+
+	body -1
+return
+
+"midDetail":
+
+	! --- Curb
+
+	material gs_curb_mat
+	prism_  8, ac_curb_height+gs_frame_thk,
+			0, -r, 15+64,
+			0, 0, 915+64,
+			r, 360-0.001, 4015+64,
+			0, -r, -1,
+			0, -r+gs_curb_thk, 15+64,
+			0, 0, 915+64,
+			r-gs_curb_thk, 360-0.001, 4015+64,
+			0, -r+gs_curb_thk, -1
+
+	! --- Glass
+
+	body -1
+	material gs_glass_mat
+
+	addz ac_curb_height+gs_frame_thk
+	roty -90
+	revolve 3, 360, 0,
+			gs_dome_height, 0, 1,
+			0, 1, 801,
+			0, a/2, 1001
+	del 2
+
+	body -1
+return
+
+"windowPoligons":
+
+	! --- Curb
+
+	material gs_curb_mat
+	extrude 4, 0, 0, ac_curb_height+gs_frame_thk, 16+32,
+			0, -r, 1,
+			0, 0, 901,
+			r, 360-0.001, 4001,
+			0, -r, -1
+
+	! --- Glass
+
+	body -1
+	material gs_glass_mat
+
+	addz ac_curb_height+gs_frame_thk
+	roty -90
+	revolve 3, 360, 0,
+			gs_dome_height, 0, 1,
+			0, 1, 801,
+			0, a/2, 1001
+	del 2
+
+	body -1
+return
+
+"singlePlane":
+
+	! --- Glass
+
+	body -1
+	material gs_glass_mat
+
+	mulz (gs_dome_height+ac_curb_height+gs_frame_thk)/gs_dome_height
+	roty -90
+	revolve 3, 360, 0,
+			gs_dome_height, 0, 1,
+			0, 1, 801,
+			0, a/2, 1001
+	del 2
+
+	body -1
+return

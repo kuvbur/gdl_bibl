@@ -1,0 +1,571 @@
+
+call "FM_types" parameters all
+
+dim st_detail3D[3]
+	st_detail3D[1] = `Детальный`
+	st_detail3D[2] = `Простой`
+	st_detail3D[3] = `Откл.`
+
+values "gs_detlevel_3D" st_detail3D		!`Detailed`,`Simple`,`Off`
+values "gs_detlevel_3D_m" 2, 1, 0
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" OR gs_detlevel_3D_m = -1 then
+	gs_detlevel_3D_m = 2	! Detailed
+	if gs_detlevel_3D = st_detail3D[3] then gs_detlevel_3D_m = 0
+	if gs_detlevel_3D = st_detail3D[2] then gs_detlevel_3D_m = 1
+	parameters gs_detlevel_3D_m = gs_detlevel_3D_m
+else
+	gs_detlevel_3D = st_detail3D[1]
+	if gs_detlevel_3D_m = 0 then gs_detlevel_3D = st_detail3D[3]
+	if gs_detlevel_3D_m = 1 then gs_detlevel_3D = st_detail3D[2]
+	parameters gs_detlevel_3D = gs_detlevel_3D
+endif
+
+values "gs_sink_type" stSinkType
+values "gs_sink_type_m" 1, 2, 3, 4, 5, 6, 7
+if GLOB_MODPAR_NAME = "gs_sink_type" then
+	for iSink = 1 to vardim1(stSinkType)
+		if gs_sink_type = stSinkType[iSink] then
+			gs_sink_type_m = iSink
+		endif
+	next iSink
+	parameters gs_sink_type_m = gs_sink_type_m
+else
+	gs_sink_type = stSinkType[gs_sink_type_m]
+	parameters gs_sink_type = gs_sink_type
+endif
+
+dim stSinkSymbol[2]
+	stSinkSymbol[1] = `Простой`
+	stSinkSymbol[2] = `Детальный`
+
+values "SinkSymbol" stSinkSymbol[2], stSinkSymbol[1]
+values "SinkSymbol_m" 1, 2
+if GLOB_MODPAR_NAME = "SinkSymbol" then
+	SinkSymbol_m = 2
+	if SinkSymbol = stSinkSymbol[1]	then SinkSymbol_m = 1
+	parameters SinkSymbol_m = SinkSymbol_m
+else
+	SinkSymbol = stSinkSymbol[2]
+	if SinkSymbol_m = 1 then SinkSymbol = stSinkSymbol[1]
+	parameters SinkSymbol = SinkSymbol
+endif
+
+VALUES "gs_resol" RANGE [4,)
+
+if gs_sink_type_m = 3 or gs_sink_type_m = 5 or gs_sink_type_m = 6 then
+	lock "count_th"
+endif
+
+! --- Parameters Values for Macro ---
+VALUES "gs_detlevel_3D_m" 	0,1,2
+
+! --- Limitation ---
+
+IF gs_cont_pen<=0 THEN PARAMETERS gs_cont_pen=8
+IF gs_fill_pen<=0 THEN PARAMETERS gs_fill_pen=91
+
+IF gs_detlevel_3D_m = 1 THEN HIDEPARAMETER "gs_resol"
+IF gs_detlevel_3D_m = 0 THEN HIDEPARAMETER "gs_resol", "gs_shadow"
+
+if SinkSymbol_m < 2 then
+	hideparameter "TapSymbol"
+	lock "TapSymbol"
+endif
+
+if GLOB_MODPAR_NAME = "gs_sink_type" then
+	if gs_sink_type_m = 1 then
+		a = sinkStyle1DefaultA			! 0.6
+		b = sinkStyle1DefaultB			! 0.5
+	endif
+	if gs_sink_type_m = 2 then
+		a = sinkStyle2DefaultA			! 0.6
+		b = sinkStyle2DefaultB			! 0.52
+	endif
+	if gs_sink_type_m = 3 then
+		a = sinkStyle3DefaultA			! 0.42
+		b = sinkStyle3DefaultB			! 0.63
+	endif
+	if gs_sink_type_m = 4 then
+		a = sinkStyle4DefaultA			! 0.85
+		b = sinkStyle4DefaultB			! 0.5
+	endif
+	if gs_sink_type_m = 5 then
+		a = sinkStyle5DefaultA			! 0.89
+		b = sinkStyle5DefaultB			! 0.63
+	endif
+	if gs_sink_type_m = 6 then
+		a = sinkStyle6DefaultA			! 0.85
+		b = sinkStyle6DefaultB			! 0.63
+	endif
+	if gs_sink_type_m = 7 then
+		a = sinkStyle7DefaultA			! 0.8
+		b = sinkStyle7DefaultB			! 0.55
+	endif
+
+	parameters a = a
+	parameters b = b
+endif
+
+! --- start of modify to Shaft
+
+bowlNumber = 1
+if gs_sink_type_m = 4 or gs_sink_type_m = 6 then bowlNumber = 2
+if gs_sink_type_m = 5 then bowlNumber = 3
+
+call "fa_belfast_sink" parameters all bowlNumber = bowlNumber,
+	returned_parameters	minWidth, minDepth, minHeight,
+						ConPosX_3, ConPosY_3,
+						ConPosX_4, ConPosY_4,
+						ConPosX_5, ConPosY_5
+
+values "a" range(minWidth, )
+values "b" range(minDepth, )
+values "zzyzx" range(minHeight, ]
+
+put 1, 2
+if isMEPEnabled then
+
+	parameters ConPosX_3 = ConPosX_3
+	parameters ConPosY_3 = ConPosY_3
+	parameters ConPosX_4 = ConPosX_4
+	parameters ConPosY_4 = ConPosY_4
+	parameters ConPosX_5 = ConPosX_5
+	parameters ConPosY_5 = ConPosY_5
+
+	nTabs = 3
+
+	IF NOT(ConStatus_1) AND NOT(ConStatus_2) AND NOT(ConStatus_3) THEN
+		LOCK "gs_con_mat"
+		HIDEPARAMETER "gs_con_mat"
+	ENDIF
+
+
+	DIM shape_typ_to_validation[3]
+		shape_typ_to_validation[1] = 0		! Rectangle
+		shape_typ_to_validation[2] = 1		! Circle
+		shape_typ_to_validation[3] = 0		! Oval
+
+					! --- CONNECTIONS --- !
+
+	PARAMETERS MEP_NumberConnections = bowlNumber + 2
+	if bowlNumber < 2 then
+		parameters ConStatus_4 = 0
+		hideparameter "ConStatus_4"
+	endif
+	if bowlNumber < 3 then
+		parameters ConStatus_5 = 0
+		hideparameter "ConStatus_5"
+	endif
+	if GLOB_MODPAR_NAME = "gs_sink_type" then
+		if bowlNumber > 1 then
+			parameters ConStatus_4 = 1
+		endif
+		if bowlNumber > 2 then
+			parameters ConStatus_5 = 1
+		endif
+	endif
+
+					! --- 1st CONNECTION --- !
+
+	ConID = 1
+	ConName = `Подключение Горячей Воды`
+
+	ConDVecX = 0
+	ConDVecY = 1
+	ConDVecZ = 0
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_1 < 0.001 THEN
+		ConWidth_1 = 0.001
+		PARAMETERS ConWidth_1 = ConWidth_1
+	ENDIF
+	IF ConWidth_1 > A/2 THEN
+		ConWidth_1 = A/2
+		PARAMETERS ConWidth_1 = ConWidth_1
+	ENDIF
+	VALUES "ConWidth_1" RANGE (0, A/2]
+	PARAMETERS ConDepth_1 = ConWidth_1
+	VALUES "ConLength_1" RANGE [0, ]
+
+	! Position in y direction
+	if GLOB_MODPAR_NAME = "B" then
+		_ConPosY_1 = B
+		parameters	ConPosY_1 = _ConPosY_1
+	endif
+
+	if GLOB_MODPAR_NAME = "gs_sink_type" then PARAMETERS ConPosX_1 = a / 2 - 0.05
+	VALUES "ConPosX_1" RANGE [ConWidth_1/2, A-ConWidth_1/2]
+	if GLOB_MODPAR_NAME = "gs_sink_type" then PARAMETERS ConPosY_1 = B
+	VALUES "ConPosY_1" RANGE [B, ]
+	if GLOB_MODPAR_NAME = "topHeight" then PARAMETERS ConPosZ_1 = topHeight - 0.033
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_1,
+		ConPosY = ConPosY_1,
+		ConPosZ = ConPosZ_1,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_1,
+		ConNominalDepth = ConNominalDepth_1,
+		ConWidth = ConWidth_1,
+		ConDepth = ConDepth_1,
+		ConLength = ConLength_1,
+		ConWallThickness = ConWallThickness_1,
+		ConConnectorWidth = ConConnectorWidth_1,
+		ConConnectorDepth = ConConnectorDepth_1,
+		ConConnectorWidth2 = ConConnectorWidth2_1,
+		ConToolType = ConToolType_1,
+		ConStatus = ConStatus_1,
+		ConType_1 = ConType_1,
+		ConConnectorType_1 = ConConnectorType_1,
+		ConSystem_1 = ConSystem_1,
+		ui_current_con = ui_current_con,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_1, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+					! --- 2nd CONNECTION --- !
+
+	ConID = 2
+	ConName = `Подключение Холодной Воды`
+
+	ConDVecX = 0
+	ConDVecY = 1
+	ConDVecZ = 0
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_2 < 0.001 THEN
+		ConWidth_2 = 0.001
+		PARAMETERS ConWidth_2 = ConWidth_2
+	ENDIF
+	IF ConWidth_2 > A/2 THEN
+		ConWidth_2 = A/2
+		PARAMETERS ConWidth_2 = ConWidth_2
+	ENDIF
+	VALUES "ConWidth_2" RANGE (0, A/2]
+	PARAMETERS ConDepth_2 = ConWidth_2
+	VALUES "ConLength_2" RANGE [0, ]
+
+	! Position in y direction
+	if GLOB_MODPAR_NAME = "B" then
+		_ConPosY_2 = B
+		parameters	ConPosY_2 = _ConPosY_2
+	endif
+
+	if GLOB_MODPAR_NAME = "gs_sink_type" then PARAMETERS ConPosX_2 = a / 2 + 0.05
+	VALUES "ConPosX_2" RANGE [ConWidth_2/2, A-ConWidth_2/2]
+	if GLOB_MODPAR_NAME = "gs_sink_type" then PARAMETERS ConPosY_2 = B
+	VALUES "ConPosY_2" RANGE [B, ]
+	if GLOB_MODPAR_NAME = "topHeight" then PARAMETERS ConPosZ_2 = topHeight - 0.033
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_2,
+		ConPosY = ConPosY_2,
+		ConPosZ = ConPosZ_2,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_2,
+		ConNominalDepth = ConNominalDepth_2,
+		ConWidth = ConWidth_2,
+		ConDepth = ConDepth_2,
+		ConLength = ConLength_2,
+		ConWallThickness = ConWallThickness_2,
+		ConConnectorWidth = ConConnectorWidth_2,
+		ConConnectorDepth = ConConnectorDepth_2,
+		ConConnectorWidth2 = ConConnectorWidth2_2,
+		ConToolType = ConToolType_2,
+		ConStatus = ConStatus_2,
+		ConType_2 = ConType_2,
+		ConConnectorType_2 = ConConnectorType_2,
+		ConSystem_2 = ConSystem_2,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_2, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+					! --- 3rd CONNECTION --- !
+
+	ConID = 3
+	ConName = `Подключение Канализации`
+
+	ConDVecX = 0
+	ConDVecY = 0
+	ConDVecZ = -1
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_3 < 0.001 THEN
+		ConWidth_3 = 0.001
+		PARAMETERS ConWidth_3 = ConWidth_3
+	ENDIF
+	IF ConWidth_3 > A*0.2 THEN
+		ConWidth_3 = A*0.2
+		PARAMETERS ConWidth_3 = ConWidth_3
+	ENDIF
+	VALUES "ConWidth_3" RANGE (0, A*0.2]
+	PARAMETERS ConDepth_3 = ConWidth_3
+	VALUES "ConLength_3" RANGE [0, ]
+
+!	VALUES "ConPosX_3" RANGE [ConWidth_3/2, A-ConWidth_3/2]
+!	VALUES "ConPosY_3" RANGE [ConWidth_3/2, B-ConWidth_3/2]
+	PARAMETERS ConPosZ_3 = topHeight - zzyzx
+
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_3,
+		ConPosY = ConPosY_3,
+		ConPosZ = ConPosZ_3,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_3,
+		ConNominalDepth = ConNominalDepth_3,
+		ConWidth = ConWidth_3,
+		ConDepth = ConDepth_3,
+		ConLength = ConLength_3,
+		ConWallThickness = ConWallThickness_3,
+		ConConnectorWidth = ConConnectorWidth_3,
+		ConConnectorDepth = ConConnectorDepth_3,
+		ConConnectorWidth2 = ConConnectorWidth2_3,
+		ConToolType = ConToolType_3,
+		ConStatus = ConStatus_3,
+		ConType_3 = ConType_3,
+		ConConnectorType_3 = ConConnectorType_3,
+		ConSystem_3 = ConSystem_3,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_3, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+					! --- 4th CONNECTION --- !
+
+	ConID = 4
+	ConName = `Подключение Канализации 2`
+
+	ConDVecX = 0
+	ConDVecY = 0
+	ConDVecZ = -1
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_4 < 0.001 THEN
+		ConWidth_4 = 0.001
+		PARAMETERS ConWidth_4 = ConWidth_4
+	ENDIF
+	IF ConWidth_4 > A*0.2 THEN
+		ConWidth_4 = A*0.2
+		PARAMETERS ConWidth_4 = ConWidth_4
+	ENDIF
+	VALUES "ConWidth_4" RANGE (0, A*0.2]
+	PARAMETERS ConDepth_4 = ConWidth_4
+	VALUES "ConLength_4" RANGE [0, ]
+
+!	VALUES "ConPosX_4" RANGE [ConWidth_4/2, A-ConWidth_4/2]
+!	VALUES "ConPosY_4" RANGE [ConWidth_4/2, B-ConWidth_4/2]
+	PARAMETERS ConPosZ_4 = topHeight - zzyzx
+
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_4,
+		ConPosY = ConPosY_4,
+		ConPosZ = ConPosZ_4,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_4,
+		ConNominalDepth = ConNominalDepth_4,
+		ConWidth = ConWidth_4,
+		ConDepth = ConDepth_4,
+		ConLength = ConLength_4,
+		ConWallThickness = ConWallThickness_4,
+		ConConnectorWidth = ConConnectorWidth_4,
+		ConConnectorDepth = ConConnectorDepth_4,
+		ConConnectorWidth2 = ConConnectorWidth2_4,
+		ConToolType = ConToolType_4,
+		ConStatus = ConStatus_4,
+		ConType_4 = ConType_4,
+		ConConnectorType_4 = ConConnectorType_4,
+		ConSystem_4 = ConSystem_4,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_4, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+					! --- 5th CONNECTION --- !
+
+	ConID = 5
+	ConName = `Подключение Канализации 3`
+
+	ConDVecX = 0
+	ConDVecY = 0
+	ConDVecZ = -1
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_5 < 0.001 THEN
+		ConWidth_5 = 0.001
+		PARAMETERS ConWidth_5 = ConWidth_5
+	ENDIF
+	IF ConWidth_5 > A*0.2 THEN
+		ConWidth_5 = A*0.2
+		PARAMETERS ConWidth_5 = ConWidth_5
+	ENDIF
+	VALUES "ConWidth_5" RANGE (0, A*0.2]
+	PARAMETERS ConDepth_5 = ConWidth_5
+	VALUES "ConLength_5" RANGE [0, ]
+
+!	VALUES "ConPosX_5" RANGE [ConWidth_5/2, A-ConWidth_5/2]
+!	VALUES "ConPosY_5" RANGE [ConWidth_5/2, B-ConWidth_5/2]
+	PARAMETERS ConPosZ_5 = topHeight - zzyzx
+
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_5,
+		ConPosY = ConPosY_5,
+		ConPosZ = ConPosZ_5,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_5,
+		ConNominalDepth = ConNominalDepth_5,
+		ConWidth = ConWidth_5,
+		ConDepth = ConDepth_5,
+		ConLength = ConLength_5,
+		ConWallThickness = ConWallThickness_5,
+		ConConnectorWidth = ConConnectorWidth_5,
+		ConConnectorDepth = ConConnectorDepth_5,
+		ConConnectorWidth2 = ConConnectorWidth2_5,
+		ConToolType = ConToolType_5,
+		ConStatus = ConStatus_5,
+		ConType_5 = ConType_5,
+		ConConnectorType_5 = ConConnectorType_5,
+		ConSystem_5 = ConSystem_5,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_5, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+
+	IF gs_ui_current_page = 3 THEN
+		ac_mep_connectionpage_active = 1
+	ELSE
+		ac_mep_connectionpage_active = 0
+	ENDIF
+	PARAMETERS ac_mep_connectionpage_active = ac_mep_connectionpage_active
+
+	IF SetProgram THEN
+		SetProgram = 0
+		PARAMETERS SetProgram = SetProgram
+	ENDIF
+	PUT 3
+ELSE
+	nTabs = 2
+
+	HIDEPARAMETER "gs_connection", "gs_con_mat", "useSysMat"
+
+	ac_mep_connectionpage_active = 0
+	PARAMETERS ac_mep_connectionpage_active = ac_mep_connectionpage_active
+ENDIF
+
+values "gs_ui_current_page" get(nsp)
+
+if not(isMEPEnabled) and gs_ui_current_page > 2 then
+	gs_ui_current_page = 1
+	parameters gs_ui_current_page = gs_ui_current_page
+endif
+
+! =============================================================================
+! Onorm list Settings
+! =============================================================================
+if LibraryLangCode = "AUT" or LibraryLangCode = "CHE" or LibraryLangCode = "GER" then
+	call "Onorm_Plumbing" parameters all
+else
+	hideparameter "gs_onorm_Title"
+endif
+END

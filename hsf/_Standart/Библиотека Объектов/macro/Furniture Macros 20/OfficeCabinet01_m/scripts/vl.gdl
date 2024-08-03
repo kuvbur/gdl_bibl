@@ -1,0 +1,1060 @@
+
+if NOT(bPartOfLayout) then
+	call "FM_types" parameters all
+
+	if bCallcabSymbolType then
+	
+		! Enable only Symbol Types without door symbol
+		
+		iSymbolStyleEnable = 2**1 + 2**2 + 2**3 + 2**6
+		call "cabSymbolType" parameters 	iSymbolStyle = iSymbolStyle,
+											iSymbolStyleEnable = iSymbolStyleEnable
+	endif
+
+	values "A" range [0.2,)
+	values "B" range [0.2,)
+	values "zzyzx" range [0.2,)
+
+	values "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+	values "gs_detlevel_3D_m" 0, 1, 2
+
+	values "gs_resol" range [3,)
+
+	if bEditableKnobNum then
+		values "iKnobNum" 1, 2
+	endif
+
+	if gs_cont_pen=0 then parameters gs_cont_pen=7
+	if gs_fill_pen=0 then parameters gs_fill_pen=91
+
+	if gs_detlevel_3D_m = 0 then
+		lock "gs_resol", "gs_shadow"
+		hideparameter "gs_resol", "gs_shadow"
+	endif
+	if gs_detlevel_3D_m = 1 then
+		lock "gs_resol"
+		hideparameter "gs_resol"
+	endif
+
+	if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+		if gs_detlevel_3D = `Откл.`		then parameters gs_detlevel_3D_m = 0
+		if gs_detlevel_3D = `Простой`	then parameters gs_detlevel_3D_m = 1
+		if gs_detlevel_3D = `Детальный`	then parameters gs_detlevel_3D_m = 2
+	else
+		if gs_detlevel_3D_m = 0 then parameters gs_detlevel_3D = `Откл.`
+		if gs_detlevel_3D_m = 1 then parameters gs_detlevel_3D = `Простой`
+		if gs_detlevel_3D_m = 2 then parameters gs_detlevel_3D = `Детальный`
+	endif
+endif
+
+
+! -----------------------------------------------------------------------------
+! Base Parameters
+! -----------------------------------------------------------------------------
+
+if not(bEnableBasetypes) then
+	gs_baseType_m	= bCabBase * 2
+	parameters gs_baseType_m = gs_baseType_m
+
+	lock			"gs_baseType_m"
+	hideparameter	"gs_baseType_m"
+else
+	if not(bBaseNoneType) then
+		VALUES{2} "gs_baseType_m"	BASE_STYLE_CASTOR,	stBaseStyles[1],
+									BASE_STYLE_TOE,		stBaseStyles[2]
+		if not(bBase) then
+			hideparameter	"gs_baseType_m"
+			lock			"gs_baseType_m"
+		endif
+
+	else
+		values "gs_baseType" `Откл.`, `Ролики`, `Основание`
+		values "gs_baseType_m" 0, 1, 2
+	
+		if GLOB_MODPAR_NAME = "gs_baseType" then
+			if gs_baseType = `Откл.` then gs_baseType_m = 0
+			if gs_baseType = `Ролики` then gs_baseType_m = 1
+			if gs_baseType = `Основание` then gs_baseType_m = 2
+			parameters gs_baseType_m = gs_baseType_m
+		else
+			if gs_baseType_m = 0 then gs_baseType = `Откл.`
+			if gs_baseType_m = 1 then gs_baseType = `Ролики`
+			if gs_baseType_m = 2 then gs_baseType = `Основание`
+			parameters gs_baseType = gs_baseType
+		endif
+	endif						
+endif
+
+values "gs_baseHeight" range (0,)
+
+if ((gs_baseType_m = 0) & bBaseNoneType) | (not(bBase) & not(bBaseNoneType)) then
+	hideparameter "gs_base_mat", "gs_baseHeight"
+	lock "gs_base_mat", "gs_baseHeight"
+endif
+
+if (not(bBase) & not(bBaseNoneType)) and gs_baseType_m = 2 then
+	hideparameter "baseWidth"
+	lock "baseWidth"
+endif
+
+if NOT(bPartOfLayout) then
+	if (GLOB_MODPAR_NAME = "gs_baseType" or GLOB_MODPAR_NAME = "gs_baseType_m" or \
+		GLOB_MODPAR_NAME = "gs_baseHeight") then
+
+		zzyzx = gs_baseHeight * (((gs_baseType_m > 0) & bBaseNoneType) | (bBase & not(bBaseNoneType))) + topThk
+		for i = 1 to drawer_num
+			zzyzx = zzyzx + gs_drawerHeights[i]
+		next i
+		parameters zzyzx = zzyzx
+	endif
+endif
+
+
+! enableDrawerSchemes - possible values
+!	2		- enable Scheme 1
+!	4		- enable Scheme 2
+!	8		- enable Scheme 3
+!	16		- enable Scheme 4
+!	32		- enable Custom
+
+if enableDrawerSchemes < EPS then enableDrawerSchemes = 2 + 4 + 8 + 16 + 32
+
+dim drawerSchemeValueList[]
+j = 1
+for i = 1 to vardim1(stDrawerSchemes)
+	if bittest(enableDrawerSchemes, i) then
+		put i
+		drawerSchemeValueList[j] = stDrawerSchemes[i]
+		j = j + 1
+	endif
+next i
+
+values "gs_drawerScheme_m" get(NSP)
+values "gs_drawerScheme" drawerSchemeValueList
+
+if GLOB_MODPAR_NAME = "gs_drawerScheme" then
+	for iDr = 1 to vardim1(stDrawerSchemes)
+		if gs_drawerScheme = stDrawerSchemes[iDr] then gs_drawerScheme_m = iDr
+	next iDr
+	parameters gs_drawerScheme_m = gs_drawerScheme_m
+else
+	gs_drawerScheme = stDrawerSchemes[max(gs_drawerScheme_m, 1)]
+	parameters gs_drawerScheme = gs_drawerScheme
+endif
+
+! -----------------------------------------------------------------------------
+! Drawer Parameters
+! -----------------------------------------------------------------------------
+
+xDrawerKnobPosMod = 0
+if gs_knob_type_m > 3 then xDrawerKnobPosMod = 0.05
+
+if NOT(bShowDrawer1WidthParam) then
+	lock 			"gs_officeCab_width"
+	hideparameter	"gs_officeCab_width"
+endif
+if bEnable2ndDrawerCabinet & NOT(bShowDrawer2WidthParam) & not(bPartOfLayout) then
+	lock 			"gs_officeCab_width_2"
+	hideparameter 	"gs_officeCab_width_2"
+endif
+
+if bShowDrawer1Params then
+	values "drawerThk" range [0.01,)
+
+	mainHeight = zzyzx - topThk - baseHeight
+	values "drawer_num" 1, 2, 3, 4, 5, 6
+
+	if gs_drawerScheme_m = 1 then
+		drawerHeight = mainHeight / drawer_num
+		for i = 1 to drawer_num
+			parameters gs_drawerHeights[i] = drawerHeight
+		next i
+
+		hideparameter	"gs_topDrawerH",
+						"gs_bottomDrawerH"
+
+		lock	"gs_topDrawerH",
+				"gs_bottomDrawerH"
+
+		if bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1",
+							"gs_drawerH_2",
+							"gs_drawerH_3",
+							"gs_drawerH_4",
+							"gs_drawerH_5",
+							"gs_drawerH_6"
+
+			lock	"gs_drawerH_1",
+					"gs_drawerH_2",
+					"gs_drawerH_3",
+					"gs_drawerH_4",
+					"gs_drawerH_5",
+					"gs_drawerH_6"
+		endif
+	endif
+
+	if gs_drawerScheme_m = 2 then
+		if drawer_num = 1 then
+			gs_topDrawerH = mainHeight
+			lock "gs_topDrawerH"
+			parameters gs_topDrawerH = gs_topDrawerH, gs_drawerHeights[1] = gs_topDrawerH
+		else
+			values "gs_topDrawerH" range [0.04, mainHeight - (drawer_num - 1) * 0.04]
+			if gs_topDrawerH > mainHeight - (drawer_num - 1) * 0.04 then gs_topDrawerH = mainHeight - (drawer_num - 1) * 0.04
+			if gs_topDrawerH <  0.04 then gs_topDrawerH = 0.04
+
+			parameters gs_drawerHeights[1] = gs_topDrawerH
+
+			drawerHeight = (mainHeight - gs_topDrawerH) / (drawer_num - 1)
+
+			for i = 2 to drawer_num
+				parameters gs_drawerHeights[i] = drawerHeight
+			next i
+		endif
+
+		hideparameter "gs_bottomDrawerH"
+
+		lock	"gs_bottomDrawerH"
+
+		if bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1",
+							"gs_drawerH_2",
+							"gs_drawerH_3",
+							"gs_drawerH_4",
+							"gs_drawerH_5",
+							"gs_drawerH_6"
+
+			lock	"gs_drawerH_1",
+					"gs_drawerH_2",
+					"gs_drawerH_3",
+					"gs_drawerH_4",
+					"gs_drawerH_5",
+					"gs_drawerH_6"
+		endif
+	endif
+
+	if gs_drawerScheme_m = 3 then
+		if drawer_num = 1 then
+			gs_bottomDrawerH = mainHeight
+			lock "gs_bottomDrawerH"
+			parameters gs_bottomDrawerH = gs_bottomDrawerH, gs_drawerHeights[1] = gs_bottomDrawerH
+		else
+			values "gs_bottomDrawerH" range [0.04, mainHeight - (drawer_num - 1) * 0.04]
+			if gs_bottomDrawerH > mainHeight - (drawer_num - 1) * 0.04 then gs_bottomDrawerH = mainHeight - (drawer_num - 1) * 0.04
+			if gs_bottomDrawerH < 0.04 then gs_bottomDrawerH = 0.04
+
+			drawerHeight = (mainHeight - gs_bottomDrawerH) / (drawer_num - 1)
+
+			for i = 1 to drawer_num - 1
+				parameters gs_drawerHeights[i] = drawerHeight
+			next i
+
+			parameters gs_drawerHeights[drawer_num] = gs_bottomDrawerH
+		endif
+
+		hideparameter "gs_topDrawerH"
+
+		lock	"gs_topDrawerH"
+
+		if bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1",
+							"gs_drawerH_2",
+							"gs_drawerH_3",
+							"gs_drawerH_4",
+							"gs_drawerH_5",
+							"gs_drawerH_6"
+
+			lock	"gs_drawerH_1",
+					"gs_drawerH_2",
+					"gs_drawerH_3",
+					"gs_drawerH_4",
+					"gs_drawerH_5",
+					"gs_drawerH_6"
+		endif
+	endif
+
+	if gs_drawerScheme_m = 4 then
+		if drawer_num = 1 then
+			gs_topDrawerH = mainHeight
+			lock "gs_topDrawerH", "gs_bottomDrawerH"
+			parameters gs_topDrawerH = gs_topDrawerH, gs_drawerHeights[1] = gs_topDrawerH
+		else
+			if drawer_num = 2 then
+				values "gs_topDrawerH" range [0.04, mainHeight - 0.04]
+				if gs_topDrawerH > mainHeight - 0.04 then gs_topDrawerH = mainHeight - 0.04
+				if gs_topDrawerH < 0.04 then gs_topDrawerH = 0.04
+
+				gs_bottomDrawerH = mainHeight - gs_topDrawerH
+				lock "gs_bottomDrawerH"
+				parameters gs_bottomDrawerH = gs_bottomDrawerH,
+							gs_drawerHeights[1] = gs_topDrawerH,
+							gs_drawerHeights[2] = gs_bottomDrawerH
+			else
+				values "gs_topDrawerH" range [0.04, mainHeight - (drawer_num - 1) * 0.04]
+				if gs_topDrawerH > mainHeight - (drawer_num - 1) * 0.04 then gs_topDrawerH = mainHeight - (drawer_num - 1) * 0.04
+				if gs_topDrawerH < 0.04 then gs_topDrawerH = 0.04
+
+				values "gs_bottomDrawerH" range [0.04, mainHeight - (drawer_num - 2) * 0.04 - gs_topDrawerH]
+				if gs_bottomDrawerH > mainHeight - (drawer_num - 2) * 0.04 - gs_topDrawerH then gs_bottomDrawerH = mainHeight - (drawer_num - 2) * 0.04 - gs_topDrawerH
+				if gs_bottomDrawerH < 0.04 then gs_bottomDrawerH = 0.04
+
+				drawerHeight = (mainHeight - gs_topDrawerH - gs_bottomDrawerH) / (drawer_num - 2)
+
+				parameters gs_drawerHeights[1] = gs_topDrawerH
+
+				for i = 2 to drawer_num - 1
+					parameters gs_drawerHeights[i] = drawerHeight
+				next i
+
+				parameters gs_drawerHeights[drawer_num] = gs_bottomDrawerH
+			endif
+		endif
+
+		if bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1",
+							"gs_drawerH_2",
+							"gs_drawerH_3",
+							"gs_drawerH_4",
+							"gs_drawerH_5",
+							"gs_drawerH_6"
+
+			lock	"gs_drawerH_1",
+					"gs_drawerH_2",
+					"gs_drawerH_3",
+					"gs_drawerH_4",
+					"gs_drawerH_5",
+					"gs_drawerH_6"
+		endif
+	endif
+
+	if gs_drawerScheme_m = 5 then
+		if GLOB_MODPAR_NAME = "gs_drawerScheme_m" or GLOB_MODPAR_NAME = "gs_drawerScheme" or GLOB_MODPAR_NAME = "drawer_num" then
+			if drawer_num = 1 then
+				gs_drawerH_1 = mainHeight
+			endif
+
+			if drawer_num = 2 then
+				gs_drawerH_1 = mainHeight/2
+				gs_drawerH_2 = mainHeight/2
+			endif
+
+			if drawer_num = 3 then
+				gs_drawerH_1 = mainHeight/3
+				gs_drawerH_2 = mainHeight/3
+				gs_drawerH_3 = mainHeight/3
+			endif
+
+			if drawer_num = 4 then
+				gs_drawerH_1 = mainHeight/4
+				gs_drawerH_2 = mainHeight/4
+				gs_drawerH_3 = mainHeight/4
+				gs_drawerH_4 = mainHeight/4
+			endif
+
+			if drawer_num = 5 then
+				gs_drawerH_1 = mainHeight/5
+				gs_drawerH_2 = mainHeight/5
+				gs_drawerH_3 = mainHeight/5
+				gs_drawerH_4 = mainHeight/5
+				gs_drawerH_5 = mainHeight/5
+			endif
+
+			if drawer_num = 6 then
+				gs_drawerH_1 = mainHeight/6
+				gs_drawerH_2 = mainHeight/6
+				gs_drawerH_3 = mainHeight/6
+				gs_drawerH_4 = mainHeight/6
+				gs_drawerH_5 = mainHeight/6
+				gs_drawerH_6 = mainHeight/6
+			endif
+
+			parameters gs_drawerH_1 = gs_drawerH_1
+			parameters gs_drawerH_2 = gs_drawerH_2
+			parameters gs_drawerH_3 = gs_drawerH_3
+			parameters gs_drawerH_4 = gs_drawerH_4
+			parameters gs_drawerH_5 = gs_drawerH_5
+			parameters gs_drawerH_6 = gs_drawerH_6
+
+		endif
+
+		if drawer_num = 1 then
+			gs_drawerH_1 = mainHeight
+			parameters gs_drawerH_1 = gs_drawerH_1
+			lock "gs_drawerH_1"
+		else
+			values "gs_drawerH_1" range [0.04, mainHeight - (drawer_num - 1) * 0.04]
+		endif
+
+		if drawer_num > 1 then
+			if drawer_num = 2 then
+				gs_drawerH_2 = mainHeight - gs_drawerH_1
+				parameters gs_drawerH_2 = gs_drawerH_2
+				lock "gs_drawerH_2"
+			else
+				values "gs_drawerH_2" range [0.04, mainHeight - gs_drawerH_1 - (drawer_num - 2) * 0.04]
+			endif
+		endif
+
+		if drawer_num > 2 then
+			if drawer_num = 3 then
+				gs_drawerH_3 = mainHeight - gs_drawerH_1 - gs_drawerH_2
+				parameters gs_drawerH_3 = gs_drawerH_3
+				lock "gs_drawerH_3"
+			else
+				values "gs_drawerH_3" range [0.04, mainHeight - gs_drawerH_1 - gs_drawerH_2 - (drawer_num - 3) * 0.04]
+			endif
+		endif
+
+		if drawer_num > 3 then
+			if drawer_num = 4 then
+				gs_drawerH_4 = mainHeight - gs_drawerH_1 - gs_drawerH_2 - gs_drawerH_3
+				parameters gs_drawerH_4 = gs_drawerH_4
+				lock "gs_drawerH_4"
+			else
+				values "gs_drawerH_4" range [0.04, mainHeight - gs_drawerH_1 - gs_drawerH_2 - gs_drawerH_3 - (drawer_num - 4) * 0.04]
+			endif
+		endif
+
+		if drawer_num > 4 then
+			if drawer_num = 5 then
+				gs_drawerH_5 = mainHeight - gs_drawerH_1 - gs_drawerH_2 - gs_drawerH_3 - gs_drawerH_4
+				parameters gs_drawerH_5 = gs_drawerH_5
+				lock "gs_drawerH_5"
+			else
+				values "gs_drawerH_5" range [0.04, mainHeight - gs_drawerH_1 - gs_drawerH_2 - gs_drawerH_3 - gs_drawerH_4 - (drawer_num - 5) * 0.04]
+			endif
+		endif
+
+		if drawer_num > 5 then
+			gs_drawerH_6 = mainHeight - gs_drawerH_1 - gs_drawerH_2 - gs_drawerH_3 - gs_drawerH_4 - gs_drawerH_5
+			parameters gs_drawerH_6 = gs_drawerH_6
+			lock "gs_drawerH_6"
+		endif
+
+		hideparameter "gs_topDrawerH",
+				"gs_bottomDrawerH"
+
+		lock	"gs_topDrawerH",
+				"gs_bottomDrawerH"
+
+		parameters gs_drawerHeights[1] = gs_drawerH_1
+		parameters gs_drawerHeights[2] = gs_drawerH_2
+		parameters gs_drawerHeights[3] = gs_drawerH_3
+		parameters gs_drawerHeights[4] = gs_drawerH_4
+		parameters gs_drawerHeights[5] = gs_drawerH_5
+		parameters gs_drawerHeights[6] = gs_drawerH_6
+
+		if drawer_num < 2 then
+			hideparameter "gs_drawerH_2"
+			lock "gs_drawerH_2"
+		endif
+		if drawer_num < 3 then
+			hideparameter "gs_drawerH_3"
+			lock "gs_drawerH_3"
+		endif
+		if drawer_num < 4 then
+			hideparameter "gs_drawerH_4"
+			lock "gs_drawerH_4"
+		endif
+		if drawer_num < 5 then
+			hideparameter "gs_drawerH_5"
+			lock "gs_drawerH_5"
+		endif
+		if drawer_num < 6 then
+			hideparameter "gs_drawerH_6"
+			lock "gs_drawerH_6"
+		endif
+
+	endif
+
+	for hi = 1 to drawer_num
+		if gs_knobPosArray[hi][1] < -A/2 - gs_knobHorPos + 0.02 + xDrawerKnobPosMod then
+			xTempKnobPos = -A/2 - gs_knobHorPos + 0.02 + xDrawerKnobPosMod
+			parameters gs_knobPosArray[hi][1] = xTempKnobPos
+		endif
+		if gs_knobPosArray[hi][1] > A/2 - gs_knobHorPos - 0.02 - xDrawerKnobPosMod then
+			xTempKnobPos = A/2 - gs_knobHorPos - 0.02 - xDrawerKnobPosMod
+			parameters gs_knobPosArray[hi][1] = xTempKnobPos
+		endif
+		if gs_knobPosArray[hi][2] < -(gs_drawerHeights[hi] - 0.005)/2 - gs_knobVerPos_m * (gs_drawerHeights[hi] - 0.005)/4 + 0.02 then
+			yTempKnobPos = -(gs_drawerHeights[hi] - 0.005)/2 - gs_knobVerPos_m * (gs_drawerHeights[hi] - 0.005)/4 + 0.02
+			parameters gs_knobPosArray[hi][2] = yTempKnobPos
+		endif
+		if gs_knobPosArray[hi][2] > (gs_drawerHeights[hi] - 0.005)/2 - gs_knobVerPos_m * (gs_drawerHeights[hi] - 0.005)/4 - 0.02 then
+			yTempKnobPos = (gs_drawerHeights[hi] - 0.005)/2 - gs_knobVerPos_m * (gs_drawerHeights[hi] - 0.005)/4 - 0.02
+			parameters gs_knobPosArray[hi][2] = yTempKnobPos
+		endif
+	next hi
+else
+	lock			"drawer_num",
+					"drawerThk",
+					"gs_drawerScheme",
+					"gs_drawerScheme_m",
+					"gs_topDrawerH",
+					"gs_bottomDrawerH",
+					"gs_knobHorPos"
+
+	hideparameter 	"drawer_num",
+					"drawerThk",
+					"gs_drawerScheme",
+					"gs_drawerScheme_m",
+					"gs_topDrawerH",
+					"gs_bottomDrawerH",
+					"gs_knobHorPos"
+
+	if bittest(enableDrawerSchemes, 5) then
+		hideparameter	"gs_drawerH_1",
+						"gs_drawerH_2",
+						"gs_drawerH_3",
+						"gs_drawerH_4",
+						"gs_drawerH_5",
+						"gs_drawerH_6"
+
+		lock	"gs_drawerH_1",
+				"gs_drawerH_2",
+				"gs_drawerH_3",
+				"gs_drawerH_4",
+				"gs_drawerH_5",
+				"gs_drawerH_6"
+	endif
+endif
+
+if bShowDrawer2Params then
+	values "drawerThk2" range [0.01,)
+
+	values "gs_drawerScheme_2" `Схема 1`, `Схема 2`, `Схема 3`, `Схема 4`, `Спец.`
+	values "gs_drawerScheme_m_2" 1, 2, 3, 4, 5
+
+	if GLOB_MODPAR_NAME = "gs_drawerScheme_2" then
+		if gs_drawerScheme_2 = `Схема 1` then gs_drawerScheme_m_2 = 1
+		if gs_drawerScheme_2 = `Схема 2` then gs_drawerScheme_m_2 = 2
+		if gs_drawerScheme_2 = `Схема 3` then gs_drawerScheme_m_2 = 3
+		if gs_drawerScheme_2 = `Схема 4` then gs_drawerScheme_m_2 = 4
+		if gs_drawerScheme_2 = `Спец.` then gs_drawerScheme_m_2 = 5
+		parameters gs_drawerScheme_m_2 = gs_drawerScheme_m_2
+	else
+		if gs_drawerScheme_m_2 = 1 then gs_drawerScheme_2 = `Схема 1`
+		if gs_drawerScheme_m_2 = 2 then gs_drawerScheme_2 = `Схема 2`
+		if gs_drawerScheme_m_2 = 3 then gs_drawerScheme_2 = `Схема 3`
+		if gs_drawerScheme_m_2 = 4 then gs_drawerScheme_2 = `Схема 4`
+		if gs_drawerScheme_m_2 = 5 then gs_drawerScheme_2 = `Спец.`
+		parameters gs_drawerScheme_2 = gs_drawerScheme_2
+	endif
+
+	mainHeight = zzyzx - topThk - baseHeight
+	values "drawer_num_2" range [1, MIN(6, INT(mainHeight / 0.04))]
+	if drawer_num_2 > MIN(6, INT(mainHeight / 0.04)) then drawer_num_2 = MIN(6, INT(mainHeight / 0.04))
+	if drawer_num_2 < 1 then drawer_num_2 = 1
+
+	if gs_drawerScheme_m_2 = 1 then
+		drawerHeight = mainHeight / drawer_num_2
+		for i = 1 to drawer_num_2
+			parameters gs_drawerHeights_2[i] = drawerHeight
+		next i
+
+		hideparameter "gs_topDrawerH_2",
+				"gs_bottomDrawerH_2"
+
+		lock	"gs_topDrawerH_2",
+				"gs_bottomDrawerH_2"
+
+		if bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1_2",
+							"gs_drawerH_2_2",
+							"gs_drawerH_3_2",
+							"gs_drawerH_4_2",
+							"gs_drawerH_5_2",
+							"gs_drawerH_6_2"
+
+			lock	"gs_drawerH_1_2",
+					"gs_drawerH_2_2",
+					"gs_drawerH_3_2",
+					"gs_drawerH_4_2",
+					"gs_drawerH_5_2",
+					"gs_drawerH_6_2"
+		endif
+	endif
+
+	if gs_drawerScheme_m_2 = 2 then
+		if drawer_num_2 = 1 then
+			gs_topDrawerH_2 = mainHeight
+			lock "gs_topDrawerH_2"
+			parameters gs_topDrawerH_2 = gs_topDrawerH_2, gs_drawerHeights_2[1] = gs_topDrawerH_2
+		else
+			values "gs_topDrawerH_2" range [0.04, mainHeight - (drawer_num_2 - 1) * 0.04]
+			if gs_topDrawerH_2 > mainHeight - (drawer_num_2 - 1) * 0.04 then gs_topDrawerH_2 = mainHeight - (drawer_num_2 - 1) * 0.04
+			if gs_topDrawerH_2 <  0.04 then gs_topDrawerH_2 = 0.04
+
+			parameters gs_drawerHeights_2[1] = gs_topDrawerH_2
+
+			drawerHeight = (mainHeight - gs_topDrawerH_2) / (drawer_num_2 - 1)
+
+			for i = 2 to drawer_num_2
+				parameters gs_drawerHeights_2[i] = drawerHeight
+			next i
+		endif
+
+		hideparameter "gs_bottomDrawerH_2"
+
+		lock	"gs_bottomDrawerH_2"
+
+		if bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1_2",
+							"gs_drawerH_2_2",
+							"gs_drawerH_3_2",
+							"gs_drawerH_4_2",
+							"gs_drawerH_5_2",
+							"gs_drawerH_6_2"
+
+			lock	"gs_drawerH_1_2",
+					"gs_drawerH_2_2",
+					"gs_drawerH_3_2",
+					"gs_drawerH_4_2",
+					"gs_drawerH_5_2",
+					"gs_drawerH_6_2"
+		endif
+	endif
+
+	if gs_drawerScheme_m_2 = 3 then
+		if drawer_num_2 = 1 then
+			gs_bottomDrawerH_2 = mainHeight
+			lock "gs_bottomDrawerH_2"
+			parameters gs_bottomDrawerH_2 = gs_bottomDrawerH_2, gs_drawerHeights_2[1] = gs_bottomDrawerH_2
+		else
+			values "gs_bottomDrawerH_2" range [0.04, mainHeight - (drawer_num_2 - 1) * 0.04]
+			if gs_bottomDrawerH_2 > mainHeight - (drawer_num_2 - 1) * 0.04 then gs_bottomDrawerH_2 = mainHeight - (drawer_num_2 - 1) * 0.04
+			if gs_bottomDrawerH_2 < 0.04 then gs_bottomDrawerH_2 = 0.04
+
+			drawerHeight = (mainHeight - gs_bottomDrawerH_2) / (drawer_num_2 - 1)
+
+			for i = 1 to drawer_num_2 - 1
+				parameters gs_drawerHeights_2[i] = drawerHeight
+			next i
+
+			parameters gs_drawerHeights_2[drawer_num_2] = gs_bottomDrawerH_2
+		endif
+
+		hideparameter "gs_topDrawerH_2"
+
+		lock	"gs_topDrawerH_2"
+
+		if bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1_2",
+							"gs_drawerH_2_2",
+							"gs_drawerH_3_2",
+							"gs_drawerH_4_2",
+							"gs_drawerH_5_2",
+							"gs_drawerH_6_2"
+
+			lock	"gs_drawerH_1_2",
+					"gs_drawerH_2_2",
+					"gs_drawerH_3_2",
+					"gs_drawerH_4_2",
+					"gs_drawerH_5_2",
+					"gs_drawerH_6_2"
+		endif
+	endif
+
+	if gs_drawerScheme_m_2 = 4 then
+		if drawer_num_2 = 1 then
+			gs_topDrawerH_2 = mainHeight
+			lock "gs_topDrawerH_2", "gs_bottomDrawerH_2"
+			parameters gs_topDrawerH_2 = gs_topDrawerH_2, gs_drawerHeights_2[1] = gs_topDrawerH_2
+		else
+			if drawer_num_2 = 2 then
+				values "gs_topDrawerH_2" range [0.04, mainHeight - 0.04]
+				if gs_topDrawerH_2 > mainHeight - 0.04 then gs_topDrawerH_2 = mainHeight - 0.04
+				if gs_topDrawerH_2 < 0.04 then gs_topDrawerH_2 = 0.04
+
+				gs_bottomDrawerH_2 = mainHeight - gs_topDrawerH_2
+				lock "gs_bottomDrawerH_2"
+				parameters gs_bottomDrawerH_2 = gs_bottomDrawerH_2,
+							gs_drawerHeights_2[1] = gs_topDrawerH_2,
+							gs_drawerHeights_2[2] = gs_bottomDrawerH_2
+			else
+				values "gs_topDrawerH_2" range [0.04, mainHeight - (drawer_num_2 - 1) * 0.04]
+				if gs_topDrawerH_2 > mainHeight - (drawer_num_2 - 1) * 0.04 then gs_topDrawerH_2 = mainHeight - (drawer_num_2 - 1) * 0.04
+				if gs_topDrawerH_2 < 0.04 then gs_topDrawerH_2 = 0.04
+
+				values "gs_bottomDrawerH_2" range [0.04, mainHeight - (drawer_num_2 - 2) * 0.04 - gs_topDrawerH_2]
+				if gs_bottomDrawerH_2 > mainHeight - (drawer_num_2 - 2) * 0.04 - gs_topDrawerH_2 then gs_bottomDrawerH_2 = mainHeight - (drawer_num_2 - 2) * 0.04 - gs_topDrawerH_2
+				if gs_bottomDrawerH_2 < 0.04 then gs_bottomDrawerH_2 = 0.04
+
+				drawerHeight = (mainHeight - gs_topDrawerH_2 - gs_bottomDrawerH_2) / (drawer_num_2 - 2)
+
+				parameters gs_drawerHeights_2[1] = gs_topDrawerH_2
+
+				for i = 2 to drawer_num_2 - 1
+					parameters gs_drawerHeights_2[i] = drawerHeight
+				next i
+
+				parameters gs_drawerHeights_2[drawer_num_2] = gs_bottomDrawerH_2
+			endif
+		endif
+
+
+		if bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1_2",
+							"gs_drawerH_2_2",
+							"gs_drawerH_3_2",
+							"gs_drawerH_4_2",
+							"gs_drawerH_5_2",
+							"gs_drawerH_6_2"
+
+			lock	"gs_drawerH_1_2",
+					"gs_drawerH_2_2",
+					"gs_drawerH_3_2",
+					"gs_drawerH_4_2",
+					"gs_drawerH_5_2",
+					"gs_drawerH_6_2"
+		endif
+	endif
+
+	if gs_drawerScheme_m_2 = 5 then
+		if GLOB_MODPAR_NAME = "gs_drawerScheme_m_2" or GLOB_MODPAR_NAME = "gs_drawerScheme_2" or GLOB_MODPAR_NAME = "drawer_num_2" then
+			if drawer_num_2 = 1 then
+				gs_drawerH_1_2 = mainHeight
+			endif
+
+			if drawer_num_2 = 2 then
+				gs_drawerH_1_2 = mainHeight/2
+				gs_drawerH_2_2 = mainHeight/2
+			endif
+
+			if drawer_num_2 = 3 then
+				gs_drawerH_1_2 = mainHeight/3
+				gs_drawerH_2_2 = mainHeight/3
+				gs_drawerH_3_2 = mainHeight/3
+			endif
+
+			if drawer_num_2 = 4 then
+				gs_drawerH_1_2 = mainHeight/4
+				gs_drawerH_2_2 = mainHeight/4
+				gs_drawerH_3_2 = mainHeight/4
+				gs_drawerH_4_2 = mainHeight/4
+			endif
+
+			if drawer_num_2 = 5 then
+				gs_drawerH_1_2 = mainHeight/5
+				gs_drawerH_2_2 = mainHeight/5
+				gs_drawerH_3_2 = mainHeight/5
+				gs_drawerH_4_2 = mainHeight/5
+				gs_drawerH_5_2 = mainHeight/5
+			endif
+
+			if drawer_num_2 = 6 then
+				gs_drawerH_1_2 = mainHeight/6
+				gs_drawerH_2_2 = mainHeight/6
+				gs_drawerH_3_2 = mainHeight/6
+				gs_drawerH_4_2 = mainHeight/6
+				gs_drawerH_5_2 = mainHeight/6
+				gs_drawerH_6_2 = mainHeight/6
+			endif
+
+			parameters gs_drawerH_1_2 = gs_drawerH_1_2
+			parameters gs_drawerH_2_2 = gs_drawerH_2_2
+			parameters gs_drawerH_3_2 = gs_drawerH_3_2
+			parameters gs_drawerH_4_2 = gs_drawerH_4_2
+			parameters gs_drawerH_5_2 = gs_drawerH_5_2
+			parameters gs_drawerH_6_2 = gs_drawerH_6_2
+
+		endif
+
+		if drawer_num_2 = 1 then
+			gs_drawerH_1 = mainHeight
+			parameters gs_drawerH_1_2 = gs_drawerH_1_2
+			lock "gs_drawerH_1_2"
+		else
+			values "gs_drawerH_1_2" range [0.04, mainHeight - (drawer_num_2 - 1) * 0.04]
+		endif
+
+		if drawer_num_2 > 1 then
+			if drawer_num_2 = 2 then
+				gs_drawerH_2_2 = mainHeight - gs_drawerH_1_2
+				parameters gs_drawerH_2_2 = gs_drawerH_2_2
+				lock "gs_drawerH_2_2"
+			else
+				values "gs_drawerH_2_2" range [0.04, mainHeight - gs_drawerH_1_2 - (drawer_num_2 - 2) * 0.04]
+			endif
+		endif
+
+		if drawer_num_2 > 2 then
+			if drawer_num_2 = 3 then
+				gs_drawerH_3_2 = mainHeight - gs_drawerH_1_2 - gs_drawerH_2_2
+				parameters gs_drawerH_3_2 = gs_drawerH_3_2
+				lock "gs_drawerH_3_2"
+			else
+				values "gs_drawerH_3_2" range [0.04, mainHeight - gs_drawerH_1_2 - gs_drawerH_2_2 - (drawer_num_2 - 3) * 0.04]
+			endif
+		endif
+
+		if drawer_num_2 > 3 then
+			if drawer_num_2 = 4 then
+				gs_drawerH_4_2 = mainHeight - gs_drawerH_1_2 - gs_drawerH_2_2 - gs_drawerH_3_2
+				parameters gs_drawerH_4_2 = gs_drawerH_4_2
+				lock "gs_drawerH_4_2"
+			else
+				values "gs_drawerH_4_2" range [0.04, mainHeight - gs_drawerH_1_2 - gs_drawerH_2_2 - gs_drawerH_3_2 - (drawer_num_2 - 4) * 0.04]
+			endif
+		endif
+
+		if drawer_num_2 > 4 then
+			if drawer_num_2 = 5 then
+				gs_drawerH_5_2 = mainHeight - gs_drawerH_1_2 - gs_drawerH_2_2 - gs_drawerH_3_2 - gs_drawerH_4_2
+				parameters gs_drawerH_5_2 = gs_drawerH_5_2
+				lock "gs_drawerH_5_2"
+			else
+				values "gs_drawerH_5_2" range [0.04, mainHeight - gs_drawerH_1_2 - gs_drawerH_2_2 - gs_drawerH_3_2 - gs_drawerH_4_2 - (drawer_num_2 - 5) * 0.04]
+			endif
+		endif
+
+		if drawer_num_2 > 5 then
+			gs_drawerH_6_2 = mainHeight - gs_drawerH_1_2 - gs_drawerH_2_2 - gs_drawerH_3_2 - gs_drawerH_4_2 - gs_drawerH_5_2
+			parameters gs_drawerH_6_2 = gs_drawerH_6_2
+			lock "gs_drawerH_6_2"
+		endif
+
+		hideparameter "gs_topDrawerH_2",
+				"gs_bottomDrawerH_2"
+
+		lock	"gs_topDrawerH_2",
+				"gs_bottomDrawerH_2"
+
+		parameters gs_drawerHeights_2[1] = gs_drawerH_1_2
+		parameters gs_drawerHeights_2[2] = gs_drawerH_2_2
+		parameters gs_drawerHeights_2[3] = gs_drawerH_3_2
+		parameters gs_drawerHeights_2[4] = gs_drawerH_4_2
+		parameters gs_drawerHeights_2[5] = gs_drawerH_5_2
+		parameters gs_drawerHeights_2[6] = gs_drawerH_6_2
+
+		if drawer_num_2 < 2 then
+			hideparameter "gs_drawerH_2_2"
+			lock "gs_drawerH_2_2"
+		endif
+		if drawer_num_2 < 3 then
+			hideparameter "gs_drawerH_3_2"
+			lock "gs_drawerH_3_2"
+		endif
+		if drawer_num_2 < 4 then
+			hideparameter "gs_drawerH_4_2"
+			lock "gs_drawerH_4_2"
+		endif
+		if drawer_num_2 < 5 then
+			hideparameter "gs_drawerH_5_2"
+			lock "gs_drawerH_5_2"
+		endif
+		if drawer_num_2 < 6 then
+			hideparameter "gs_drawerH_6_2"
+			lock "gs_drawerH_6_2"
+		endif
+
+	endif
+
+	for hi = 1 to drawer_num_2
+		if gs_knobPosArray_2[hi][1] < -gs_officeCab_width_2/2 - gs_knobHorPos_2 + 0.02 + xDrawerKnobPosMod then
+			xTempKnobPos = -gs_officeCab_width_2/2 - gs_knobHorPos_2 + 0.02 + xDrawerKnobPosMod
+			parameters gs_knobPosArray_2[hi][1] = xTempKnobPos
+		endif
+		if gs_knobPosArray_2[hi][1] > gs_officeCab_width_2/2 - gs_knobHorPos_2 - 0.02 - xDrawerKnobPosMod then
+			xTempKnobPos = gs_officeCab_width_2/2 - gs_knobHorPos_2 - 0.02 - xDrawerKnobPosMod
+			parameters gs_knobPosArray_2[hi][1] = xTempKnobPos
+		endif
+		if gs_knobPosArray_2[hi][2] < -(gs_drawerHeights_2[hi] - 0.005)/2 - gs_knobVerPos_m * (gs_drawerHeights_2[hi] - 0.005)/4 + 0.02 then
+			yTempKnobPos = -(gs_drawerHeights_2[hi] - 0.005)/2 - gs_knobVerPos_m * (gs_drawerHeights_2[hi] - 0.005)/4 + 0.02
+			parameters gs_knobPosArray_2[hi][2] = yTempKnobPos
+		endif
+		if gs_knobPosArray_2[hi][2] > (gs_drawerHeights_2[hi] - 0.005)/2 - gs_knobVerPos_m * (gs_drawerHeights_2[hi] - 0.005)/4 - 0.02 then
+			yTempKnobPos = (gs_drawerHeights_2[hi] - 0.005)/2 - gs_knobVerPos_m * (gs_drawerHeights_2[hi] - 0.005)/4 - 0.02
+			parameters gs_knobPosArray_2[hi][2] = yTempKnobPos
+		endif
+	next hi
+else
+	if bEnable2ndDrawerCabinet then
+		if not(bPartOfLayout) then
+			lock 			"drawer_num_2",
+							"drawerThk2",
+							"gs_drawerScheme_2",
+							"gs_drawerScheme_m_2",
+							"gs_topDrawerH_2",
+							"gs_bottomDrawerH_2",
+							"gs_knobHorPos_2"
+
+			hideparameter	"drawer_num_2",
+							"drawerThk2",
+							"gs_drawerScheme_2",
+							"gs_drawerScheme_m_2",
+							"gs_topDrawerH_2",
+							"gs_bottomDrawerH_2",
+							"gs_knobHorPos_2"
+		endif
+
+		if bPartOfLayout & bittest(enableDrawerSchemes, 5) then
+			hideparameter	"gs_drawerH_1_2",
+							"gs_drawerH_2_2",
+							"gs_drawerH_3_2",
+							"gs_drawerH_4_2",
+							"gs_drawerH_5_2",
+							"gs_drawerH_6_2"
+
+			lock	"gs_drawerH_1_2",
+					"gs_drawerH_2_2",
+					"gs_drawerH_3_2",
+					"gs_drawerH_4_2",
+					"gs_drawerH_5_2",
+					"gs_drawerH_6_2"
+		endif
+	endif
+endif
+
+! -----------------------------------------------------------------------------
+! Knob Parameters
+! -----------------------------------------------------------------------------
+
+if bKnobNoneType then
+	values "gs_knob_type_m"	KNOB_STYLE_NONE,
+							KNOB_STYLE_1,
+							KNOB_STYLE_2,
+							KNOB_STYLE_3,
+							KNOB_STYLE_4,
+							KNOB_STYLE_5,
+							KNOB_STYLE_6,
+							KNOB_STYLE_7,
+							KNOB_STYLE_8
+else
+	values "gs_knob_type_m"	KNOB_STYLE_1,
+							KNOB_STYLE_2,
+							KNOB_STYLE_3,
+							KNOB_STYLE_4,
+							KNOB_STYLE_5,
+							KNOB_STYLE_6,
+							KNOB_STYLE_7,
+							KNOB_STYLE_8
+endif
+
+values "gs_knobVerPos" `Вверху`, `Середина`, `Низ`
+values "gs_knobVerPos_m" 1, 0, -1
+
+if GLOB_MODPAR_NAME = "gs_knobVerPos" then
+	gs_knobVerPos_m = 1
+	if gs_knobVerPos = `Середина` then gs_knobVerPos_m = 0
+	if gs_knobVerPos = `Низ` then gs_knobVerPos_m = -1
+	parameters gs_knobVerPos_m = gs_knobVerPos_m
+else
+	gs_knobVerPos = `Вверху`
+	if gs_knobVerPos_m = 0 then gs_knobVerPos = `Середина`
+	if gs_knobVerPos_m = -1 then gs_knobVerPos = `Низ`
+	parameters gs_knobVerPos = gs_knobVerPos
+endif
+
+if bShowCommonCabParams then
+	if not(bKnobNoneType) then
+		values{2} "gs_knob_type_m"	KNOB_STYLE_1,	st_knobtypes[1],
+									KNOB_STYLE_2,	st_knobtypes[2],
+									KNOB_STYLE_3,	st_knobtypes[3],
+									KNOB_STYLE_4,	st_knobtypes[4],
+									KNOB_STYLE_5,	st_knobtypes[5],
+									KNOB_STYLE_6,	st_knobtypes[6],
+									KNOB_STYLE_7,	st_knobtypes[7],
+									KNOB_STYLE_8,	st_knobtypes[8]
+	else
+		values "gs_knob_type" st_knobtypes
+
+		if GLOB_MODPAR_NAME = "gs_knob_type" then
+			for iKnob = 1 to 9
+				if gs_knob_type = st_knobtypes[iKnob] then
+					gs_knob_type_m = iKnob - 1
+				endif
+			next iKnob
+			parameters gs_knob_type_m = gs_knob_type_m
+		else
+			gs_knob_type = st_knobtypes[gs_knob_type_m+1]
+			parameters gs_knob_type = gs_knob_type
+		endif
+	endif
+
+	if ((gs_knob_type_m = KNOB_STYLE_NONE) & bKnobNoneType) | (not(bKnob) & not(bKnobNoneType)) then
+		lock			"gs_knobHorPos",
+						"gs_knobHorPos_2",
+						"gs_knobVerPos",
+						"gs_knobVerPos_m",
+						"gs_editableKnobs",
+						"gs_knob_mat"
+		hideparameter	"gs_knobHorPos",
+						"gs_knobHorPos_2",
+						"gs_knobVerPos",
+						"gs_knobVerPos_m",
+						"gs_editableKnobs",
+						"gs_knob_mat"
+	endif
+
+	if bEditableKnobNum then
+		if not(bKnob) then
+			lock			"iKnobNum"
+			hideparameter	"iKnobNum"
+		endif
+	endif
+
+	if bEditableDrawerKnobSize then
+		if (gs_knob_type_m < 4) | not(bKnob) then
+			lock			"drawerKnobSize"
+			hideparameter	"drawerKnobSize"
+		endif
+	endif
+
+	if not(bKnobNoneType) then
+		if not(bKnob) then
+			lock			"gs_knob_type_m"
+			hideparameter	"gs_knob_type_m"
+		endif
+	endif
+
+	values "gs_knobHorPos" range [-A / 2 + 0.02, A / 2 - 0.02]
+	if bShowDrawer2Params then
+		values "gs_knobHorPos_2" range [-gs_officeCab_width_2 / 2 + 0.02, gs_officeCab_width_2 / 2 - 0.02]
+	endif
+else
+	lock			"gs_knob_type",
+					"gs_knob_type_m",
+					"gs_knobHorPos",
+					"gs_knobVerPos",
+					"gs_knobVerPos_m",
+					"gs_editableKnobs",
+					"gs_cabinet_mat",
+					"gs_door_mat",
+					"gs_base_mat",
+					"gs_knob_mat",
+					"gs_bevel"
+
+	hideparameter	"gs_knob_type",
+					"gs_knob_type_m",
+					"gs_knobHorPos",
+					"gs_knobVerPos",
+					"gs_knobVerPos_m",
+					"gs_editableKnobs",
+					"gs_cabinet_mat",
+					"gs_door_mat",
+					"gs_base_mat",
+					"gs_knob_mat",
+					"gs_bevel"
+
+	if bEnable2ndDrawerCabinet then
+		lock			"gs_knobHorPos_2"
+		hideparameter	"gs_knobHorPos_2"
+	endif
+endif
+
+if NOT(bShowDrawer1Params) and NOT(bShowDrawer2Params) then
+	if bEnableBasetypes then
+		lock			"gs_baseType",
+						"gs_baseType_m"
+
+		hideparameter	"gs_baseType",
+						"gs_baseType_m"
+	endif
+
+	lock			"bCabBase",
+					"gs_baseHeight"
+
+	hideparameter	"bCabBase",
+					"gs_baseHeight"
+endif

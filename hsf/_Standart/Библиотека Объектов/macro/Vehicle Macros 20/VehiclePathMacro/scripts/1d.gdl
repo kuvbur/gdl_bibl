@@ -1,0 +1,545 @@
+
+EPS = 0.0001
+
+! =============================================================================
+! Frame index
+! =============================================================================
+
+if GLOB_SCRIPT_TYPE = 2 | GLOB_SCRIPT_TYPE = 3 then
+	if test then
+		frameIdx = int(10 * testPos) + 1
+	else
+		frameIdx = max(1, GLOB_FRAME_NR + 1 - gs_path_start_frame)
+	endif
+else
+	frameIdx = 1
+endif
+
+
+! =============================================================================
+! Bezier path points
+! =============================================================================
+
+dim Coord[4][3] ! Coordinate System, and Translation Vector
+dim m[4][4]     ! The Last Rotation's Matrix
+dim summ[4][4]  ! The Whole Rotation Matrix
+
+lambda = 1/2 ! Length of middle points
+SectL = 0.25 ! Length of Ring Section
+
+dim sect[][14] ! Bezier Sections
+	!  1- 3 : x1,y1,z1
+	!  4- 6 : x2,y3,z4
+	!  7- 9 : x3,y3,z3
+	! 10-12 : x4,y4,z4
+	! 13    : Length of Spline
+	! 14    : Segment Length
+
+dim pathPnts[][7]	! path points
+	!  1-3 : Front wheel position (x,y,z)
+	!  4-6 : End wheel position (x,y,z)
+	!  7   : Distance from the begining of the path
+
+pathNodesNum = gs_pathNodes_Num_old
+
+if GLOB_SCRIPT_TYPE = 2 | GLOB_SCRIPT_TYPE = 3 then
+	bFeedBack = (GLOB_CONTEXT > 20 and GLOB_CONTEXT < 40)
+else
+	bFeedBack = 0
+endif
+
+if gs_path_move then
+
+	if bFeedBack then
+		gs_path_fps	= 5
+	endif
+
+! =============================================================================
+! Calculating Bezier Control Points
+! =============================================================================
+
+	for i=2 to pathNodesNum + 1
+
+		sect[i-1][1] = gs_pathNodes_Pos[i][1]
+		sect[i-1][2] = gs_pathNodes_Pos[i][2]
+		sect[i-1][3] = gs_pathNodes_Pos[i][3]
+
+		sect[i-1][10] = gs_pathNodes_Pos[i+1][1]
+		sect[i-1][11] = gs_pathNodes_Pos[i+1][2]
+		sect[i-1][12] = gs_pathNodes_Pos[i+1][3]
+
+		if i=2 then
+			! Normalize Vector
+			x = gs_pathNodes_Pos[1][1]
+			y = gs_pathNodes_Pos[1][2]
+			z = gs_pathNodes_Pos[1][3]
+			S = 1/sqr(x^2 + y^2 + z^2)
+			x = S*x
+			y = S*y
+			z = S*z
+
+			x1 = gs_pathNodes_Pos[2][1]-gs_pathNodes_Pos[3][1]
+			y1 = gs_pathNodes_Pos[2][2]-gs_pathNodes_Pos[3][2]
+			z1 = gs_pathNodes_Pos[2][3]-gs_pathNodes_Pos[3][3]
+			S1 = sqr(x1^2 + y1^2 + z1^2)
+			x = lambda*S1*x
+			y = lambda*S1*y
+			z = lambda*S1*z
+
+			sect[1][4] = gs_pathNodes_Pos[2][1] + x
+			sect[1][5] = gs_pathNodes_Pos[2][2] + y
+			sect[1][6] = gs_pathNodes_Pos[2][3] + z
+		endif
+
+		if i = pathNodesNum + 1 then
+			! Normalize Vector
+			x = gs_pathNodes_Pos[i+1][1]
+			y = gs_pathNodes_Pos[i+1][2]
+			z = gs_pathNodes_Pos[i+1][3]
+			S = 1/sqr(x^2 + y^2 + z^2)
+			x = S*x
+			y = S*y
+			z = S*z
+
+			x1 = gs_pathNodes_Pos[i][1]-gs_pathNodes_Pos[i-1][1]
+			y1 = gs_pathNodes_Pos[i][2]-gs_pathNodes_Pos[i-1][2]
+			z1 = gs_pathNodes_Pos[i][3]-gs_pathNodes_Pos[i-1][3]
+			S1 = sqr(x1^2 + y1^2 + z1^2)
+			x = lambda*S1*x
+			y = lambda*S1*y
+			z = lambda*S1*z
+			sect[i-2][7] = gs_pathNodes_Pos[i][1] + x
+			sect[i-2][8] = gs_pathNodes_Pos[i][2] + y
+			sect[i-2][9] = gs_pathNodes_Pos[i][3] + z
+		endif
+
+		if i > 2 and i < pathNodesNum + 1 then
+			! P0
+			x0 = 0
+			y0 = 0
+			z0 = 0
+
+			! P1
+			x1 = gs_pathNodes_Pos[i-1][1]-gs_pathNodes_Pos[i][1]
+			y1 = gs_pathNodes_Pos[i-1][2]-gs_pathNodes_Pos[i][2]
+			z1 = gs_pathNodes_Pos[i-1][3]-gs_pathNodes_Pos[i][3]
+			S1 = 1/sqr(x1^2 + y1^2 + z1^2)
+
+			! P2
+			x2 = gs_pathNodes_Pos[i+1][1]-gs_pathNodes_Pos[i][1]
+			y2 = gs_pathNodes_Pos[i+1][2]-gs_pathNodes_Pos[i][2]
+			z2 = gs_pathNodes_Pos[i+1][3]-gs_pathNodes_Pos[i][3]
+			S2 = 1/sqr(x2^2 + y2^2 + z2^2)
+
+			! Mid Angle
+			x = (S1*x1 + S2*x2)/2
+			y = (S1*y1 + S2*y2)/2
+			z = (S1*z1 + S2*z2)/2
+
+			gosub 100 ! Cross Product (P0,P1,P2)
+
+			gosub 1100	! Init Coordinate System
+
+			if abs(x)> EPS or abs(y) > EPS or abs(z) > EPS then
+				put x,y,z,90
+				gosub 1120	! Rot around (x,y,z) axis
+
+				put Vx,Vy,Vz
+				gosub 1210	! Transform
+				xx=GET(1): yy=GET(1): zz=GET(1)
+			else
+				xx = x1
+				yy = y1
+				zz = z1
+			endif
+
+			! Normalize vector
+			temp  = sqr(xx^2 + yy^2 + zz^2)
+			xx = xx/temp
+			yy = yy/temp
+			zz = zz/temp
+
+			xx1 = lambda*xx/S1
+			yy1 = lambda*yy/S1
+			zz1 = lambda*zz/S1
+
+			xx2 = -lambda*xx/S2
+			yy2 = -lambda*yy/S2
+			zz2 = -lambda*zz/S2
+
+			sect[i-2][7] = gs_pathNodes_Pos[i][1]+xx1
+			sect[i-2][8] = gs_pathNodes_Pos[i][2]+yy1
+			sect[i-2][9] = gs_pathNodes_Pos[i][3]+zz1
+
+			sect[i-1][4] = gs_pathNodes_Pos[i][1]+xx2
+			sect[i-1][5] = gs_pathNodes_Pos[i][2]+yy2
+			sect[i-1][6] = gs_pathNodes_Pos[i][3]+zz2
+		endif
+	next i
+
+! =============================================================================
+! Calculating Curve Lengths - Step 1
+! =============================================================================
+
+	for i=1 to pathNodesNum - 1
+
+		x=sect[i][1]-sect[i][10]
+		y=sect[i][2]-sect[i][11]
+		z=sect[i][3]-sect[i][12]
+		L1 = sqr(x^2 + y^2 + z^2)
+
+		x=sect[i][1]-sect[i][4]
+		y=sect[i][2]-sect[i][5]
+		z=sect[i][3]-sect[i][6]
+		L2 = sqr(x^2 + y^2 + z^2)
+
+		x=sect[i][4]-sect[i][7]
+		y=sect[i][5]-sect[i][8]
+		z=sect[i][6]-sect[i][9]
+		L2 = L2 + sqr(x^2 + y^2 + z^2)
+
+		x=sect[i][7]-sect[i][10]
+		y=sect[i][8]-sect[i][11]
+		z=sect[i][9]-sect[i][12]
+		L2 = L2 + sqr(x^2 + y^2 + z^2)
+
+		L = (L1 + L2) / 2
+		stp = 1/max(1, int(L/SectL))
+
+		sect[i][13] = L
+		sect[i][14] = stp
+	next i
+
+! =============================================================================
+! Calculating Curve Lengths - Step 2
+! =============================================================================
+
+	pathLength = 0
+
+	for i=1 to pathNodesNum - 1
+
+		stp = sect[i][14]
+		L = 0
+
+		t=0
+		Px0 = ((1-t)^3)*sect[i][1] + (3*t*(1-t)^2)*sect[i][4] + (3*t*t*(1-t))*sect[i][7] + (t^3)*sect[i][10]
+		Py0 = ((1-t)^3)*sect[i][2] + (3*t*(1-t)^2)*sect[i][5] + (3*t*t*(1-t))*sect[i][8] + (t^3)*sect[i][11]
+		Pz0 = ((1-t)^3)*sect[i][3] + (3*t*(1-t)^2)*sect[i][6] + (3*t*t*(1-t))*sect[i][9] + (t^3)*sect[i][12]
+
+		for t=stp to 1 step stp
+			Px = ((1-t)^3)*sect[i][1] + (3*t*(1-t)^2)*sect[i][4] + (3*t*t*(1-t))*sect[i][7] + (t^3)*sect[i][10]
+			Py = ((1-t)^3)*sect[i][2] + (3*t*(1-t)^2)*sect[i][5] + (3*t*t*(1-t))*sect[i][8] + (t^3)*sect[i][11]
+			Pz = ((1-t)^3)*sect[i][3] + (3*t*(1-t)^2)*sect[i][6] + (3*t*t*(1-t))*sect[i][9] + (t^3)*sect[i][12]
+
+			L = L + sqr( (Px-Px0)^2 + (Py-Py0)^2 + (Pz-Pz0)^2 )
+			Px0 = Px
+			Py0 = Py
+			Pz0 = Pz
+		next t
+
+		stp = 1/max(1, int(L/SectL))
+		pathLength = pathLength + L
+
+		sect[i][13] = L
+		sect[i][14] = stp
+	next i
+
+
+! =============================================================================
+! Create Bezier Path
+! =============================================================================
+
+	idx = 1
+	summDist = 0
+
+	for i=1 to pathNodesNum - 1
+
+! Acceleration ----------------------------------------------------------------
+
+		pathLeght	= sect[i][13]
+		speedStart	= gs_pathNodes_Speed[i + 1] / 3.6	! Convert km/h to m/s
+		speedEnd	= gs_pathNodes_Speed[i + 2] / 3.6
+
+		if pathLeght > EPS then
+			tStepStart	= speedStart / gs_path_fps / pathLeght	! Step of (t) parameter at the start of path t=[0...1]
+			tStepEnd	= speedEnd   / gs_path_fps / pathLeght	! Step of (t) parameter at the end of path t=[0...1]
+		else
+			tStepStart	= 0
+			tStepEnd	= 0
+		endif
+		averageStep = (tStepEnd + tStepStart) / 2
+		if averageStep > EPS then
+			numSteps = max(1, ceil((1 - tStepEnd - tStepStart) / ((tStepEnd + tStepStart) / 2)))
+		else
+			numSteps = 1
+		endif
+
+		avgStep = (1 - tStepEnd - tStepStart) / numSteps
+
+! Calculate points within the path --------------------------------------------
+
+		for s=0 to numSteps + 1 * (i = (pathNodesNum - 1))
+
+			t = tStepStart * s * (1 - s / (numSteps + 1)) + avgStep * s * (s / numSteps)
+
+! Front wheel point -----------------------------------------------------------
+
+			Px = ((1-t)^3)*sect[i][1] + (3*t*(1-t)^2)*sect[i][4] + (3*t^2*(1-t))*sect[i][7] + (t^3)*sect[i][10]
+			Py = ((1-t)^3)*sect[i][2] + (3*t*(1-t)^2)*sect[i][5] + (3*t^2*(1-t))*sect[i][8] + (t^3)*sect[i][11]
+			Pz = ((1-t)^3)*sect[i][3] + (3*t*(1-t)^2)*sect[i][6] + (3*t^2*(1-t))*sect[i][9] + (t^3)*sect[i][12]
+
+! Rear wheel point ------------------------------------------------------------
+
+			pathLeghtFromBeg = t * pathLeght
+			if pathLeghtFromBeg > wheelBase then
+				t2 = (pathLeghtFromBeg - wheelBase) / pathLeght
+				idxEnd = i
+			else
+				idxEnd = i - 1
+				if idxEnd > 0 then
+					bLoopEnd = 0
+					while (not(bLoopEnd)) & (idxEnd > 0) do
+						if (pathLeghtFromBeg + sect[idxEnd][13]) < wheelBase then
+							pathLeghtFromBeg = pathLeghtFromBeg + sect[idxEnd][13]
+							idxEnd = idxEnd - 1
+						else
+							bLoopEnd = 1
+						endif
+					endwhile
+				endif
+				if idxEnd > 0 then
+					t2 = 1 - (wheelBase - pathLeghtFromBeg) / sect[idxEnd][13]
+				else
+					vectLength = wheelBase - pathLeghtFromBeg
+				endif
+			endif
+
+			if idxEnd > 0 then
+				P2x = ((1-t2)^3)*sect[idxEnd][1] + (3*t2*(1-t2)^2)*sect[idxEnd][4] + (3*t2^2*(1-t2))*sect[idxEnd][7] + (t2^3)*sect[idxEnd][10]
+				P2y = ((1-t2)^3)*sect[idxEnd][2] + (3*t2*(1-t2)^2)*sect[idxEnd][5] + (3*t2^2*(1-t2))*sect[idxEnd][8] + (t2^3)*sect[idxEnd][11]
+				P2z = ((1-t2)^3)*sect[idxEnd][3] + (3*t2*(1-t2)^2)*sect[idxEnd][6] + (3*t2^2*(1-t2))*sect[idxEnd][9] + (t2^3)*sect[idxEnd][12]
+			else
+				vx = sect[1][4] - sect[1][1]
+				vy = sect[1][5] - sect[1][2]
+				vz = sect[1][6] - sect[1][3]
+				L = vectLength / sqr(vx^2 + vy^2 + vz^2)
+				P2x = sect[1][1] - vx * L
+				P2y = sect[1][2] - vy * L
+				P2z = sect[1][3] - vz * L
+			endif
+
+! Store points ----------------------------------------------------------------
+
+			pathPnts[idx][1] = Px
+			pathPnts[idx][2] = Py
+			pathPnts[idx][3] = Pz
+
+			pathPnts[idx][4] = P2x
+			pathPnts[idx][5] = P2y
+			pathPnts[idx][6] = P2z
+
+			if idx > 1 then
+				distDelta = sqr((Px - pathPnts[idx - 1][1])^2 + (Py - pathPnts[idx - 1][2])^2)
+			else
+				distDelta = 0
+			endif
+			summDist = summDist + distDelta
+			pathPnts[idx][7] = summDist
+
+			idx = idx + 1
+		next s
+	next i
+
+endif
+
+
+goto 1
+
+
+
+! =============================================================================
+! Geometry functions
+! =============================================================================
+
+100:	! Cross Product
+	Vx = (Y0-Y1)*(Z0-Z2) - (Z0-Z1)*(Y0-Y2)
+	Vy = (Z0-Z1)*(X0-X2) - (X0-X1)*(Z0-Z2)
+	Vz = (X0-X1)*(Y0-Y2) - (Y0-Y1)*(X0-X2)
+return
+
+200:	! Dot Product
+	angle = (x1*x2) + (y1*y2) + (z1*z2)
+return
+
+
+! =============================================================================
+! Matrix functions
+! =============================================================================
+
+1100:	! Init Coordinate System
+
+	! Reset Coordinate Vectors
+	Coord[1][1]=1: Coord[1][2]=0: Coord[1][3]=0
+	Coord[2][1]=0: Coord[2][2]=1: Coord[2][3]=0
+	Coord[3][1]=0: Coord[3][2]=0: Coord[3][3]=1
+
+	! Set Zero Translation
+	Coord[4][1]=0: Coord[4][2]=0: Coord[4][3]=0
+
+	! Set Identity Matrix
+	for ii=1 to 4
+		for jj=1 to 4
+			if ii=jj then
+				m[ii][jj]=1
+				summ[ii][jj]=1
+			else
+				m[ii][jj]=0
+				summ[ii][jj]=0
+			endif
+		next jj
+	next ii
+return
+
+
+1120:	! Rotation around Axis with Angle
+
+	if NSP<>4 then print "Something Wrong !"
+
+	! Transform axis to the current coordinate system
+	gosub 1201   ! Transform Point with summ[4][4]
+
+	alfa_hpts = -get(1)
+	x_hpts = get(1)
+	y_hpts = get(1)
+	z_hpts = get(1)
+
+	gosub 1301   ! Rotation Axis and Angle to Quaternion
+	gosub 1304   ! Quaternion to Rotation Matrix
+	gosub 1202   ! Transform Coordinate System with Matrix m[4][4]
+	gosub 1203   ! Transform Summ Matrix
+return
+
+
+1200:	! Transform Point with m[4][4]
+	x_hpts = get(1)
+	y_hpts = get(1)
+	z_hpts = get(1)
+	h_hpts = 1
+	put x_hpts*m[1][1] + y_hpts*m[2][1] + z_hpts*m[3][1] + h_hpts*m[4][1] ! X
+	put x_hpts*m[1][2] + y_hpts*m[2][2] + z_hpts*m[3][2] + h_hpts*m[4][2] ! Y
+	put x_hpts*m[1][3] + y_hpts*m[2][3] + z_hpts*m[3][3] + h_hpts*m[4][3] ! Z
+!	put x_hpts*m[1][4] + y_hpts*m[2][4] + z_hpts*m[3][4] + h_hpts*m[4][4] ! h
+return
+
+
+1201:	! Transform Point with summ[4][4]
+	x_hpts = get(1)
+	y_hpts = get(1)
+	z_hpts = get(1)
+	h_hpts = 1
+	put x_hpts*summ[1][1] + y_hpts*summ[2][1] + z_hpts*summ[3][1] + h_hpts*summ[4][1] ! X
+	put x_hpts*summ[1][2] + y_hpts*summ[2][2] + z_hpts*summ[3][2] + h_hpts*summ[4][2] ! Y
+	put x_hpts*summ[1][3] + y_hpts*summ[2][3] + z_hpts*summ[3][3] + h_hpts*summ[4][3] ! Z
+!	put x_hpts*summ[1][4] + y_hpts*summ[2][4] + z_hpts*summ[3][4] + h_hpts*summ[4][4] ! h
+return
+
+
+1202:	! Transform Coordinate System
+	put Coord[1][1],Coord[1][2],Coord[1][3]
+	gosub 1200
+	Coord[1][1] = get(1)
+	Coord[1][2] = get(1)
+	Coord[1][3] = get(1)
+
+	put Coord[2][1],Coord[2][2],Coord[2][3]
+	gosub 1200
+	Coord[2][1] = get(1)
+	Coord[2][2] = get(1)
+	Coord[2][3] = get(1)
+
+	put Coord[3][1],Coord[3][2],Coord[3][3]
+	gosub 1200
+	Coord[3][1] = get(1)
+	Coord[3][2] = get(1)
+	Coord[3][3] = get(1)
+return
+
+
+1203:	! Transform Matrix
+	dim temp[4][4] ! Temporary Matrix
+
+	! Copy summ[] to temp[]
+	for ii=1 TO 4
+		for jj=1 TO 4
+			temp[ii][jj]=summ[ii][jj]
+		next jj
+	next ii
+
+	! Transform summ[] and m[]
+	for ii=1 to 4
+		for jj=1 to 4
+			summ[ii][jj]=0
+			for kk=1 to 4
+				summ[ii][jj] = summ[ii][jj]+temp[ii][kk]*m[kk][jj]
+			next kk
+		next jj
+	next ii
+return
+
+
+1210:	! Transform Point with summ[4][4] and Coord[4][3]
+	gosub 1201   ! Transform Point with summ[4][4]
+
+	x_hpts = get(1)
+	y_hpts = get(1)
+	z_hpts = get(1)
+
+	put Coord[4][1] + x_hpts
+	put Coord[4][2] + y_hpts
+	put Coord[4][3] + z_hpts
+return
+
+
+! =============================================================================
+! Quaternion Functions
+! =============================================================================
+
+1301:	! Rotation Axis and Angle to Quaternion
+
+	temp_hpts = x_hpts^2 + y_hpts^2 + z_hpts^2
+	dist_hpts = SIN(alfa_hpts/2) / sqr(temp_hpts)
+
+	qX_hpts = x_hpts * dist_hpts
+	qY_hpts = y_hpts * dist_hpts
+	qZ_hpts = z_hpts * dist_hpts
+	qW_hpts = COS(alfa_hpts/2)
+return
+
+1304:	! Quaternion to Rotation Matrix
+	x2_hpts = qx_hpts + qx_hpts: y2_hpts = qy_hpts + qy_hpts: z2_hpts = qz_hpts + qz_hpts
+	xx_hpts = qx_hpts * x2_hpts: xy_hpts = qx_hpts * y2_hpts: xz_hpts = qx_hpts * z2_hpts
+	yy_hpts = qy_hpts * y2_hpts: yz_hpts = qy_hpts * z2_hpts: zz_hpts = qz_hpts * z2_hpts
+	wx_hpts = qw_hpts * x2_hpts: wy_hpts = qw_hpts * y2_hpts: wz_hpts = qw_hpts * z2_hpts
+
+	m[1][1] = 1 - (yy_hpts + zz_hpts)
+	m[1][2] = xy_hpts - wz_hpts
+	m[1][3] = xz_hpts + wy_hpts
+	m[1][4] = 0
+
+	m[2][1] = xy_hpts + wz_hpts
+	m[2][2] = 1 - (xx_hpts + zz_hpts)
+	m[2][3] = yz_hpts - wx_hpts
+	m[2][4] = 0
+
+	m[3][1] = xz_hpts - wy_hpts
+	m[3][2] = yz_hpts + wx_hpts
+	m[3][3] = 1 - (xx_hpts + yy_hpts)
+	m[3][4] = 0
+
+	m[4][1] = 0
+	m[4][2] = 0
+	m[4][3] = 0
+	m[4][4] = 1
+return
+
+1:

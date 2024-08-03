@@ -1,0 +1,347 @@
+
+! ==============================================================================
+! Biomass Boiler
+! ==============================================================================
+
+call "FM_types" parameters all
+
+dim stDetail[3]
+	stDetail[1]=`Детальный`
+	stDetail[2]=`Простой`
+	stDetail[3]=`Откл.`
+
+dim stDetail2D[3]
+	stDetail2D[1]=`Детальный`
+	stDetail2D[2]=`Простой`
+	stDetail2D[3]=`Упрощенный`
+
+VALUES "gs_detlevel_3D" stDetail
+VALUES "gs_detlevel_3D_m" 2, 1, 0
+
+IF GLOB_MODPAR_NAME = "gs_detlevel_3D" OR gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = stDetail[3] THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = stDetail[2] THEN gs_detlevel_3D_m = 1
+	PARAMETERS gs_detlevel_3D_m = gs_detlevel_3D_m
+ELSE
+	gs_detlevel_3D = stDetail[1]
+	IF gs_detlevel_3D_m = 0 THEN gs_detlevel_3D = stDetail[3]
+	IF gs_detlevel_3D_m = 1 THEN gs_detlevel_3D = stDetail[2]
+	PARAMETERS gs_detlevel_3D = gs_detlevel_3D
+ENDIF
+
+values "gs_detlevel_2D" stDetail2D
+values "gs_detlevel_2D_m" 2, 1, 0
+
+if GLOB_MODPAR_NAME = "gs_detlevel_2D" then
+	gs_detlevel_2D_m = 2 ! detailed
+	if gs_detlevel_2D = stDetail2D[3] then gs_detlevel_2D_m = 0
+	if gs_detlevel_2D = stDetail2D[2] then gs_detlevel_2D_m = 1
+	parameters gs_detlevel_2D_m = gs_detlevel_2D_m
+else
+	gs_detlevel_2D = stDetail[1]
+	if gs_detlevel_2D_m = 0 then gs_detlevel_2D = stDetail2D[3]
+	if gs_detlevel_2D_m = 1 then gs_detlevel_2D = stDetail2D[2]
+	parameters gs_detlevel_2D = gs_detlevel_2D
+endif
+
+for i = 1 to 255
+	put i
+next i
+
+values "gs_cont_pen" use(NSP)
+values "gs_fill_pen" get(NSP)
+
+values "gs_resol" range [3, )
+IF gs_detlevel_3D_m = 1 then lock "gs_resol"
+
+VALUES "A" RANGE [2*displayFrameW + 5*buttonW, )
+VALUES "B" RANGE [doorThk + displayFrameW*3, )
+VALUES "ZZYZX" RANGE [footHeight + 3*handleL + 0.1 + boxChamfer, )
+PUT 1
+
+IF isMEPEnabled THEN
+
+	IF NOT(ConStatus_1) AND NOT(ConStatus_2) AND NOT(ConStatus_3) THEN
+		LOCK "gs_con_mat"
+		HIDEPARAMETER "gs_con_mat"
+	ENDIF
+
+	DIM shape_typ_to_validation[3]
+		shape_typ_to_validation[1] = 0		! Rectangle
+		shape_typ_to_validation[2] = 1		! Circle
+		shape_typ_to_validation[3] = 0		! Oval
+
+					! --- CONNECTIONS --- !
+
+	PARAMETERS MEP_NumberConnections = 3
+
+
+					! --- 1st CONNECTION --- !
+
+	ConID = 1
+	ConName = `Подключение Горячей Воды`
+
+	ConDVecX = 0
+	ConDVecY = 1
+	ConDVecZ = 0
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_1 < 0.001 THEN
+		ConWidth_1 = 0.001
+		PARAMETERS ConWidth_1 = ConWidth_1
+	ENDIF
+	IF ConWidth_1 > 0.09*(A/0.60) THEN
+		ConWidth_1 = 0.09*(A/0.60)
+		PARAMETERS ConWidth_1 = ConWidth_1
+	ENDIF
+	VALUES "ConWidth_1" RANGE (0, 0.09*(A/0.60)]
+	PARAMETERS ConDepth_1 = ConWidth_1
+	VALUES "ConLength_1" RANGE [0, ]
+
+	VALUES "ConPosX_1" RANGE [A/2 + ConWidth_1, A - ConWidth_1]
+	PARAMETERS ConPosY_1 = B
+	VALUES "ConPosZ_1" RANGE [footHeight + ConWidth_1, ZZYZX - ConWidth_1]
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_1,
+		ConPosY = ConPosY_1,
+		ConPosZ = ConPosZ_1,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_1,
+		ConNominalDepth = ConNominalDepth_1,
+		ConWidth = ConWidth_1,
+		ConDepth = ConDepth_1,
+		ConLength = ConLength_1,
+		ConWallThickness = ConWallThickness_1,
+		ConConnectorWidth = ConConnectorWidth_1,
+		ConConnectorDepth = ConConnectorDepth_1,
+		ConConnectorWidth2 = ConConnectorWidth2_1,
+		ConToolType = ConToolType_1,
+		ConStatus = ConStatus_1,
+		ConType_1 = ConType_1,
+		ConConnectorType_1 = ConConnectorType_1,
+		ConSystem_1 = ConSystem_1,
+		ui_current_con = ui_current_con,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_1, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+					! --- 2nd CONNECTION --- !
+
+	ConID = 2
+	ConName = `Подключение Холодной Воды`
+
+	ConDVecX = 0
+	ConDVecY = 1
+	ConDVecZ = 0
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_2 < 0.001 THEN
+		ConWidth_2 = 0.001
+		PARAMETERS ConWidth_2 = ConWidth_2
+	ENDIF
+	IF ConWidth_2 > 0.09*(A/0.60) THEN
+		ConWidth_2 = 0.09*(A/0.60)
+		PARAMETERS ConWidth_2 = ConWidth_2
+	ENDIF
+	VALUES "ConWidth_2" RANGE (0, 0.09*(A/0.60)]
+	PARAMETERS ConDepth_2 = ConWidth_2
+	VALUES "ConLength_2" RANGE [0, ]
+
+	VALUES "ConPosX_2" RANGE [ConWidth_1, A/2 - ConWidth_1]
+	PARAMETERS ConPosY_2 = B
+	VALUES "ConPosZ_2" RANGE [footHeight + ConWidth_1, ZZYZX - ConWidth_1]
+
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_2,
+		ConPosY = ConPosY_2,
+		ConPosZ = ConPosZ_2,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_2,
+		ConNominalDepth = ConNominalDepth_2,
+		ConWidth = ConWidth_2,
+		ConDepth = ConDepth_2,
+		ConLength = ConLength_2,
+		ConWallThickness = ConWallThickness_2,
+		ConConnectorWidth = ConConnectorWidth_2,
+		ConConnectorDepth = ConConnectorDepth_2,
+		ConConnectorWidth2 = ConConnectorWidth2_2,
+		ConToolType = ConToolType_2,
+		ConStatus = ConStatus_2,
+		ConType_2 = ConType_2,
+		ConConnectorType_2 = ConConnectorType_2,
+		ConSystem_2 = ConSystem_2,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_2, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+					! --- 3nd CONNECTION --- !
+
+	ConID = 3
+	ConName = `Подключение Дымохода`
+
+	ConDVecX = 0
+	ConDVecY = 0
+	ConDVecZ = 1
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_3 < 0.05 THEN
+		ConWidth_3 = 0.05
+		PARAMETERS ConWidth_3 = ConWidth_3
+	ENDIF
+	IF ConWidth_3 > A/3 THEN
+		ConWidth_3 = A/3
+		PARAMETERS ConWidth_3 = ConWidth_3
+	ENDIF
+	VALUES "ConWidth_3" RANGE (0, A/3]
+	PARAMETERS ConDepth_3 = ConWidth_3
+	VALUES "ConLength_3" RANGE [0, ]
+
+	VALUES "ConPosX_3" RANGE [ConWidth_3, A - ConWidth_3]
+	VALUES "ConPosY_3" RANGE [boxChamfer + ConWidth_3, B - ConWidth_3]
+	PARAMETERS ConPosZ_3 = ZZYZX
+
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_3,
+		ConPosY = ConPosY_3,
+		ConPosZ = ConPosZ_3,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_3,
+		ConNominalDepth = ConNominalDepth_3,
+		ConWidth = ConWidth_3,
+		ConDepth = ConDepth_3,
+		ConLength = ConLength_3,
+		ConWallThickness = ConWallThickness_3,
+		ConConnectorWidth = ConConnectorWidth_3,
+		ConConnectorDepth = ConConnectorDepth_3,
+		ConConnectorWidth2 = ConConnectorWidth2_3,
+		ConToolType = ConToolType_3,
+		ConStatus = ConStatus_3,
+		ConType_3 = ConType_3,
+		ConConnectorType_3 = ConConnectorType_3,
+		ConSystem_3 = ConSystem_3,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_3, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_3, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+	IF gs_ui_current_page = 2 THEN
+		ac_mep_connectionpage_active = 1
+	ELSE
+		ac_mep_connectionpage_active = 0
+	ENDIF
+	PARAMETERS ac_mep_connectionpage_active = ac_mep_connectionpage_active
+
+	IF SetProgram THEN
+		SetProgram = 0
+		PARAMETERS SetProgram = SetProgram
+	ENDIF
+	PUT 2
+ELSE
+	HIDEPARAMETER "gs_connection", "useSysMat", "gs_con_mat"
+
+	ac_mep_connectionpage_active = 0
+	PARAMETERS ac_mep_connectionpage_active = ac_mep_connectionpage_active
+ENDIF
+
+values "FM_HeatOutput_unit" `З`, `БТЕ/час`
+values "FM_RefrigeratingOutput_unit" `З`, `БТЕ/час`
+
+
+if FM_HeatOutput_unit = `БТЕ/час` then
+	hideparameter "FM_HeatOutput"
+else
+	hideparameter "FM_HeatOutput_btu"
+endif
+
+if FM_RefrigeratingOutput_unit = `БТЕ/час` then
+	hideparameter "FM_RefrigeratingOutput"
+else
+	hideparameter "FM_RefrigeratingOutput_btu"
+endif
+
+
+!1000 W = 3414,426 Btu/hour
+if GLOB_MODPAR_NAME = "FM_HeatOutput_btu" then
+	FM_HeatOutput = FM_HeatOutput_btu / 3.414426
+	parameters FM_HeatOutput = FM_HeatOutput
+else
+	FM_HeatOutput_btu = FM_HeatOutput * 3.414426
+	parameters FM_HeatOutput_btu = FM_HeatOutput_btu
+endif
+
+!1000 W = 3414,426 Btu/hour
+if GLOB_MODPAR_NAME = "FM_RefrigeratingOutput_btu" then
+	FM_RefrigeratingOutput = FM_RefrigeratingOutput_btu / 3.414426
+	parameters FM_RefrigeratingOutput = FM_RefrigeratingOutput
+else
+	FM_RefrigeratingOutput_btu = FM_RefrigeratingOutput * 3.414426
+	parameters FM_RefrigeratingOutput_btu = FM_RefrigeratingOutput_btu
+endif
+
+values "gs_ui_current_page" get(nsp)

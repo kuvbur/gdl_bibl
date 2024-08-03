@@ -1,0 +1,186 @@
+
+EPS = 0.0001
+
+
+POS_TOP		= 1
+POS_LEFT	= 2
+POS_RIGHT	= 3
+POS_BOTT	= 4
+
+! =============================================================================
+! Migration
+! =============================================================================
+
+if GLOB_SCRIPT_TYPE = 7 | GLOB_SCRIPT_TYPE = 8 then goto "MasterEnd"	! forward migration, backward migration
+
+
+
+
+dim mPositionSide[4]
+	mPositionSide[1] = `Верх`
+	mPositionSide[2] = `Слева`
+	mPositionSide[3] = `Справа`
+	mPositionSide[4] = `Низ`
+
+dim mTitleFitMode[4]
+	mTitleFitMode[1] = `Чертеж`
+	mTitleFitMode[2] = `Макет`
+	mTitleFitMode[3] = `Ячейка`
+	mTitleFitMode[4] = `Специальный`
+
+
+
+! ==============================================================================
+! Bounding Box Calculations
+! ==============================================================================
+
+if AC_ManualPosition then
+
+	titlePosX = 0
+	titlePosY = 0
+	titleAlpha = 0
+
+	if AC_titleFitMode = 1 then		! Fit to Drawing Rect
+		xo = AC_DrawingRect[1]:			yo = AC_DrawingRect[2]
+		x1 = AC_DrawingRect[3]:			y1 = AC_DrawingRect[4]
+		x2 = x1 + cos(titleAlpha - 90):	y2 = y1 + sin(titleAlpha - 90)
+	endif
+	if AC_titleFitMode = 2 then		! Fit to Layout Rect
+		xo = AC_LayoutRect[1]:		yo = AC_LayoutRect[2]
+		x1 = AC_LayoutRect[3]:		y1 = AC_LayoutRect[4]
+		x2 = x1 + cos(titleAlpha - 90):	y2 = y1 + sin(titleAlpha - 90)
+	endif
+	if AC_titleFitMode = 3 then		! Fit to Cell Rect
+		xo = AC_GridRect[1]:		yo = AC_GridRect[2]
+		x1 = AC_GridRect[3]:		y1 = AC_GridRect[4]
+		x2 = x1 + cos(titleAlpha - 90):	y2 = y1 + sin(titleAlpha - 90)
+	endif
+else
+	drawingPosX  = AC_DrawingRect[1]
+	drawingPosY  = AC_DrawingRect[2]
+	drawingAlpha = AC_DrawingRect[5]
+
+	xo = AC_DrawingRect[1]:		yo = AC_DrawingRect[2]
+	x1 = AC_DrawingRect[3]:		y1 = AC_DrawingRect[4]
+	x2 = x1 + cos(drawingAlpha - 90):	y2 = y1 + sin(drawingAlpha - 90)
+
+	drawingRectX = (abs((y2 - y1) * (xo - x1) - (x2 - x1) * (yo - y1)) / sqr((x2 - x1)^2 + (y2 - y1)^2))
+	diagonalL = sqr((xo - x1)^2 + (yo - y1)^2)
+
+	if abs(drawingRectX) < EPS | diagonalL < EPS then end
+
+	drawingRectY = sqr(diagonalL^2 - drawingRectX^2)
+
+	if AC_titleFitMode = 1 then		! Fit to Drawing Rect
+		titlePosX	= drawingPosX
+		titlePosY	= drawingPosY
+		titleAlpha	= drawingAlpha
+		titleRectX	= drawingRectX
+		titleRectY	= drawingRectY
+	else
+		if AC_titleFitMode = 2 then		! Fit to Layout Rect
+			titlePosX = AC_LayoutRect[1]
+			titlePosY = AC_LayoutRect[2]
+			titleAlpha = AC_LayoutRect[5]
+
+			xo = AC_LayoutRect[1]:		yo = AC_LayoutRect[2]
+			x1 = AC_LayoutRect[3]:		y1 = AC_LayoutRect[4]
+			x2 = x1 + cos(titleAlpha - 90):	y2 = y1 + sin(titleAlpha - 90)
+		endif
+
+		if AC_titleFitMode = 3 then		! Fit to Cell Rect
+			titlePosX = AC_GridRect[1]
+			titlePosY = AC_GridRect[2]
+			titleAlpha = AC_GridRect[5]
+
+			xo = AC_GridRect[1]:		yo = AC_GridRect[2]
+			x1 = AC_GridRect[3]:		y1 = AC_GridRect[4]
+			x2 = x1 + cos(titleAlpha - 90):	y2 = y1 + sin(titleAlpha - 90)
+		endif
+	endif
+endif
+
+titleRectX = (abs((y2 - y1) * (xo - x1) - (x2 - x1) * (yo - y1)) / sqr((x2 - x1)^2 + (y2 - y1)^2))
+diagonalL = sqr((xo - x1)^2 + (yo - y1)^2)
+
+if abs(titleRectX) < EPS | diagonalL < EPS then end
+
+titleRectY = sqr(diagonalL^2 - titleRectX^2)
+
+savedTitleRectX = titleRectX
+savedTitleRectY = titleRectY
+
+
+! ==============================================================================
+! Draw Preview
+! ==============================================================================
+
+if GLOB_SCRIPT_TYPE = 2 then
+	bPositioningPreview = (GLOB_CONTEXT = 5 & AC_PreviewType = 0)
+else
+	bPositioningPreview = 0
+endif
+
+if bPositioningPreview then
+
+	if SYMB_MIRRORED then
+		mul2 -1, 1
+	endif
+
+	PAPER_TO_MODEL = 0.1
+
+	pwx = 20
+	pwy = 20
+
+	if GLOB_SCRIPT_TYPE = 2 then
+		gs_title_width_paper = 100 * gs_title_width_paper / GLOB_SCALE
+		gs_title_height_paper = 100 * gs_title_height_paper / GLOB_SCALE
+	endif
+
+
+	pen 1
+	rect2 0,0, pwx,pwy
+
+	if AC_titleFitMode = 1 | AC_ManualPosition then		! Fit to Drawing Rect
+		rect2 0.2*pwx, 0.3*pwy, 0.8*pwx, 0.8*pwy
+
+		titlePosX	= 0.2*pwx
+		titlePosY	= 0.3*pwy
+		titleAlpha	= 0
+		titleRectX	= 0.6*pwx
+		titleRectY	= 0.5*pwy
+	endif
+
+	if AC_titleFitMode = 2 then		! Fit to Layout Rect
+		titlePosX	= 0
+		titlePosY	= 0
+		titleAlpha	= 0
+		titleRectX	= pwx
+		titleRectY	= pwy
+	endif
+
+	if AC_titleFitMode = 3 then		! Fit to Cell Rect
+		line2 0,		0.3*pwy,	pwx,		0.3*pwy
+		line2 0,		0.8*pwy,	pwx,		0.8*pwy
+		line2 0.2*pwx,	0,			0.2*pwx,	pwy
+		line2 0.8*pwx,	0,			0.8*pwx,	pwy
+
+		titlePosX	= 0.2*pwx
+		titlePosY	= 0.3*pwy
+		titleAlpha	= 0
+		titleRectX	= 0.6*pwx
+		titleRectY	= 0.5*pwy
+	endif
+
+	add2 titlePosX, titlePosY
+	rot2 titleAlpha
+
+	rect2 0,0, titleRectX,titleRectY
+
+	del 2
+endif
+
+! =============================================================================
+"MasterEnd":
+
+

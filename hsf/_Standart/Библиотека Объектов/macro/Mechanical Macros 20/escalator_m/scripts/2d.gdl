@@ -1,0 +1,340 @@
+
+! ==============================================================================
+! escalator_m
+! ==============================================================================
+
+
+call "2dDetailLevel" parameters gs_detlevel_2D_m = gs_detlevel_2D_m,
+				returned_parameters det2D
+
+if inclination > 0 then
+	nLowerTread = int(GLOB_CUTPLANES_INFO[1]/riser)
+	if nLowerTread > nTread - 4 then nLowerTread = nTread - 4
+else
+	nLowerTread = 5
+endif
+
+if abs(inclination) < eps then bShowBreakline = 0
+breaklineAngle = atn((tread * cos(asn(riser/tread)) - 0.05)/stepWidth)
+breaklineDist = 0.1
+
+HOTSPOT2 0, 0, unID, xBreaklinePos, 1+128: unID=unID+1
+HOTSPOT2 xBreaklinePos, 0, unID, xBreaklinePos, 2: unID=unID+1
+
+!xBreaklinePos = A/2 - totalTreadLength/2 + 2 * tread + tread * cos(asn(riserBegin/tread)) + (nLowerTread - 1) * tread * cos(asn(riser/tread)) - balustradeWidth * tan(breaklineAngle)
+!if xBreaklinePos < landingLength + 2 * combLength then xBreaklinePos = landingLength + 2 * combLength
+
+railMod = balustradeRadius
+if iBalustradeType = BALUSTRADE_GLAZED & det2D = DET2D_DETAILED then railMod = 0
+bRubber = 1
+if det2D = DET2D_DETAILED then bRubber = 0
+
+pen gs_cont_pen
+fill gs_fill_type
+
+unID = 1
+hotspot2 0, 0, unID : unID = unID + 1
+hotspot2 0, B/2, unID : unID = unID + 1
+hotspot2 0, B, unID : unID = unID + 1
+hotspot2 A, B, unID : unID = unID + 1
+hotspot2 A, B/2, unID : unID = unID + 1
+hotspot2 A, 0, unID : unID = unID + 1
+hotspot2 landingLength, B, unID : unID = unID + 1
+hotspot2 landingLength, 0, unID : unID = unID + 1
+hotspot2 A - landingLength, B, unID : unID = unID + 1
+hotspot2 A - landingLength, 0, unID : unID = unID + 1
+hotspot2 A/2, B/2, unID
+
+if bStorySensitive then
+	if GLOB_CSTORY_ELEV > GLOB_HSTORY_ELEV then
+		if bShowBreaklineUp then
+			if bShowLower2D then
+				poly2_b 5, 2+64, gs_fill_pen, gs_back_pen,
+					xBreaklinePos, 0, 0,
+					xBreaklinePos + breaklineDist, 0, 0,
+					xBreaklinePos + B * tan(breaklineAngle) + breaklineDist, B, 0,
+					xBreaklinePos + B * tan(breaklineAngle), B, 0,
+					xBreaklinePos, 0, -1
+				bBreakline = 1
+				ltStair = 1
+				gosub "LowerStair"
+			endif
+
+			bBreakline = 1
+			ltStair = 1
+			gosub "UpperStair"
+		else
+			bBreakline = 0
+			ltStair = 1
+			gosub "LowerStair"
+			gosub "UpperStair"
+		endif
+	endif
+	if GLOB_CSTORY_ELEV < GLOB_HSTORY_ELEV then
+		bBreakline = 0
+		ltStair = ltOverhead
+		gosub "LowerStair"
+		gosub "UpperStair"
+	endif
+endif
+
+if not(bStorySensitive) | (bStorySensitive & abs(GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV) < eps) then
+	if bShowBreakline then
+		bBreakline = 1
+		if bShowOverhead then
+			poly2_b 5, 2+64, gs_fill_pen, gs_back_pen,
+				xBreaklinePos, 0, 0,
+				xBreaklinePos + breaklineDist, 0, 0,
+				xBreaklinePos + B * tan(breaklineAngle) + breaklineDist, B, 0,
+				xBreaklinePos + B * tan(breaklineAngle), B, 0,
+				xBreaklinePos, 0, -1
+
+			ltStair = ltOverhead
+			gosub "UpperStair"
+		endif
+
+		ltStair = 1
+		gosub "LowerStair"
+	else
+		bBreakline = 0
+		ltStair = 1
+		gosub "LowerStair"
+		gosub "UpperStair"
+	endif
+endif
+
+
+! ==============================================================================
+! Up and Down text
+! ==============================================================================
+
+if walkingDirUPDN_m then
+	dim stWText[2]
+		stWText[1] = `ВВЕРХ`
+		stWText[2] = `ВНИЗ`
+
+	define style "UPDN" fontType, UPDNfontsize, 5, 1		  	!!- UP/DN
+	UPDNheigth = 0
+	rrr = request("Height_of_style", "UPDN", UPDNheigth)
+	UPDNheigth = UPDNheigth / 1000 * GLOB_SCALE
+	set style "UPDN"
+	pen UPDNfontpen
+
+	UPDNx=0
+	if walkingDirUPDN_m = 1 then	! UP
+		UPDNText = stWText[1]
+	else
+		if walkingDirUPDN_m = 3 then
+			UPDNx = a
+		endif
+		UPDNText = stWText[2]
+	endif
+	UPDNwidth = STW ((UPDNText+"  ")) / 1000 * GLOB_SCALE
+
+	! --- Oriented View ------------------------------ [
+	angleViewRot = 0
+	rrr = REQUEST ("View_Rotangle", "", angleViewRot)
+	totalRotate = (SYMB_ROTANGLE + angleViewRot) MOD 360
+	! --- Oriented View ------------------------------ ]
+
+	iReadable = 0
+	gs_readable_angle = 0
+	rotateUPDN = 0
+	! Text Rotation - Readable / Parallel with Walking Line / Align with Symbol
+	! ----------------------------------------------------------------------
+	if UPDNx > EPS then
+		UPDNTextOffset = UPDNheigth/2
+	else
+		UPDNTextOffset = -UPDNheigth/2
+	endif
+	if typeTextRotation_UpDn_m = 1 then									! Readable
+		if (totalRotate > (gs_readable_angle + eps) & totalRotate < (gs_readable_angle + 180 + eps)) then
+			rotateUPDN = -180
+		endif
+		if SYMB_MIRRORED then rotateUPDN=rotateUPDN-180
+	else
+		if typeTextRotation_UpDn_m = 2 then								! Parallel with Walking Line
+			gs_readable_angle = 180
+			iReadable = (totalRotate > (gs_readable_angle - 90 + eps) & totalRotate < (gs_readable_angle + 180 - 90 + eps))- not(totalRotate > (gs_readable_angle - 90 + eps) & totalRotate < (gs_readable_angle + 180 - 90 + eps))
+
+			rotateUPDN = 90 * iReadable
+
+			if UPDNx > EPS then
+				UPDNTextOffset = UPDNwidth/2
+			else
+				UPDNTextOffset = -UPDNwidth/2
+			endif
+		else
+			rotateUPDN = 180
+		endif
+	endif
+
+	add2 UPDNx+UPDNTextOffset, B/2
+	rot2 rotateUPDN+90
+	text2 0, 0, UPDNText
+	del 2
+endif
+
+end
+
+
+"LowerStair":
+
+line_type ltStair
+
+poly2_b 5, 1+2+64, gs_fill_pen, gs_back_pen,
+	0, 0, 1,
+	xBreaklinePos + breaklineDist * not(bBreakLine), 0, bBreakline,
+	xBreaklinePos + B * tan(breaklineAngle) + breaklineDist * not(bBreakLine), B, 1,
+	0, B, 1,
+	0, 0, -1
+
+poly2_b 7, 1, gs_fill_pen, gs_back_pen,
+	landingLength - railMod, 0, 0,
+	xBreaklinePos + breaklineDist * not(bBreakLine), 0, 0,
+	xBreaklinePos + balustradeWidth * tan(breaklineAngle) + breaklineDist * not(bBreakLine), balustradeWidth, 1,
+	landingLength - railMod, balustradeWidth, 1,
+	landingLength - railMod, balustradeWidth/2 + handrailRubberWidth/2, bRubber,
+	landingLength - railMod, balustradeWidth/2 - handrailRubberWidth/2, 1,
+	landingLength - railMod, 0, -1
+
+poly2_b 7, 1, gs_fill_pen, gs_back_pen,
+	landingLength - railMod, B - balustradeWidth, 1,
+	xBreaklinePos + (B - balustradeWidth) * tan(breaklineAngle) + breaklineDist * not(bBreakLine), B - balustradeWidth, 0,
+	xBreaklinePos + B * tan(breaklineAngle) + breaklineDist * not(bBreakLine), B, 0,
+	landingLength - railMod, B, 1,
+	landingLength - railMod, B - balustradeWidth/2 + handrailRubberWidth/2, bRubber,
+	landingLength - railMod, B - balustradeWidth/2 - handrailRubberWidth/2, 1,
+	landingLength - railMod, B - balustradeWidth, -1
+
+if det2D = DET2D_DETAILED then
+	poly2_b 5, 1, gs_fill_pen, gs_back_pen,
+		landingLength - balustradeRadius - handrailRubberThk, balustradeWidth/2 - handrailRubberWidth/2, 1,
+		xBreaklinePos + (balustradeWidth/2 - handrailRubberWidth/2) * tan(breaklineAngle) + breaklineDist * not(bBreakLine), balustradeWidth/2 - handrailRubberWidth/2, 0,
+		xBreaklinePos + (balustradeWidth/2 + handrailRubberWidth/2) * tan(breaklineAngle) + breaklineDist * not(bBreakLine), balustradeWidth/2 + handrailRubberWidth/2, 1,
+		landingLength - balustradeRadius - handrailRubberThk, balustradeWidth/2 + handrailRubberWidth/2, 1,
+		landingLength - balustradeRadius - handrailRubberThk, balustradeWidth/2 - handrailRubberWidth/2, -1
+
+	poly2_b 5, 1, gs_fill_pen, gs_back_pen,
+		landingLength - balustradeRadius - handrailRubberThk, B - balustradeWidth/2 - handrailRubberWidth/2, 1,
+		xBreaklinePos + (B - balustradeWidth/2 - handrailRubberWidth/2) * tan(breaklineAngle) + breaklineDist * not(bBreakLine), B - balustradeWidth/2 - handrailRubberWidth/2, 0,
+		xBreaklinePos + (B - balustradeWidth/2 + handrailRubberWidth/2) * tan(breaklineAngle) + breaklineDist * not(bBreakLine), B - balustradeWidth/2 + handrailRubberWidth/2, 1,
+		landingLength - balustradeRadius - handrailRubberThk, B - balustradeWidth/2 + handrailRubberWidth/2, 1,
+		landingLength - balustradeRadius - handrailRubberThk, B - balustradeWidth/2 - handrailRubberWidth/2, -1
+endif
+
+if (det2D = DET2D_DETAILED | det2D = DET2D_MIDDLE) then
+	line2 landingLength, balustradeWidth, landingLength, B - balustradeWidth
+endif
+
+if (det2D = DET2D_DETAILED | det2D = DET2D_MIDDLE) & iObjectType = ESCALATOR then
+	nShowTreadBegin = 1
+	if totalTreadLength - 2 * tread > A - 2 * (landingLength + combLength) then
+		nShowTreadBegin = 2
+	endif
+	nShowTreadLast = int((xBreaklinePos)/(tread * cos(asn(riser/tread))))-1
+	gosub "Tread"
+endif
+line2 landingLength + combLength, balustradeWidth, landingLength + combLength, B - balustradeWidth
+line2 landingLength + combLength, B/2, xBreaklinePos + B/2 * tan(breaklineAngle) + breaklineDist * not(bBreakLine), B/2
+
+return
+
+
+"UpperStair":
+
+line_type ltStair
+
+poly2_b 5, 1+2+64, gs_fill_pen, gs_back_pen,
+	A, 0, 1,
+	xBreaklinePos + breaklineDist, 0, bBreakline,
+	xBreaklinePos + B * tan(breaklineAngle) + breaklineDist, B, 1,
+	A, B, 1,
+	A, 0, -1
+
+poly2_b 7, 1, gs_fill_pen, gs_back_pen,
+	A - landingLength + railMod, 0, 0,
+	xBreaklinePos + breaklineDist, 0, 0,
+	xBreaklinePos + balustradeWidth * tan(breaklineAngle) + breaklineDist, balustradeWidth, 1,
+	A - landingLength + railMod, balustradeWidth, 1,
+	A - landingLength + railMod, balustradeWidth/2 + handrailRubberWidth/2, bRubber,
+	A - landingLength + railMod, balustradeWidth/2 - handrailRubberWidth/2, 1,
+	A - landingLength + railMod, 0, -1
+
+poly2_b 7, 1, gs_fill_pen, gs_back_pen,
+	A - landingLength + railMod, B - balustradeWidth, 1,
+	xBreaklinePos + (B - balustradeWidth) * tan(breaklineAngle) + breaklineDist, B - balustradeWidth, 0,
+	xBreaklinePos + B * tan(breaklineAngle) + breaklineDist, B, 0,
+	A - landingLength + railMod, B, 1,
+	A - landingLength + railMod, B - balustradeWidth/2 + handrailRubberWidth/2, bRubber,
+	A - landingLength + railMod, B - balustradeWidth/2 - handrailRubberWidth/2, 1,
+	A - landingLength + railMod, B - balustradeWidth, -1
+
+if det2D = DET2D_DETAILED then
+	poly2_b 5, 1, gs_fill_pen, gs_back_pen,
+		A - landingLength + balustradeRadius + handrailRubberThk, balustradeWidth/2 - handrailRubberWidth/2, 1,
+		xBreaklinePos + (balustradeWidth/2 - handrailRubberWidth/2) * tan(breaklineAngle) + breaklineDist, balustradeWidth/2 - handrailRubberWidth/2, 0,
+		xBreaklinePos + (balustradeWidth/2 + handrailRubberWidth/2) * tan(breaklineAngle) + breaklineDist, balustradeWidth/2 + handrailRubberWidth/2, 1,
+		A - landingLength + balustradeRadius + handrailRubberThk, balustradeWidth/2 + handrailRubberWidth/2, 1,
+		A - landingLength + balustradeRadius + handrailRubberThk, balustradeWidth/2 - handrailRubberWidth/2, -1
+
+	poly2_b 5, 1, gs_fill_pen, gs_back_pen,
+		A - landingLength + balustradeRadius + handrailRubberThk, B - balustradeWidth/2 - handrailRubberWidth/2, 1,
+		xBreaklinePos + (B - balustradeWidth/2 - handrailRubberWidth/2) * tan(breaklineAngle) + breaklineDist, B - balustradeWidth/2 - handrailRubberWidth/2, 0,
+		xBreaklinePos + (B - balustradeWidth/2 + handrailRubberWidth/2) * tan(breaklineAngle) + breaklineDist, B - balustradeWidth/2 + handrailRubberWidth/2, 1,
+		A - landingLength + balustradeRadius + handrailRubberThk, B - balustradeWidth/2 + handrailRubberWidth/2, 1,
+		A - landingLength + balustradeRadius + handrailRubberThk, B - balustradeWidth/2 - handrailRubberWidth/2, -1
+endif
+
+if (det2D = DET2D_DETAILED | det2D = DET2D_MIDDLE) then
+	line2 A - landingLength, balustradeWidth, A - landingLength, B - balustradeWidth
+endif
+
+if (det2D = DET2D_DETAILED | det2D = DET2D_MIDDLE)  & iObjectType = ESCALATOR then
+!	nShowTreadBegin = nLowerTread + 3
+	nShowTreadBegin = int((xBreaklinePos)/(tread * cos(asn(riser/tread))))
+	nShowTreadLast = nTread + 3 + nUpperLandingTread
+	arrowMod = 1
+	if totalTreadLength - 2 * tread > A - 2 * (landingLength + combLength) then
+		nShowTreadLast = nTread + 3 + nUpperLandingTread - 1
+		arrowMod = 2
+	endif
+	gosub "Tread"
+
+endif
+line2 A - landingLength - combLength, balustradeWidth, A - landingLength - combLength, B - balustradeWidth
+line2 A - landingLength - combLength, B/2, xBreaklinePos + B/2 * tan(breaklineAngle) + breaklineDist, B/2
+
+line2 A - landingLength - combLength - tread, balustradeWidth, A - landingLength - combLength, B/2
+line2 A - landingLength - combLength - tread, B - balustradeWidth, A - landingLength - combLength, B/2
+
+return
+
+
+"Tread":
+add2 A/2 - totalTreadLength/2, balustradeWidth
+for hi = 1 to nTread + 3 + nUpperLandingTread
+
+	xTread = tread * cos(asn(riser/tread))
+	zTread = riser
+	treadAngle = 0
+	if hi = 1 | hi = 2 | hi = nTread + 3 | hi = nTread + 4 | hi = nTread + 5 | hi = nTread + 6 then
+		xTread = tread
+	endif
+	if hi = 3 then
+		xTread = tread * cos(asn(riserBegin/tread))
+	endif
+	if hi = nTread + 2 then
+		xTread = tread * cos(asn(riserBegin/tread))
+	endif
+
+	if hi > nShowTreadBegin & hi <= nShowTreadLast then
+		line2 0, 0, 0, stepWidth
+	endif
+
+	add2 xTread, 0
+next hi
+del nTread + 3 + nUpperLandingTread + 1
+
+return
+

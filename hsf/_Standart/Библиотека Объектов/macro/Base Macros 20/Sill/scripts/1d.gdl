@@ -1,0 +1,1048 @@
+
+! const values for parameter: iBrickSilldetlevel
+BRICKSILL_SIMPLE   = 1
+BRICKSILL_DETAILED = 2
+
+EPS = 0.0001
+
+! iLoD3D
+SYMBW_3D_OFF				= 0
+SYMBW_3D_SINGLEPLANE		= 12	! (lod3D_DW = 1 lod3D = lodSE500)
+SYMBW_3D_SPLANE_MIDLINES	= 11	! (lod3D_DW = 1 lod3D = lodSE200)
+SYMBW_3D_MULTIPLANES		= 22	! (lod3D_DW = 2 lod3D = lodSE100)(Simple 3D)
+SYMBW_3D_MULTIPLANES_FRAME	= 21	! (lod3D_DW = 3 lod3D = lodSE50)
+SYMBW_3D_FULLDET			= 31	! (lod3D_DW = 4 lod3D = lodSE20)(Detailed 3D)
+
+! iRevealType
+REVEAL_EDGE				= 0
+REVEAL_NO				= 1
+REVEAL_POSITIVE			= 2
+REVEAL_NEGATIVE			= 3
+REVEAL_SLANTED			= 4
+REVEAL_SPLAYED			= 5
+REVEAL_HISTORIC			= 6
+REVEAL_DOUBLE			= 7
+REVEAL_DOUBLE_SPLAYED	= 8
+REVEAL_OUTSIDE_SPLAYED	= 9
+
+! const values for parameter: iSillType
+SILL_TIMBER			= 1
+SILL_BRICK			= 2
+SILL_STONE			= 3
+SILL_CERAMIC		= 4
+SILL_ETHERNIT		= 5
+SILL_CONCRETE_TUB	= 6
+SILL_ALUMINIUM		= 7
+SILL_SOLID_11		= 8
+SILL_SOLID_12		= 9
+SILL_SOLID_22		= 10
+SILL_METAL_1		= 11
+SILL_PARALLEL		= 12
+SILL_METAL_2		= 13
+SILL_PARALLEL_2		= 14
+SILL_SIMPLEBLOCK	= 15
+SILL_BLOCK			= 16
+SILL_DUTCH			= 17
+
+! iWindowShape:
+SHAPE_RECTANGULAR			= 0
+SHAPE_ARCHED				= 1
+SHAPE_ROUND					= 2
+SHAPE_EYEBROWS				= 3
+SHAPE_HALFCIRCLE			= 4 	! straight side is horizontal
+SHAPE_MULTISIDE				= 5
+SHAPE_OCTAGONAL				= 6
+SHAPE_HALFARCH				= 7
+SHAPE_PENTAGON				= 8
+SHAPE_QUARTERROUND			= 9
+SHAPE_HALFROUND				= 10 	! straight side is vertical
+SHAPE_TRAPEZOID				= 11
+SHAPE_TRIANGLE				= 12
+SHAPE_GOTHICARCH			= 13
+SHAPE_ELLIPSEARCH			= 14
+SHAPE_ROMBUS				= 15
+SHAPE_HORSESHOE				= 16
+SHAPE_OGEECENTERED			= 17
+SHAPE_SARACENIC				= 18
+SHAPE_T						= 19
+SHAPE_HALF_T_LEFT			= 20
+SHAPE_ARCHED_T				= 21
+SHAPE_ARCHED_HALF_T_LEFT	= 22
+SHAPE_PARALLELOGRAM			= 23
+SHAPE_ELLIPSE				= 24
+SHAPE_CORNER_TRIANGLE		= 25
+SHAPE_QUARTERROUND_NOFRAME	= 26
+SHAPE_HALF_T_RIGHT			= 27
+SHAPE_ARCHED_HALF_T_RIGHT	= 28
+
+! thresholdType, iThresholdType
+THRESHOLD_OFF		= 0
+THRESHOLD_NORMAL	= 1
+THRESHOLD_BLIND		= 2
+
+
+! ==============================================================================
+
+bTShapedOpening =  (iWindowShape = SHAPE_T |\
+					iWindowShape = SHAPE_HALF_T_LEFT |\
+					iWindowShape = SHAPE_HALF_T_RIGHT |\
+					iWindowShape = SHAPE_ARCHED_T |\
+					iWindowShape = SHAPE_ARCHED_HALF_T_LEFT |\
+					iWindowShape = SHAPE_ARCHED_HALF_T_RIGHT)
+
+bInclinedWall	= (abs(WALL_INCL) > EPS)
+curvedWall		= (abs(WIDO_ORIG_DIST) > EPS)
+wallIsLeft		= (SYMB_ROTANGLE > EPS) exor WIDO_REVEAL_SIDE
+signWallIsLeft	= wallIsleft - not(wallIsleft)
+
+if bDoorWithSidelightSupport then
+	bHasAnySillOn = (gs_sill_outside | \
+					(gs_sidelight_left  & gs_sidelight_parapet_hgt_left > EPS  & gs_sill_outside_sl_left) | \
+					(gs_sidelight_right & gs_sidelight_parapet_hgt_right > EPS & gs_sill_outside_sl_right))
+else
+	bHasAnySillOn = (gs_sill_outside)
+endif
+
+
+! ==============================================================================
+
+if SYMB_MIRRORED exor (SYMB_ROTANGLE > EPS) then
+	widoRightJamb	= WIDO_LEFT_JAMB
+	widoLeftJamb	= WIDO_RIGHT_JAMB
+	RightJamb	= WIDO_LEFT_JAMB
+	LeftJamb	= WIDO_RIGHT_JAMB
+else
+	widoRightJamb	= WIDO_RIGHT_JAMB
+	widoLeftJamb	= WIDO_LEFT_JAMB
+	RightJamb	= WIDO_RIGHT_JAMB
+	LeftJamb	= WIDO_LEFT_JAMB
+endif
+
+
+! ==============================================================================
+! Restrictions for Window Shapes
+! ==============================================================================
+
+if iWindowShape = 1 then
+	! --- Arched Window Shape ---
+
+	widoLeftJamb	= widoRightJamb
+endif
+
+
+! ==============================================================================
+! Brick- and Stone Sill Specials
+! ==============================================================================
+
+if	iSillType = SILL_BRICK | \
+	iSillType = SILL_STONE | \
+	iSillType = SILL_CERAMIC | \
+	iSillType = SILL_ETHERNIT | \
+	iSillType = SILL_CONCRETE_TUB | \
+	iSillType = SILL_ALUMINIUM then
+	gs_sill_curved = 0
+endif
+
+
+! ==============================================================================
+! Calculations for Corner Window
+! ==============================================================================
+
+if bRightCornerFunction & abs(rightCornerAngle) > EPS then
+	rx = 1 / tan(rightCornerAngle / 2)
+
+	if rightCornerAngle > 180 then
+		rightCwDx = WIDO_FRAME_THICKNESS / tan(-rightCornerAngle / 2)
+	else
+		rightCwDx = 0
+	endif
+
+	rightCwDx2 = 0
+	if abs(WALL_THICKNESS - rightConnWallThk) > EPS then
+		rightCwDx2 = (WALL_THICKNESS - rightConnWallThk) / cos(rightCornerAngle - 90)
+	endif
+	bFitMode = (rightConnWallThk > WALL_THICKNESS + EPS)
+
+!!!	if SYMB_MIRRORED exor WIDO_REVEAL_SIDE then
+!!!		! --- Swap Left and Right Attributes
+!!!		gs_sill_ovhg_left	= gs_sill_ovhg_right
+!!!		gs_stack_left		= gs_stack_right
+!!!		gs_left_oversize	= gs_right_oversize
+!!!	endif
+
+	gs_right_oversize = 0
+endif
+
+if bLeftCornerFunction & abs(leftCornerAngle) > EPS then
+	lx = 1 / tan(leftCornerAngle / 2)
+
+	if leftCornerAngle > 180 then
+		leftCwDx = WIDO_FRAME_THICKNESS / tan(-leftCornerAngle / 2)
+	else
+		leftCwDx = 0
+	endif
+
+	leftCwDx2 = 0
+	if abs(WALL_THICKNESS - leftConnWallThk) > EPS then
+		leftCwDx2 = (WALL_THICKNESS - leftConnWallThk) / cos(leftCornerAngle - 90)
+	endif
+	bFitMode = (leftConnWallThk > WALL_THICKNESS + EPS)
+
+	gs_left_oversize = 0
+endif
+
+
+! ==============================================================================
+! Calculations for Inclined Walls
+! ==============================================================================
+
+if bInclinedWall then
+	bFactor = SYMB_MIRRORED exor WIDO_REVEAL_SIDE exor wallIsLeft
+	incFactor = not(bFactor) - bFactor
+	incX = incFactor * tan(WALL_INCL)
+	incY = incFactor * (1 / cos(WALL_INCL))
+
+	bDir = SYMB_MIRRORED exor (SYMB_ROTANGLE > EPS)
+	iDir = not(bDir) - bDir
+	incH = cos(WALL_INCL)
+	incV = sin(WALL_INCL) * iDir
+else
+	incX = 0
+	incY = 1
+	incH = 0
+	incV = 0
+endif
+
+
+! ==============================================================================
+! Calculations for Stack Window
+! ==============================================================================
+
+if gs_stack_left then
+	gs_sill_ovhg_left	= gs_left_oversize
+	overSizeLeft		= gs_left_oversize
+	overSizeLeftOut		= gs_left_oversize
+	widoLeftJamb		= 0
+else
+	overSizeLeft		= 0
+	overSizeLeftOut		= -widoLeftJamb
+endif
+
+if gs_stack_right then
+	gs_sill_ovhg_right	= gs_right_oversize
+	overSizeRight		= gs_right_oversize
+	overSizeRightOut	= gs_right_oversize
+	widoRightJamb		= 0
+else
+	overSizeRight		= 0
+	overSizeRightOut	= -widoRightJamb
+endif
+
+
+! ==============================================================================
+! Sill Nosing
+! ==============================================================================
+
+sillNosing = gs_sill_nosing
+
+
+! ==============================================================================
+! Reveal Points Indexes
+! ==============================================================================
+
+idxSillStartRevealLeft		= iRevealPointsIdx[1]
+idxSillEndRevealLeft		= iRevealPointsIdx[2]
+idxSillStartPlasterLeft		= iRevealPointsIdx[7]
+idxSillEndPlasterLeft		= iRevealPointsIdx[8]
+idxSillStartRevealRight		= iRevealPointsIdx[11]
+idxSillEndRevealRight		= iRevealPointsIdx[12]
+idxSillStartPlasterRight	= iRevealPointsIdx[17]
+idxSillEndPlasterRight		= iRevealPointsIdx[18]
+idxFrameStartRevealLeft		= iRevealPointsIdx[3]
+idxFrameEndRevealLeft		= iRevealPointsIdx[4]
+idxFrameStartRevealRight	= iRevealPointsIdx[13]
+idxFrameEndRevealRight		= iRevealPointsIdx[14]
+
+! ==============================================================================
+! Calculations for Straight Walls
+! ==============================================================================
+
+maxSillAngle = 0
+
+casingOffsetLeft = 0
+casingOffsetRight = 0
+
+if gs_trim_show_cover_out & GLOB_SCRIPT_TYPE = 2 then
+	casingOffsetLeft	= (bDrawOutsideTrim * not(gs_trim_atframe_out) * gs_trim_thk_out * (gs_sill_ovhg_left  < CasingOutsLeftOutPoint))
+	casingOffsetRight	= (bDrawOutsideTrim * not(gs_trim_atframe_out) * gs_trim_thk_out * (gs_sill_ovhg_right < CasingOutsRightOutPoint))
+endif
+
+if not(curvedWall) then
+
+	if iSillType = SILL_DUTCH then
+
+		! the calculate not depends on ganging because there is no sill side overhang
+		if bLeftCornerFunction then
+			spx3 = leftRevealPnts[idxSillStartRevealLeft][1] - min(0, ((gs_sill_width - WIDO_FRAME_THICKNESS) - WIDO_SILL)) * lx
+			spy3 = -min(WIDO_SILL, (gs_sill_width - WIDO_FRAME_THICKNESS))
+
+			spx4 = leftRevealPnts[idxSillStartRevealLeft][1] - ((gs_sill_width - WIDO_FRAME_THICKNESS) - WIDO_SILL) * lx
+			spy4 = -(gs_sill_width - WIDO_FRAME_THICKNESS)
+		else
+			spx3 = leftRevealPnts[idxSillStartRevealLeft][1]
+			spy3 = -min((WIDO_SILL + casingOffsetLeft), (gs_sill_width - WIDO_FRAME_THICKNESS))
+
+			spx4 = spx3
+			spy4 = -(gs_sill_width - WIDO_FRAME_THICKNESS)
+		endif
+
+		if bRightCornerFunction then
+			spx6 = rightRevealPnts[idxSillStartRevealRight][1] + min(0, ((gs_sill_width - WIDO_FRAME_THICKNESS) - WIDO_SILL)) * rx
+			spy6 = -min(WIDO_SILL, (gs_sill_width - WIDO_FRAME_THICKNESS))
+
+			spx5 = rightRevealPnts[idxSillStartRevealRight][1] + ((gs_sill_width - WIDO_FRAME_THICKNESS) - WIDO_SILL) * rx
+			spy5 = -(gs_sill_width - WIDO_FRAME_THICKNESS)
+		else
+			spx6 = rightRevealPnts[idxSillStartRevealRight][1]
+			spy6 = -min((WIDO_SILL + casingOffsetRight), (gs_sill_width - WIDO_FRAME_THICKNESS))
+
+			spx5 = spx6
+			spy5 = -(gs_sill_width - WIDO_FRAME_THICKNESS)
+		endif
+	else
+		if bLeftCornerFunction then
+			spx3 = leftRevealPnts[idxSillStartRevealLeft][1]
+			spy3 = -WIDO_SILL
+
+			spx4 = spx3 - sillNosing * lx
+			spy4 = spy3 - sillNosing
+		else
+			spx3 = leftRevealPnts[idxSillStartRevealLeft][1] - not(gs_stack_left) * gs_sill_ovhg_left
+			spy3 = -WIDO_SILL - casingOffsetLeft
+
+			spx4 = spx3
+			spy4 = -WIDO_SILL - sillNosing
+		endif
+
+		if bRightCornerFunction then
+			spx6 = rightRevealPnts[idxSillStartRevealRight][1]
+			spy6 = -WIDO_SILL
+
+			spx5 = spx6 + sillNosing * rx
+			spy5 = spy6 - sillNosing
+		else
+			spx6 = rightRevealPnts[idxSillStartRevealRight][1] + not(gs_stack_right) * gs_sill_ovhg_right
+			spy6 = -WIDO_SILL - casingOffsetRight
+
+			spx5 = spx6
+			spy5 = -WIDO_SILL - sillNosing
+		endif
+	endif
+
+	if bHasAnySillOn then	! Outside, Both Sides
+		if iSillType = SILL_TIMBER then
+			temp = WIDO_SILL + gs_sill_nosing
+			if abs(temp) < EPS then
+				maxSillAngle = 90
+			else
+				maxSillAngle = atn(gs_sill_thk / temp)
+			endif
+		endif
+		if iSillType = SILL_BRICK then
+			maxSillAngle = 90
+		endif
+		if iSillType = SILL_STONE then
+			temp = gs_sill_nosing + WIDO_SILL + gs_sill_topWidth
+			if abs(temp) < EPS then
+				maxSillAngle = 90
+			else
+				maxSillAngle = atn((gs_sill_thk - gs_sill_topHeight) / temp)
+			endif
+		endif
+		if iSillType = SILL_ETHERNIT then
+			temp = gs_sill_nosing + WIDO_SILL + gs_sill_slip_in - gs_sill_topWidth
+			if abs(temp) < EPS then
+				maxSillAngle = 90
+			else
+				maxSillAngle = atn((gs_sill_thk - gs_sill_topHeight) / temp)
+			endif
+		endif
+	endif
+endif
+
+
+! ==============================================================================
+! Calculations for Curved Walls
+! ==============================================================================
+
+if curvedWall & abs(radSill) > EPS then
+
+	if GLOB_SCRIPT_TYPE = 2 | GLOB_SCRIPT_TYPE = 3 then
+		if GLOB_SCRIPT_TYPE <> 2 then
+			widoOrigDist = -WIDO_ORIG_DIST
+		else
+			widoOrigDist = WIDO_ORIG_DIST
+		endif
+
+		tempWOD = abs(widoOrigDist) - (SYMB_ROTANGLE > EPS) * WIDO_FRAME_THICKNESS
+
+		alfaLeft	= atn((leftWidth  + overSizeLeft)  / tempWOD)
+		alfaRight	= atn((rightWidth + overSizeRight) / tempWOD)
+
+		alfaLeftOs	= atn((leftWidth  + gs_left_oversize) / tempWOD)
+		alfaRightOs	= atn((rightWidth + gs_right_oversize) / tempWOD)
+
+		bArchSign = (WIDO_REVEAL_SIDE exor SYMB_ROTANGLE > EPS)
+		iArchSign = bArchSign - not(bArchSign)		! 1 / -1
+
+		if WIDO_REVEAL_SIDE then
+			tempWOD = widoOrigDist + WIDO_FRAME_THICKNESS
+		else
+			tempWOD = -widoOrigDist
+		endif
+
+		if WIDO_REVEAL_SIDE exor SYMB_ROTANGLE < EPS then
+			ySign = 1
+		else
+			ySign = -1
+		endif
+
+		radSillLine = radSill - iArchSign * WIDO_SILL	! Radius of the reveal at the Sill depth
+
+		ArcLengthSillToAngle	= 180 / radSill / PI
+
+		alfaLeftJamb	= widoLeftJamb  * ArcLengthSillToAngle
+		alfaRightJamb	= widoRightJamb * ArcLengthSillToAngle
+
+		alfaSillLeftOvhg	= not(gs_stack_left)  * gs_sill_ovhg_left  * ArcLengthSillToAngle
+		alfaSillRightOvhg	= not(gs_stack_right) * gs_sill_ovhg_right * ArcLengthSillToAngle
+
+		alfaL = -alfaLeft + alfaLeftJamb - alfaSillLeftOvhg
+		alfaR = alfaRight - alfaRightJamb + alfaSillRightOvhg
+
+		if iSillType = SILL_BRICK |  iSillType = SILL_STONE then
+			if wallIsLeft then
+				maxSillLength = abs(radSill - abs(tempWOD))
+			else
+				pyR = ySign * radSill * cos(alfaR)
+
+				pyL = ySign * radSill * cos(alfaL)
+
+				maxSillLength = max((abs(tempWOD) - pyL), (abs(tempWOD) - pyR))
+			endif
+		endif
+
+		if wallIsLeft then
+			alfaL = -atn((leftWidth)  / (WOD - WIDO_FRAME_THICKNESS))
+			alfaR =  atn((rightWidth) / (WOD - WIDO_FRAME_THICKNESS))
+		else
+			alfaL = -atn((leftWidth)  / WOD)
+			alfaR =  atn((rightWidth) / WOD)
+		endif
+
+		if iSillType = SILL_DUTCH then
+
+			if bParalellInCurvedWalls then
+
+				! Left side
+
+				! Casing offset in parallel direction
+				if casingOffsetLeft > EPS then
+					_casingRadius = sqr(leftRevealPnts[idxSillStartRevealLeft][1]^2 + (WOD - leftRevealPnts[idxSillStartRevealLeft][2])^2) + casingOffsetLeft * wallIsLeft - casingOffsetLeft * not(wallIsLeft)
+					_casingOffset = abs( abs(sqr((_casingRadius)^2 - (leftRevealPnts[idxSillStartRevealLeft][1])^2) - abs(WOD)) - abs(leftRevealPnts[idxSillStartRevealLeft][2]) )
+				else
+					_casingOffset = casingOffsetLeft	! 0
+				endif
+
+				_y = leftRevealPnts[idxSillEndRevealLeft][2] + WIDO_FRAME_THICKNESS
+				_y2 = leftRevealPnts[idxSillStartRevealLeft][2] - _casingOffset
+
+				_checkDist = abs(_y - _y2)
+
+				spx3 = leftRevealPnts[idxSillEndRevealLeft][1]
+				spy3 = _y - min(_checkDist, gs_sill_width)
+
+				spx4 = spx3
+				spy4 = _y - gs_sill_width
+
+				! Right side
+
+				! Casing offset in parallel direction
+				if casingOffsetLeft > EPS then
+					_casingRadius = sqr(rightRevealPnts[idxSillStartRevealRight][1]^2 + (WOD - rightRevealPnts[idxSillStartRevealRight][2])^2) + casingOffsetRight * wallIsLeft - casingOffsetRight * not(wallIsLeft)
+					_casingOffset = abs( abs(sqr((_casingRadius)^2 - (rightRevealPnts[idxSillStartRevealRight][1])^2) - abs(WOD)) - abs(rightRevealPnts[idxSillStartRevealRight][2]) )
+				else
+					_casingOffset = casingOffsetLeft	! 0
+				endif
+
+				_y = rightRevealPnts[idxSillEndRevealRight][2] + WIDO_FRAME_THICKNESS
+				_y2 = rightRevealPnts[idxSillStartRevealRight][2] - _casingOffset
+
+				_checkDist = abs(_y - _y2)
+
+				spx6 = rightRevealPnts[idxSillEndRevealRight][1]
+				spy6 = _y - min(_checkDist, gs_sill_width)
+
+				spx5 = spx6
+				spy5 = _y - gs_sill_width
+			else
+				! Left side
+
+				_x = leftRevealPnts[idxSillEndRevealLeft][1] - WIDO_FRAME_THICKNESS*tan(alfaL)
+				_y = leftRevealPnts[idxSillEndRevealLeft][2] + WIDO_FRAME_THICKNESS
+
+				_x2 = leftRevealPnts[idxSillStartRevealLeft][1]
+				_y2 = leftRevealPnts[idxSillStartRevealLeft][2]
+
+				_checkDist = (sqr((_x - _x2)^2 + (_y - _y2)^2)) * cos(alfaL)
+
+				_casingOffset = casingOffsetLeft / cos(alfaL)
+				spx3 = _x + min((_checkDist + _casingOffset), gs_sill_width) * tan(alfaL) - min(_casingOffset, max(0, (gs_sill_width - _checkDist))) * tan(alfaL)
+				spy3 = _y - min((_checkDist + _casingOffset), gs_sill_width)
+
+				spx4 = _x + gs_sill_width * tan(alfaL) - (max(0, gs_sill_width - _checkDist)) * tan(alfaL)
+				spy4 = _y - gs_sill_width
+
+				! Right side
+
+				_x = rightRevealPnts[idxSillEndRevealRight][1] - WIDO_FRAME_THICKNESS*tan(alfaR)
+				_y = rightRevealPnts[idxSillEndRevealRight][2] + WIDO_FRAME_THICKNESS
+
+				_x2 = rightRevealPnts[idxSillStartRevealRight][1]
+				_y2 = rightRevealPnts[idxSillStartRevealRight][2]
+
+				_checkDist = (sqr((_x - _x2)^2 + (_y - _y2)^2)) * cos(alfaR)
+
+				_casingOffset = casingOffsetRight / cos(alfaR)
+				spx6 = _x + min((_checkDist + _casingOffset), gs_sill_width) * tan(alfaR) - min(_casingOffset, max(0, (gs_sill_width - _checkDist))) * tan(alfaR)
+				spy6 = _y - min((_checkDist + _casingOffset), gs_sill_width)
+
+				spx5 = _x + gs_sill_width*tan(alfaR) - (max(0, gs_sill_width - _checkDist)) * tan(alfaR)
+				spy5 = _y - gs_sill_width
+			endif
+		else
+			alfaSillLeftOvhg	= not(gs_stack_left)  * gs_sill_ovhg_left  * ArcLengthSillToAngle
+			alfaSillRightOvhg	= not(gs_stack_right) * gs_sill_ovhg_right * ArcLengthSillToAngle
+
+			if gs_stack_left then
+				spx3 = leftRevealPnts[idxSillStartRevealLeft][1] + casingOffsetLeft * sin(alfaL)
+				spy3 = leftRevealPnts[idxSillStartRevealLeft][2] - casingOffsetLeft
+
+				spx4 = spx3 + sillNosing * sin(alfaL) - casingOffsetLeft * sin(alfaL)
+				spy4 = spy3 - sillNosing * cos(alfaL) + casingOffsetLeft
+			else
+				if bParalellInCurvedWalls then
+					spx3 = leftRevealPnts[idxSillStartRevealLeft][1] - gs_sill_ovhg_left
+					spy3 = -signWallIsLeft * sqr(radSill^2 - spx3^2) + WOD - casingOffsetLeft
+
+					spx4 = spx3
+					spy4 = -signWallIsLeft * sqr((radSill + signWallIsLeft * sillNosing)^2 - spx4^2) + WOD
+				else
+					x = leftRevealPnts[idxSillStartRevealLeft][1] + casingOffsetLeft * sin(alfaL)
+					y = leftRevealPnts[idxSillStartRevealLeft][2] - casingOffsetLeft
+					alpha = -alfaSillLeftOvhg
+					gosub 9000	! Rotate 2D points around curved wall's center
+					spx3 = x
+					spy3 = y
+
+					alpha = abs(atn(spx3 / (spy3 - WOD)))
+					spx4 = spx3 - sillNosing * sin(alpha) * signWallIsLeft - casingOffsetLeft * sin(alfaL)
+					spy4 = spy3 - sillNosing * cos(alpha) + casingOffsetLeft
+				endif
+			endif
+
+			if gs_stack_right then
+				spx6 = rightRevealPnts[idxSillStartRevealRight][1] + casingOffsetRight * sin(alfaR)
+				spy6 = rightRevealPnts[idxSillStartRevealRight][2] - casingOffsetRight
+
+				spx5 = spx6 + sillNosing * sin(alfaR) - casingOffsetRight * sin(alfaR)
+				spy5 = spy6 - sillNosing * cos(alfaR) + casingOffsetRight
+			else
+				if bParalellInCurvedWalls then
+					spx6 = rightRevealPnts[idxSillStartRevealRight][1] + gs_sill_ovhg_right
+					spy6 = -signWallIsLeft * sqr(radSill^2 - spx6^2) + WOD - casingOffsetRight
+
+					spx5 = spx6 + casingOffsetRight * sin(alfaR)
+					spy5 = -signWallIsLeft * sqr((radSill + signWallIsLeft * sillNosing)^2 - spx5^2) + WOD
+				else
+					x = rightRevealPnts[idxSillStartRevealRight][1] + casingOffsetRight * sin(alfaR)
+					y = rightRevealPnts[idxSillStartRevealRight][2] - casingOffsetRight
+					alpha = alfaSillRightOvhg
+					gosub 9000	! Rotate 2D points around curved wall's center
+					spx6 = x
+					spy6 = y
+
+					alpha = abs(atn(spx6 / (spy6 - WOD)))
+					spx5 = spx6 + sillNosing * sin(alpha) * signWallIsLeft - casingOffsetRight * sin(alfaR)
+					spy5 = spy6 - sillNosing * cos(alpha) + casingOffsetRight
+				endif
+			endif
+		endif
+	endif
+endif
+
+if curvedWall then
+	if bHasAnySillOn then	! Outside, Both Sides
+		! --- Check Sill angle ---
+
+		if iSillType = SILL_TIMBER & abs(radSill) > EPS then
+			temp = max(abs(spy4 + WOD), abs(spy5 + WOD))
+			maxSillLength = max(abs(radSill - ySign * gs_sill_nosing - abs(WOD)), temp)
+			if abs(maxSillLength) < EPS then
+				maxSillAngle = 90
+			else
+				maxSillAngle = asn((gs_sill_thk - 0.001) / maxSillLength)
+			endif
+		endif
+		if iSillType = SILL_BRICK then
+			maxSillAngle = 90
+		endif
+		if iSillType = SILL_STONE then
+			maxSillAngle = 90
+		endif
+		if iSillType = SILL_ETHERNIT then
+			maxSillAngle = 90
+		endif
+	endif
+endif
+
+! ==============================================================================
+
+reorder = (AC_Wall_Direction_Type <> 1 & AC_Wall_Direction_Type <> 3)
+signReorder = not(reorder) - reorder
+
+SKIN_FILL				=  1
+SKIN_THICKNESS			=  2
+SKIN_CONT_PEN			=  3	! Obsolete (old contour pen)
+SKIN_FILL_PEN			=  4
+SKIN_FILL_BACK_PEN		=  5
+SKIN_CORE_STATUS		=  6
+SKIN_UPPER_LINE_PEN		=  7 !+ 2 * reorder
+SKIN_UPPER_LINE_TYPE	=  8 !+ 2 * reorder
+SKIN_LOWER_LINE_PEN		=  9 !- 2 * reorder
+SKIN_LOWER_LINE_TYPE	= 10 !- 2 * reorder
+SKIN_END_FACE_PEN		= 11
+SKIN_FILL_ORIENTATION	= 12	! 0 - global, 1 - local
+SKIN_TYPE				= 13	! 0 - cut, 1 - below cutplane, 2 - above cutplane (all skin types are 0 for simple walls)
+!	For D/W in complex walls on the floor plan this variable contains the data of all cut skins, for wall ends on the floor plan the data of all skins.
+!	For D/W and wall ends in the 3D window contains the data of the skins actually cut by the D/W or wall end
+SKIN_END_LINE_TYPE		= 14
+SKIN_FINISH_STATUS		= 15
+SKIN_FILL_FIT_TO_SKIN	= 16
+SKIN_THICKEN_TRAPEZOID	= 17
+
+
+! Line Property defines:
+LINE_PROPERTY_GENERIC	= 0
+LINE_PROPERTY_INNER		= 1
+LINE_PROPERTY_CONTOUR	= 2
+
+
+! Partial Stucture Display defines:
+STRUCTURE_ENTIRE_STRUCTURE	= 0
+STRUCTURE_CORE_ONLY			= 1
+STRUCTURE_WITHOUT_FINISHES	= 2
+
+! ==============================================================================
+
+bCompositeWall		= (WALL_SKINS_NUMBER > 0)
+
+goto 1
+
+
+! ==============================================================================
+! Rotate 2D points around curved wall's center
+! ------------------------------------------------------------------------------
+! Input variables:
+!	x,y:				2D point
+!	WOD:				"wido orig dist" in the wallhole coordinate system
+!	alpha:				rotation angle
+! Returned variables:
+!	x,y:				rotated 2D point
+! ==============================================================================
+
+9000:
+	xo = x
+	yo = y - WOD
+	x = xo * cos(signWallIsLeft * alpha) - yo * sin(signWallIsLeft * alpha)
+	y = xo * sin(signWallIsLeft * alpha) + yo * cos(signWallIsLeft * alpha) + WOD
+return
+
+
+! ==============================================================================
+! Generate Sill Polygon - in Polygonal Walls
+! ------------------------------------------------------------------------------
+! Input variables:
+!	ch:
+!	leftRevealPnts, rightRevealPnts:
+!	reveal point indices:
+!	bGetWallCutPolygons:
+!	bPolyFor3D:
+!	AC_WallContourPolygon:
+!	sillNosing:
+!	gs_stack_left:
+!	gs_stack_right:
+! ==============================================================================
+
+2000:
+
+	preparefunction ch, "CreateContainer", "mySourceContainer", ""
+	preparefunction ch, "CreateContainer", "myDestinationContainer", ""
+
+	preparefunction ch, "SetSourceContainer",	 	"mySourceContainer", ""
+	preparefunction ch, "SetDestinationContainer",	"myDestinationContainer", ""
+
+! Store wallhole polygon -------------------------------------------------------
+
+	dim vertArr1[][3]
+	dim inhEdgeInfos1[]
+	defaultInhEdgeInfo = 0
+
+	bHasAnySillPoint = 0
+	for i=idxSillStartRevealLeft to idxSillEndRevealLeft
+		if leftRevealPnts[i][2] <= 0 then
+			distFromLast = abs((leftRevealPnts[i][1] - lastSillPointX)^2 + (leftRevealPnts[i][2] - lastSillPointY)^2)
+			if not(bHasAnySillPoint) | distFromLast > EPS then
+				if bHasAnySillPoint then
+					put not(gs_stack_left)	! status of the previous point
+				endif
+				put leftRevealPnts[i][1], leftRevealPnts[i][2]
+				lastSillPointX = leftRevealPnts[i][1]
+				lastSillPointY = leftRevealPnts[i][2]
+				bHasAnySillPoint = 1
+			endif
+		endif
+	next i
+	if bHasAnySillPoint then
+		put -1	! last status
+	endif
+
+	if abs(bSillNnosUsa) > EPS & WIDO_SILL >= 0 then	! Sill Negativ Nosing by USA Framesill
+		if WIDO_SILL > EPS then
+			put  leftRevealPnts[idxSillEndRevealLeft][1]  + frameWidthLeft,		 leftRevealPnts[idxSillEndRevealLeft][2],		0
+		endif
+		put	 leftRevealPnts[idxSillEndRevealLeft][1]  + frameWidthLeft,		 leftRevealPnts[idxSillEndRevealLeft][2]  + bSillNnosUsa,	0,
+			rightRevealPnts[idxSillEndRevealRight][1] - frameWidthRight,	rightRevealPnts[idxSillEndRevealRight][2] + bSillNnosUsa,	0
+		if WIDO_SILL > EPS then
+			put rightRevealPnts[idxSillEndRevealRight][1] - frameWidthRight,	rightRevealPnts[idxSillEndRevealRight][2],		0
+		endif
+	endif
+
+	bHasAnySillPoint = 0
+	for i = idxSillEndRevealRight to idxSillStartRevealRight step -1
+		if rightRevealPnts[i][2] <= 0 then
+			distFromLast = abs((rightRevealPnts[i][1] - lastSillPointX)^2 + (rightRevealPnts[i][2] - lastSillPointY)^2)
+			if not(bHasAnySillPoint) | distFromLast > EPS then
+				if bHasAnySillPoint then
+					put not(gs_stack_right)	! status of the previous point
+				endif
+				put rightRevealPnts[i][1], rightRevealPnts[i][2]
+				lastSillPointX = rightRevealPnts[i][1]
+				lastSillPointY = rightRevealPnts[i][2]
+				bHasAnySillPoint = 1
+			endif
+		endif
+	next i
+	if bHasAnySillPoint then
+		put -1	! last status
+	endif
+
+	nVertices1 = nsp/3
+	for i=1 to nVertices1
+		px = get(1)
+		py = get(1)
+		ps = get(1)
+		vertarr1[i][1]	 = px
+		vertarr1[i][2]	 = py
+		vertarr1[i][3]	 = 0
+		if bPolyFor3D then
+			inhEdgeInfos1[i] = ps
+		else
+			inhEdgeInfos1[i] = 0	! Mark wallhole edges
+		endif
+	next i
+
+	nContours1 = 1
+	dim contArr1[]
+	contArr1[1] = nVertices1 + 1
+
+	if nVertices1 >= 2 then
+		preparefunction ch, "Store", "wallHolePoly", nVertices1, nContours1, vertArr1, contArr1, defaultInhEdgeInfo, inhEdgeInfos1
+	endif
+
+	prevSourceContainer	= ""
+	lastDestContainer	= "mySourceContainer"
+	preparefunction ch, "SetDestinationContainer", lastDestContainer, ""
+
+! Offset sill side edge --------------------------------------------------------
+
+	if prevSourceContainer <> "" then
+		preparefunction ch, "DeleteContainer",		prevSourceContainer, ""
+	endif
+	preparefunction ch, "SetSourceContainer",		lastDestContainer, ""
+	prevSourceContainer	= lastDestContainer
+	lastDestContainer	= "myDestContainer1"
+	preparefunction ch, "CreateContainer",			lastDestContainer, ""
+	preparefunction ch, "SetDestinationContainer",	lastDestContainer, ""
+
+	preparefunction ch, "OffsetParams", "", 1, 0.50
+
+	dim srcPolyIDArr[]
+	numPoly = callfunction (ch, "GetSourcePolygons", "", srcPolyIDArr)
+
+	dim tempResPolyIDArr[]
+	for i=1 to numPoly
+		tempNumPoly = callfunction (ch, "OffsetEdge", srcPolyIDArr[i], tempResPolyIDArr)
+	next i
+
+!!!dim resPolyIDArr[]
+!!!numPoly = callfunction (ch, "GetDestinationPolygons", "", resPolyIDArr)
+!!!
+!!!for i = 1 to numPoly
+!!!	polygonID = resPolyIDArr[i]
+!!!	gosub 1000	! Get GDL Polygon
+!!!
+!!!	ccc=0
+!!!	for j=1 to nsp/3
+!!!		xx=get(1)
+!!!		yy=get(1)
+!!!		ss=get(1)
+!!!		ccc=ccc+0.003
+!!!		circle2 xx,yy,ccc
+!!!		text2 xx,yy,j
+!!!	next j
+!!!next i
+!!!end
+
+! Store wall contour polygon in wallhole coordinate system ---------------------
+
+	if prevSourceContainer <> "" then
+		preparefunction ch, "DeleteContainer",		prevSourceContainer, ""
+	endif
+	preparefunction ch, "SetSourceContainer",		lastDestContainer, ""
+	prevSourceContainer	= lastDestContainer
+	lastDestContainer	= "myDestContainer2"
+	preparefunction ch, "CreateContainer",			lastDestContainer, ""
+	preparefunction ch, "SetDestinationContainer",	lastDestContainer, ""
+
+	nVertices2 = vardim1(AC_WallContourPolygon)
+	dim vertArr2[][3]
+
+	dim srcPolyIDArr[]
+	numPoly = callfunction (ch, "GetSourcePolygons", "", srcPolyIDArr)
+
+	defaultInhEdgeInfo = 0
+	dim inhEdgeInfos2[]
+
+	for i=1 to nVertices2
+		vertarr2[i][1] = AC_WallContourPolygon[i][1]
+		if WIDO_REVEAL_SIDE then
+			vertarr2[i][2] = AC_WallContourPolygon[i][2] + WIDO_FRAME_THICKNESS
+			vertarr2[i][3] = AC_WallContourPolygon[i][3]
+		else
+			vertarr2[i][2] = -AC_WallContourPolygon[i][2]
+			vertarr2[i][3] = -AC_WallContourPolygon[i][3]
+		endif
+
+		inhEdgeInfos2[i] = 1
+	next i
+
+	nContours2 = 1
+	dim contArr2[]
+	contArr2[1] = nVertices2 + 1
+
+	preparefunction ch, "Store", "wallContourPoly", nVertices2, nContours2, vertArr2, contArr2, defaultInhEdgeInfo, inhEdgeInfos2
+
+! Substract polygons -----------------------------------------------------------
+
+	dim tempResPolyIDArr[]
+	for i = 1 to numPoly
+		tempNumPoly = callfunction (ch, "wallContourPoly - " + srcPolyIDArr[i], "", tempResPolyIDArr)
+	next i
+
+!! Regularize polygon(s) --------------------------------------------------------
+!
+!	if prevSourceContainer <> "" then
+!		preparefunction ch, "DeleteContainer",		prevSourceContainer, ""
+!	endif
+!	preparefunction ch, "SetSourceContainer",		lastDestContainer, ""
+!	prevSourceContainer	= lastDestContainer
+!	lastDestContainer	= "myDestContainer3"
+!	preparefunction ch, "CreateContainer",			lastDestContainer, ""
+!	preparefunction ch, "SetDestinationContainer",	lastDestContainer, ""
+!
+!	dim srcPolyIDArr[]
+!	numPoly = callfunction (ch, "GetSourcePolygons", "", srcPolyIDArr)
+!
+!	dim tempResPolyIDArr[]
+!	for i=1 to numPoly
+!		tempNumPoly = callfunction (ch, "Regularize", srcPolyIDArr[i], tempResPolyIDArr)
+!	next i
+
+	if bGetWallCutPolygons then
+		return
+	endif
+
+! Store Sill polygon -----------------------------------------------------------
+
+	sidelightCutPosLeft		= 0
+	sidelightCutPosRight	= 0
+	sidelightCutPosElevBodyLeft		= 0
+	sidelightCutPosElevBodyRight	= 0
+
+	if prevSourceContainer <> "" then
+		preparefunction ch, "DeleteContainer",		prevSourceContainer, ""
+	endif
+	preparefunction ch, "SetSourceContainer",		lastDestContainer, ""
+	prevSourceContainer	= lastDestContainer
+	lastDestContainer	= "myDestContainer4"
+	preparefunction ch, "CreateContainer",			lastDestContainer, ""
+	preparefunction ch, "SetDestinationContainer",	lastDestContainer, ""
+
+	dim srcPolyIDArr[]
+	numPoly = callfunction (ch, "GetSourcePolygons", "", srcPolyIDArr)
+
+	sillNosingY = min(leftRevealPnts[idxSillStartRevealLeft][2], rightRevealPnts[idxSillStartRevealRight][2]) - sillNosing
+
+	sillOvhgLeft	= max(gs_sill_ovhg_left,	EPS)
+	sillOvhgRight	= max(gs_sill_ovhg_right,	EPS)
+
+	if sidelightCutLeft then
+		put	sidelightCutPosLeft, sillNosingY,	2,
+			sidelightCutPosLeft, 0,				2
+	else
+		put leftRevealPnts[idxSillStartRevealLeft][1] - not(gs_stack_left) * sillOvhgLeft,	sillNosingY,									2 * not(gs_stack_left),
+			leftRevealPnts[idxSillStartRevealLeft][1] - not(gs_stack_left) * sillOvhgLeft,	not(gs_stack_left) * WIDO_FRAME_THICKNESS,		2 * bPolyFor3D
+		if not(gs_stack_left) then
+			put leftRevealPnts[idxSillStartRevealLeft][1],	0,	 2 * bPolyFor3D
+		endif
+	endif
+
+	if abs(bSillNnosUsa) > EPS then	! Sill Negativ Nosing by USA Framesill
+		put  leftRevealPnts[idxSillEndRevealLeft][1]  + frameWidthLeft,		 leftRevealPnts[idxSillEndRevealLeft][2],					0,
+			 leftRevealPnts[idxSillEndRevealLeft][1]  + frameWidthLeft,		 leftRevealPnts[idxSillEndRevealLeft][2]  + bSillNnosUsa,	0,
+			rightRevealPnts[idxSillEndRevealRight][1] - frameWidthRight,	rightRevealPnts[idxSillEndRevealRight][2] + bSillNnosUsa,	0,
+			rightRevealPnts[idxSillEndRevealRight][1] - frameWidthRight,	rightRevealPnts[idxSillEndRevealRight][2],					0
+	endif
+
+	if sidelightCutRight then
+		put	sidelightCutPosRight, 0,			2,
+			sidelightCutPosRight, sillNosingY,	2
+	else
+		if not(gs_stack_right) then
+			put rightRevealPnts[idxSillStartRevealRight][1],	0,	 2 * not(gs_stack_right)
+		endif
+		put	rightRevealPnts[idxSillStartRevealRight][1] + not(gs_stack_right) * sillOvhgRight,	not(gs_stack_right) * WIDO_FRAME_THICKNESS,	2 * not(gs_stack_right),
+			rightRevealPnts[idxSillStartRevealRight][1] + not(gs_stack_right) * sillOvhgRight,	sillNosingY,								2
+	endif
+
+	dim vertArrSill[][3]
+	dim inhEdgeInfosSill[]
+	defaultInhEdgeInfo = 0
+
+	for i=1 to nsp/3
+		px = get(1)
+		py = get(1)
+		ps = round_int (get(1))
+
+		vertarrSill[i][1]	= px
+		vertarrSill[i][2]	= py
+		vertarrSill[i][3]	= 0
+		inhEdgeInfosSill[i]	= ps
+	next i
+	nVerticesSill = vardim1(vertarrSill)
+
+	nContoursSill = 1
+	dim contArrSill[]
+	contArrSill[1] = nVerticesSill + 1
+
+	if nVertices1 >= 2 then
+		preparefunction ch, "Store", "sillPoly", nVerticesSill, nContoursSill, vertArrSill, contArrSill, defaultInhEdgeInfo, inhEdgeInfosSill
+	endif
+
+! Substract polygons -----------------------------------------------------------
+
+	dim operandPolygonNames[]
+		operandPolygonNames[1] = "sillPoly"
+	numOperandPolygonNames = 1
+	containerIdx = 10
+
+	while numPoly > 0 do
+
+		for i = 2 to numPoly
+			tempNumPoly = callfunction (ch, "CopyPolygon", srcPolyIDArr[i], tempResPolyIDArr)
+		next i
+		lastNumPoly = numPoly - 1
+
+		for i=1 to numOperandPolygonNames
+			tempNumPoly = callfunction (ch, operandPolygonNames[i] + " - " + srcPolyIDArr[1], "", tempResPolyIDArr)
+		next i
+
+		numResPoly = tempNumPoly - lastNumPoly + 1
+
+		dim resPolyIDArr[]
+		tempNumPoly = callfunction (ch, "GetDestinationPolygons", "", resPolyIDArr)
+
+		numOperandPolygonNames = tempNumPoly - lastNumPoly
+
+		for i=1 to numOperandPolygonNames
+			operandPolygonNames[i] = resPolyIDArr[lastNumPoly + i]
+		next i
+
+		numPoly = numPoly - 1
+
+		if numPoly > 0 then
+			if prevSourceContainer <> "" then
+				preparefunction ch, "DeleteContainer",		prevSourceContainer, ""
+			endif
+			preparefunction ch, "SetSourceContainer",		lastDestContainer, ""
+			prevSourceContainer	= lastDestContainer
+			lastDestContainer	= "myDestContainer" + str(containerIdx, 1, 0)
+			preparefunction ch, "CreateContainer",			lastDestContainer, ""
+			preparefunction ch, "SetDestinationContainer",	lastDestContainer, ""
+			containerIdx = containerIdx + 1
+		endif
+	endwhile
+return
+
+
+1:
+
+! ==============================================================================
+! NED Sill Types
+! ==============================================================================
+
+if iSillType = SILL_CERAMIC then
+	if gs_sill_topWidth < EPS then gs_sill_topWidth = 0.03
+	gs_sill_topHeight = gs_sill_thk - gs_sill_endthk
+endif
+if iSillType = SILL_ETHERNIT then
+	if gs_sill_topWidth  < EPS then gs_sill_topWidth  = 0.01
+	if gs_sill_topHeight < EPS then gs_sill_topHeight = 0.01
+endif
+if iSillType = SILL_ALUMINIUM then
+	if gs_sill_topHeight < EPS then gs_sill_topHeight = 0.018
+	thk = 0.002
+	gs_sill_angle = atn((gs_sill_thk - gs_sill_topHeight) / (gs_sill_width - thk))
+endif
+
+
+! ==============================================================================
+! CHE Sill Types
+! ==============================================================================
+
+!sillDetLev = 0	! Detailed Sill
+!sillDetLev = 1	! Normal Sill
+!sillDetLev = 1
+
+if iSillType = SILL_SOLID_11 | iSillType = SILL_SOLID_12 | iSillType = SILL_SOLID_22 then
+	gs_sill_topHeight = 0.01
+	gs_sill_topWidth = 0.01
+endif
+if iSillType = SILL_METAL_1 then
+	gs_sill_topHeight = 0.01
+endif
+
+if iSillType = SILL_SOLID_11 | iSillType = SILL_SOLID_12 | iSillType = SILL_SOLID_22 | iSillType = SILL_METAL_1 then
+	gs_sill_slip_in = 0
+endif

@@ -1,0 +1,129 @@
+EPS = 0.0001
+flag = 0
+
+tip_konstr = " "
+subpos = " "
+pos = " "
+upr = 0
+type_spec = "Металл"
+
+!Смещение оси
+dx = 0
+dy = 0
+el_type_view = 0
+
+VERT_SHEET = 1
+GOR_SHEET = 2
+POLY_SHEET = 3
+
+dict _dataprof
+dict _all
+dict _tmp
+dict _emp
+
+if not(haskey(profile_data.set)) then
+	text2 0,0,"mpl - not(haskey(profile_data.set))"
+	goto "m_end"
+endif
+
+if not(haskey(profile_data.set.coord)) then 
+	text2 0,0,"mpl - not(haskey(profile_data.set.coord))"
+	goto "m_end"
+else
+	for i=1 to vardim1(profile_data.set.coord)
+		if not(haskey(profile_data.set.coord[i].x)) then profile_data.set.coord[i].x = 0
+		if not(haskey(profile_data.set.coord[i].y)) then profile_data.set.coord[i].y = 0
+		if not(haskey(profile_data.set.coord[i].z)) then profile_data.set.coord[i].z = 0
+	next i
+endif
+
+typesheet = 0
+if haskey(profile_data.set.typesheet) then 
+	typesheet = profile_data.set.typesheet
+else
+	typesheet = VERT_SHEET
+endif
+
+if not(haskey(profile_data.set.path)) and typesheet = VERT_SHEET then 
+	text2 0,0,"mpl - not(haskey(profile_data.set.path))"
+	goto "m_end"
+else
+	for i=1 to vardim1(profile_data.set.path)
+		if not(haskey(profile_data.set.path[i].x)) then profile_data.set.path[i].x = 0
+		if not(haskey(profile_data.set.path[i].y)) then profile_data.set.path[i].y = 0
+		if not(haskey(profile_data.set.path[i].z)) then profile_data.set.path[i].z = 0
+		if not(haskey(profile_data.set.path[i].a)) then profile_data.set.path[i].a = 0
+	next i
+endif
+
+!Если задана точка привязки - получим смещение сечения
+sgnth = 1
+if haskey(profile_data.set.cpoint) then
+	if haskey(profile_data.set.cpoint.x) then dx = profile_data.read.cpoint.x
+	if haskey(profile_data.set.cpoint.y) then dy = profile_data.read.cpoint.y
+	if haskey(profile_data.set.cpoint.sgnth) then 
+		sgnth = profile_data.set.cpoint.sgnth
+		if abs(sgnth)<EPS then sgnth = 1
+	endif
+endif
+
+thickness = 0.003
+if haskey(profile_data.set.thickness) then thickness = profile_data.set.thickness
+
+if not(haskey(profile_data.set.start)) then profile_data.set.start[1].x = 0
+
+!Читаем сортамент, если его не передали
+gosub "read_sort"
+if typesheet = VERT_SHEET then
+	dict coord
+	coord.in = profile_data.set.coord
+	coord.thickness = thickness
+	coord.fold = profile_data.set.fold
+	coord.sgnth = sgnth
+	coord.error = "-"
+	call "macro_get_vert_sheet" parameters coord = coord, RETURNED_PARAMETERS coord
+	if coord.error = "ok" then
+		profile_data.read.dlin_prof = coord.length
+		profile_data.read.sum_length = coord.sum_length
+		profile_data.read._2d[1].unput = coord.out
+		profile_data.read._2d[2].unput = profile_data.read._2d[1].unput
+		profile_data.read._3d[1].unput = profile_data.read._2d[2].unput
+		for i=1 to vardim1(profile_data.read._3d[1].unput)
+			if not(haskey(profile_data.read._3d[1].unput[i].s)) then profile_data.read._3d[1].unput[i].s = 1
+			profile_data.read._3d[1].unput[i].s = profile_data.read._3d[1].unput[i].s + 14
+		next i
+		profile_data.read._3d[2].unput = profile_data.read._3d[1].unput
+	else
+		text2 0,0,"mpl - " + coord.error
+	endif
+endif
+
+if typesheet = GOR_SHEET or typesheet = POLY_SHEET then
+	profile_data.read._3d[1].unput = profile_data.set.coord
+	profile_data.read._2d[1].unput = profile_data.read._3d[1].unput
+	for i=1 to vardim1(profile_data.read._3d[1].unput)
+		if not(haskey(profile_data.read._3d[1].unput[i].s)) then
+			profile_data.read._3d[1].unput[i].s = 15
+			profile_data.read._2d[1].unput[i].s = 1
+		endif
+	next i
+	profile_data.read._3d[2].unput = profile_data.read._3d[1].unput
+	profile_data.read._2d[2].unput = profile_data.read._2d[1].unput
+endif
+
+goto "m_end"
+
+"read_sort":
+	if not(haskey(sort_data.isread)) then call "macro_get_sort" PARAMETERS ALL, RETURNED_PARAMETERS sort_data
+	if haskey(sort_data.isread) then 
+		if sort_data.isread = 0 then
+			text2 0,0, "mpl - Сортамент прочитан с ошибкой"
+			goto "m_end"
+		endif
+	else
+		text2 0,0, "mpl - Сортамент не прочитан"
+		goto "m_end"
+	endif
+return
+
+"m_end":

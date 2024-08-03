@@ -1,0 +1,293 @@
+
+call "FM_types" parameters all
+
+!Hide all parameters from UI
+hideparameter all  "A", "B", "ZZYZX"
+
+! --------------------------------------------------------------------------------
+
+values "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+values "gs_detlevel_3D_m" 2,1,0
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+	if gs_detlevel_3D = `Детальный` then gs_detlevel_3D_m = 2
+	if gs_detlevel_3D = `Простой` then gs_detlevel_3D_m = 1
+	if gs_detlevel_3D = `Откл.` then gs_detlevel_3D_m = 0
+	parameters gs_detlevel_3D_m = gs_detlevel_3D_m
+else
+	if gs_detlevel_3D_m = 2 then gs_detlevel_3D = `Детальный`
+	if gs_detlevel_3D_m = 1 then gs_detlevel_3D = `Простой`
+	if gs_detlevel_3D_m = 0 then gs_detlevel_3D = `Откл.`
+	parameters gs_detlevel_3D = gs_detlevel_3D
+endif
+
+IF gs_detlevel_3D_m = 1 then
+	hideparameter "gs_resol"
+	lock "gs_resol"
+endif
+IF gs_detlevel_3D_m = 0 then
+	hideparameter "gs_resol", "gs_shadow"
+	lock "gs_resol", "gs_shadow"
+endif
+
+VALUES "gs_resol" RANGE [3,)
+
+call "2dDetailLevel" parameters gs_detlevel_2D	= gs_detlevel_2D,
+							gs_detlevel_2D_m	= gs_detlevel_2D_m,
+							enable2dDetLevels	= 2+4+8+16+32
+
+if gs_detlevel_2D_m <> 4 then 
+	hideparameter "gs_SymbolType", "gs_SymbolType_m"
+	lock "gs_SymbolType", "gs_SymbolType_m"
+endif
+
+call "fa_ChairSymbol" parameters all stSymbolTypes = stSymbolTypes
+
+IF gs_detlevel_2D_m = 4 & (gs_SymbolType = `Круглый` | gs_SymbolType = `Круглый со Спинкой`) THEN
+		chaird=chairw
+		LOCK "chaird"
+		HIDEPARAMETER "chaird"
+ENDIF
+
+IF gs_cont_pen=0 THEN PARAMETERS gs_cont_pen=4
+IF gs_fill_pen=0 THEN PARAMETERS gs_fill_pen=19
+
+VALUES "SizingType" stSizingTypes[1], stSizingTypes[2]
+VALUES "iSizingType" SIZING_CHAIR_DIST, SIZING_TOTAL_SPACE
+if GLOB_MODPAR_NAME = "SizingType" then
+	if SizingType = stSizingTypes[1] then iSizingType = SIZING_CHAIR_DIST
+	if SizingType = stSizingTypes[2] then iSizingType = SIZING_TOTAL_SPACE
+	parameters iSizingType = iSizingType
+else
+	if iSizingType = SIZING_CHAIR_DIST then SizingType = stSizingTypes[1]
+	if iSizingType = SIZING_TOTAL_SPACE then SizingType = stSizingTypes[2]
+	parameters SizingType = SizingType
+endif
+
+
+! --- Minimal Space -----------------------------------------------------------------
+
+values "MSRear" RANGE [0,)
+values "MSRearW" RANGE [0, )
+
+
+! --- Limitation --------------------------------------------------------------------
+values{2} 	"iChairType" 	CHAIRTYPE_RECTANGLE, _strChairType[1],
+							CHAIRTYPE_ROUND, _strChairType[2] 
+
+values "ChairNum" RANGE [2,)
+
+values "tablew" RANGE [((chairw / (2 * TAN(alfa/2))) - ChairTableDist) * 2,)
+values "tablew2" RANGE [((chairw / (2 * TAN(alfa/2))) - ChairTableDist),)
+
+values "tableh" RANGE (0,)
+values "gs_leg" RANGE (0,)
+values "gs_top_thk" RANGE (0,)
+values "tbo" RANGE (0,)
+values "tboy" RANGE (0,)
+
+values "chairw" RANGE [0.1,)
+values "chaird" RANGE [0.1,)
+values "chairh" RANGE (gs_seat_height,)
+values "gs_seat_height" RANGE [0.1,)
+values "DepPerChair" RANGE [chaird, )
+
+values "A" RANGE ((chairw / (2 * TAN(alfa/2)) - ChairTableDist) * 2 + 2 * (chaird + ChairTableDist),)
+values "B" RANGE ((chairw / (2 * TAN(alfa/2)) - ChairTableDist) * 2 + 2 * (chaird + ChairTableDist),)
+
+minChairTableDistLimit = max( (-tablew2+(chairw/2)/tan(alfa/2)), (-chaird+0.05))
+IF iSizingType = SIZING_CHAIR_DIST THEN
+	values "ChairTableDist" range [minChairTableDistLimit, ]
+else
+	values "ChairTableDist" range [minChairTableDistLimit, min_pl-chaird]
+endif
+
+values "wheelchairw" RANGE [0.1, )
+values "wheelchaird" RANGE [0.1, )
+values "wheelchairh" RANGE [0.1, )
+values "WidForWheelchair" RANGE [wheelchairw, )
+values "DepForWheelchair" RANGE [wheelchaird, )
+values "DistNextToWheelchair" RANGE [0, )
+
+IF GLOB_MODPAR_NAME = "tablew" 	THEN PARAMETERS tablew2=tablew/2
+IF GLOB_MODPAR_NAME = "tablew2" THEN PARAMETERS tablew=tablew2*2
+
+IF GLOB_MODPAR_NAME = "ChairNum" THEN
+	IF ChairNum<=4 THEN
+		PARAMETERS tablew=0.8
+		tablew=0.8
+	ENDIF
+
+	IF ChairNum=5 OR ChairNum=6 OR ChairNum=7 THEN
+		PARAMETERS  tablew=1.2, tablew2=0.6
+		tablew=1.2
+	ENDIF
+
+	IF ChairNum=8 OR ChairNum=9 THEN
+		PARAMETERS  tablew=1.5, tablew2=0.75
+		tablew=1.5
+	ENDIF
+
+	IF ChairNum=10 THEN
+		PARAMETERS  tablew=1.8, tablew2=0.9
+		tablew=1.8
+	ENDIF
+
+	IF ChairNum=11 OR ChairNum=12 THEN
+		PARAMETERS  tablew=2.0, tablew2=1.0
+		tablew=2.0
+	ENDIF
+
+	IF ChairNum>12  THEN
+		PARAMETERS tablew=(INT((((chairw+0.15)/(2*TAN(alfa/2)))-ChairTableDist)*2*10))/10+0.1, tablew2=tablew/2
+		tablew=(INT((((chairw+0.15)/(2*TAN(alfa/2)))-ChairTableDist)*2*10))/10+0.1
+	ENDIF
+
+	tablew2=tablew/2
+	PARAMETERS tablew2=tablew2
+ENDIF
+
+
+! --- Interaction between Sizing Types ----------------------------------------------
+
+IF iSizingType = SIZING_CHAIR_DIST THEN
+	DepPerChair = chaird + MSRear + ChairTableDist
+	PARAMETERS DepPerChair = DepPerChair
+
+	WidForWheelchair = wheelchairw + DistNextToWheelchair*2
+	PARAMETERS WidForWheelchair = WidForWheelchair
+	DepForWheelchair = wheelchaird + MSRearW
+	PARAMETERS DepForWheelchair = DepForWheelchair
+ELSE
+	MSRear = DepPerChair - chaird - ChairTableDist
+	PARAMETERS MSRear = MSRear
+
+	DistNextToWheelchair = (WidForWheelchair - wheelchairw)/2
+	PARAMETERS DistNextToWheelchair = DistNextToWheelchair
+
+	MSRearW = DepForWheelchair - wheelchaird
+	PARAMETERS MSRearW = MSRearW
+ENDIF
+
+
+! --- A,B, ZZYZX Sizes---------------------------------------------------------------
+
+if GLOB_MODPAR_NAME = "A" then
+	tablew = A - 2 * (chaird + ChairTableDist) - (wheelchaird - chaird - ChairTableDist)*bWheelchair
+	PARAMETERS tablew = tablew
+	tablew2=tablew/2
+	PARAMETERS tablew2=tablew2
+else
+	A = tablew + 2 * (chaird + ChairTableDist) + (wheelchaird - chaird - ChairTableDist)*bWheelchair
+	PARAMETERS A = A
+endif
+
+if GLOB_MODPAR_NAME = "B" then
+	tablew = B - 2 * (chaird + ChairTableDist)
+	PARAMETERS tablew = tablew
+	tablew2=tablew/2
+	PARAMETERS tablew2=tablew2
+else
+	B = tablew + 2 * (chaird + ChairTableDist)
+	PARAMETERS B = B
+endif
+
+PARAMETERS ZZYZX = MAX(tableh, chairh)
+
+! --- Parameters Lock --------------------------------------------------------------
+
+IF NOT(bWheelchair) THEN
+	LOCK 	"MSRearW",
+			"DistNextToWheelchair",
+			"WidForWheelchair",
+			"DepForWheelchair",
+			"wheelchairw",
+			"wheelchaird",
+			"wheelchairh"
+ENDIF
+IF iSizingType = SIZING_CHAIR_DIST THEN
+	LOCK 	"DepPerChair",
+			"WidForWheelchair",
+			"DepForWheelchair"
+ELSE
+	LOCK 	"MSRear",
+			"MSRearW",
+			"DistNextToWheelchair"
+ENDIF
+LOCK "ZZYZX"
+
+! ==============================================================================
+! 		Uniform surfaces
+! ==============================================================================
+
+if GLOB_MODPAR_NAME = "bUniformSurfaces" then
+	if bUniformSurfaces then
+		gs_leg_mat		= gs_top_mat
+		gs_frame_mat 	= gs_top_mat
+		gs_back_mat		= gs_top_mat
+		gs_seat_mat		= gs_top_mat
+
+		parameters 	gs_leg_mat 		= gs_leg_mat,
+					gs_frame_mat	= gs_frame_mat,
+					gs_back_mat		= gs_back_mat,
+					gs_seat_mat		= gs_seat_mat
+	endif
+else
+	if bUniformSurfaces then
+		if GLOB_MODPAR_NAME = "gs_top_mat" then
+			gs_leg_mat		= gs_top_mat
+			gs_frame_mat 	= gs_top_mat
+			gs_back_mat		= gs_top_mat
+			gs_seat_mat		= gs_top_mat
+	
+			parameters 	gs_leg_mat 		= gs_leg_mat,
+						gs_frame_mat	= gs_frame_mat,
+						gs_back_mat		= gs_back_mat,
+						gs_seat_mat		= gs_seat_mat
+		endif
+		if GLOB_MODPAR_NAME = "gs_leg_mat" then
+			gs_top_mat		= gs_leg_mat
+			gs_frame_mat 	= gs_leg_mat
+			gs_back_mat		= gs_leg_mat
+			gs_seat_mat		= gs_leg_mat
+
+			parameters 	gs_top_mat 		= gs_top_mat,
+						gs_frame_mat	= gs_frame_mat,
+						gs_back_mat		= gs_back_mat,
+						gs_seat_mat		= gs_seat_mat
+		endif
+		if GLOB_MODPAR_NAME = "gs_frame_mat" then
+			gs_top_mat		= gs_frame_mat
+			gs_leg_mat 		= gs_frame_mat
+			gs_back_mat		= gs_frame_mat
+			gs_seat_mat		= gs_frame_mat
+
+			parameters 	gs_top_mat 		= gs_top_mat,
+						gs_leg_mat		= gs_leg_mat,
+						gs_back_mat		= gs_back_mat,
+						gs_seat_mat		= gs_seat_mat
+		endif
+		if GLOB_MODPAR_NAME = "gs_back_mat" then
+			gs_top_mat		= gs_back_mat
+			gs_leg_mat 		= gs_back_mat
+			gs_frame_mat	= gs_back_mat
+			gs_seat_mat		= gs_back_mat
+
+			parameters 	gs_top_mat 		= gs_top_mat,
+						gs_leg_mat		= gs_leg_mat,
+						gs_frame_mat	= gs_frame_mat,
+						gs_seat_mat		= gs_seat_mat
+		endif
+		if GLOB_MODPAR_NAME = "gs_seat_mat" then
+			gs_top_mat		= gs_seat_mat
+			gs_leg_mat 		= gs_seat_mat
+			gs_frame_mat	= gs_seat_mat
+			gs_back_mat		= gs_seat_mat
+
+			parameters 	gs_top_mat 		= gs_top_mat,
+						gs_leg_mat		= gs_leg_mat,
+						gs_frame_mat	= gs_frame_mat,
+						gs_back_mat		= gs_back_mat
+		endif
+	endif
+endif

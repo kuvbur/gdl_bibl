@@ -1,0 +1,272 @@
+
+values "gs_resol" range[3,)
+
+values "gs_detlevel_3D" stDetlevel3D[2], stDetlevel3D[1], stDetlevel3D[3]
+values "gs_detlevel_3D_m" 2, 1, 0
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+	if gs_detlevel_3D = stDetlevel3D[3] then gs_detlevel_3D_m = 0
+	if gs_detlevel_3D = stDetlevel3D[1]	then gs_detlevel_3D_m = 1
+	if gs_detlevel_3D = stDetlevel3D[2]	then gs_detlevel_3D_m = 2
+	parameters gs_detlevel_3D_m = gs_detlevel_3D_m
+else
+	if gs_detlevel_3D_m = 0 then gs_detlevel_3D = stDetlevel3D[3]
+	if gs_detlevel_3D_m = 1 then gs_detlevel_3D = stDetlevel3D[1]
+	if gs_detlevel_3D_m = 2 then gs_detlevel_3D = stDetlevel3D[2]
+	parameters gs_detlevel_3D = gs_detlevel_3D
+endif
+
+values "topThk" range(0, )
+
+if gs_detlevel_3D_m = 1 then
+	lock			"gs_resol"
+	hideparameter	"gs_resol"
+endif
+if gs_detlevel_3D_m = 0 then
+	lock			"gs_resol",
+					"gs_shadow"
+	hideparameter	"gs_resol",
+					"gs_shadow"
+endif
+
+if NOT(bPartOfLayout) and NOT(bPartOfWsSolo) and bCalledAsExtension then
+	! enableTableTopTypes - possible values
+	!	2		- enable L-Shaped
+	!	4		- enable Straight
+	!	8		- enable 45
+	!	16		- enable 60
+	!	32		- enable 90
+	!	64		- enable 135
+	!	128		- enable 180
+	!	256		- enable 360
+	!	512		- enable C-top
+	!	1024	- enable P-top
+	!	2048	- enable Rectangle
+
+	if enableTableTopTypes < EPS then enableTableTopTypes = 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 512 + 1024 + 2048
+
+	dim tableTopTypeValueList[]
+	j = 1
+	for i = 1 to vardim1(stTableTopTypes)
+		if bittest(enableTableTopTypes, i) then
+			put i
+			tableTopTypeValueList[j] = stTableTopTypes[i]
+			j = j + 1
+		endif
+	next i
+
+	values "iTableTopType" get(NSP)
+	values "ttyp" tableTopTypeValueList
+
+	if GLOB_MODPAR_NAME = "ttyp" then
+		for iTtop = 1 to vardim1(stTableTopTypes)
+			if ttyp = stTableTopTypes[iTtop] then iTableTopType = iTtop
+		next iTtop
+		parameters iTableTopType = iTableTopType
+	else
+		ttyp = stTableTopTypes[max(iTableTopType, 1)]
+		parameters ttyp = ttyp
+	endif
+endif
+
+if NOT(bCalledAsExtension) then
+	if iTableTopType = TTOP_L_SHAPED then
+		values "innerEdge" stInnerEdge
+		values "iInnerEdge" 1, 2
+
+		if GLOB_MODPAR_NAME = "innerEdge" then
+			for iInn = 1 to vardim1(stInnerEdge)
+				if innerEdge = stInnerEdge[iInn] then iInnerEdge = iInn
+			next iInn
+			parameters iInnerEdge = iInnerEdge
+		else
+			innerEdge = stInnerEdge[max(iInnerEdge, 1)]
+			parameters innerEdge = innerEdge
+		endif
+
+		if iInnerEdge = STRAIGHT then
+			lock			"innerEdgeRad"
+		endif
+	else
+		if bPartOfLayout or bPartOfWsSolo then
+			values "innerEdge" stInnerEdge
+			values "iInnerEdge" 1, 2
+		endif
+	endif
+endif
+
+if iTableTopType = TTOP_L_SHAPED and NOT(bCalledAsExtension) then
+	minCabWidth1	= 0.2 * bOfficeCab1
+
+	if GLOB_MODPAR_NAME = "innerCornerPos" then
+		tableDepth2 = tableDepth1 / (COS(tableTopAngle - 90) / TAN(tableTopAngle - 90 + ATN(innerCornerPos / tableDepth1)) + SIN(tableTopAngle - 90))
+		parameters tableDepth2 = tableDepth2
+	else
+		innerCornerPos = -tableDepth1 * TAN(beta)
+		parameters innerCornerPos = innerCornerPos
+	endif
+
+	if GLOB_MODPAR_NAME = "innerArcStartPos" then
+		innerEdgeRad = (innerArcStartPos + tableDepth1 * TAN(beta)) * TAN(tableTopAngle / 2)
+		parameters innerEdgeRad = innerEdgeRad
+	else
+		innerArcStartPos = innerEdgeRad / TAN(tableTopAngle / 2) - tableDepth1 * TAN(beta)
+		parameters innerArcStartPos = innerArcStartPos
+	endif
+
+	if GLOB_MODPAR_NAME = "innerArcEndPos" then
+		innerEdgeRad = (innerArcEndPos - tableDepth2 / TAN(alpha)) * TAN(tableTopAngle / 2)
+		parameters innerEdgeRad = innerEdgeRad
+	else
+		innerArcEndPos = innerEdgeRad / TAN(tableTopAngle / 2) + tableDepth2 / TAN(alpha)
+		parameters innerArcEndPos = innerArcEndPos
+	endif
+
+
+	!!!!!!!!!!! Inner Edge Radius Limitation
+	maxInnerEdgeLength1	= (yPosTopCorner - tableDepth1) / SIN(180 - tableTopAngle) - minCabWidth1 * (bMirroredCabPos) - 0.01
+	maxInnerEdgeLength2	= (tableLength1 - innerCornerPos) - minCabWidth1 * NOT(bMirroredCabPos) - 0.01
+	minInnerEdgeRad		= 0.1
+	maxInnerEdgeRad		= MIN(maxInnerEdgeLength1, maxInnerEdgeLength2) * TAN(tableTopAngle / 2)
+	values "innerEdgeRad" range[minInnerEdgeRad, maxInnerEdgeRad]
+
+	!!!!!!!!!!! Table Length 1 Limitation
+	minTableLength1		= innerCornerPos + (minInnerEdgeRad / TAN(tableTopAngle / 2)) * (iInnerEdge = ROUNDED) + minCabWidth1 * NOT(bMirroredCabPos) + 0.01
+	values "tableLength1" range[MAX(0.4, minTableLength1),]
+
+	!!!!!!!!!!! Table Length 2 Limitation
+	minTableLength2		= tableDepth1 / SIN(180 - tableTopAngle) - tableDepth2 / TAN(180 - tableTopAngle) + minInnerEdgeRad / TAN(tableTopAngle / 2) * (iInnerEdge = ROUNDED) + minCabWidth1 * (bMirroredCabPos) + 0.01
+	values "tableLength2" range[MAX(0.4, minTableLength2),]
+
+	!!!!!!!!!!! Table Depth 1 Limitation
+	minTableDepth1		= 0.2
+	maxTableDepth1		= yPosTopCorner - (minInnerEdgeRad / TAN(tableTopAngle / 2) * SIN(180 - tableTopAngle)) * (iInnerEdge = ROUNDED) - minCabWidth1 * (bMirroredCabPos) * SIN(180 - tableTopAngle) - 0.01
+	values "tableDepth1" range[minTableDepth1, maxTableDepth1]
+
+	!!!!!!!!!!! Table Depth 2 Limitation
+	length1Diagonal 	= tableLength1 * TAN(tableTopAngle - 90)
+	minTableDepth2		= 0.2
+	if length1Diagonal > tableDepth1 then
+		maxTableDepth2	= tableLength1 / COS(tableTopAngle - 90) - (length1Diagonal - tableDepth1) * SIN(tableTopAngle - 90)\
+						- (minInnerEdgeRad / TAN(tableTopAngle / 2) * SIN(180 - tableTopAngle)) * (iInnerEdge = ROUNDED)\
+						- minCabWidth1 * NOT(bMirroredCabPos) * SIN(180 - tableTopAngle) - 0.01
+	else
+		maxTableDepth2	= tableLength1 / COS(tableTopAngle - 90) + (tableDepth1 - length1Diagonal) * SIN(tableTopAngle - 90)\
+						- (minInnerEdgeRad / TAN(tableTopAngle / 2) * SIN(180 - tableTopAngle)) * (iInnerEdge = ROUNDED)\
+						- minCabWidth1 * NOT(bMirroredCabPos) * SIN(180 - tableTopAngle) - 0.01
+	endif
+	values "tableDepth2" range[minTableDepth2, maxTableDepth2]
+
+
+	!!!!!!!!!!! Inner Corner Point Limitation
+	minInnerCornerPos	= minTableDepth2 / SIN(180 - tableTopAngle) - tableDepth1 / TAN(180 - tableTopAngle)
+	maxInnerCornerPos	= tableLength1 - minCabWidth1 * NOT(bMirroredCabPos) - 0.01
+	values "innerCornerPos" range[minInnerCornerPos, maxInnerCornerPos]
+
+	!!!!!!!!!!! Inner Arc Right Point Limitation
+	minInnerArcStartPos	= innerCornerPos + minInnerEdgeRad / TAN(tableTopAngle / 2)
+	maxInnerArcStartPos	= innerCornerPos + MIN(maxInnerEdgeLength1, maxInnerEdgeLength2)
+	values "innerArcStartPos" range[minInnerArcStartPos, maxInnerArcStartPos]
+
+	!!!!!!!!!!! Inner Arc Left Point Limitation
+	minInnerArcEndPos	= minInnerEdgeRad / TAN(tableTopAngle / 2) + minTableDepth2 / TAN(alpha)
+	maxInnerArcEndPos	= tableDepth2 / TAN(alpha) + MIN(maxInnerEdgeLength1, maxInnerEdgeLength2)
+	values "innerArcEndPos" range[minInnerArcEndPos, maxInnerArcEndPos]
+endif
+
+if iTableTopType = TTOP_STRAIGHT then
+	if NOT(bCalledAsExtension) then
+		minCabWidth1	= 0.2 * bOfficeCab1
+		minCabWidth2	= 0.2 * bOfficeCab2
+		minA			= 0.2 + minCabWidth1 + minCabWidth2
+		minB			= 0.2
+
+		if bPartOfLayout or bPartOfWsSolo then
+			values "tableLength1" range[minA, )
+			values "tableDepth1" range[minB, )
+		else
+			if a < 0.2 + gs_officeCab_width * bOfficeCab1 + gs_officeCab_width_2 * bOfficeCab2 then
+				if gs_officeCab_width * bOfficeCab1 > gs_officeCab_width_2 * bOfficeCab2 then
+					gs_officeCab_width = a - 0.2 - gs_officeCab_width_2 * bOfficeCab2
+
+					if bOfficeCab2 and gs_officeCab_width < gs_officeCab_width_2 then
+						gs_officeCab_width = (a - 0.2) / 2
+						gs_officeCab_width_2 = gs_officeCab_width
+					endif
+				else
+					gs_officeCab_width_2 = a - 0.2 - gs_officeCab_width * bOfficeCab1
+
+					if bOfficeCab1 and gs_officeCab_width_2 < gs_officeCab_width then
+						gs_officeCab_width_2 = (a - 0.2) / 2
+						gs_officeCab_width = gs_officeCab_width_2
+					endif
+				endif
+
+				parameters gs_officeCab_width = gs_officeCab_width
+				parameters gs_officeCab_width_2 = gs_officeCab_width_2
+			endif
+
+			values "a" range[minA, )
+			values "b" range[minB, )
+		endif
+	endif
+endif
+
+if archedTableTop then
+	if GLOB_MODPAR_NAME = "B" then parameters a = b
+	if GLOB_MODPAR_NAME = "A" then parameters b = a
+endif
+
+if iTableTopType = TTOP_RECT then
+	if GLOB_MODPAR_NAME = "halfA" or GLOB_MODPAR_NAME = "halfB" then
+		parameters a = halfA * 2
+		parameters b = halfB * 2
+	else
+		parameters halfA = a / 2
+		parameters halfB = b / 2
+	endif
+endif
+
+if NOT(bCalledAsExtension) then
+	if bPartOfLayout or bPartOfWsSolo then
+		if iTableTopType = TTOP_STRAIGHT then
+			if bOfficeCab1 and bOfficeCab2 then
+				values "gs_officeCab_width" range[0.2, (tableLength1 - 0.2) / 2]
+			else
+				values "gs_officeCab_width" range[0.2, tableLength1 - 0.2]
+			endif
+		else
+			if bMirroredCabPos then
+				values "gs_officeCab_width" range[0.2, (yPosTopCorner - tableDepth1) / SIN(180 - tableTopAngle) - innerEdgeRad / TAN(tableTopAngle / 2) * (iInnerEdge = ROUNDED) - 0.01]
+			else
+				values "gs_officeCab_width" range[0.2, tableLength1 - innerCornerPos - innerEdgeRad / TAN(tableTopAngle / 2) * (iInnerEdge = ROUNDED) - 0.01]
+			endif
+		endif
+	else
+		if iTableTopType = TTOP_STRAIGHT then
+			values "gs_officeCab_width" range[0.2, a - (0.2 + gs_officeCab_width_2 * bOfficeCab2))
+			values "gs_officeCab_width_2" range[0.2, a - (0.2 + gs_officeCab_width * bOfficeCab1))
+		else
+			values "gs_officeCab_width" range[0.2, tableLength1 - innerCornerPos - innerEdgeRad / TAN(tableTopAngle / 2) * (iInnerEdge = ROUNDED) - 0.01]
+		endif
+	endif
+endif
+
+values "MSFront" range[0, ]
+if bPartOfWsSolo then
+	if iTableTopType = TTOP_L_SHAPED then
+		values "MSSide" range[MSFront / TAN(tableTopAngle / 2), ]
+		values "MSSide2" range[MSFront / TAN(tableTopAngle / 2), ]
+
+		lock			"MSLength"
+		hideparameter	"MSLength"
+	else
+		values "MSLength" range[0, ]
+
+		lock			"MSSide",
+						"MSSide2"
+		hideparameter	"MSSide",
+						"MSSide2"
+	endif
+endif
+

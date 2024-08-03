@@ -1,0 +1,774 @@
+
+! Contact person: <BD, BO, NJ>
+
+minUnitWidth	= 2 * (2 * gs_frame2_width + 3 * (gs_sash_width - gs_rebate_width)) + gw * (iMullionStyle_01 = MULLION_HVGRID) * (2 * (vgn_01-1) + (vgn_05-1)) + eps
+minUnitHeight	= 2 * (gs_frame2_width + gs_sash_width - gs_rebate_width) + (iMullionStyle_01 = MULLION_HVGRID) * max((hgn_01-1), (hgn_05-1)) * gw + \
+				 gs_UTrans * (gs_UTrans_w + 2 * (gs_sash_width - gs_rebate_width) + (iMullionStyle_02 = MULLION_HVGRID) * max((hgn_02-1), (hgn_06-1)) * gw) + eps
+
+! =============================================================================
+! GS Corner Window Functions
+! =============================================================================
+
+dim stDetail2D[]
+
+call "GS Corner Window Functions",
+	parameters all	iWindowShape			= iWindowShape,
+					gs_IsCurved				= gs_IsCurved,
+					bParalellInCurvedWalls	= bParalellInCurvedWalls,
+					bDisabeMirroring		= bDisabeMirroring,
+					minUnitWidth			= minUnitWidth,
+					minUnitHeight			= minUnitHeight,
+
+					bLeftCornerFunction		= bLeftCornerFunction,
+					leftCornerAngle			= leftCornerAngle,
+					bLeftDiffConnWall		= bLeftDiffConnWall,
+					leftConnWallThk			= leftConnWallThk,
+					bRightCornerFunction	= bRightCornerFunction,
+					rightCornerAngle		= rightCornerAngle,
+					bRightDiffConnWall		= bRightDiffConnWall,
+					rightConnWallThk		= rightConnWallThk,
+	returned_parameters	stDetail2D
+
+
+! =============================================================================
+! Opening types
+! =============================================================================
+
+values "gs_open_2D" range [0, 90]
+
+
+! =============================================================================
+! Ventilation Profile
+! =============================================================================
+
+if bEnableVentilationProfile then
+	call "Ventilation_profile" parameters	isWindow						= 1,
+											iWindowType						= 13, 		! WIN_HistoricWindowTriple
+											gs_bSLight						= 1,
+											gs_bLeftSLight					= 1,
+											gs_LTrans						= 0,
+											gs_LTrans_Div					= 0,
+											gs_UTrans						= gs_UTrans,
+											gs_UTrans_Div					= gs_UTrans_Div,
+											CasementIDArray					= CasementIDArray,
+											bVentilationProfile				= bVentilationProfile,
+											iVentilationProfileType			= iVentilationProfileType,
+											isVentilationProfileInSash_01	= isVentilationProfileInSash_01,
+											isVentilationProfileInSash_02	= isVentilationProfileInSash_02,
+											isVentilationProfileInSash_03	= 0,
+											isVentilationProfileInSash_04	= 0,
+											isVentilationProfileInSash_05	= isVentilationProfileInSash_05,
+											isVentilationProfileInSash_06	= isVentilationProfileInSash_06,
+											isVentilationProfileInSash_07	= 0,
+											isVentilationProfileInSash_08	= 0,
+											isVentilationProfileInSash_09	= isVentilationProfileInSash_09,
+											isVentilationProfileInSash_10	= isVentilationProfileInSash_10,
+											isVentilationProfileInSash_11	= 0,
+											iMullionStyle_01				= iMullionStyle_01,
+											iMullionStyle_02				= iMullionStyle_02,
+											iMullionStyle_05				= iMullionStyle_05,
+											iMullionStyle_06				= iMullionStyle_06,
+											iMullionStyle_09				= iMullionStyle_09,
+											iMullionStyle_10				= iMullionStyle_10,
+											gs_VentilationProfileTypeEnable	= gs_VentilationProfileTypeEnable
+else
+	lock	"bVentilationProfile",
+			"gs_select_sash_vent_profile",
+			"gs_list_freeAirPerformance"
+	hideparameter	"bVentilationProfile",
+					"gs_select_sash_vent_profile",
+					"gs_list_freeAirPerformance"
+endif
+
+
+! ==============================================================================
+! Uniform Surfaces
+! ==============================================================================
+
+dim	surfaceParNames[8]						:	dim	surfaceParameters[8]
+	surfaceParNames[1]	= "gs_frame_mat"	:		surfaceParameters[1]	= gs_frame_mat
+	surfaceParNames[2]	= "gs_frame_mat2"	:		surfaceParameters[2]	= gs_frame_mat2
+	surfaceParNames[3]	= "gs_sash_mat"		:		surfaceParameters[3]	= gs_sash_mat
+	surfaceParNames[4]	= "gs_sash_mat2"	:		surfaceParameters[4]	= gs_sash_mat2
+	surfaceParNames[5]	= "gs_grill_mat"	:		surfaceParameters[5]	= gs_grill_mat
+	surfaceParNames[6]	= "gs_grill_mat2"	:		surfaceParameters[6]	= gs_grill_mat2
+	surfaceParNames[7]	= "gs_panel_mat"	:		surfaceParameters[7]	= gs_panel_mat
+	surfaceParNames[8]	= "gs_panel_mat2"	:		surfaceParameters[8]	= gs_panel_mat2
+
+_lastModSurfaceParameter = gs_frame_mat
+
+if stored_material[1][1] <> -9999 then
+	for i = 1 to vardim1(surfaceParNames)
+		if GLOB_MODPAR_NAME = surfaceParNames[i] then
+			_lastModSurfaceParameter	= surfaceParameters[i]
+			stored_material[1][i]	= surfaceParameters[i]
+			stored_material[2][i]	= 1
+
+			for j = 1 to i-1
+				stored_material[2][j]	= 0
+				parameters stored_material[2][j]	= stored_material[2][j]
+			next j
+
+			for k = i+1 to vardim1(surfaceParNames)
+				stored_material[2][k]	= 0
+				parameters stored_material[2][k]	= stored_material[2][k]
+			next k
+		endif
+
+		parameters	stored_material[1][i]	= stored_material[1][i],
+					stored_material[2][i]	= stored_material[2][i]
+
+		if stored_material[2][i] = 1 then
+			_lastModSurfaceParameter = stored_material[1][i]
+		endif
+	next i
+else
+	gosub "preloadSurfaces"
+endif
+
+if bLinkSurfacesFrameSash then
+	parameters	gs_frame_mat	= _lastModSurfaceParameter,
+				gs_frame_mat2	= _lastModSurfaceParameter,
+				gs_sash_mat		= _lastModSurfaceParameter,
+				gs_sash_mat2	= _lastModSurfaceParameter,
+				gs_grill_mat	= _lastModSurfaceParameter,
+				gs_grill_mat2	= _lastModSurfaceParameter,
+				gs_panel_mat	= _lastModSurfaceParameter,
+				gs_panel_mat2	= _lastModSurfaceParameter
+else
+	if GLOB_MODPAR_NAME = "bLinkSurfacesFrameSash" then
+		parameters	gs_frame_mat	= stored_material[1][1],
+					gs_frame_mat2	= stored_material[1][2],
+					gs_sash_mat		= stored_material[1][3],
+					gs_sash_mat2	= stored_material[1][4],
+					gs_grill_mat	= stored_material[1][5],
+					gs_grill_mat2	= stored_material[1][6],
+					gs_panel_mat	= stored_material[1][7],
+					gs_panel_mat2	= stored_material[1][8]
+	else
+		gosub "preloadSurfaces"
+	endif
+endif
+
+
+! =============================================================================
+! Orientation
+! =============================================================================
+
+values{2} "gs_list_orientationDef_m"	0, `Автоматически`,
+										1, `Специальный`
+
+if gs_list_orientationDef_m = 0 then
+	ac_OpeningSide = ""
+	parameters ac_OpeningSide = ac_OpeningSide
+
+	lock "ac_OpeningSide"
+	hideparameter "ac_OpeningSide"
+endif
+
+
+! =============================================================================
+! IFC Parameters
+! =============================================================================
+
+ifc_optype = 10		! WIN_OP_USER_DEFINED
+
+if not(gs_UTrans) then
+	ifc_optype = 4		! WIN_OP_TRIPLE_PANEL_VERTICAL
+endif
+
+parameters ifc_optype = ifc_optype
+
+call "IFC_optype_window" parameters ifc_optype = ifc_optype
+
+lock "ifc_optypestr"
+
+ifc_LiningDepth = WIDO_FRAME_THICKNESS
+parameters ifc_LiningDepth = ifc_LiningDepth
+
+ifc_LiningThickness = gs_frame_width
+parameters ifc_LiningThickness = ifc_LiningThickness
+
+ifc_MullionThickness	= 0
+ifc_FirstMullionOffset	= 0
+ifc_SecondMullionOffset	= 0
+if ifc_optype = 4 then		! WIN_OP_TRIPLE_PANEL_VERTICAL
+	ifc_MullionThickness	= gs_frame_width
+	ifc_FirstMullionOffset	= gs_SLight_w/ac_unit_width
+	ifc_SecondMullionOffset	= (ac_unit_width - gs_SLight_w)/ac_unit_width
+endif
+parameters	ifc_MullionThickness	= ifc_MullionThickness,
+			ifc_FirstMullionOffset	= ifc_FirstMullionOffset,
+			ifc_SecondMullionOffset	= ifc_SecondMullionOffset
+
+ifc_TransomThickness	= 0
+ifc_FirstTransomOffset	= 0
+ifc_SecondTransomOffset	= 0
+parameters	ifc_TransomThickness	= ifc_TransomThickness,
+			ifc_FirstTransomOffset	= ifc_FirstTransomOffset,
+			ifc_SecondTransomOffset	= ifc_SecondTransomOffset
+
+dim ifc_WindowPanel[][4]
+if ifc_optype = 10 then		! WIN_OP_USER_DEFINED
+	ifc_WindowPanel[1][1] = 0
+	ifc_WindowPanel[1][2] = 0
+	ifc_WindowPanel[1][3] = 0		! NOTDEFINED
+	ifc_WindowPanel[1][4] = 0		! NOTDEFINED
+else
+	optypeID = gs_optype_m_09
+	gosub "paneloperation"
+	ifc_WindowPanel[1][1] = gs_sash_thk * (optypeID <> SASH_FIXED)
+	ifc_WindowPanel[1][2] = gs_sash_width * (optypeID <> SASH_FIXED)
+	ifc_WindowPanel[1][3] = panelOperationID
+	ifc_WindowPanel[1][4] = 1	! LEFT
+
+	optypeID = gs_optype_m_01
+	gosub "paneloperation"
+	ifc_WindowPanel[2][1] = gs_sash_thk * (optypeID <> SASH_FIXED)
+	ifc_WindowPanel[2][2] = gs_sash_width * (optypeID <> SASH_FIXED)
+	ifc_WindowPanel[2][3] = panelOperationID
+	ifc_WindowPanel[2][4] = 2	! MIDDLE
+
+	optypeID = gs_optype_m_05
+	gosub "paneloperation"
+	ifc_WindowPanel[3][1] = gs_sash_thk * (optypeID <> SASH_FIXED)
+	ifc_WindowPanel[3][2] = gs_sash_width * (optypeID <> SASH_FIXED)
+	ifc_WindowPanel[3][3] = panelOperationID
+	ifc_WindowPanel[3][4] = 3	! RIGHT
+endif
+parameters ifc_WindowPanel = ifc_WindowPanel
+
+
+! =============================================================================
+! FM Types
+! =============================================================================
+
+call "FM_types" parameters all
+
+
+! =============================================================================
+! 3D Detail Level
+! =============================================================================
+
+if gs_3DDetEnable =0 then
+
+    values{2} "iDWDet3D" 	DETLEVEL_DW3D_DETAILED,		`Детальный`,
+						    DETLEVEL_DW3D_SIMPLE,		`Простой`,
+						    DETLEVEL_DW3D_OFF,			`Откл.`
+
+else
+	dim n3DScaleValueMask[]
+	dim n3DScaleValueMask_m[]
+
+	i=1
+	if bittest( gs_3DDetEnable, 0) then                                              ! Scale Sensitive in Value list, 1
+				n3DScaleValueMask[i] = stDetail[1]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_SCALESENS
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 1) then                                              ! Detailed in Value list,2
+				n3DScaleValueMask[i] = stDetail[2]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_DETAILED
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 2) then                                              ! Simple in Value list,4
+				n3DScaleValueMask[i] = stDetail[3]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_SIMPLE
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 3) then                                              ! Off in Value list,8
+				n3DScaleValueMask[i] = stDetail[4]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_OFF
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 4) then                                              ! Chinese Simple in Value list,16
+				n3DScaleValueMask[i] = stDetail[5]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_CHI_SIMPLE
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 5) then                                              ! Chinese Detailed in Value list,32
+				n3DScaleValueMask[i] = stDetail[6]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_CHI_DETAILED
+				i = i + 1
+	endif
+
+	values{2} "iDWDet3D" n3DScaleValueMask_m, n3DScaleValueMask
+endif
+
+
+! =============================================================================
+! Swedish list parameter control
+! =============================================================================
+
+if gs_SWE_listParams_contr > 0 then
+	call "SWE_ListParameters_control" parameters gs_SWE_listParams_contr = gs_SWE_listParams_contr,
+			swe_list_f1	= swe_list_f1
+endif
+
+! =============================================================================
+! Japanese list parameter control
+! =============================================================================
+
+if gs_JPN_listParams_contr then
+	call "ListValuesJPN" parameters all gs_JPNObjectType = 2,		!COMMPARS_INTWINDOWS
+			gs_is_p2	= 0,
+			gs_is_p6	= 0
+endif
+
+
+! =============================================================================
+! Frame
+! =============================================================================
+
+values "gs_frame_thk" range [gs_frame2_thk*2 - gs_rebate_depth + gs_sash_thk, ]
+values "gs_frame_width" range [gs_rebate_width + gs_sash_thk - gs_rebate_depth, A/2 - gs_sash_thk]
+
+values "gs_frame2_thk" range (gs_rebate_depth + EPS, ]
+values "gs_frame2_width" range [gs_frame_width + gs_rebate_width + gs_sash_thk - gs_rebate_depth, A/2 - gs_sash_thk]
+
+if gs_uniform_framewidth then
+	lock	"gs_frame_width_lower",
+			"gs_frame2_width_lower"
+endif
+
+values "gs_PanesConfig"		stPanesConfiguration[1], stPanesConfiguration[2]
+values "gs_iPanesConfig"	PANESCONFIG_UNIFORM, PANESCONFIG_SYMM
+
+if GLOB_MODPAR_NAME = "gs_PanesConfig" then
+	gs_iPanesConfig	= PANESCONFIG_UNIFORM
+	if gs_PanesConfig = stPanesConfiguration[2]	then gs_iPanesConfig	= PANESCONFIG_SYMM
+	if gs_PanesConfig = stPanesConfiguration[3]	then gs_iPanesConfig	= PANESCONFIG_ASYMM
+
+	parameters gs_iPanesConfig = gs_iPanesConfig
+else
+	gs_PanesConfig = stPanesConfiguration[gs_iPanesConfig]
+	parameters gs_PanesConfig = gs_PanesConfig
+endif
+
+
+! =============================================================================
+! Transom
+! =============================================================================
+
+values "gs_UTrans_w"	range(3 * gs_rebate_width, ]
+values "gs_UTrans_h"	range(gs_UTrans_w/2 + gs_frame2_width + 2 * (gs_sash_width - gs_rebate_width) + (iMullionStyle_01 = MULLION_HVGRID) * max((hgn_01-1), (hgn_05-1)) * gw , \
+								ac_unit_height - gs_UTrans_w/2 - gs_frame2_width - 2 * (gs_sash_width - gs_rebate_width) - (iMullionStyle_02 = MULLION_HVGRID) * max((hgn_02-1), (hgn_06-1)) * gw)
+
+if not(gs_UTrans) then
+	lock "gs_UTrans_w", "gs_UTrans_h", "gs_UTrans_Div"
+	hideparameter "gs_UTrans_w", "gs_UTrans_h", "gs_UTrans_Div"
+endif
+
+values{2} "gs_SashText_typ_num" 	MITERED_JOINT, `Угловое Соединение`,
+									BUTT_JOINT, `Соединение Встык`
+
+if gs_iPanesConfig = PANESCONFIG_SYMM then
+	values "gs_SLight_w" range (gs_frame2_width + 2 *(gs_sash_width - gs_rebate_width) + gs_frame2_width/2,
+								ac_unit_width/2 - gs_frame2_width/2 - (gs_sash_width - gs_rebate_width)]
+endif
+
+
+! =============================================================================
+! Sash Options
+! =============================================================================
+
+if gs_sash_uniform then
+	lock "vgn_05", "hgn_05", "vgn2_05", "hgn2_05"
+	hideparameter "vgn_05", "hgn_05", "vgn2_05", "hgn2_05"
+	lock "vgn_06", "hgn_06", "vgn2_06", "hgn2_06"
+	hideparameter "vgn_06", "hgn_06", "vgn2_06", "hgn2_06"
+	lock "vgn_09", "hgn_09", "vgn2_09", "hgn2_09"
+	hideparameter "vgn_09", "hgn_09", "vgn2_09", "hgn2_09"
+	lock "vgn_10", "hgn_10", "vgn2_10", "hgn2_10"
+	hideparameter "vgn_10", "hgn_10", "vgn2_10", "hgn2_10"
+endif
+
+dim sashMullionResetArray[3][3]
+for i=1 to 3
+	for j=1 to 3
+		sashMullionResetArray[i][j]	= 0
+	next j
+next i
+
+call "Casement_rectangular" parameters	iWindowClass			= 2,				! WINCLASS_HISTORIC
+										CasementIDArray 		= CasementIDArray,
+										CasementTypeArray		= CasementTypeArray,
+										sashWidthArray			= sashWidthArray,
+										sashHeightArray			= sashHeightArray,
+										sashMullionResetArray	= sashMullionResetArray,
+										gs_sash_uniform			= gs_sash_uniform,
+										gs_sash_width			= gs_sash_width,
+										gs_rebate_width			= gs_rebate_width,
+										gs_bLeftSLight			= 1,
+										gs_bSLight				= 1,
+										gs_UTrans				= gs_UTrans,
+										gs_LTrans				= 0,
+										gs_UTrans_Div			= gs_UTrans_Div,
+										gs_LTrans_Div			= 0,
+										iMullionPosition		= iMullionPosition,
+										MullionStyle_00			= MullionStyle_00,
+										iMullionStyle_00		= iMullionStyle_00,
+										MullionStyle_01			= MullionStyle_01,
+										iMullionStyle_01		= iMullionStyle_01,
+										iMullionStyleOriginal_01= iMullionStyleOriginal_01,
+										MullionStyle_02			= MullionStyle_02,
+										iMullionStyle_02		= iMullionStyle_02,
+										iMullionStyleOriginal_02= iMullionStyleOriginal_02,
+										MullionStyle_05			= MullionStyle_05,
+										iMullionStyle_05		= iMullionStyle_05,
+										iMullionStyleOriginal_05= iMullionStyleOriginal_05,
+										MullionStyle_06			= MullionStyle_06,
+										iMullionStyle_06		= iMullionStyle_06,
+										iMullionStyleOriginal_06= iMullionStyleOriginal_06,
+										MullionStyle_09			= MullionStyle_09,
+										iMullionStyle_09		= iMullionStyle_09,
+										iMullionStyleOriginal_09= iMullionStyleOriginal_09,
+										MullionStyle_10			= MullionStyle_10,
+										iMullionStyle_10		= iMullionStyle_10,
+										iMullionStyleOriginal_10= iMullionStyleOriginal_10,
+										MullionPosition			= MullionPosition,
+!										gs_horiz_div_height_01	= gs_horiz_div_height_01,
+!										gs_horiz_div_height_02	= gs_horiz_div_height_02,
+!										gs_horiz_div_height_05	= gs_horiz_div_height_05,
+!										gs_horiz_div_height_06	= gs_horiz_div_height_06,
+!										gs_horiz_div_height_09	= gs_horiz_div_height_09,
+!										gs_horiz_div_height_10	= gs_horiz_div_height_10,
+										gs_optype_01			= gs_optype_01,
+										gs_optype_02			= gs_optype_02,
+										gs_optype_05			= gs_optype_05,
+										gs_optype_06			= gs_optype_06,
+										gs_optype_09			= gs_optype_09,
+										gs_optype_10			= gs_optype_10,
+										gs_optype_m_01			= gs_optype_m_01,
+										gs_optype_m_02			= gs_optype_m_02,
+										gs_optype_m_05			= gs_optype_m_05,
+										gs_optype_m_06			= gs_optype_m_06,
+										gs_optype_m_09			= gs_optype_m_09,
+										gs_optype_m_10			= gs_optype_m_10,
+										bVentilationProfile				= bVentilationProfile,
+										iVentilationProfileType			= iVentilationProfileType,
+										VentilationProfileHeight		= VentilationProfileHeight,
+										isVentilationProfileInSash_01	= isVentilationProfileInSash_01,
+										isVentilationProfileInSash_02	= isVentilationProfileInSash_02,
+										isVentilationProfileInSash_05	= isVentilationProfileInSash_05,
+										isVentilationProfileInSash_06	= isVentilationProfileInSash_06,
+										isVentilationProfileInSash_09	= isVentilationProfileInSash_09,
+										isVentilationProfileInSash_10	= isVentilationProfileInSash_10,
+										stSashType				= stSashType,
+										gw						= gw,
+										ghe						= 1,
+										vgn_01					= vgn_01,
+										hgn_01					= hgn_01,
+										vgn_02					= vgn_02,
+										hgn_02					= hgn_02,
+										vgn_05					= vgn_05,
+										hgn_05					= hgn_05,
+										vgn_06					= vgn_06,
+										hgn_06					= hgn_06,
+										vgn_09					= vgn_09,
+										hgn_09					= hgn_09,
+										vgn_10					= vgn_10,
+										hgn_10					= hgn_10,
+!										vgn2_01					= vgn2_01,
+!										hgn2_01					= hgn2_01,
+!										vgn2_02					= vgn2_02,
+!										hgn2_02					= hgn2_02,
+!										vgn2_05					= vgn2_05,
+!										hgn2_05					= hgn2_05,
+!										vgn2_06					= vgn2_06,
+!										hgn2_06					= hgn2_06,
+!										vgn2_09					= vgn2_09,
+!										hgn2_09					= hgn2_09,
+!										vgn2_10					= vgn2_10,
+!										hgn2_10					= hgn2_10,
+!										vergrid_01				= vergrid_01,
+!										horgrid_01				= horgrid_01,
+!										vergrid_02				= vergrid_02,
+!										horgrid_02				= horgrid_02,
+!										vergrid_05				= vergrid_05,
+!										horgrid_05				= horgrid_05,
+!										vergrid_06				= vergrid_06,
+!										horgrid_06				= horgrid_06,
+!										vergrid_09				= vergrid_09,
+!										horgrid_09				= horgrid_09,
+!										vergrid_10				= vergrid_10,
+!										horgrid_10				= horgrid_10,
+!										vergrid2_05				= vergrid2_05,
+!										horgrid2_05				= horgrid2_05,
+!										vergrid2_06				= vergrid2_06,
+!										horgrid2_06				= horgrid2_06,
+!										vergrid2_09				= vergrid2_09,
+!										horgrid2_09				= horgrid2_09,
+!										vergrid2_10				= vergrid2_10,
+!										horgrid2_10				= horgrid2_10,
+										stMullionPosition		= stMullionPosition,
+										stOpeningType			= stOpeningType,
+										openingAngle_01			= openingAngle_01,
+										openingAngle_02			= openingAngle_02,
+										openingAngle_05			= openingAngle_05,
+										openingAngle_06			= openingAngle_06,
+										openingAngle_09			= openingAngle_09,
+										openingAngle_10			= openingAngle_10
+!										openingAngle2_01		= openingAngle2_01,
+!										openingAngle2_02		= openingAngle2_02,
+!										openingAngle2_05		= openingAngle2_05,
+!										openingAngle2_06		= openingAngle2_06,
+!										openingAngle2_09		= openingAngle2_09,
+!										openingAngle2_10		= openingAngle2_10
+
+! =============================================================================
+! Total Glazed Area Listing Parameters
+! =============================================================================
+if NOT(gs_list_glassarea_override) then
+	if GLOB_MODPAR_NAME = "gs_list_glassarea" then
+		gs_list_glassarea_tmp = gs_list_glassarea
+		parameters gs_list_glassarea_tmp = gs_list_glassarea_tmp
+	else
+		gs_list_glassarea = gs_list_glassarea_tmp
+		parameters gs_list_glassarea = gs_list_glassarea
+	endif
+
+	gs_list_glassarea	= 0
+	if gs_UTrans & gs_UTrans_Div then
+	! Transom Left Sash -------------------------------------------------------------
+	!	sh_unID		= 5700
+		sashWidth	= sashWidthArray2[1][1]
+		sashHeight	= sashHeightArray2[1][1]
+
+		if gs_optype_m_10 = 1 then
+			GlassWidth	= sashWidth - 2 * gs_rebate_width
+			GlassHeight	= sashHeight - 2 * gs_rebate_width
+		else
+			GlassWidth	= sashWidth - 2 * gs_sash_width
+			GlassHeight	= sashHeight - 2 * gs_sash_width
+		endif
+		PanelGlassArea  = GlassWidth * GlassHeight
+
+		if iMullionStyle_10 = 2 then ! H-V Grid
+			HorGrillNum		= hgn_10 - 1
+			VertGrillNum	= vgn_10 - 1
+			GrillWidth		= gw
+
+			HorGrillArea	= HorGrillNum * GlassWidth * GrillWidth
+			VertGrillArea	= VertGrillNum * GlassHeight * GrillWidth
+			SectGrillArea	= HorGrillNum * VertGrillNum * GrillWidth * GrillWidth
+			SummaGrillArea	= HorGrillArea + VertGrillArea - SectGrillArea
+
+			PanelGlassArea = PanelGlassArea - SummaGrillArea
+		endif
+
+		if iMullionStyle_10 = 4 then ! Custom Panel
+			PanelGlassArea = 0
+		endif
+		gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+	endif
+
+	if gs_UTrans then
+	! Transom Middle Sash -----------------------------------------------------------
+	!	sh_unID		= 2500
+		sashWidth	= sashWidthArray2[1][2]
+		sashHeight	= sashHeightArray2[1][2]
+
+		if gs_optype_m_02 = 1 then
+			GlassWidth	= sashWidth - 2 * gs_rebate_width
+			GlassHeight	= sashHeight - 2 * gs_rebate_width
+		else
+			GlassWidth	= sashWidth - 2 * gs_sash_width
+			GlassHeight	= sashHeight - 2 * gs_sash_width
+		endif
+		PanelGlassArea  = GlassWidth * GlassHeight
+
+		if iMullionStyle_02 = 2 then ! H-V Grid
+			HorGrillNum		= hgn_02 - 1
+			VertGrillNum	= vgn_02 - 1
+			GrillWidth		= gw
+
+			HorGrillArea	= HorGrillNum * GlassWidth * GrillWidth
+			VertGrillArea	= VertGrillNum * GlassHeight * GrillWidth
+			SectGrillArea	= HorGrillNum * VertGrillNum * GrillWidth * GrillWidth
+			SummaGrillArea	= HorGrillArea + VertGrillArea - SectGrillArea
+
+			PanelGlassArea = PanelGlassArea - SummaGrillArea
+		endif
+
+		if iMullionStyle_02 = 4 then ! Custom Panel
+			PanelGlassArea = 0
+		endif
+		gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+	endif
+
+	if gs_UTrans & gs_UTrans_Div then
+	! Transom Right Sash ------------------------------------------------------------
+	!	sh_unID		= 4100
+		sashWidth	= sashWidthArray2[1][3]
+		sashHeight	= sashHeightArray2[1][3]
+
+		if gs_optype_m_06 = 1 then
+			GlassWidth	= sashWidth - 2 * gs_rebate_width
+			GlassHeight	= sashHeight - 2 * gs_rebate_width
+		else
+			GlassWidth	= sashWidth - 2 * gs_sash_width
+			GlassHeight	= sashHeight - 2 * gs_sash_width
+		endif
+		PanelGlassArea  = GlassWidth * GlassHeight
+
+		if iMullionStyle_06 = 2 then ! H-V Grid
+			HorGrillNum		= hgn_06 - 1
+			VertGrillNum	= vgn_06 - 1
+			GrillWidth		= gw
+
+			HorGrillArea	= HorGrillNum * GlassWidth * GrillWidth
+			VertGrillArea	= VertGrillNum * GlassHeight * GrillWidth
+			SectGrillArea	= HorGrillNum * VertGrillNum * GrillWidth * GrillWidth
+			SummaGrillArea	= HorGrillArea + VertGrillArea - SectGrillArea
+
+			PanelGlassArea = PanelGlassArea - SummaGrillArea
+		endif
+
+		if iMullionStyle_06 = 4 then ! Custom Panel
+			PanelGlassArea = 0
+		endif
+		gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+	endif
+
+	! =============================================================================
+	! Main Sashes
+	! =============================================================================
+	! Middle Left Sash ------------------------------------------------------------
+	!sh_unID		= 5300
+	sashWidth	= sashWidthArray2[2][1]
+	sashHeight	= sashHeightArray2[2][1]
+
+	if gs_optype_m_09 = 1 then
+		GlassWidth	= sashWidth - 2 * gs_rebate_width
+		GlassHeight	= sashHeight - 2 * gs_rebate_width
+	else
+		GlassWidth	= sashWidth - 2 * gs_sash_width
+		GlassHeight	= sashHeight - 2 * gs_sash_width
+	endif
+	PanelGlassArea  = GlassWidth * GlassHeight
+
+	if iMullionStyle_09 = 2 then ! H-V Grid
+		HorGrillNum		= hgn_09 - 1
+		VertGrillNum	= vgn_09 - 1
+		GrillWidth		= gw
+
+		HorGrillArea	= HorGrillNum * GlassWidth * GrillWidth
+		VertGrillArea	= VertGrillNum * GlassHeight * GrillWidth
+		SectGrillArea	= HorGrillNum * VertGrillNum * GrillWidth * GrillWidth
+		SummaGrillArea	= HorGrillArea + VertGrillArea - SectGrillArea
+
+		PanelGlassArea = PanelGlassArea - SummaGrillArea
+	endif
+
+	if iMullionStyle_09 = 4 then ! Custom Panel
+		PanelGlassArea = 0
+	endif
+	gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+	! Middle Middle Sash ----------------------------------------------------------
+	sh_unID		= 2100
+	sashWidth	= sashWidthArray2[2][2]
+	sashHeight	= sashHeightArray2[2][2]
+
+	if gs_optype_m_01 = 1 then
+		GlassWidth	= sashWidth - 2 * gs_rebate_width
+		GlassHeight	= sashHeight - 2 * gs_rebate_width
+	else
+		GlassWidth	= sashWidth - 2 * gs_sash_width
+		GlassHeight	= sashHeight - 2 * gs_sash_width
+	endif
+	PanelGlassArea  = GlassWidth * GlassHeight
+
+	if iMullionStyle_01 = 2 then ! H-V Grid
+		HorGrillNum		= hgn_01 - 1
+		VertGrillNum	= vgn_01 - 1
+		GrillWidth		= gw
+
+		HorGrillArea	= HorGrillNum * GlassWidth * GrillWidth
+		VertGrillArea	= VertGrillNum * GlassHeight * GrillWidth
+		SectGrillArea	= HorGrillNum * VertGrillNum * GrillWidth * GrillWidth
+		SummaGrillArea	= HorGrillArea + VertGrillArea - SectGrillArea
+
+		PanelGlassArea = PanelGlassArea - SummaGrillArea
+	endif
+
+	if iMullionStyle_01 = 4 then ! Custom Panel
+		PanelGlassArea = 0
+	endif
+	gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+
+	! Middle Right Sash -----------------------------------------------------------
+	sh_unID		= 3700
+	sashWidth	= sashWidthArray2[2][3]
+	sashHeight	= sashHeightArray2[2][3]
+
+	if gs_optype_m_05 = 1 then
+		GlassWidth	= sashWidth - 2 * gs_rebate_width
+		GlassHeight	= sashHeight - 2 * gs_rebate_width
+	else
+		GlassWidth	= sashWidth - 2 * gs_sash_width
+		GlassHeight	= sashHeight - 2 * gs_sash_width
+	endif
+	PanelGlassArea  = GlassWidth * GlassHeight
+
+	if iMullionStyle_05 = 2 then ! H-V Grid
+		HorGrillNum		= hgn_05 - 1
+		VertGrillNum	= vgn_05 - 1
+		GrillWidth		= gw
+
+		HorGrillArea	= HorGrillNum * GlassWidth * GrillWidth
+		VertGrillArea	= VertGrillNum * GlassHeight * GrillWidth
+		SectGrillArea	= HorGrillNum * VertGrillNum * GrillWidth * GrillWidth
+		SummaGrillArea	= HorGrillArea + VertGrillArea - SectGrillArea
+
+		PanelGlassArea = PanelGlassArea - SummaGrillArea
+	endif
+
+	if iMullionStyle_05 = 4 then ! Custom Panel
+		PanelGlassArea = 0
+	endif
+	gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+	parameters gs_list_glassarea = gs_list_glassarea
+	lock "gs_list_glassarea"
+else
+	if GLOB_MODPAR_NAME = "gs_list_glassarea" then
+		gs_list_glassarea_tmp = gs_list_glassarea
+		parameters gs_list_glassarea_tmp = gs_list_glassarea_tmp
+	else
+		gs_list_glassarea = gs_list_glassarea_tmp
+		parameters gs_list_glassarea = gs_list_glassarea
+	endif
+endif
+
+
+end
+
+"preloadSurfaces":
+	parameters	stored_material[1][1]	= gs_frame_mat,
+				stored_material[1][2]	= gs_frame_mat2,
+				stored_material[1][3]	= gs_sash_mat,
+				stored_material[1][4]	= gs_sash_mat2,
+				stored_material[1][5]	= gs_grill_mat,
+				stored_material[1][6]	= gs_grill_mat2,
+				stored_material[1][7]	= gs_panel_mat,
+				stored_material[1][8]	= gs_panel_mat2
+return
+
+
+"paneloperation":
+	panelOperationID = 13	! OTHEROPERATION
+	if optypeID = SASH_FIXED		then panelOperationID = 12 	! FIXEDCASEMENT
+	if optypeID = SASH_FIXED_SCREW	then panelOperationID = 12 	! FIXEDCASEMENT
+	if optypeID = SASH_SIDE_HUNG	then panelOperationID = 2	! SIDEHUNGLEFTHAND
+	if optypeID = SASH_SIDE_HUNG_M	then panelOperationID = 1	! SIDEHUNGRIGHTHAND
+	if optypeID = SASH_TILT_TURN	then panelOperationID = 4	! TILTANDTURNLEFTHAND
+	if optypeID = SASH_TILT_TURN_M	then panelOperationID = 3	! TILTANDTURNRIGHTHAND
+	if optypeID = SASH_BOTTOM_HUNG	then panelOperationID = 6	! BOTTOMHUNG
+	if optypeID = SASH_TOP_HUNG		then panelOperationID = 5	! TOPHUNG
+	if optypeID = SASH_VER_PIVOT	then panelOperationID = 8	! PIVOTVERTICAL
+	if optypeID = SASH_VER_PIVOT_M	then panelOperationID = 8	! PIVOTVERTICAL
+	if optypeID = SASH_HOR_PIVOT	then panelOperationID = 7	! PIVOTHORIZONTAL
+return

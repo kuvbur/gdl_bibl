@@ -1,0 +1,1963 @@
+
+hideparameter all
+
+call "FM_types" parameters all
+
+! ==============================================================================
+! Parameters for general lights and built-in lights
+! ==============================================================================
+
+! iEnableColorPresetTypes - possible values
+!	2		- enable Type 1
+!	4		- enable Type 2
+!	8		- enable Type 3
+!	16		- enable Type 4
+!	32		- enable Type 5
+!	64		- enable Type 6
+!	128		- enable Type 7
+!	256		- enable Type 8
+!	512		- enable Type 9
+!	1024	- enable Type 10
+!	2048	- enable Type 11
+!	4096	- enable Type 12
+!	8192	- enable Type 13
+!	16384	- enable Type 14
+!	32768	- enable Type 15
+
+if iLightGroupType = LIGHTGROUP_GENERAL_LIGHT then
+	iEnableColorPresetTypes =	2**1 +\
+								2**2 +\
+								2**3 +\
+								2**4 +\
+								2**5 +\
+								2**6 +\
+								2**7 +\
+								2**8 +\
+								2**9 +\
+								2**10 +\
+								2**11 +\
+								2**12 +\
+								2**13 +\
+								2**14 +\
+								2**15 +\
+								2**16
+
+	if	iC4dGenType = GENTYPE_INFINITE and bSunObject	| \
+		iC4dGenType = GENTYPE_AREA and bWindowLight		then
+
+		iEnableColorPresetTypes =	2**1 +\
+									2**2 +\
+									2**3 +\
+									2**4 +\
+									2**5 +\
+									2**6 +\
+									2**7 +\
+									2**8 +\
+									2**9
+	endif
+
+	if iC4dGenType = GENTYPE_IES then
+		iEnableColorPresetTypes =	2**1 +\
+									2**10 +\
+									2**11 +\
+									2**12 +\
+									2**13 +\
+									2**14 +\
+									2**15 +\
+									2**16
+	endif
+else
+	if iLightGroupType = LIGHTGROUP_BUILTIN_SPOT then
+		iEnableColorPresetTypes =	2**1 +\
+									2**11 +\
+									2**12 +\
+									2**13 +\
+									2**14 +\
+									2**15 +\
+									2**16
+	else
+		iEnableColorPresetTypes =	2**1 +\
+									2**10 +\
+									2**11 +\
+									2**12 +\
+									2**13 +\
+									2**14 +\
+									2**15 +\
+									2**16
+	endif
+endif
+
+
+values "tempIntC" 0, 1
+values "gs_light_intensity" range [0, 200]
+
+if GLOB_MODPAR_NAME = "tempIntC" then
+	gs_light_switch	= tempIntC
+	parameters gs_light_switch = gs_light_switch
+else
+	tempIntC	= gs_light_switch
+	parameters tempIntC = tempIntC
+endif
+
+
+if iEnableColorPresetTypes > EPS then
+	dim colorPresetValueList[]
+	j = 1
+	for i = 1 to vardim1(stColorPreset)
+		if bittest(iEnableColorPresetTypes, i) then
+			put i
+			colorPresetValueList[j] = stColorPreset[i]
+			j = j + 1
+		endif
+	next i
+	values "iColorPreset" get(NSP)
+	values "colorPreset" colorPresetValueList
+	if GLOB_MODPAR_NAME = "colorPreset" then
+		for i = 1 to vardim1(stColorPreset)
+			if colorPreset = stColorPreset[i] then iColorPreset = i
+		next i
+		parameters iColorPreset = iColorPreset
+	else
+		if GLOB_MODPAR_NAME = "gs_color_red" | GLOB_MODPAR_NAME = "gs_color_green" | GLOB_MODPAR_NAME = "gs_color_blue" then
+			iColorPreset = 1
+			parameters iColorPreset = iColorPreset
+
+			colorPreset = stColorPreset[1]
+			parameters colorPreset = colorPreset
+		else
+			colorPreset = stColorPreset[max(iColorPreset, 1)]
+			parameters colorPreset = colorPreset
+		endif
+	endif
+
+	if iColorPreset <> 1 then
+		gs_color_red = iLightColorRed / 255
+		gs_color_green = iLightColorGreen / 255
+		gs_color_blue = iLightColorBlue / 255
+		parameters	gs_color_red = gs_color_red,
+					gs_color_green = gs_color_green,
+					gs_color_blue = gs_color_blue
+	endif
+endif
+
+
+values "c4dPhoUnit" stPhoUnit
+values "iC4dPhoUnit" 1, 2
+if GLOB_MODPAR_NAME = "c4dPhoUnit" then
+	for i = 1 to vardim1(stPhoUnit)
+	   if c4dPhoUnit = stPhoUnit[i]	then iC4dPhoUnit = i
+	next i
+	parameters iC4dPhoUnit = iC4dPhoUnit
+else
+	c4dPhoUnit = stPhoUnit[max(min(iC4dPhoUnit,vardim1(stPhoUnit)),1)]
+	parameters c4dPhoUnit = c4dPhoUnit
+endif
+
+if NOT(c4dPhoPhotometric) | iC4dGenType = GENTYPE_IES then
+	lock			"c4dPhoUnit",
+					"iC4dPhoUnit",
+					"photoIntensityCandela",
+					"photoIntensityLumen"
+else
+	lock			"c4dDetRadius"
+endif
+
+if iC4dGenType = GENTYPE_SPOT then
+	if GLOB_MODPAR_NAME = "c4dDetOuterAngle" | GLOB_MODPAR_NAME = "photoIntensityCandela" then
+		photoIntensityLumen = photoIntensityCandela * (2 * pi * (1 - COS(c4dDetOuterAngle / 2)))
+		parameters photoIntensityLumen = photoIntensityLumen
+	endif
+	if GLOB_MODPAR_NAME = "c4dDetOuterAngle" | GLOB_MODPAR_NAME = "photoIntensityLumen" then
+		photoIntensityCandela = photoIntensityLumen / (2 * pi * (1 - COS(c4dDetOuterAngle / 2)))
+		parameters photoIntensityCandela = photoIntensityCandela
+	endif
+else
+	if GLOB_MODPAR_NAME = "photoIntensityCandela" then
+		photoIntensityLumen = photoIntensityCandela * (4 * pi)
+		parameters photoIntensityLumen = photoIntensityLumen
+	else
+		photoIntensityCandela = photoIntensityLumen / (4 * pi)
+		parameters photoIntensityCandela = photoIntensityCandela
+	endif
+endif
+
+if iC4dPhoUnit = PHOTOUNIT_LUMEN then
+	lock			"photoIntensityCandela"
+else
+	lock			"photoIntensityLumen"
+endif
+
+if NOT(c4dPhoPhotometric) then
+	lock			"photoIntensityCandela",
+					"photoIntensityLumen"
+endif
+
+values "iShadowQuality" range[1, 10]
+
+if not(bGenShadow) then
+	lock			"iShadowQuality"
+endif
+
+if iLightGroupType = LIGHTGROUP_GENERAL_LIGHT | bEnable3DModelTypes then
+	values "modelType" stModelType
+	values "iModelType" 1, 2
+endif
+if bEnable3DModelTypes then
+	if GLOB_MODPAR_NAME = "modelType" then
+		for i = 1 to vardim1(stModelType)
+		   if modelType = stModelType[i]	then iModelType = i
+		next i
+		parameters iModelType = iModelType
+	else
+		modelType = stModelType[max(min(iModelType,vardim1(stModelType)),1)]
+		parameters modelType = modelType
+	endif
+endif
+
+if iLightGroupType = LIGHTGROUP_GENERAL_LIGHT then
+	if (iC4dGenType = GENTYPE_SPOT and NOT(_bShowIllumination3D)) | NOT(bShow3D) then
+		lock			"modelType",
+						"iModelType"
+	endif
+else
+	if bEnable3DModelTypes & (NOT(_bShowIllumination3D) | NOT(bShow3D)) then
+		lock			"modelType",
+						"iModelType"
+	endif
+endif
+
+if iC4dGenType = GENTYPE_SPOT then
+	if GLOB_MODPAR_NAME = "innerConeRadius" then
+		c4dDetInnerAngle	= ASN(innerConeRadius / c4dDetRadius) * 2
+		parameters	c4dDetInnerAngle = c4dDetInnerAngle
+
+		innerConeAngleHalf	= c4dDetInnerAngle / 2
+		parameters	innerConeAngleHalf = innerConeAngleHalf
+	else
+		if GLOB_MODPAR_NAME = "c4dDetInnerAngle" then
+			innerConeAngleHalf	= c4dDetInnerAngle / 2
+			parameters	innerConeAngleHalf = innerConeAngleHalf
+
+			innerConeRadius	= SIN(c4dDetInnerAngle / 2) * c4dDetRadius
+			parameters	innerConeRadius = innerConeRadius
+		else
+			c4dDetInnerAngle	= innerConeAngleHalf * 2
+			parameters	c4dDetInnerAngle = c4dDetInnerAngle
+
+			innerConeRadius	= SIN(innerConeAngleHalf) * c4dDetRadius
+			parameters	innerConeRadius = innerConeRadius
+		endif
+	endif
+
+	if GLOB_MODPAR_NAME = "outerConeRadius" then
+		c4dDetOuterAngle	= ASN(outerConeRadius / c4dDetRadius) * 2
+		parameters	c4dDetOuterAngle = c4dDetOuterAngle
+
+		outerConeAngleHalf	= c4dDetOuterAngle / 2
+		parameters	outerConeAngleHalf = outerConeAngleHalf
+	else
+		if GLOB_MODPAR_NAME = "c4dDetOuterAngle" then
+			outerConeAngleHalf	= c4dDetOuterAngle / 2
+			parameters	outerConeAngleHalf = outerConeAngleHalf
+
+			outerConeRadius	= SIN(c4dDetOuterAngle / 2) * c4dDetRadius
+			parameters	outerConeRadius = outerConeRadius
+		else
+			c4dDetOuterAngle	= outerConeAngleHalf * 2
+			parameters	c4dDetOuterAngle = c4dDetOuterAngle
+
+			outerConeRadius	= SIN(outerConeAngleHalf) * c4dDetRadius
+			parameters	outerConeRadius = outerConeRadius
+		endif
+	endif
+
+	values "c4dDetInnerAngle" range[0, c4dDetOuterAngle)
+	values "c4dDetOuterAngle" range(c4dDetInnerAngle, 180)
+
+	values "innerConeAngleHalf" range[0, outerConeAngleHalf)
+	values "outerConeAngleHalf" range(innerConeAngleHalf, 90)
+
+	values "innerConeRadius" range(0, outerConeRadius)
+	values "outerConeRadius" range(innerConeRadius, c4dDetRadius)
+
+	values "c4dVisBrightness" range [0, 100]
+endif
+
+if iLightGroupType = LIGHTGROUP_BUILTIN_NONVIS_AREA & NOT(bFixFalloffAngle) then
+	values "c4dDetFalloffAngle" range [15, 130]
+	values "falloffAngleTemp" range [TAN(15 / 2) * c4dDetRadius, TAN(130 / 2) * c4dDetRadius]
+
+	if GLOB_MODPAR_NAME = "falloffAngleTemp" then
+		c4dDetFalloffAngle	= ATN(falloffAngleTemp / c4dDetRadius) * 2
+		parameters	c4dDetFalloffAngle = c4dDetFalloffAngle
+	else
+		falloffAngleTemp	= c4dDetRadius * TAN(c4dDetFalloffAngle / 2)
+		parameters	falloffAngleTemp = falloffAngleTemp
+	endif
+endif
+
+if iLightGroupType <> LIGHTGROUP_GENERAL_LIGHT then
+	if NOT(bShow3D) | c4dPhoPhotometric then
+		lock			"bShowIllumination3D"
+	endif
+
+	if NOT(bShow3D) | NOT(bShowIllumination3D) | c4dPhoPhotometric then
+		lock			"penIllumination"
+
+		if bEnable3DModelTypes then
+			lock			"modelType",
+							"iModelType"
+		endif
+	endif
+endif
+
+values "c4dDetRadius" range[0, )
+values "photoIntensityLumen" range [0, 10000000]
+values "photoIntensityCandela" range [0, 10000000]
+
+
+! ==============================================================================
+! Parameters for general lights
+! ==============================================================================
+
+if iLightGroupType = LIGHTGROUP_GENERAL_LIGHT then
+
+	a		= 0
+	b		= 0
+	zzyzx	= 0
+	parameters	a		= a,
+				b		= b,
+				zzyzx	= zzyzx
+	lock		"a", "b", "zzyzx"
+
+	values "c4dDetAspectRatio" range[0.01, 100]
+	values "c4dDetInfinitAngle" range [0, 90]
+	values "c4dDetFalloffAngle" range [0, 180]
+	values "c4dDetInnerRadius" range [0, ]
+	values "c4dVisFalloff" range [0, 100]
+	values "c4dVisEdgeFalloff" range [0, 100]
+	values "c4dVisInnerDistance" range [0, c4dVisOuterDistance]
+	values "c4dVisOuterDistance" range [0, ]
+	values "c4dVisBrightness" range [0, 100]
+	values "c4dNoiIlluminationScale" range [0, ]
+	values "c4dNoiVisibilityScale" range [0, ]
+	values "c4dCauSurfaceEnergy" range [0, ]
+	values "c4dCauSurfacePhotons" range [10, 10000000]
+	values "c4dCauVolumeEnergy" range [0, ]
+	values "c4dCauVolumePhotons" range [10, 2000000]
+	values "c4dCauInnerDistance" range [0, ]
+	values "c4dCauOuterDistance" range [0, ]
+	values "c4dShaDensity" range [0, 100]
+	values "c4dNoiOctaves" range [1, 8]
+	values "c4dNoiBrightness" range [-100, 100]
+	values "c4dNoiContrast" range [0, 500]
+
+	values "c4dLenGlowBrightness" range [0, 200]
+	values "c4dLenGlowAspectRatio" range [0.1, 10]
+	values "c4dLenReflexBrightness" range [0, 200]
+	values "c4dLenReflexAspectRatio" range [0.1, 10]
+	values "c4dLenScale" range [0, 200]
+	values "c4dLenRotation" range [0, ]
+
+	lock			"c4dGenColor",
+					"c4dGenIntensity"
+
+	values "c4dDetAreaShape"	stDetAreaShape[2],
+								stDetAreaShape[1],
+								stDetAreaShape[5],
+								stDetAreaShape[3],
+								stDetAreaShape[6],
+								stDetAreaShape[4],
+								stDetAreaShape[8],
+								stDetAreaShape[7]
+	values "iC4dDetAreaShape"	AREASHAPE_RECT,
+								AREASHAPE_DISC,
+								AREASHAPE_CUBE,
+								AREASHAPE_SPHERE,
+								AREASHAPE_HEMISPHERE,
+								AREASHAPE_CYLIND,
+								AREASHAPE_PCYLIND,
+								AREASHAPE_LINE
+
+	if GLOB_MODPAR_NAME = "c4dDetAreaShape" then
+		for i = 1 to vardim1(stDetAreaShape)
+		   if c4dDetAreaShape = stDetAreaShape[i]	then iC4dDetAreaShape = i
+		next i
+		parameters iC4dDetAreaShape = iC4dDetAreaShape
+	else
+		c4dDetAreaShape = stDetAreaShape[max(min(iC4dDetAreaShape,vardim1(stDetAreaShape)),1)]
+		parameters c4dDetAreaShape = c4dDetAreaShape
+	endif
+
+	! ==============================================================================
+	! 2D Symbol
+	! ==============================================================================
+
+	call "Lamp_symbol" parameters all	bEnableSymbolTypes				= bEnableSymbolTypes,
+										iEnableLampSymbolTypes			= iEnableLampSymbolTypes,
+										gs_symbtype_2D_m				= gs_symbtype_2D_m,
+										iSpecSymbolType					= _specialSymbolType,
+										bEnableFillOnRealisticSymbol	= 0,
+										bEnableTextOnRealisticSymbol	= bEnableTextOnRealisticSymbol
+
+	if bEnableSymbolTypes & (iEnableLampSymbolTypes < 1 | gs_symbtype_2D_m = 1) then
+		lock	"symbolType",
+				"iSymbolType",
+				"bRotateIndependently",
+				"angleSymbolRotation"
+	endif
+
+	if bEnableSymbolTypes & NOT(bRotateIndependently) then
+		lock	"angleSymbolRotation"
+	endif
+
+	if not(bEnableSymbolTypes) then
+		lock		"gs_symbtype_2D",
+					"gs_symbtype_2D_m"
+	endif
+
+	! ==============================================================================
+	! 3D Symbol
+	! ==============================================================================
+
+	if NOT(bShow3D) | NOT(_bShowIllumination3D) then
+		lock			"bShowClipping",
+						"penNearClip",
+						"penFarClip"
+	endif
+	if NOT(bShow3D) then
+		lock			"bShowIllumination3D",
+						"bFullEditing"
+	endif
+	if iC4dGenType = GENTYPE_INFINITE then
+		lock			"bShowIllumination2D",
+						"bShowIllumination3D",
+						"bFullEditing"
+	endif
+	if iC4dGenType = GENTYPE_IES then
+		lock			"bFullEditing"
+	endif
+
+	if bEnableClipping then
+		if NOT(c4dDetNearClip) and NOT(c4dDetFarClip) then
+			lock			"bShowClipping"
+		endif
+		if NOT(bShowClipping) | NOT(c4dDetNearClip) then
+			lock			"penNearClip"
+		endif
+		if NOT(bShowClipping) | NOT(c4dDetFarClip) then
+			lock			"penFarClip"
+		endif
+	else
+		lock			"bShowClipping",
+						"penNearClip",
+						"penFarClip"
+	endif
+
+	if	NOT(_bDetShowFalloff) | c4dGenNoIllumination | c4dPhoPhotometric |\
+		gs_symbtype_2D_m = SYMBOL_ELECTRIC | gs_symbtype_2D_m = SYMBOL_RCP then
+
+		lock			"bShowIllumination2D"
+	endif
+	if NOT(_bDetShowFalloff) | c4dGenNoIllumination | c4dPhoPhotometric | NOT(bShow3D) then
+		lock			"bShowIllumination3D"
+	endif
+
+	if NOT(_bDetShowFalloff) | c4dGenNoIllumination | c4dPhoPhotometric |\
+		NOT(bShow3D) | (NOT(_bShowIllumination3D) and NOT(_bShowIllumination2D)) then
+		lock			"penIllumination"
+	endif
+
+
+	! ==============================================================================
+	! Light Geometry Parameters
+	! ==============================================================================
+
+	if iC4dGenType = GENTYPE_SPOT then
+		if GLOB_MODPAR_NAME = "falloffDist2DTempSpot" then
+			c4dDetRadius	= (targetLineLength3D * falloffDist2DTempSpot) / targetLineLength2D
+			parameters	c4dDetRadius = c4dDetRadius
+		else
+			falloffDist2DTempSpot	= (targetLineLength2D * c4dDetRadius) / targetLineLength3D
+			parameters	falloffDist2DTempSpot = falloffDist2DTempSpot
+		endif
+		values "falloffDist2DTempSpot" range[0, )
+
+		values "lightForm" stLightForm[1], stLightForm[2]
+		values "iLightForm" 1, 2
+		if GLOB_MODPAR_NAME = "lightForm" then
+			for i = 1 to vardim1(stLightForm)
+			   if lightForm = stLightForm[i]	then iLightForm = i
+			next i
+			parameters iLightForm = iLightForm
+		else
+			lightForm = stLightForm[max(min(iLightForm,vardim1(stLightForm)),1)]
+			parameters lightForm = lightForm
+		endif
+	endif
+
+	if iC4dGenType = GENTYPE_AREA then
+		if NOT(bWindowLight) then
+			if NOT(bLinkAreaSizes) then
+				if GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "c4dDetAreaY" | GLOB_MODPAR_NAME = "c4dDetAspectRatio" then
+					sizeAreaXHalf	= c4dDetAreaX / 2
+					parameters	sizeAreaXHalf = sizeAreaXHalf
+
+					sizeAreaYHalf	= c4dDetAreaY / 2 * _c4dDetAspectRatio
+					parameters	sizeAreaYHalf = sizeAreaYHalf
+				else
+					c4dDetAreaX	= sizeAreaXHalf * 2
+					parameters	c4dDetAreaX = c4dDetAreaX
+
+					c4dDetAreaY	= sizeAreaYHalf * 2 / _c4dDetAspectRatio
+					parameters	c4dDetAreaY = c4dDetAreaY
+				endif
+				if GLOB_MODPAR_NAME = "c4dDetAreaZ" then
+					sizeAreaZHalf	= c4dDetAreaZ / 2
+					parameters	sizeAreaZHalf = sizeAreaZHalf
+				else
+					c4dDetAreaZ	= sizeAreaZHalf * 2
+					parameters	c4dDetAreaZ = c4dDetAreaZ
+				endif
+
+				areaSizeRatioXY = c4dDetAreaX / c4dDetAreaY
+				parameters	areaSizeRatioXY = areaSizeRatioXY
+
+				areaSizeRatioYZ = c4dDetAreaY / c4dDetAreaZ
+				parameters	areaSizeRatioYZ = areaSizeRatioYZ
+
+				areaSizeRatioXZ = c4dDetAreaX / c4dDetAreaZ
+				parameters	areaSizeRatioXZ = areaSizeRatioXZ
+			else
+				if bLinkAreaSizeXY then
+					if	GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "sizeAreaXHalf" |\
+						GLOB_MODPAR_NAME = "c4dDetAreaY" | GLOB_MODPAR_NAME = "sizeAreaYHalf" then
+
+						if	GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "c4dDetAreaY" then
+							if GLOB_MODPAR_NAME = "c4dDetAreaX" then
+								sizeAreaXHalf	= c4dDetAreaX / 2
+								parameters	sizeAreaXHalf = sizeAreaXHalf
+
+								c4dDetAreaY	= c4dDetAreaX / areaSizeRatioXY
+								parameters	c4dDetAreaY = c4dDetAreaY
+								sizeAreaYHalf	= c4dDetAreaY / 2
+								parameters	sizeAreaYHalf = sizeAreaYHalf
+							else
+								sizeAreaYHalf	= c4dDetAreaY / 2
+								parameters	sizeAreaYHalf = sizeAreaYHalf
+
+								c4dDetAreaX	= c4dDetAreaY * areaSizeRatioXY
+								parameters	c4dDetAreaX = c4dDetAreaX
+								sizeAreaXHalf	= c4dDetAreaX / 2
+								parameters	sizeAreaXHalf = sizeAreaXHalf
+							endif
+						else
+							if GLOB_MODPAR_NAME = "sizeAreaXHalf" then
+								sizeAreaYHalf	= sizeAreaXHalf / areaSizeRatioXY
+								parameters	sizeAreaYHalf = sizeAreaYHalf
+							else
+								sizeAreaXHalf	= sizeAreaYHalf * areaSizeRatioXY
+								parameters	sizeAreaXHalf = sizeAreaXHalf
+							endif
+
+							c4dDetAreaX	= sizeAreaXHalf * 2
+							parameters	c4dDetAreaX = c4dDetAreaX
+							c4dDetAreaY	= c4dDetAreaX / areaSizeRatioXY
+							parameters	c4dDetAreaY = c4dDetAreaY
+						endif
+					else
+						if GLOB_MODPAR_NAME = "c4dDetAreaZ" then
+							sizeAreaZHalf	= c4dDetAreaZ / 2
+							parameters	sizeAreaZHalf = sizeAreaZHalf
+						else
+							c4dDetAreaZ	= sizeAreaZHalf * 2
+							parameters	c4dDetAreaZ = c4dDetAreaZ
+						endif
+
+						areaSizeRatioXY = c4dDetAreaX / c4dDetAreaY
+						parameters	areaSizeRatioXY = areaSizeRatioXY
+
+						areaSizeRatioYZ = c4dDetAreaY / c4dDetAreaZ
+						parameters	areaSizeRatioYZ = areaSizeRatioYZ
+
+						areaSizeRatioXZ = c4dDetAreaX / c4dDetAreaZ
+						parameters	areaSizeRatioXZ = areaSizeRatioXZ
+					endif
+				endif
+				if bLinkAreaSizeXZ then
+					if	GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "sizeAreaXHalf" |\
+						GLOB_MODPAR_NAME = "c4dDetAreaZ" | GLOB_MODPAR_NAME = "sizeAreaZHalf" then
+
+						if	GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "c4dDetAreaZ" then
+							if GLOB_MODPAR_NAME = "c4dDetAreaX" then
+								sizeAreaXHalf	= c4dDetAreaX / 2
+								parameters	sizeAreaXHalf = sizeAreaXHalf
+
+								c4dDetAreaZ	= c4dDetAreaX / areaSizeRatioXZ
+								parameters	c4dDetAreaZ = c4dDetAreaZ
+								sizeAreaZHalf	= c4dDetAreaZ / 2
+								parameters	sizeAreaZHalf = sizeAreaZHalf
+							else
+								sizeAreaZHalf	= c4dDetAreaZ / 2
+								parameters	sizeAreaZHalf = sizeAreaZHalf
+
+								c4dDetAreaX	= c4dDetAreaZ * areaSizeRatioXZ
+								parameters	c4dDetAreaX = c4dDetAreaX
+								sizeAreaXHalf	= c4dDetAreaX / 2
+								parameters	sizeAreaXHalf = sizeAreaXHalf
+							endif
+						else
+							if GLOB_MODPAR_NAME = "sizeAreaXHalf" then
+								sizeAreaZHalf	= sizeAreaXHalf / areaSizeRatioXZ
+								parameters	sizeAreaZHalf = sizeAreaZHalf
+							else
+								sizeAreaXHalf	= sizeAreaZHalf * areaSizeRatioXZ
+								parameters	sizeAreaXHalf = sizeAreaXHalf
+							endif
+
+							c4dDetAreaX	= sizeAreaXHalf * 2
+							parameters	c4dDetAreaX = c4dDetAreaX
+							c4dDetAreaZ	= c4dDetAreaX / areaSizeRatioXZ
+							parameters	c4dDetAreaZ = c4dDetAreaZ
+						endif
+					else
+						if GLOB_MODPAR_NAME = "c4dDetAreaY" then
+							sizeAreaYHalf	= c4dDetAreaY / 2
+							parameters	sizeAreaYHalf = sizeAreaYHalf
+						else
+							c4dDetAreaY	= sizeAreaYHalf * 2
+							parameters	c4dDetAreaY = c4dDetAreaY
+						endif
+
+						areaSizeRatioXY = c4dDetAreaX / c4dDetAreaY
+						parameters	areaSizeRatioXY = areaSizeRatioXY
+
+						areaSizeRatioYZ = c4dDetAreaY / c4dDetAreaZ
+						parameters	areaSizeRatioYZ = areaSizeRatioYZ
+
+						areaSizeRatioXZ = c4dDetAreaX / c4dDetAreaZ
+						parameters	areaSizeRatioXZ = areaSizeRatioXZ
+					endif
+				endif
+				if bLinkAreaSizeYZ then
+					if	GLOB_MODPAR_NAME = "c4dDetAreaY" | GLOB_MODPAR_NAME = "sizeAreaYHalf" |\
+						GLOB_MODPAR_NAME = "c4dDetAreaZ" | GLOB_MODPAR_NAME = "sizeAreaZHalf" then
+
+						if	GLOB_MODPAR_NAME = "c4dDetAreaY" | GLOB_MODPAR_NAME = "c4dDetAreaZ" then
+							if GLOB_MODPAR_NAME = "c4dDetAreaY" then
+								sizeAreaYHalf	= c4dDetAreaY / 2
+								parameters	sizeAreaYHalf = sizeAreaYHalf
+
+								c4dDetAreaZ	= c4dDetAreaY / areaSizeRatioYZ
+								parameters	c4dDetAreaZ = c4dDetAreaZ
+								sizeAreaZHalf	= c4dDetAreaZ / 2
+								parameters	sizeAreaZHalf = sizeAreaZHalf
+							else
+								sizeAreaZHalf	= c4dDetAreaZ / 2
+								parameters	sizeAreaZHalf = sizeAreaZHalf
+
+								c4dDetAreaY	= c4dDetAreaZ * areaSizeRatioYZ
+								parameters	c4dDetAreaY = c4dDetAreaY
+								sizeAreaYHalf	= c4dDetAreaY / 2
+								parameters	sizeAreaYHalf = sizeAreaYHalf
+							endif
+						else
+							if GLOB_MODPAR_NAME = "sizeAreaYHalf" then
+								sizeAreaZHalf	= sizeAreaYHalf / areaSizeRatioYZ
+								parameters	sizeAreaZHalf = sizeAreaZHalf
+							else
+								sizeAreaYHalf	= sizeAreaZHalf * areaSizeRatioYZ
+								parameters	sizeAreaYHalf = sizeAreaYHalf
+							endif
+
+							c4dDetAreaY	= sizeAreaYHalf * 2
+							parameters	c4dDetAreaY = c4dDetAreaY
+							c4dDetAreaZ	= c4dDetAreaY / areaSizeRatioYZ
+							parameters	c4dDetAreaZ = c4dDetAreaZ
+						endif
+					else
+						if GLOB_MODPAR_NAME = "c4dDetAreaX" then
+							sizeAreaXHalf	= c4dDetAreaX / 2
+							parameters	sizeAreaXHalf = sizeAreaXHalf
+						else
+							c4dDetAreaX	= sizeAreaXHalf * 2
+							parameters	c4dDetAreaX = c4dDetAreaX
+						endif
+
+						areaSizeRatioXY = c4dDetAreaX / c4dDetAreaY
+						parameters	areaSizeRatioXY = areaSizeRatioXY
+
+						areaSizeRatioYZ = c4dDetAreaY / c4dDetAreaZ
+						parameters	areaSizeRatioYZ = areaSizeRatioYZ
+
+						areaSizeRatioXZ = c4dDetAreaX / c4dDetAreaZ
+						parameters	areaSizeRatioXZ = areaSizeRatioXZ
+					endif
+				endif
+				if bLinkAreaSizeXYZ then
+					if	GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "sizeAreaXHalf" |\
+						GLOB_MODPAR_NAME = "c4dDetAreaY" | GLOB_MODPAR_NAME = "sizeAreaYHalf" |\
+						GLOB_MODPAR_NAME = "c4dDetAreaZ" | GLOB_MODPAR_NAME = "sizeAreaZHalf" then
+
+						if	GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "c4dDetAreaY" | GLOB_MODPAR_NAME = "c4dDetAreaZ" then
+							if GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "c4dDetAreaY" then
+								if GLOB_MODPAR_NAME = "c4dDetAreaX" then
+									sizeAreaXHalf	= c4dDetAreaX / 2
+									parameters	sizeAreaXHalf = sizeAreaXHalf
+
+									c4dDetAreaY	= c4dDetAreaX / areaSizeRatioXY
+									parameters	c4dDetAreaY = c4dDetAreaY
+									sizeAreaYHalf	= c4dDetAreaY / 2
+									parameters	sizeAreaYHalf = sizeAreaYHalf
+
+									c4dDetAreaZ	= c4dDetAreaX / areaSizeRatioXZ
+									parameters	c4dDetAreaZ = c4dDetAreaZ
+									sizeAreaZHalf	= c4dDetAreaZ / 2
+									parameters	sizeAreaZHalf = sizeAreaZHalf
+								else
+									sizeAreaYHalf	= c4dDetAreaY / 2
+									parameters	sizeAreaYHalf = sizeAreaYHalf
+
+									c4dDetAreaX	= c4dDetAreaY * areaSizeRatioXY
+									parameters	c4dDetAreaX = c4dDetAreaX
+									sizeAreaXHalf	= c4dDetAreaX / 2
+									parameters	sizeAreaXHalf = sizeAreaXHalf
+
+									c4dDetAreaZ	= c4dDetAreaY / areaSizeRatioYZ
+									parameters	c4dDetAreaZ = c4dDetAreaZ
+									sizeAreaZHalf	= c4dDetAreaZ / 2
+									parameters	sizeAreaZHalf = sizeAreaZHalf
+								endif
+							else
+								sizeAreaZHalf	= c4dDetAreaZ / 2
+								parameters	sizeAreaZHalf = sizeAreaZHalf
+
+								c4dDetAreaX	= c4dDetAreaZ * areaSizeRatioXZ
+								parameters	c4dDetAreaX = c4dDetAreaX
+								sizeAreaXHalf	= c4dDetAreaX / 2
+								parameters	sizeAreaXHalf = sizeAreaXHalf
+
+								c4dDetAreaY	= c4dDetAreaZ * areaSizeRatioYZ
+								parameters	c4dDetAreaY = c4dDetAreaY
+								sizeAreaYHalf	= c4dDetAreaY / 2
+								parameters	sizeAreaYHalf = sizeAreaYHalf
+							endif
+						else
+							if GLOB_MODPAR_NAME = "sizeAreaXHalf" | GLOB_MODPAR_NAME = "sizeAreaYHalf" then
+								if GLOB_MODPAR_NAME = "sizeAreaXHalf" then
+									sizeAreaYHalf	= sizeAreaXHalf / areaSizeRatioXY
+									parameters	sizeAreaYHalf = sizeAreaYHalf
+
+									sizeAreaZHalf	= sizeAreaXHalf / areaSizeRatioXZ
+									parameters	sizeAreaYHalf = sizeAreaYHalf
+								else
+									sizeAreaXHalf	= sizeAreaYHalf * areaSizeRatioXY
+									parameters	sizeAreaXHalf = sizeAreaXHalf
+
+									sizeAreaZHalf	= sizeAreaYHalf / areaSizeRatioYZ
+									parameters	sizeAreaZHalf = sizeAreaZHalf
+								endif
+							else
+								sizeAreaXHalf	= sizeAreaZHalf * areaSizeRatioXZ
+								parameters	sizeAreaXHalf = sizeAreaXHalf
+
+								sizeAreaYHalf	= sizeAreaZHalf * areaSizeRatioYZ
+								parameters	sizeAreaYHalf = sizeAreaYHalf
+							endif
+
+							c4dDetAreaX	= sizeAreaXHalf * 2
+							parameters	c4dDetAreaX = c4dDetAreaX
+							c4dDetAreaY	= c4dDetAreaX / areaSizeRatioXY
+							parameters	c4dDetAreaY = c4dDetAreaY
+							c4dDetAreaZ	= c4dDetAreaX / areaSizeRatioXZ
+							parameters	c4dDetAreaZ = c4dDetAreaZ
+						endif
+					else
+						areaSizeRatioXY = c4dDetAreaX / c4dDetAreaY
+						parameters	areaSizeRatioXY = areaSizeRatioXY
+
+						areaSizeRatioYZ = c4dDetAreaY / c4dDetAreaZ
+						parameters	areaSizeRatioYZ = areaSizeRatioYZ
+
+						areaSizeRatioXZ = c4dDetAreaX / c4dDetAreaZ
+						parameters	areaSizeRatioXZ = areaSizeRatioXZ
+					endif
+				endif
+			endif
+
+			values "c4dDetAreaX" range(0, )
+			values "sizeAreaXHalf" range(0, )
+			values "c4dDetAreaY" range(0, )
+			values "sizeAreaYHalf" range(0, )
+			values "c4dDetAreaZ" range(0, )
+			values "sizeAreaZHalf" range(0, )
+		else										!!! bWindowLight
+			if NOT(bLinkAreaSizes) then
+				if GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "sizeAreaY2DTemp" then
+					if ABS(rotAngleX) > EPS then
+						c4dDetAreaY	= ABS(sizeAreaY2DTemp / SIN(rotAngleX))
+						parameters	c4dDetAreaY = c4dDetAreaY
+					endif
+				else
+					if GLOB_MODPAR_NAME = "c4dDetAreaX" | GLOB_MODPAR_NAME = "c4dDetAreaY" | GLOB_MODPAR_NAME = "rotAngleX" then
+						sizeAreaY2DTemp	= ABS(c4dDetAreaY * SIN(rotAngleX))
+						parameters	sizeAreaY2DTemp = sizeAreaY2DTemp
+					else
+						if ABS(rotAngleX) > EPS then
+							c4dDetAreaY	= ABS(sizeAreaY2DTemp / SIN(rotAngleX))
+							parameters	c4dDetAreaY = c4dDetAreaY
+						endif
+					endif
+				endif
+
+				areaSizeRatioXY = c4dDetAreaX / c4dDetAreaY
+				parameters	areaSizeRatioXY = areaSizeRatioXY
+			else
+				if GLOB_MODPAR_NAME = "c4dDetAreaY" then
+					c4dDetAreaX	= ABS(sizeAreaY2DTemp / SIN(rotAngleX)) * areaSizeRatioXY
+					parameters	c4dDetAreaX = c4dDetAreaX
+				else
+					if GLOB_MODPAR_NAME = "c4dDetAreaY" then
+						c4dDetAreaX	= c4dDetAreaY * areaSizeRatioXY
+						parameters	c4dDetAreaX = c4dDetAreaX
+					else
+						c4dDetAreaY	= c4dDetAreaX / areaSizeRatioXY
+						parameters	c4dDetAreaY = c4dDetAreaY
+
+						sizeAreaY2DTemp	= ABS(c4dDetAreaX * SIN(rotAngleX)) / areaSizeRatioXY
+						parameters	sizeAreaY2DTemp = sizeAreaY2DTemp
+					endif
+				endif
+			endif
+			values "c4dDetAreaX" range(0, )
+			values "c4dDetAreaY" range(0, )
+			values "sizeAreaXHalf" range(0, )
+			values "sizeAreaYHalf" range(0, )
+			values "sizeAreaY2DTemp" range[0, )
+
+			if NOT(bSetSunManually) then
+				lock		"angleSunAzimuth",
+							"angleSunAltitude"
+			endif
+		endif
+
+		if GLOB_MODPAR_NAME = "falloffDist3DTempY" then
+			c4dDetRadius	= falloffDist3DTempY / _c4dDetAspectRatio
+			parameters	c4dDetRadius = c4dDetRadius
+		else
+			falloffDist3DTempY	= c4dDetRadius * _c4dDetAspectRatio
+			parameters	falloffDist3DTempY = falloffDist3DTempY
+		endif
+		values "falloffDist3DTempY" range(0, )
+
+		if GLOB_MODPAR_NAME = "falloffDist2DTempX" then
+			c4dDetRadius	= SQR(falloffDist2DTempX**2 / (SIN(rotAngleZ)**2 * COS(rotAngleX)**2 + COS(rotAngleZ)**2))
+			parameters	c4dDetRadius = c4dDetRadius
+		else
+			falloffDist2DTempX	= SQR((c4dDetRadius * SIN(rotAngleZ) * COS(rotAngleX))**2 + (c4dDetRadius * COS(rotAngleZ))**2)
+			parameters	falloffDist2DTempX = falloffDist2DTempX
+		endif
+		values "falloffDist2DTempX" range(0, )
+
+		if GLOB_MODPAR_NAME = "falloffDist2DTempY" then
+			c4dDetRadius	= SQR(falloffDist2DTempY**2 / (COS(rotAngleZ)**2 * COS(rotAngleX)**2 + SIN(rotAngleZ)**2)) / _c4dDetAspectRatio
+			parameters	c4dDetRadius = c4dDetRadius
+		else
+			falloffDist2DTempY	= SQR((c4dDetRadius * COS(rotAngleZ) * COS(rotAngleX))**2 + (c4dDetRadius * SIN(rotAngleZ))**2) * _c4dDetAspectRatio
+			parameters	falloffDist2DTempY = falloffDist2DTempY
+		endif
+		values "falloffDist2DTempY" range(0, )
+
+		if bLinkAreaSizes then
+			lock			"c4dDetAspectRatio"
+		endif
+		if ABS(c4dDetAspectRatio - 1) > EPS then
+			lock			"bLinkAreaSizes"
+		endif
+	endif
+
+	if iC4dGenType = GENTYPE_INFINITE then
+		if bSetSunManually and bSunObject then
+			if GLOB_MODPAR_NAME = "angleSunAltitude" | GLOB_MODPAR_NAME = "angleSunAzimuth" then
+				lightPosZ	= targetLineLength3D * SIN(angleSunAltitude)
+				parameters	lightPosZ = lightPosZ
+
+				targetLineLength2D = targetLineLength3D * COS(angleSunAltitude)
+				parameters	targetLineLength2D = targetLineLength2D
+
+				lightPosX	= targetLineLength2D * COS(angleSunAzimuth)
+				lightPosY	= targetLineLength2D * SIN(angleSunAzimuth)
+				parameters	lightPosX = lightPosX,
+							lightPosY = lightPosY
+			else
+				targetLineLength3D	= SQR((targetPosX - lightPosX)**2 + (targetPosY - lightPosY)**2 + (targetPosZ - lightPosZ)**2)
+				parameters	targetLineLength3D = targetLineLength3D
+
+				targetLineLength2D	= SQR((targetPosX - lightPosX)**2 + (targetPosY - lightPosY)**2)
+				parameters	targetLineLength2D = targetLineLength2D
+
+				angleSunAzimuth		= targetAngle2D
+				parameters	angleSunAzimuth = angleSunAzimuth
+
+				if targetLineLength3D > 0 and ABS(lightPosZ - targetLineLength3D) > EPS then
+					angleSunAltitude	= ASN(lightPosZ / targetLineLength3D)
+					parameters	angleSunAltitude = angleSunAltitude
+				endif
+			endif
+		else
+			if bSunObject then
+				lock	"angleSunAzimuth",
+						"angleSunAltitude"
+			endif
+		endif
+	endif
+
+
+	values "c4dDetRadius" range[0, )
+	values "c4dDetInnerAngle" range[0, c4dDetOuterAngle)
+	values "c4dDetOuterAngle" range(c4dDetInnerAngle, 180)
+
+	values "c4dDetNearFrom" range[0, c4dDetNearTo]
+	values "c4dDetNearTo" range[c4dDetNearFrom, c4dDetFarFrom)
+	values "c4dDetFarFrom" range(c4dDetNearTo, c4dDetFarTo]
+	values "c4dDetFarTo" range[c4dDetFarFrom, )
+
+
+	!!! LightGeneral
+	bShowGenVisibleLight		= 0
+	bShowGenColor				= 0
+	bShowGenIntensity			= 0
+	bShowGenShadow				= 0
+	bShowGenShadowType			= 0
+	bShowGenVisibility			= 0
+	bShowGenNoiIlumination		= 0
+	bShowGenAmbientOnly			= 0
+	bShowGenDiffuse				= 0
+	bShowGenSpecular			= 0
+	bShowGenGIIllumination		= 0
+
+	!!! LightDetail
+	bShowDetUseInner			= 0
+	bShowDetInnerAngle			= 0
+	bShowDetOuterAngle			= 0
+	bShowDetAspectRatio			= 0
+	bShowDetContrast			= 0
+	bShowDetShadowCaster		= 0
+	bShowDetAreaShape			= 0
+	bShowDetAreaX				= 0
+	bShowDetAreaY				= 0
+	bShowDetAreaZ				= 0
+	bShowDetSamples				= 0
+	bShowDetOnlyZ				= 0
+	bShowDetShowInRender		= 0
+	bShowDetShowInReflection	= 0
+	bShowDetShowFalloff			= 0
+	bShowDetFalloff				= 0
+	bShowDetInfinitAngle		= 0
+	bShowDetAddGrain			= 0
+	bShowDetIdenticalNoise		= 0		!!!Global hidden parameter
+	bShowDetFalloffAngle		= 0
+	bShowDetInnerRadius			= 0
+	bShowDetRadius				= 0
+	bShowDetUseGradient			= 0
+	bShowDetNearClip			= 0
+	bShowDetFarClip				= 0
+	bShowDetNearFrom			= 0
+	bShowDetNearTo				= 0
+	bShowDetFarFrom				= 0
+	bShowDetFarTo				= 0
+
+	!!! LightVisibility
+	bShowVisUseFalloff			= 0
+	bShowVisFalloff				= 0
+	bShowVisUseEdgeFalloff		= 0
+	bShowVisEdgeFalloff			= 0
+	bShowVisColoredEdge			= 0
+	bShowVisInnerDistance		= 0
+	bShowVisOuterDistance		= 0
+	bShowVisRelativeScale		= 0
+	bShowVisSampleDistance		= 0
+	bShowVisBrightness			= 0
+	bShowVisDust				= 0
+	bShowVisDithering			= 0
+	bShowVisUseGradient			= 0
+	bShowVisColor				= 0
+	bShowVisAdditive			= 0
+	bShowVisAdaptBrightness		= 0
+	bShowVisQuality				= 0
+
+	!!! LightPhotometric
+	bShowPhoUseIES				= 0
+	bShowPhoIESFile				= 0
+	bShowPhoUseIESSize			= 0
+	bShowPhoPhotometric			= 0
+	bShowPhoIntensity			= 0
+	bShowPhoUnit				= 0
+	bShowPho					= 0
+
+	!!! LightCaustics
+	bShowCauSurface				= 0
+	bShowCauSurfaceEnergy		= 0
+	bShowCauSurfacePhotons		= 0
+	bShowCauVolume				= 0
+	bShowCauVolumeEnergy		= 0
+	bShowCauVolumePhotons		= 0
+	bShowCauShowFalloff			= 0
+	bShowCauFalloff				= 0
+	bShowCauInnerDistance		= 0
+	bShowCauOuterDistance		= 0
+
+	!!! LightNoise
+	bShowNoiseIllumination		= 0
+	bShowNoiseVisibility		= 0
+	bShowNoiKind				= 0
+	bShowNoiType				= 0
+	bShowNoiOctaves				= 0
+	bShowNoiBrightness			= 0
+	bShowNoiContrast			= 0
+	bShowNoiVisibilityScale		= 0
+	bShowNoiIlluminationScale	= 0
+
+	!!! LightShadow
+	bShowShadowParams			= 0
+	bShowShaDensity				= 0
+	bShowShaColor				= 0		!!!Global hidden parameter
+	bShowShaTransparency		= 0
+	bShowShaClippingInfluence	= 0
+	bShowShaShadowMapSize		= 0
+	bShowShaShadowMapX			= 0
+	bShowShaShadowMapY			= 0
+	bShowShaSampleRadius		= 0
+	bShowShaAbsoluteBias		= 0
+	bShowShaRelBias				= 0
+	bShowShaAbsBias				= 0
+	bShowShaParalellWidth		= 0
+	bShowShaOutlineShadow		= 0
+	bShowShaShadowCone			= 0
+	bShowShaAngle				= 0
+	bShowShaSoftCone			= 0
+	bShowShaAccuracy			= 0
+	bShowShaMinSamples			= 0
+	bShowShaMaxSamples			= 0
+	bShowShadowQuality			= 0
+
+	!!! LightLens
+	bShowLenShowGlow			= 0
+	bShowLenGlow				= 0
+	bShowLenGlowBrightness		= 0
+	bShowLenGlowAspectRatio		= 0
+	bShowLenShowReflexes		= 0
+	bShowLenReflexes			= 0
+	bShowLenReflexBrightness	= 0
+	bShowLenReflexAspectRatio	= 0
+	bShowLenScale				= 0
+	bShowLenRotation			= 0
+	bShowLenUseLightParams		= 0		!!!Global hidden parameter
+	bShowLenFadeBehindObjects	= 0		!!!Global hidden parameter
+	bShowLenFadeNearBorders		= 0		!!!Global hidden parameter
+	bShowLenFadeApproachingObjs	= 0		!!!Global hidden parameter
+	bShowLenGlowDistantScale	= 0		!!!Global hidden parameter
+	bShowLenReflexDistantScale	= 0		!!!Global hidden parameter
+
+
+	! ==============================================================================
+	! C4D Omni Light parameters
+	! ==============================================================================
+	if	iC4dGenType = GENTYPE_OMNI then
+		bShowGenColor				= 1
+		bShowGenIntensity			= 1
+		bShowGenShadow				= 1
+		bShowGenVisibleLight		= 1
+		bShowGenVisibility			= bGenVisibleLight
+		bShowGenNoiIlumination		= NOT(c4dDetShadowCaster)
+		bShowGenAmbientOnly			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenDiffuse				= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenSpecular			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenGIIllumination		= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+
+		bShowDetShadowCaster		= NOT(c4dGenNoIllumination)
+		bShowDetOnlyZ				= 1
+		bShowDetShowFalloff			= 1
+		bShowDetRadius				= _bDetShowFalloff * NOT(c4dPhoPhotometric)
+
+		bShowShadowParams			= bGenShadow
+		bShowShaDensity				= bGenShadow
+		bShowShaTransparency		= bGenShadow
+		bShowShaAccuracy			= bGenShadow
+		bShowShaMinSamples			= bGenShadow
+		bShowShaMaxSamples			= bGenShadow
+		bShowShadowQuality			= bGenShadow
+
+		bShowDetNearClip			= 1
+		bShowDetFarClip				= 1
+		bShowDetNearFrom			= c4dDetNearClip
+		bShowDetNearTo				= c4dDetNearClip
+		bShowDetFarFrom				= c4dDetFarClip
+		bShowDetFarTo				= c4dDetFarClip
+
+		bShowPhoPhotometric			= 1
+		bShowPhoIntensity			= c4dPhoPhotometric
+		bShowPhoUnit				= c4dPhoPhotometric
+
+!!!		bShowVisUseEdgeFalloff		= bGenVisibleLight
+!!!		bShowVisEdgeFalloff			= c4dVisUseEdgeFalloff * bGenVisibleLight
+		bShowVisUseFalloff			= bGenVisibleLight
+		bShowVisFalloff				= c4dVisUseFalloff * bGenVisibleLight
+		bShowVisInnerDistance		= c4dVisUseFalloff * bGenVisibleLight
+		bShowVisOuterDistance		= bGenVisibleLight
+		bShowVisSampleDistance		= bGenVisibleLight
+		bShowVisBrightness			= bGenVisibleLight
+		bShowVisQuality				= bGenVisibleLight
+
+		bShowCauSurface				= 1
+		bShowCauSurfaceEnergy		= c4dCauSurface
+		bShowCauSurfacePhotons		= c4dCauSurface
+		bShowCauVolume				= bGenVisibleLight
+		bShowCauVolumeEnergy		= c4dCauVolume * bGenVisibleLight
+		bShowCauVolumePhotons		= c4dCauVolume * bGenVisibleLight
+		bShowCauShowFalloff			= (c4dCauSurface | c4dCauVolume)
+
+		bShowNoiseIllumination		= 1
+		bShowNoiseVisibility		= bGenVisibleLight
+		bShowNoiKind				= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiType				= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiOctaves				= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiBrightness			= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiContrast			= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiVisibilityScale		= bNoiseVisibility
+		bShowNoiIlluminationScale	= bNoiseIllumination
+
+		bShowLenShowGlow			= 1
+		bShowLenGlow				= bLenShowGlow
+		bShowLenGlowBrightness		= bLenShowGlow
+		bShowLenGlowAspectRatio		= bLenShowGlow
+		bShowLenShowReflexes		= 1
+		bShowLenReflexes			= bLenShowReflexes
+		bShowLenReflexBrightness	= bLenShowReflexes
+		bShowLenReflexAspectRatio	= bLenShowReflexes
+		bShowLenScale				= (bLenShowGlow | bLenShowReflexes)
+		bShowLenRotation			= bLenShowGlow
+	endif
+
+
+	! ==============================================================================
+	! C4D Spot Light parameters
+	! ==============================================================================
+	if	iC4dGenType = GENTYPE_SPOT then
+		bShowGenColor				= 1
+		bShowGenIntensity			= 1
+		bShowGenShadow				= 1
+		bShowGenVisibleLight		= 1
+		bShowGenVisibility			= bGenVisibleLight
+		bShowGenNoiIlumination		= NOT(c4dDetShadowCaster)
+		bShowGenAmbientOnly			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenDiffuse				= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenSpecular			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenGIIllumination		= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+
+		bShowDetShadowCaster		= NOT(c4dGenNoIllumination)
+		bShowDetUseInner			= 1
+		bShowDetInnerAngle			= c4dDetUseInner
+		bShowDetOuterAngle			= 1
+		bShowDetAspectRatio			= (iLightForm = LIGHTFORM_ELLIPSE)
+!!!		bShowDetOnlyZ				= 1
+		bShowDetShowFalloff			= 1
+		bShowDetRadius				= _bDetShowFalloff * NOT(c4dPhoPhotometric)
+
+		bShowShadowParams			= bGenShadow
+		bShowShaDensity				= bGenShadow
+		bShowShaTransparency		= bGenShadow
+		bShowShaAccuracy			= bGenShadow
+		bShowShaMinSamples			= bGenShadow
+		bShowShaMaxSamples			= bGenShadow
+		bShowShadowQuality			= bGenShadow
+
+		bShowDetNearClip			= 1
+		bShowDetFarClip				= 1
+		bShowDetNearFrom			= c4dDetNearClip
+		bShowDetNearTo				= c4dDetNearClip
+		bShowDetFarFrom				= c4dDetFarClip
+		bShowDetFarTo				= c4dDetFarClip
+
+		bShowPhoPhotometric			= 1
+		bShowPhoIntensity			= c4dPhoPhotometric
+		bShowPhoUnit				= c4dPhoPhotometric
+
+		bShowShaClippingInfluence	= bShowGenShadow * (c4dDetNearClip | c4dDetFarClip)
+
+		bShowVisUseEdgeFalloff		= bGenVisibleLight
+		bShowVisEdgeFalloff			= c4dVisUseEdgeFalloff * bGenVisibleLight
+		bShowVisUseFalloff			= bGenVisibleLight
+		bShowVisFalloff				= c4dVisUseFalloff * bGenVisibleLight
+		bShowVisInnerDistance		= c4dVisUseFalloff * bGenVisibleLight
+		bShowVisOuterDistance		= bGenVisibleLight
+		bShowVisSampleDistance		= bGenVisibleLight
+		bShowVisBrightness			= bGenVisibleLight
+		bShowVisQuality				= bGenVisibleLight
+
+		bShowCauSurface				= 1
+		bShowCauSurfaceEnergy		= c4dCauSurface
+		bShowCauSurfacePhotons		= c4dCauSurface
+		bShowCauVolume				= bGenVisibleLight
+		bShowCauVolumeEnergy		= c4dCauVolume * bGenVisibleLight
+		bShowCauVolumePhotons		= c4dCauVolume * bGenVisibleLight
+		bShowCauShowFalloff			= (c4dCauSurface | c4dCauVolume)
+
+		bShowNoiseIllumination		= 1
+		bShowNoiseVisibility		= bGenVisibleLight
+		bShowNoiKind				= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiType				= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiOctaves				= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiBrightness			= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiContrast			= (bNoiseIllumination | bNoiseVisibility)
+		bShowNoiVisibilityScale		= bNoiseVisibility
+		bShowNoiIlluminationScale	= bNoiseIllumination
+
+		bShowLenShowGlow			= 1
+		bShowLenGlow				= bLenShowGlow
+		bShowLenGlowBrightness		= bLenShowGlow
+		bShowLenGlowAspectRatio		= bLenShowGlow
+		bShowLenShowReflexes		= 1
+		bShowLenReflexes			= bLenShowReflexes
+		bShowLenReflexBrightness	= bLenShowReflexes
+		bShowLenReflexAspectRatio	= bLenShowReflexes
+		bShowLenScale				= (bLenShowGlow | bLenShowReflexes)
+		bShowLenRotation			= bLenShowGlow
+	endif
+
+
+	! ==============================================================================
+	! C4D Area Light parameters
+	! ==============================================================================
+	if	iC4dGenType = GENTYPE_AREA then
+		bShowGenColor				= 1
+		bShowGenIntensity			= 1
+		bShowGenShadow				= 1
+		bShowGenVisibleLight		= (iC4dDetAreaShape = AREASHAPE_LINE)
+		bShowGenVisibility			= bGenVisibleLight
+		bShowGenNoiIlumination		= NOT(c4dDetShadowCaster)
+		bShowGenAmbientOnly			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenDiffuse				= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenSpecular			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenGIIllumination		= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+
+		if bWindowLight then
+			bShowDetShadowCaster		= NOT(c4dGenNoIllumination)
+!!!			bShowDetAspectRatio			= 1
+			bShowDetAreaX				= 1
+			bShowDetAreaY				= 1
+			bShowDetOnlyZ				= 1
+			bShowDetShowInRender		= 1
+			bShowDetShowInReflection	= 1
+!!!			bShowDetShowFalloff			= 1
+			bShowDetFalloffAngle		= 1
+			bShowDetRadius				= 1
+!!!			bShowDetAddGrain			= 1
+
+			bShowShadowParams			= bGenShadow
+			bShowShaDensity				= bGenShadow
+			bShowShaTransparency		= bGenShadow
+			bShowShaAccuracy			= bGenShadow
+			bShowShaMinSamples			= bGenShadow
+			bShowShaMaxSamples			= bGenShadow
+			bShowShadowQuality			= bGenShadow
+		else
+			bShowDetShadowCaster		= NOT(c4dGenNoIllumination)
+			bShowDetAspectRatio			= 1
+			bShowDetAreaShape			= 1
+			bShowDetAreaX				= bShowDetAreaShape
+			bShowDetAreaY				= bShowDetAreaShape * (iC4dDetAreaShape <> AREASHAPE_LINE)
+			bShowDetAreaZ				= bShowDetAreaShape * (iC4dDetAreaShape <> AREASHAPE_DISC and iC4dDetAreaShape <> AREASHAPE_RECT and iC4dDetAreaShape <> AREASHAPE_LINE)
+			bShowDetOnlyZ				= 1
+			bShowDetShowInRender		= (iC4dDetAreaShape <> AREASHAPE_LINE)
+			bShowDetShowInReflection	= (iC4dDetAreaShape <> AREASHAPE_LINE)
+			bShowDetShowFalloff			= 1
+			bShowDetFalloffAngle		= (iC4dDetAreaShape = AREASHAPE_DISC | iC4dDetAreaShape = AREASHAPE_RECT)
+			bShowDetRadius				= _bDetShowFalloff * NOT(c4dPhoPhotometric)
+			bShowDetAddGrain			= 1
+
+			bShowPhoPhotometric			= 1
+			bShowPhoIntensity			= c4dPhoPhotometric
+			bShowPhoUnit				= c4dPhoPhotometric
+
+			bShowShadowParams			= bGenShadow
+			bShowShaDensity				= bGenShadow
+			bShowShaTransparency		= bGenShadow
+			bShowShaAccuracy			= bGenShadow
+			bShowShaMinSamples			= bGenShadow
+			bShowShaMaxSamples			= bGenShadow
+			bShowShadowQuality			= bGenShadow
+
+	!!!		bShowVisUseEdgeFalloff		= bGenVisibleLight
+	!!!		bShowVisEdgeFalloff			= c4dVisUseEdgeFalloff * bGenVisibleLight
+			bShowVisUseFalloff			= bGenVisibleLight
+			bShowVisFalloff				= c4dVisUseFalloff * bGenVisibleLight
+			bShowVisInnerDistance		= c4dVisUseFalloff * bGenVisibleLight
+			bShowVisOuterDistance		= bGenVisibleLight
+			bShowVisSampleDistance		= bGenVisibleLight
+			bShowVisBrightness			= bGenVisibleLight
+			bShowVisQuality				= bGenVisibleLight
+
+			bShowCauSurface				= 1
+			bShowCauSurfaceEnergy		= c4dCauSurface
+			bShowCauSurfacePhotons		= c4dCauSurface
+			bShowCauVolume				= bGenVisibleLight * (iC4dDetAreaShape = AREASHAPE_LINE)
+			bShowCauVolumeEnergy		= c4dCauVolume * bGenVisibleLight * (iC4dDetAreaShape = AREASHAPE_LINE)
+			bShowCauVolumePhotons		= c4dCauVolume * bGenVisibleLight * (iC4dDetAreaShape = AREASHAPE_LINE)
+			bShowCauShowFalloff			= (c4dCauSurface | (c4dCauVolume * bGenVisibleLight * (iC4dDetAreaShape = AREASHAPE_LINE)))
+
+			bShowNoiseIllumination		= 1
+			bShowNoiseVisibility		= bGenVisibleLight * (iC4dDetAreaShape = AREASHAPE_LINE)
+			bShowNoiKind				= (bNoiseIllumination | bNoiseVisibility)
+			bShowNoiType				= (bNoiseIllumination | bNoiseVisibility)
+			bShowNoiOctaves				= (bNoiseIllumination | bNoiseVisibility)
+			bShowNoiBrightness			= (bNoiseIllumination | bNoiseVisibility)
+			bShowNoiContrast			= (bNoiseIllumination | bNoiseVisibility)
+			bShowNoiVisibilityScale		= bNoiseVisibility
+			bShowNoiIlluminationScale	= bNoiseIllumination
+
+			bShowLenShowGlow			= 1
+			bShowLenGlow				= bLenShowGlow
+			bShowLenGlowBrightness		= bLenShowGlow
+			bShowLenGlowAspectRatio		= bLenShowGlow
+			bShowLenShowReflexes		= 1
+			bShowLenReflexes			= bLenShowReflexes
+			bShowLenReflexBrightness	= bLenShowReflexes
+			bShowLenReflexAspectRatio	= bLenShowReflexes
+			bShowLenScale				= (bLenShowGlow | bLenShowReflexes)
+			bShowLenRotation			= bLenShowGlow
+		endif
+	endif
+
+
+	! ==============================================================================
+	! C4D Infinite Light parameters
+	! ==============================================================================
+	if	iC4dGenType = GENTYPE_INFINITE then
+		bShowGenColor				= 1
+		bShowGenIntensity			= 1
+		bShowGenShadow				= 1
+		bShowGenNoiIlumination		= NOT(c4dDetShadowCaster)
+		bShowGenAmbientOnly			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenDiffuse				= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenSpecular			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenGIIllumination		= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+
+		bShowDetShadowCaster		= NOT(c4dGenNoIllumination)
+		bShowDetOnlyZ				= 1
+
+		if NOT(bSunObject) then
+			bShowDetShowFalloff			= NOT(c4dPhoPhotometric)
+			bShowDetRadius				= _bDetShowFalloff * NOT(c4dPhoPhotometric)
+
+			bShowPhoPhotometric			= 1
+			bShowPhoIntensity			= c4dPhoPhotometric
+			bShowPhoUnit				= c4dPhoPhotometric
+		endif
+
+		bShowShadowParams			= bGenShadow
+		bShowShaDensity				= bGenShadow
+		bShowShaTransparency		= bGenShadow
+		bShowShaAccuracy			= bGenShadow
+		bShowShaMinSamples			= bGenShadow
+		bShowShaMaxSamples			= bGenShadow
+		bShowDetInfinitAngle		= bGenShadow
+		bShowShadowQuality			= bGenShadow
+
+		bShowCauSurface				= 1
+		bShowCauSurfaceEnergy		= c4dCauSurface
+		bShowCauSurfacePhotons		= c4dCauSurface
+		bShowCauVolume				= bGenVisibleLight
+		bShowCauVolumeEnergy		= c4dCauVolume * bGenVisibleLight
+		bShowCauVolumePhotons		= c4dCauVolume * bGenVisibleLight
+		bShowCauShowFalloff			= (c4dCauSurface | c4dCauVolume)
+
+		bShowNoiseIllumination		= 1
+		bShowNoiKind				= bNoiseIllumination
+		bShowNoiType				= bNoiseIllumination
+		bShowNoiOctaves				= bNoiseIllumination
+		bShowNoiBrightness			= bNoiseIllumination
+		bShowNoiContrast			= bNoiseIllumination
+		bShowNoiIlluminationScale	= bNoiseIllumination
+
+		bShowLenShowGlow			= 1
+		bShowLenGlow				= bLenShowGlow
+		bShowLenGlowBrightness		= bLenShowGlow
+		bShowLenGlowAspectRatio		= bLenShowGlow
+		bShowLenShowReflexes		= 1
+		bShowLenReflexes			= bLenShowReflexes
+		bShowLenReflexBrightness	= bLenShowReflexes
+		bShowLenReflexAspectRatio	= bLenShowReflexes
+		bShowLenScale				= (bLenShowGlow | bLenShowReflexes)
+		bShowLenRotation			= bLenShowGlow
+	endif
+
+	! ==============================================================================
+	! C4D IES Light parameters
+	! ==============================================================================
+	if	iC4dGenType = GENTYPE_IES then
+		bShowGenColor				= 1
+		bShowGenIntensity			= 1
+		bShowGenShadow				= 1
+!!!		bShowGenVisibleLight		= (iC4dDetAreaShape = AREASHAPE_LINE)
+		bShowGenVisibility			= bGenVisibleLight
+		bShowGenNoiIlumination		= NOT(c4dDetShadowCaster)
+		bShowGenAmbientOnly			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenDiffuse				= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenSpecular			= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+		bShowGenGIIllumination		= (NOT(c4dDetShadowCaster) and NOT(c4dGenNoIllumination))
+
+		bShowDetShadowCaster		= NOT(c4dGenNoIllumination)
+!!!		bShowDetAspectRatio			= 1
+!!!		bShowDetAreaShape			= 1
+		bShowDetOnlyZ				= 1
+		bShowDetShowInRender		= (c4dPhoUseIESSize and bIESFileExist)
+		bShowDetShowInReflection	= (c4dPhoUseIESSize and bIESFileExist)
+		bShowDetShowFalloff			= 1
+!!!		bShowDetFalloffAngle		= (iC4dDetAreaShape = AREASHAPE_DISC | iC4dDetAreaShape = AREASHAPE_RECT)
+		bShowDetRadius				= _bDetShowFalloff * (NOT(c4dPhoPhotometric) * bIESFileExist | NOT(bIESFileExist))
+		bShowDetAddGrain			= (c4dPhoUseIESSize and bIESFileExist)
+
+!!!		bShowPhoUseIES				= 0
+		bShowPhoUseIESSize			= bIESFileExist
+		bShowPhoIESFile				= 1
+		bShowPhoPhotometric			= bIESFileExist
+!!!		bShowPhoIntensity			= c4dPhoPhotometric
+!!!		bShowPhoUnit				= c4dPhoPhotometric
+
+		bShowShadowParams			= bGenShadow
+		bShowShaDensity				= bGenShadow
+		bShowShaTransparency		= bGenShadow
+		bShowShaAccuracy			= bGenShadow
+		bShowShaMinSamples			= bGenShadow
+		bShowShaMaxSamples			= bGenShadow
+		bShowShadowQuality			= bGenShadow
+
+!!!		bShowDetNearClip			= 1
+!!!		bShowDetFarClip				= 1
+!!!		bShowDetNearFrom			= c4dDetNearClip
+!!!		bShowDetNearTo				= c4dDetNearClip
+!!!		bShowDetFarFrom				= c4dDetFarClip
+!!!		bShowDetFarTo				= c4dDetFarClip
+
+!!!		bShowVisUseEdgeFalloff		= bGenVisibleLight
+!!!		bShowVisEdgeFalloff			= c4dVisUseEdgeFalloff * bGenVisibleLight
+!!!		bShowVisUseFalloff			= bGenVisibleLight
+!!!		bShowVisFalloff				= c4dVisUseFalloff * bGenVisibleLight
+!!!		bShowVisInnerDistance		= c4dVisUseFalloff * bGenVisibleLight
+!!!		bShowVisOuterDistance		= c4dVisUseFalloff * bGenVisibleLight
+!!!		bShowVisSampleDistance		= bGenVisibleLight
+!!!		bShowVisBrightness			= bGenVisibleLight
+!!!		bShowVisQuality				= bGenVisibleLight
+
+		bShowCauSurface				= 1
+		bShowCauSurfaceEnergy		= c4dCauSurface
+		bShowCauSurfacePhotons		= c4dCauSurface
+		bShowCauVolume				= bGenVisibleLight
+		bShowCauVolumeEnergy		= c4dCauVolume * bGenVisibleLight
+		bShowCauVolumePhotons		= c4dCauVolume * bGenVisibleLight
+		bShowCauShowFalloff			= (c4dCauSurface | c4dCauVolume)
+
+		bShowNoiseIllumination		= 1
+		bShowNoiKind				= bNoiseIllumination
+		bShowNoiType				= bNoiseIllumination
+		bShowNoiOctaves				= bNoiseIllumination
+		bShowNoiBrightness			= bNoiseIllumination
+		bShowNoiContrast			= bNoiseIllumination
+		bShowNoiIlluminationScale	= bNoiseIllumination
+
+		bShowLenShowGlow			= 1
+		bShowLenGlow				= bLenShowGlow
+		bShowLenGlowBrightness		= bLenShowGlow
+		bShowLenGlowAspectRatio		= bLenShowGlow
+		bShowLenShowReflexes		= 1
+		bShowLenReflexes			= bLenShowReflexes
+		bShowLenReflexBrightness	= bLenShowReflexes
+		bShowLenReflexAspectRatio	= bLenShowReflexes
+		bShowLenScale				= (bLenShowGlow | bLenShowReflexes)
+		bShowLenRotation			= bLenShowGlow
+	endif
+
+
+
+	! ======================================================================
+	! Variable names for lock and hide
+	! ======================================================================
+	dim	lockVariablesGen[]
+		!!! LightGeneral
+		lockVariablesGen[ 1] = bShowGenVisibleLight
+		lockVariablesGen[ 2] = bShowGenColor
+		lockVariablesGen[ 3] = bShowGenIntensity
+		lockVariablesGen[ 4] = bShowGenShadow
+		lockVariablesGen[ 5] = bShowGenVisibility
+		lockVariablesGen[ 6] = bShowGenNoiIlumination
+		lockVariablesGen[ 7] = bShowGenAmbientOnly
+		lockVariablesGen[ 8] = bShowGenDiffuse
+		lockVariablesGen[ 9] = bShowGenSpecular
+		lockVariablesGen[10] = bShowGenGIIllumination
+
+	dim	lockVariablesDet[]
+		!!! LightDetail
+		lockVariablesDet[ 1] = bShowDetUseInner
+		lockVariablesDet[ 2] = bShowDetInnerAngle
+		lockVariablesDet[ 3] = bShowDetOuterAngle
+		lockVariablesDet[ 4] = bShowDetAspectRatio
+		lockVariablesDet[ 5] = bShowDetContrast
+		lockVariablesDet[ 6] = bShowDetShadowCaster
+		lockVariablesDet[ 7] = bShowDetAreaShape
+		lockVariablesDet[ 8] = bShowDetAreaX
+		lockVariablesDet[ 9] = bShowDetAreaY
+		lockVariablesDet[10] = bShowDetAreaZ
+		lockVariablesDet[11] = bShowDetSamples
+		lockVariablesDet[12] = bShowDetOnlyZ
+		lockVariablesDet[13] = bShowDetShowInRender
+		lockVariablesDet[14] = bShowDetShowInReflection
+		lockVariablesDet[15] = bShowDetShowFalloff
+		lockVariablesDet[16] = bShowDetInfinitAngle
+		lockVariablesDet[17] = bShowDetAddGrain
+		lockVariablesDet[18] = bShowDetIdenticalNoise
+		lockVariablesDet[19] = bShowDetFalloffAngle
+		lockVariablesDet[20] = bShowDetInnerRadius
+		lockVariablesDet[21] = bShowDetRadius
+		lockVariablesDet[22] = bShowDetNearClip
+		lockVariablesDet[23] = bShowDetFarClip
+		lockVariablesDet[24] = bShowDetNearFrom
+		lockVariablesDet[25] = bShowDetNearTo
+		lockVariablesDet[26] = bShowDetFarFrom
+		lockVariablesDet[27] = bShowDetFarTo
+
+	dim	lockVariablesVis[]
+		!!! LightVisibility
+		lockVariablesVis[ 1] = bShowVisUseFalloff
+		lockVariablesVis[ 2] = bShowVisFalloff
+		lockVariablesVis[ 3] = bShowVisUseEdgeFalloff
+		lockVariablesVis[ 4] = bShowVisEdgeFalloff
+		lockVariablesVis[ 5] = bShowVisColoredEdge
+		lockVariablesVis[ 6] = bShowVisInnerDistance
+		lockVariablesVis[ 7] = bShowVisOuterDistance
+		lockVariablesVis[ 8] = bShowVisRelativeScale
+		lockVariablesVis[ 9] = bShowVisBrightness
+		lockVariablesVis[10] = bShowVisDust
+		lockVariablesVis[11] = bShowVisDithering
+		lockVariablesVis[12] = bShowVisAdditive
+		lockVariablesVis[13] = bShowVisAdaptBrightness
+		lockVariablesVis[14] = bShowVisQuality
+
+	dim	lockVariablesPho[]
+		!!! LightPhotometric
+		lockVariablesPho[ 1] = bShowPhoUseIES
+		lockVariablesPho[ 2] = bShowPhoIESFile
+		lockVariablesPho[ 3] = bShowPhoUseIESSize
+		lockVariablesPho[ 4] = bShowPhoPhotometric
+		lockVariablesPho[ 5] = bShowPhoUnit
+
+	dim	lockVariablesCau[]
+		!!! LightCaustics
+		lockVariablesCau[ 1] = bShowCauSurface
+		lockVariablesCau[ 2] = bShowCauSurfaceEnergy
+		lockVariablesCau[ 3] = bShowCauSurfacePhotons
+		lockVariablesCau[ 4] = bShowCauVolume
+		lockVariablesCau[ 5] = bShowCauVolumeEnergy
+		lockVariablesCau[ 6] = bShowCauVolumePhotons
+		lockVariablesCau[ 7] = bShowCauShowFalloff
+		lockVariablesCau[ 8] = bShowCauInnerDistance
+		lockVariablesCau[ 9] = bShowCauOuterDistance
+
+	dim	lockVariablesNoi[]
+		!!! LightNoise
+		lockVariablesNoi[ 1] = bShowNoiseIllumination
+		lockVariablesNoi[ 2] = bShowNoiseVisibility
+		lockVariablesNoi[ 3] = bShowNoiType
+		lockVariablesNoi[ 4] = bShowNoiType
+		lockVariablesNoi[ 5] = bShowNoiOctaves
+		lockVariablesNoi[ 6] = bShowNoiBrightness
+		lockVariablesNoi[ 7] = bShowNoiContrast
+		lockVariablesNoi[ 8] = bShowNoiVisibilityScale
+		lockVariablesNoi[ 9] = bShowNoiIlluminationScale
+
+	dim	lockVariablesSha[]
+		!!! LightShadow
+		lockVariablesSha[ 1] = bShowShadowParams
+		lockVariablesSha[ 2] = bShowShaDensity
+		lockVariablesSha[ 3] = bShowShaColor
+		lockVariablesSha[ 4] = bShowShaTransparency
+		lockVariablesSha[ 5] = bShowShaClippingInfluence
+		lockVariablesSha[ 6] = bShowShaShadowMapSize
+		lockVariablesSha[ 7] = bShowShaShadowMapX
+		lockVariablesSha[ 8] = bShowShaShadowMapY
+		lockVariablesSha[ 9] = bShowShaSampleRadius
+		lockVariablesSha[10] = bShowShaAbsoluteBias
+		lockVariablesSha[11] = bShowShaRelBias
+		lockVariablesSha[12] = bShowShaAbsBias
+		lockVariablesSha[13] = bShowShaParalellWidth
+		lockVariablesSha[14] = bShowShaOutlineShadow
+		lockVariablesSha[15] = bShowShaShadowCone
+		lockVariablesSha[16] = bShowShaAngle
+		lockVariablesSha[17] = bShowShaSoftCone
+		lockVariablesSha[18] = bShowShaAccuracy
+		lockVariablesSha[19] = bShowShaMinSamples
+		lockVariablesSha[20] = bShowShaMaxSamples
+		lockVariablesSha[21] = bShowShadowQuality
+
+	dim	lockVariablesLen[]
+		!!! LightLens
+		lockVariablesLen[ 1] = bShowLenShowGlow
+		lockVariablesLen[ 2] = bShowLenGlow
+		lockVariablesLen[ 3] = bShowLenGlowBrightness
+		lockVariablesLen[ 4] = bShowLenGlowAspectRatio
+		lockVariablesLen[ 5] = bShowLenShowReflexes
+		lockVariablesLen[ 6] = bShowLenReflexes
+		lockVariablesLen[ 7] = bShowLenReflexBrightness
+		lockVariablesLen[ 8] = bShowLenReflexAspectRatio
+		lockVariablesLen[ 9] = bShowLenScale
+		lockVariablesLen[10] = bShowLenRotation
+		lockVariablesLen[11] = bShowLenUseLightParams
+		lockVariablesLen[12] = bShowLenFadeBehindObjects
+		lockVariablesLen[13] = bShowLenFadeNearBorders
+		lockVariablesLen[14] = bShowLenFadeApproachingObjs
+		lockVariablesLen[15] = bShowLenGlowDistantScale
+		lockVariablesLen[16] = bShowLenReflexDistantScale
+
+
+
+
+	! ======================================================================
+	! Parameter names for lock and hide
+	! ======================================================================
+	dim	lockParamNamesGen[]
+		lockParamNamesGen[ 1] = "bGenVisibleLight"
+		lockParamNamesGen[ 2] = "c4dGenColor"
+		lockParamNamesGen[ 3] = "c4dGenIntensity"
+		lockParamNamesGen[ 4] = "bGenShadow"
+		lockParamNamesGen[ 5] = "c4dGenVisibility"
+		lockParamNamesGen[ 6] = "c4dGenNoIllumination"
+		lockParamNamesGen[ 7] = "c4dGenAmbientOnly"
+		lockParamNamesGen[ 8] = "c4dGenDiffuse"
+		lockParamNamesGen[ 9] = "c4dGenSpecular"
+		lockParamNamesGen[10] = "c4dGenGIIllumination"
+
+	dim	lockParamNamesDet[]
+		lockParamNamesDet[ 1] = "c4dDetUseInner"
+		lockParamNamesDet[ 2] = "c4dDetInnerAngle"
+		lockParamNamesDet[ 3] = "c4dDetOuterAngle"
+		lockParamNamesDet[ 4] = "c4dDetAspectRatio"
+		lockParamNamesDet[ 5] = "c4dDetContrast"
+		lockParamNamesDet[ 6] = "c4dDetShadowCaster"
+		lockParamNamesDet[ 7] = "c4dDetAreaShape"
+		lockParamNamesDet[ 8] = "c4dDetAreaX"
+		lockParamNamesDet[ 9] = "c4dDetAreaY"
+		lockParamNamesDet[10] = "c4dDetAreaZ"
+		lockParamNamesDet[11] = "c4dDetSamples"
+		lockParamNamesDet[12] = "c4dDetOnlyZ"
+		lockParamNamesDet[13] = "c4dDetShowInRender"
+		lockParamNamesDet[14] = "c4dDetShowInReflection"
+		lockParamNamesDet[15] = "bDetShowFalloff"
+		lockParamNamesDet[16] = "c4dDetInfinitAngle"
+		lockParamNamesDet[17] = "c4dDetAddGrain"
+		lockParamNamesDet[18] = "c4dDetIdenticalNoise"
+		lockParamNamesDet[19] = "c4dDetFalloffAngle"
+		lockParamNamesDet[20] = "c4dDetInnerRadius"
+		lockParamNamesDet[21] = "c4dDetRadius"
+		lockParamNamesDet[22] = "c4dDetNearClip"
+		lockParamNamesDet[23] = "c4dDetFarClip"
+		lockParamNamesDet[24] = "c4dDetNearFrom"
+		lockParamNamesDet[25] = "c4dDetNearTo"
+		lockParamNamesDet[26] = "c4dDetFarFrom"
+		lockParamNamesDet[27] = "c4dDetFarTo"
+
+	dim	lockParamNamesVis[]
+		lockParamNamesVis[ 1] = "c4dVisUseFalloff"
+		lockParamNamesVis[ 2] = "c4dVisFalloff"
+		lockParamNamesVis[ 3] = "c4dVisUseEdgeFalloff"
+		lockParamNamesVis[ 4] = "c4dVisEdgeFalloff"
+		lockParamNamesVis[ 5] = "c4dVisColoredEdge"
+		lockParamNamesVis[ 6] = "c4dVisInnerDistance"
+		lockParamNamesVis[ 7] = "c4dVisOuterDistance"
+		lockParamNamesVis[ 8] = "c4dVisRelativeScale"
+		lockParamNamesVis[ 9] = "c4dVisBrightness"
+		lockParamNamesVis[10] = "c4dVisDust"
+		lockParamNamesVis[11] = "c4dVisDithering"
+		lockParamNamesVis[12] = "c4dVisAdditive"
+		lockParamNamesVis[13] = "c4dVisAdaptBrightness"
+		lockParamNamesVis[14] = "iVisibeLightQuality"
+
+	dim	lockParamNamesPho[]
+		lockParamNamesPho[1] = "c4dPhoUseIES"
+		lockParamNamesPho[2] = "c4dPhoIESFile"
+		lockParamNamesPho[3] = "c4dPhoUseIESSize"
+		lockParamNamesPho[4] = "c4dPhoPhotometric"
+		lockParamNamesPho[5] = "c4dPhoUnit"
+
+	dim	lockParamNamesCau[]
+		lockParamNamesCau[1] = "c4dCauSurface"
+		lockParamNamesCau[2] = "c4dCauSurfaceEnergy"
+		lockParamNamesCau[3] = "c4dCauSurfacePhotons"
+		lockParamNamesCau[4] = "c4dCauVolume"
+		lockParamNamesCau[5] = "c4dCauVolumeEnergy"
+		lockParamNamesCau[6] = "c4dCauVolumePhotons"
+		lockParamNamesCau[7] = "bCauShowFalloff"
+		lockParamNamesCau[8] = "c4dCauInnerDistance"
+		lockParamNamesCau[9] = "c4dCauOuterDistance"
+
+	dim	lockParamNamesNoi[]
+		lockParamNamesNoi[1] = "bNoiseIllumination"
+		lockParamNamesNoi[2] = "bNoiseVisibility"
+		lockParamNamesNoi[3] = "c4dNoiType"
+		lockParamNamesNoi[4] = "iC4dNoiType"
+		lockParamNamesNoi[5] = "c4dNoiOctaves"
+		lockParamNamesNoi[6] = "c4dNoiBrightness"
+		lockParamNamesNoi[7] = "c4dNoiContrast"
+		lockParamNamesNoi[8] = "c4dNoiVisibilityScale"
+		lockParamNamesNoi[9] = "c4dNoiIlluminationScale"
+
+	dim	lockParamNamesSha[]
+		lockParamNamesSha[ 1] = "_c4dSHA"
+		lockParamNamesSha[ 2] = "c4dShaDensity"
+		lockParamNamesSha[ 3] = "c4dShaColor"
+		lockParamNamesSha[ 4] = "c4dShaTransparency"
+		lockParamNamesSha[ 5] = "c4dShaClippingInfluence"
+		lockParamNamesSha[ 6] = "c4dShaShadowMapSize"
+		lockParamNamesSha[ 7] = "c4dShaShadowMapX"
+		lockParamNamesSha[ 8] = "c4dShaShadowMapY"
+		lockParamNamesSha[ 9] = "c4dShaSampleRadius"
+		lockParamNamesSha[10] = "c4dShaAbsoluteBias"
+		lockParamNamesSha[11] = "c4dShaRelBias"
+		lockParamNamesSha[12] = "c4dShaAbsBias"
+		lockParamNamesSha[13] = "c4dShaParalellWidth"
+		lockParamNamesSha[14] = "c4dShaOutlineShadow"
+		lockParamNamesSha[15] = "c4dShaShadowCone"
+		lockParamNamesSha[16] = "c4dShaAngle"
+		lockParamNamesSha[17] = "c4dShaSoftCone"
+		lockParamNamesSha[18] = "c4dShaAccuracy"
+		lockParamNamesSha[19] = "c4dShaMinSamples"
+		lockParamNamesSha[20] = "c4dShaMaxSamples"
+		lockParamNamesSha[21] = "iShadowQuality"
+
+	dim	lockParamNamesLen[]
+		lockParamNamesLen[ 1] = "bLenShowGlow"
+		lockParamNamesLen[ 2] = "c4dLenGlow"
+		lockParamNamesLen[ 3] = "c4dLenGlowBrightness"
+		lockParamNamesLen[ 4] = "c4dLenGlowAspectRatio"
+		lockParamNamesLen[ 5] = "bLenShowReflexes"
+		lockParamNamesLen[ 6] = "c4dLenReflexes"
+		lockParamNamesLen[ 7] = "c4dLenReflexBrightness"
+		lockParamNamesLen[ 8] = "c4dLenReflexAspectRatio"
+		lockParamNamesLen[ 9] = "c4dLenScale"
+		lockParamNamesLen[10] = "c4dLenRotation"
+		lockParamNamesLen[11] = "c4dLenUseLightParams"
+		lockParamNamesLen[12] = "c4dLenFadeBehindObjects"
+		lockParamNamesLen[13] = "c4dLenFadeNearBorders"
+		lockParamNamesLen[14] = "c4dLenFadeApproachingObjs"
+		lockParamNamesLen[15] = "c4dLenGlowDistantScale"
+		lockParamNamesLen[16] = "c4dLenReflexDistantScale"
+
+	for i = 1 to vardim1(lockParamNamesGen)
+		if lockVariablesGen[i] = 0 then
+			lock			lockParamNamesGen[i]
+		endif
+	next i
+	for i = 1 to vardim1(lockParamNamesDet)
+		if lockVariablesDet[i] = 0 then
+			lock			lockParamNamesDet[i]
+		endif
+	next i
+	for i = 1 to vardim1(lockParamNamesVis)
+		if lockVariablesVis[i] = 0 then
+			lock			lockParamNamesVis[i]
+		endif
+	next i
+	for i = 1 to vardim1(lockParamNamesPho)
+		if lockVariablesPho[i] = 0 then
+			lock			lockParamNamesPho[i]
+		endif
+	next i
+	for i = 1 to vardim1(lockParamNamesCau)
+		if lockVariablesCau[i] = 0 then
+			lock			lockParamNamesCau[i]
+		endif
+	next i
+	for i = 1 to vardim1(lockParamNamesNoi)
+		if lockVariablesNoi[i] = 0 then
+			lock			lockParamNamesNoi[i]
+		endif
+	next i
+	for i = 1 to vardim1(lockParamNamesSha)
+		if lockVariablesSha[i] = 0 then
+			lock			lockParamNamesSha[i]
+		endif
+	next i
+	for i = 1 to vardim1(lockParamNamesLen)
+		if lockVariablesLen[i] = 0 then
+			lock			lockParamNamesLen[i]
+		endif
+	next i
+
+
+	! ==============================================================================
+	! Light Quality parameter
+	! ==============================================================================
+	if iC4dGenType = GENTYPE_AREA | iC4dGenType = GENTYPE_IES then values "iLightQuality" range[1, 10]
+	if iC4dGenType = GENTYPE_IES and not(c4dPhoUseIESSize and bIESFileExist) then
+		lock			"iLightQuality"
+	endif
+
+	! ==============================================================================
+	! C4D Visibility parameters
+	! ==============================================================================
+	if GLOB_MODPAR_NAME = "bGenVisibleLight" then
+		if bGenVisibleLight then
+			iC4dGenVisibility	= 3
+			parameters iC4dGenVisibility = iC4dGenVisibility
+		endif
+	endif
+	if bGenVisibleLight then
+		values "c4dGenVisibility" stGenVisibility[2], stGenVisibility[3], stGenVisibility[4]
+		values "iC4dGenVisibility" 2, 3, 4
+		if GLOB_MODPAR_NAME = "c4dGenVisibility" then
+			for i = 1 to vardim1(stGenVisibility)
+			   if c4dGenVisibility = stGenVisibility[i]	then iC4dGenVisibility = i
+			next i
+			parameters iC4dGenVisibility = iC4dGenVisibility
+		else
+			c4dGenVisibility = stGenVisibility[max(min(iC4dGenVisibility,vardim1(stGenVisibility)),1)]
+			parameters c4dGenVisibility = c4dGenVisibility
+		endif
+	else
+		values "c4dGenVisibility" stGenVisibility[1]
+		values "iC4dGenVisibility" 1
+		iC4dGenVisibility	= 1
+		parameters iC4dGenVisibility = iC4dGenVisibility
+		c4dGenVisibility = stGenVisibility[1]
+		parameters c4dGenVisibility = c4dGenVisibility
+	endif
+	if NOT(bGenVisibleLight) then
+		values "c4dGenVisibility" stGenVisibility[1]
+		lock			"c4dGenVisibility",
+						"iC4dGenVisibility"
+	endif
+
+	values "iVisibeLightQuality" range[1, 10]
+
+
+
+	! ==============================================================================
+	! C4D Caustics parameters
+	! ==============================================================================
+
+
+
+	! ==============================================================================
+	! C4D Shadow parameters
+	! ==============================================================================
+	values "c4dShaShadowMapSize" "250", "500", "750", "1000", "1250", "1500", "1750", "2000", Custom
+
+
+
+	! ==============================================================================
+	! C4D Noise parameters
+	! ==============================================================================
+	values "c4dNoiType" stNoiType
+	values "iC4dNoiType"	1, 2, 3, 4
+	if GLOB_MODPAR_NAME = "c4dNoiType" then
+		for i = 1 to vardim1(stNoiType)
+		   if c4dNoiType = stNoiType[i]	then iC4dNoiType = i
+		next i
+		parameters iC4dNoiType = iC4dNoiType
+	else
+		c4dNoiType = stNoiType[max(min(iC4dNoiType, vardim1(stNoiType)), 1)]
+		parameters c4dNoiType = c4dNoiType
+	endif
+
+
+
+	! ==============================================================================
+	! C4D Lens parameters
+	! ==============================================================================
+	if bLenShowGlow then
+		values "c4dLenGlow"	stLenGlow[2], stLenGlow[3], stLenGlow[4], stLenGlow[5],
+							stLenGlow[6], stLenGlow[7], stLenGlow[8], stLenGlow[9],
+							stLenGlow[10], stLenGlow[11], stLenGlow[12], stLenGlow[13],
+							stLenGlow[14], stLenGlow[15], stLenGlow[16], stLenGlow[17],
+							stLenGlow[18], stLenGlow[19], stLenGlow[20], stLenGlow[21],
+							stLenGlow[22], stLenGlow[23]
+		values "iC4dLenGlow"	2, 3, 4, 5,
+								6, 7, 8, 9,
+								10, 11, 12, 13,
+								14, 15, 16, 17,
+								18, 19, 20, 21,
+								22, 23
+		if GLOB_MODPAR_NAME = "c4dLenGlow" then
+			for i = 1 to vardim1(stLenGlow)
+			   if c4dLenGlow = stLenGlow[i]	then iC4dLenGlow = i
+			next i
+			parameters iC4dLenGlow = iC4dLenGlow
+		else
+			c4dLenGlow = stLenGlow[max(min(iC4dLenGlow,vardim1(stLenGlow)),1)]
+			parameters c4dLenGlow = c4dLenGlow
+		endif
+	else
+		values "c4dLenGlow"	stLenGlow[1]
+		values "iC4dLenGlow" 1
+
+		iC4dLenGlow	= 1
+		parameters iC4dLenGlow = iC4dLenGlow
+		c4dLenGlow = stLenGlow[1]
+		parameters c4dLenGlow = c4dLenGlow
+		lock "iC4dLenGlow"
+	endif
+
+	if bLenShowReflexes then
+		values "c4dLenReflexes"	stLenReflexes[2], stLenReflexes[3], stLenReflexes[4], stLenReflexes[5],
+								stLenReflexes[6], stLenReflexes[7], stLenReflexes[8], stLenReflexes[9],
+								stLenReflexes[10], stLenReflexes[11], stLenReflexes[12], stLenReflexes[13],
+								stLenReflexes[14], stLenReflexes[15], stLenReflexes[16]
+		values "iC4dLenReflexes"	2, 3, 4, 5,
+								6, 7, 8, 9,
+								10, 11, 12, 13,
+								14, 15, 16
+		if GLOB_MODPAR_NAME = "c4dLenReflexes" then
+			for i = 1 to vardim1(stLenReflexes)
+			   if c4dLenReflexes = stLenReflexes[i]	then iC4dLenReflexes = i
+			next i
+			parameters iC4dLenReflexes = iC4dLenReflexes
+		else
+			c4dLenReflexes = stLenReflexes[max(min(iC4dLenReflexes,vardim1(stLenReflexes)),1)]
+			parameters c4dLenReflexes = c4dLenReflexes
+		endif
+	else
+		values "c4dLenReflexes" stLenReflexes[1]
+		values "iC4dLenReflexes" 1
+
+		iC4dLenReflexes	= 1
+		parameters iC4dLenReflexes = iC4dLenReflexes
+		c4dLenReflexes = stLenReflexes[1]
+		parameters c4dLenReflexes = c4dLenReflexes
+		lock "iC4dLenReflexes"
+	endif
+else
+	if bEnableSymbolic2D then
+		! ==============================================================================
+		! 2D Symbol
+		! ==============================================================================
+
+		call "Lamp_symbol" parameters all	bEnableSymbolTypes				= 0,
+											iEnableLampSymbolTypes			= 0,
+											gs_symbtype_2D_m				= gs_symbtype_2D_m,
+											iSpecSymbolType					= _specialSymbolType,
+											bEnableFillOnRealisticSymbol	= 1,
+											bEnableTextOnRealisticSymbol	= 0
+	endif
+endif
+
+! ==============================================================================
+! UI parameters
+! ==============================================================================
+
+if GLOB_UI_BUTTON_ID < 0 then
+	gs_ui_current_page = -GLOB_UI_BUTTON_ID
+	parameters gs_ui_current_page = gs_ui_current_page
+endif
+
+
+
+

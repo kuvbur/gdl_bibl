@@ -1,0 +1,233 @@
+
+EPS = 0.0001
+
+
+SHID_DRAWINGID	= 1
+SHID_LAYOUTID	= 2
+SHID_BOTH		= 3
+SHID_NONE		= 4
+
+POS_TOP			= 1
+POS_LEFT		= 2
+POS_RIGHT		= 3
+POS_BOTT		= 4
+
+ALIGN_LEFT		= 1
+ALIGN_CENTER	= 2
+ALIGN_RIGHT		= 3
+
+CONFIG_STYLE1	= 1
+CONFIG_STYLE2	= 2
+CONFIG_STYLE3	= 3
+
+SYMBST_CIRCLE	= 1
+SYMBST_ELLIPT	= 2
+SYMBST_RECTANG	= 3
+SYMBST_PENTA	= 4
+
+POSID_TOP		= 1
+POSID_CENTER	= 2
+
+FRAME_STYLE01	= 1
+FRAME_STYLE02	= 2
+FRAME_STYLE03	= 3
+
+
+! =============================================================================
+! Migration
+! =============================================================================
+
+if GLOB_SCRIPT_TYPE = 7 | GLOB_SCRIPT_TYPE = 8 then goto "MasterEnd"	! forward migration, backward migration
+
+
+_usedGlobalScale = 1						! In Layout View the Global Scale is always 1
+
+PAPER_TO_MODEL = _usedGlobalScale / 1000	! Convert paper size to model size
+
+dim mPositionSide[4]
+	mPositionSide[1] = `Верх`
+	mPositionSide[2] = `Слева`
+	mPositionSide[3] = `Справа`
+	mPositionSide[4] = `Низ`
+
+dim mPositionAlignment[3]
+	mPositionAlignment[1] = `Слева`
+	mPositionAlignment[2] = `Центр`
+	mPositionAlignment[3] = `Справа`
+
+dim mPositionIDText[2]
+	mPositionIDText[1]	= `Верх`
+	mPositionIDText[2]	= `Центр`
+
+dim mTitleFitMode[4]
+	mTitleFitMode[1] = `Чертеж`
+	mTitleFitMode[2] = `Макет`
+	mTitleFitMode[3] = `Ячейка`
+	mTitleFitMode[4] = `Специальный`
+
+dim mFrameStyle[3]
+	mFrameStyle[1] = `Стиль 01`
+	mFrameStyle[2] = `Стиль 02`
+	mFrameStyle[3] = `Стиль 03`
+
+dim mSymbolStyle[4]
+	mSymbolStyle[1] = `Окружность`
+	mSymbolStyle[2] = `Эллипс`
+	mSymbolStyle[3] = `Прямоугольник`
+	mSymbolStyle[4] = `Пятиугольник`
+
+dim	mTitleConfiguration[3]
+	mTitleConfiguration[1] = `Стиль 1`
+	mTitleConfiguration[2] = `Стиль 2`
+	mTitleConfiguration[3] = `Стиль 3`
+
+dim	mShowIDText[4]
+	mShowIDText[1]	= `ID Чертежа`
+	mShowIDText[2]	= `ID Макета`
+	mShowIDText[3]	= `Обе`
+	mShowIDText[4]	= `Нет`
+
+! ==============================================================================
+! Bounding Box Calculations
+! ==============================================================================
+
+if AC_titleFitMode = 1 then		! Fit to Drawing Rect
+	titlePosX = AC_DrawingRect[1]
+	titlePosY = AC_DrawingRect[2]
+	titleAlpha = AC_DrawingRect[5]
+
+	xo = AC_DrawingRect[1]:		yo = AC_DrawingRect[2]
+	x1 = AC_DrawingRect[3]:		y1 = AC_DrawingRect[4]
+	x2 = x1 + cos(titleAlpha - 90):	y2 = y1 + sin(titleAlpha - 90)
+endif
+
+if AC_titleFitMode = 2 then		! Fit to Layout Rect
+	titlePosX = AC_LayoutRect[1]
+	titlePosY = AC_LayoutRect[2]
+	titleAlpha = AC_LayoutRect[5]
+
+	xo = AC_LayoutRect[1]:		yo = AC_LayoutRect[2]
+	x1 = AC_LayoutRect[3]:		y1 = AC_LayoutRect[4]
+	x2 = x1 + cos(titleAlpha - 90):	y2 = y1 + sin(titleAlpha - 90)
+endif
+
+if AC_titleFitMode = 3 then		! Fit to Cell Rect
+	titlePosX = AC_GridRect[1]
+	titlePosY = AC_GridRect[2]
+	titleAlpha = AC_GridRect[5]
+
+	xo = AC_GridRect[1]:		yo = AC_GridRect[2]
+	x1 = AC_GridRect[3]:		y1 = AC_GridRect[4]
+	x2 = x1 + cos(titleAlpha - 90):	y2 = y1 + sin(titleAlpha - 90)
+endif
+
+titleRectX = (abs((y2 - y1) * (xo - x1) - (x2 - x1) * (yo - y1)) / sqr((x2 - x1)^2 + (y2 - y1)^2))
+diagonalL = sqr((xo - x1)^2 + (yo - y1)^2)
+
+if abs(titleRectX) < EPS | diagonalL < EPS then end
+
+titleRectY = sqr(diagonalL^2 - titleRectX^2)
+
+savedTitleRectX = titleRectX
+savedTitleRectY = titleRectY
+
+if AC_ManualPosition then
+	titlePosX	= 0
+	titlePosY	= 0
+	titleAlpha	= 0
+endif
+
+
+! ==============================================================================
+! Draw Preview
+! ==============================================================================
+
+if GLOB_SCRIPT_TYPE = 2 then
+    bPositioningPreview = (GLOB_CONTEXT = 5 & AC_PreviewType = 0)
+else
+    bPositioningPreview = 0
+endif
+
+if bPositioningPreview then
+
+	if SYMB_MIRRORED then
+		mul2 -1, 1
+	endif
+
+	PAPER_TO_MODEL = 0.1
+
+	pwx = 20
+	pwy = 20
+
+	DEFINE FILLA `Штриховка Заголовка Чертежа` 136, 34, 136, 34, 136, 34, 136, 34,
+		0.07, 0.07, 0, 1,
+		1, 0, 0, 0, 0, 2,
+		0, 1
+
+	gs_frame_pen		= 1
+	gs_frame_linetype	= 1		! Solid Line
+	gs_frame_fill		= IND(FILL, `Штриховка Заголовка Чертежа`)
+	gs_frame_fill_fg	= 6
+	gs_frame_fill_bg	= 91
+
+	pen 1
+	rect2 0,0, pwx,pwy
+
+	if AC_titleFitMode = 1 | AC_ManualPosition then		! Fit to Drawing Rect
+		rect2 0.2*pwx, 0.3*pwy, 0.8*pwx, 0.8*pwy
+
+		titlePosX	= 0.2*pwx
+		titlePosY	= 0.3*pwy
+		titleAlpha	= 0
+		titleRectX	= 0.6*pwx
+		titleRectY	= 0.5*pwy
+	endif
+
+	if AC_titleFitMode = 2 then		! Fit to Layout Rect
+		titlePosX	= 0
+		titlePosY	= 0
+		titleAlpha	= 0
+		titleRectX	= pwx
+		titleRectY	= pwy
+	endif
+
+	if AC_titleFitMode = 3 then		! Fit to Cell Rect
+		line2 0,		0.3*pwy,	pwx,		0.3*pwy
+		line2 0,		0.8*pwy,	pwx,		0.8*pwy
+		line2 0.2*pwx,	0,			0.2*pwx,	pwy
+		line2 0.8*pwx,	0,			0.8*pwx,	pwy
+
+		titlePosX	= 0.2*pwx
+		titlePosY	= 0.3*pwy
+		titleAlpha	= 0
+		titleRectX	= 0.6*pwx
+		titleRectY	= 0.5*pwy
+	endif
+
+	add2 titlePosX, titlePosY
+	rot2 titleAlpha
+
+	rect2 0,0, titleRectX,titleRectY
+
+	del 2
+endif
+
+
+! Rotate mode ==================================================================
+
+bSpecPos = (not(gs_title_rotate_with_position) & (gs_position_side_int = POS_LEFT | gs_position_side_int = POS_RIGHT))		! Left or Right
+
+if bSpecPos then
+	lock "gs_link_title_width"
+	gs_link_title_width = 0
+endif
+
+! Custom Standing ==================================================================
+! free setting Position or Title Range (Width), not depend on Sizes of Drawing/Layout/Cell
+
+_bCustomPosition = not(gs_link_title_width) | AC_ManualPosition
+
+! =============================================================================
+"MasterEnd":
+
+

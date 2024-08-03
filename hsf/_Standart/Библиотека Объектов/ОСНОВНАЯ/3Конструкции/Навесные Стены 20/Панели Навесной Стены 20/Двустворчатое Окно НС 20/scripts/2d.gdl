@@ -1,0 +1,254 @@
+
+unID = 1
+
+tranWidth = 0
+tranX = 0
+call "CW Transformation" parameters A = A, AC_PanelCoords = AC_PanelCoords, ac_originIsFrameCenter = ac_originIsFrameCenter returned_parameters tranWidth, tranX
+mul2 tranWidth, 1
+add2 -tranX, 0
+
+! =============================================================================
+! Request globals for 2D (MVO Detail Level, MVO Reveal, Hotspots for IS)
+! =============================================================================
+
+iMVODetlevel2D			= 0
+bMVOCasing2D			= 0
+bShowAddHotspots		= 0
+bMVODetlevelReveal		= 0
+bShowAddHotspotsForIS	= 0
+
+bGetMVOValueDlev2D		= (gs_detlevel_2d_m = 1)
+bGetMVOValueCasing2D	= 0
+bGetMVOValueDlevReveal	= 0
+bGetHotspotsForIS		= 0
+
+if (bGetMVOValueDlev2D | bGetMVOValueDlevReveal | bGetHotspotsForIS) then
+	call "GetDWSymbSettings" parameters	bWindow					= 1,
+										bGetMVOValueDlev2D		= bGetMVOValueDlev2D,
+										bGetMVOValueCasing2D	= bGetMVOValueCasing2D,
+										bGetMVOValueDlevReveal	= bGetMVOValueDlevReveal,
+										bGetHotspotsForIS		= bGetHotspotsForIS,
+					returned_parameters iMVODetlevel2D,
+										bMVOCasing2D,
+										bMVODetlevelReveal,
+										bShowAddHotspotsForIS
+endif
+
+! =============================================================================
+! 2D detail level settings
+! =============================================================================
+
+if bGetMVOValueDlev2D then															! by MVO
+	iLoD2D	= SYMBW_D_SGLASS
+	if iMVODetlevel2D < SYMBW_D_SGLASS	then iLoD2D	= SYMBW_M_2LINE_GLASS
+	if iMVODetlevel2D < SYMBW_M_2LINE_NOGLASS	then iLoD2D = SYMBW_S_1LINE
+
+	if GLOB_PREVIEW_MODE = 3 then				! in case of 2D-3D Favorite Preview
+		iLoD2D = SYMBW_D_SGLASS
+	endif
+else
+	iLoD2D = SYMBW_OFF														! Off
+	if gs_detlevel_2d_m = 50 then	iLoD2D = SYMBW_D_SGLASS		! 50
+	if gs_detlevel_2d_m = 100 then	iLoD2D = SYMBW_M_2LINE_GLASS		! 100
+	if gs_detlevel_2d_m = 200 then	iLoD2D = SYMBW_S_1LINE			! 200
+
+	if gs_detlevel_2d_m < 0 then
+		iLoD2D	= SYMBW_S_1LINE
+		if GLOB_SCALE <= 150 and GLOB_SCALE > 75 then	iLoD2D = SYMBW_M_2LINE_GLASS
+		if GLOB_SCALE <= 75 then						iLoD2D = SYMBW_D_SGLASS
+	endif
+endif
+
+if iLoD2D = SYMBW_OFF then end
+
+
+! --- setting center of window ---
+
+add2 (leftSide_X + rightSide_X) / 2, 0
+
+add2 0, AC_ClampWidth / 2 + offsetPanel
+
+
+! --- defining dimensions ---
+
+frameLeftIn		= -windowWidth / 2 + frameWidth + adapterWidth * (iFrameType = 2)
+frameRightIn	=  windowWidth / 2 - frameWidth - adapterWidth * (iFrameType = 2)
+
+frameLeftOut	= -windowWidth / 2 + adapterWidth * (iFrameType = 2)	! adapter
+frameRightOut	=  windowWidth / 2 - adapterWidth * (iFrameType = 2)	! adapter
+
+sashLeftOut		= frameLeftIn  - recessWidth
+sashRightOut	= frameRightIn + recessWidth
+sashLeftIn		= sashLeftOut  + sashWidth
+sashRightIn		= sashRightOut - sashWidth
+
+sashInside		= offsetGlass - sashThk
+sashOutside		= offsetGlass
+
+if gs_opening_dir_m = OPDIR_IN then
+	frameInside = offsetGlass - recessThk
+else
+	frameInside = offsetGlass - sashThk - (frameThk - recessThk)
+endif
+
+frameOutside = frameInside + frameThk
+
+adapterOutside	= max (0, frameOutside)
+
+adapterInside	= adapterOutside - adapterThk
+
+
+! --- drawing symbol ---
+
+! --- 1:200 ---
+if iLoD2D = SYMBW_S_1LINE then
+	pen penFrame
+	line2 -windowWidth / 2,	0,	frameLeftIn  ,		0
+	line2  frameRightIn,	0,	windowWidth / 2,	0
+
+	pen penSymbol
+	line2  frameLeftIn,		0,	frameRightIn,		0
+endif
+
+! --- 1:100 ---
+if iLoD2D = SYMBW_M_2LINE_GLASS then
+	pen penSymbol
+	fill fillCover
+	poly2_b 5, 1+2+4+64, fillPenCover, fillPenBgCover,
+				 sashLeftIn,	max (frameOutside, sashOutside),	1,
+				-sashWidth,		max (frameOutside, sashOutside),	0,
+				-sashWidth,		min (frameInside, sashInside),		1,
+				 sashLeftIn,	min (frameInside, sashInside),		0,
+				 sashLeftIn,	max (frameOutside, sashOutside),	-1
+	poly2_b 5, 1+2+4+64, fillPenCover, fillPenBgCover,
+				 sashWidth,		max (frameOutside, sashOutside),	1,
+				 sashRightIn,	max (frameOutside, sashOutside),	0,
+				 sashRightIn,	min (frameInside, sashInside),		1,
+				 sashWidth,		min (frameInside, sashInside),		0,
+				 sashWidth,		max (frameOutside, sashOutside),	-1
+
+	pen penFrame
+	fill fillFrame
+
+	poly2_b 4, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				frameLeftOut,	max (frameOutside, sashOutside),	1,
+				sashLeftIn,		max (frameOutside, sashOutside),	1,
+				sashLeftIn,		min (frameInside, sashInside),		1,
+				frameLeftOut,	min (frameInside, sashInside),		1
+	poly2_b 4, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				 frameRightOut,	max (frameOutside, sashOutside),	1,
+				 sashRightIn,	max (frameOutside, sashOutside),	1,
+				 sashRightIn,	min (frameInside, sashInside),		1,
+				 frameRightOut,	min (frameInside, sashInside),		1
+
+	poly2_b 4, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				-sashWidth,	max (frameOutside, sashOutside),	1,
+				 sashWidth,	max (frameOutside, sashOutside),	1,
+				 sashWidth,	min (frameInside, sashInside),		1,
+				-sashWidth,	min (frameInside, sashInside),		1
+
+	line2 0, min (frameInside, sashInside), 0, max (frameOutside, sashOutside)
+
+	if iFrameType = 2 then		! adapter
+		poly2_b 4, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				-windowWidth / 2,	adapterOutside,	1,
+				 frameLeftOut,		adapterOutside,	1,
+				 frameLeftOut,		adapterInside,	1,
+				-windowWidth / 2,	adapterInside,	1
+		poly2_b 4, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				 windowWidth / 2,	adapterOutside,	1,
+				 frameRightOut,		adapterOutside,	1,
+				 frameRightOut,		adapterInside,	1,
+				 windowWidth / 2,	adapterInside,	1
+	endif
+
+	pen penGlass
+	line2 sashLeftIn, 0, -sashWidth, 0
+	line2 sashWidth, 0, sashRightIn, 0
+endif
+
+! --- 1:50 ---
+if iLoD2D = SYMBW_D_SGLASS then
+	pen penFrame
+	fill fillFrame
+	if iFrameType = 2 then		! adapter
+		poly2_b 4, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				-windowWidth / 2,	adapterOutside,	1,
+				 frameLeftOut,		adapterOutside,	1,
+				 frameLeftOut,		adapterInside,	1,
+				-windowWidth / 2,	adapterInside,	1
+		poly2_b 4, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				 windowWidth / 2,	adapterOutside,	1,
+				 frameRightOut,		adapterOutside,	1,
+				 frameRightOut,		adapterInside,	1,
+				 windowWidth / 2,	adapterInside,	1
+	endif
+
+
+	if gs_opening_dir_m = OPDIR_IN then
+		poly2_b 6, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				frameLeftOut,					frameOutside,	1,
+				frameLeftIn,					frameOutside,	1,
+				frameLeftIn,					sashOutside,	1,
+				frameLeftIn - recessWidth,		sashOutside,	1,
+				frameLeftIn - recessWidth,		frameInside,	1,
+				frameLeftOut,					frameInside,	1
+		poly2_b 6, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				frameRightOut,					frameOutside,	1,
+				frameRightIn,					frameOutside,	1,
+				frameRightIn,					sashOutside,	1,
+				frameRightIn + recessWidth,		sashOutside,	1,
+				frameRightIn + recessWidth, 	frameInside,	1,
+				frameRightOut,					frameInside,	1
+	else
+		poly2_b 6, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				frameLeftOut,					frameInside,	1,
+				frameLeftIn,					frameInside,	1,
+				frameLeftIn,					sashInside,		1,
+				frameLeftIn - recessWidth,		sashInside,		1,
+				frameLeftIn - recessWidth,		frameOutside,	1,
+				frameLeftOut,					frameOutside,	1
+		poly2_b 6, 1+2+4+32, fillPenFrame, fillPenBgFrame,
+				frameRightOut,					frameInside,	1,
+				frameRightIn,					frameInside,	1,
+				frameRightIn,					sashInside,		1,
+				frameRightIn + recessWidth,		sashInside,		1,
+				frameRightIn + recessWidth, 	frameOutside,	1,
+				frameRightOut,					frameOutside,	1
+	endif
+
+	pen penSymbol
+	fill fillCover
+	poly2_b 5, 1+2+4+64, fillPenCover, fillPenBgCover,
+				 sashLeftIn,	sashOutside,	1,
+				 sashRightIn,	sashOutside,	0,
+				 sashRightIn,	sashInside,		1,
+				 sashLeftIn,	sashInside,		0,
+				 sashLeftIn,	sashOutside,	-1
+
+	fill fillSash
+	pen penSymbol
+	poly2_b 4, 1+2+4+32, fillPenSash, fillPenBgSash,
+				 sashLeftOut,	sashOutside,	1,
+				 sashLeftIn,	sashOutside,	1,
+				 sashLeftIn,	sashInside,		1,
+				 sashLeftOut,	sashInside,		1
+	poly2_b 4, 1+2+4+32, fillPenSash, fillPenBgSash,
+				 sashRightOut,	sashOutside,	1,
+				 sashRightIn,	sashOutside,	1,
+				 sashRightIn,	sashInside,		1,
+				 sashRightOut,	sashInside,		1
+
+	poly2_b 4, 1+2+4+32, fillPenSash, fillPenBgSash,
+				 -sashWidth,	sashOutside,	1,
+				  sashWidth,	sashOutside,	1,
+				  sashWidth,	sashInside,		1,
+				 -sashWidth,	sashInside,		1
+	line2 0, sashInside, 0, sashOutside
+
+	pen penGlass
+	line2 sashLeftIn, 0, -sashWidth, 0
+	line2 sashWidth, 0, sashRightIn, 0
+endif
+
+end

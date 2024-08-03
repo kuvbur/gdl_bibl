@@ -1,0 +1,1040 @@
+
+!!! *** LStair
+
+IF gs_detlevel_3D_m = DET3D_OFF THEN END
+
+IF GLOB_CONTEXT>20 and GLOB_CONTEXT<40 THEN 		!! FOR Simple Model and in 3D Windoow
+	gs_detlevel_3D_m = DET3D_SIMPLE
+ENDIF
+
+IF not(gs_shadow) THEN SHADOW OFF
+
+covthick = covthick*cover
+addz -sst-covthick
+
+PEN gs_cont_PEN
+FILL gs_FILL_type
+
+depthTreadIn=(lx+ly)/rnu					!! Step Depth/Inside
+depthTreadOut=(ly+flw+lx+flw)/rnu			!! Step Depth/Outside
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *** HOTSPOTs UNID *** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+	!!! FlightUNID=1			!!! 1-9
+	!!! RailUNID=1000			!!! 1000,1100,1200,1300
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *** Flight Slab ** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+	StepNumCornerIn=INT(ly/depthTreadIn)+1			!!Step Number at Corner (Inside)
+	StepNumCornerOut=INT((ly+flw)/depthTreadOut)+1	!!Step Number at Corner (Outside)
+
+	!!! Rest Value of Last Step at Corner
+	RestStep=(flw+lx)-(rnu-StepNumCornerOut)*depthTreadOut
+
+	!!! Calculation of "nxprev" value at Corner (StepNum=StepNumCornerOut-1)
+	!!! Overhang at Corner Outside Direction
+	YY1=(ly+flw)-(StepNumCornerOut-1)*depthTreadOut
+	YY2A=flw-yy1
+	YY2B=(ly+flw)-yy1-(StepNumCornerOut-1)*depthTreadIn
+	XX2A=(flw+lx)-(rnu-(StepNumCornerOut-1))*depthTreadIn
+	XX2B=flw
+
+	IF (StepNumCornerOut-1)*depthTreadIn>ly THEN
+		XX1=YY1*XX2A/YY2A	!!="nxprev" value
+		ELSE
+		XX1=YY1*XX2B/YY2B	!!="nxprev" value
+	ENDIF
+
+	LastStep=XX1+RestStep
+
+	!!! Y Height of  Stair Slab
+	SlabAlfa=ATN(th/depthTreadIn)
+	SlabAlfaOut=ATN(th/depthTreadOut)
+	SlabYHeight=sst/cos(SlabAlfa)
+
+	!!! Join at Upper Flight Slab
+	IF SlabYHeight > lst THEN
+		X1DistUp=(SlabYHeight-lst)/TAN(SlabAlfa)
+		XDistUp=-X1DistUp
+		ELSE
+		X2DistUp=(lst-SlabYHeight)/TAN(SlabAlfa)
+		XDistUp=X2DistUp
+	ENDIF
+
+	GROUP "FlightSlab"
+
+		FOR i=1 TO rnu
+
+				!!! Join at Upper Flight Slab
+				IF i=rnu THEN
+					tempXDistUp=XDistUp
+					tempJointSlab=(SlabYHeight-lst)
+					ELSE
+					tempXDistUp=0
+					tempJointSlab=0
+				ENDIF
+
+				!!! Calculation of Steps Outside
+				IF depthTreadOut*i <= ly+flw THEN
+					ny=i*depthTreadOut
+					nx=0
+					nyprev=(i-1)*depthTreadOut
+					nxprev=0
+				ELSE
+					ny=ly+flw
+					nx=i*depthTreadOut-ny-tempXDistUp
+					IF i=StepNumCornerOut THEN
+						nyprev=ly+flw
+						nxprev=(i)*depthTreadOut-LastStep-ny
+					ELSE
+						nyprev=ly+flw
+						nxprev=(i-1)*depthTreadOut-ny
+					ENDIF
+				ENDIF
+
+				!!! Calculation of Steps Inside
+				IF depthTreadIn*i <= ly THEN
+					ky=depthTreadIn*i
+					kx=flw
+					kyprev=depthTreadIn*(i-1)
+					kxprev=flw
+				ELSE
+					ky=ly
+					kx=flw+depthTreadIn*i-ly-tempXDistUp
+					IF i=StepNumCornerIn THEN
+						kyprev=depthTreadIn*(i-1)
+						kxprev=flw
+					ELSE
+						kyprev=ly
+						kxprev=flw+depthTreadIn*(i-1)-ly
+					ENDIF
+				ENDIF
+
+				IF i=rnu THEN 	!!! at Upper Step
+					tempMask=8
+					ELSE
+					tempMask=9
+				ENDIF
+
+				ADDz sst
+
+					!!! Slab Flight
+					SECT_FILL typeFillStringer, penBackFillStringer, penFillStringer, penLineStringer
+
+					MASS matb,matb,matb,
+					5,0,1+4+16,th*(i),
+						nx,ny,th*(i)+th-(th+SlabYHeight)+tempJointSlab,tempMask,
+						kx,ky,th*(i)+th-(th+SlabYHeight)+tempJointSlab,9,
+						kxprev,kyprev,th*(i)-(th+SlabYHeight),9,
+						nxprev,nyprev,th*(i)-(th+SlabYHeight),9,
+						nx,ny,th*(i)+th-(th+SlabYHeight)+tempJointSlab,-1
+
+				DEL 1
+
+		NEXT i
+
+	ENDGROUP
+
+	GROUP "FlightSlabCut"
+
+		MATERIAL matb
+		SECT_FILL typeFillStringer, penBackFillStringer, penFillStringer, penLineStringer
+
+		ADD flw,0,sst
+			BLOCK lx,ly,ZZYZX		!! Cut Inside
+		DEL 1
+
+		ADD -flw,0,sst
+			BLOCK flw,ly+flw,ZZYZX	!! Cut Outside
+		DEL 1
+
+		ADDz -SlabYHeight+sst-lst2
+			BLOCK flw,ly,SlabYHeight	!! Join to Lower Slab Thickness
+		DEL 1
+
+		!!! Join at Upper Flight Slab/ IF SlabYHeight > lst
+		IF SlabYHeight > lst THEN
+			ADD flw+lx-XDistUp,ly,sst+ZZYZX-lst
+				MATERIAL matb
+				SECT_FILL typeFillStringer, penBackFillStringer, penFillStringer, penLineStringer
+
+				PRISM_ 5,lst,
+					0,0,13,
+					XDistUp,0,15,
+					XDistUp,flw,15,
+					0,flw,8,
+					0,0,-1
+			DEL 1
+		ENDIF
+
+	ENDGROUP
+
+	PLACEGROUP SUBGROUP("FlightSlab","FlightSlabCut")
+	KILLGROUP "FlightSlab"
+	KILLGROUP "FlightSlabCut"
+
+	!!! Join at Upper Flight Slab/IF SlabYHeight < lst
+	IF SlabYHeight < lst THEN
+		ADD flw+lx-XDistUp,ly,sst+ZZYZX-lst
+			MATERIAL matb
+			SECT_FILL typeFillStringer, penBackFillStringer, penFillStringer, penLineStringer
+
+			PRISM_ 5,lst,
+				0,0,13,
+				XDistUp,0,15,
+				XDistUp,flw,15,
+				0,flw,8,
+				0,0,-1
+		DEL 1
+	ENDIF
+
+	!!! Contour of Stair Slab
+	FOR i=1 TO StepNumCornerOut		!!! Stair Contour/Outside/Lower
+		ADDz sst
+			nxprev=0
+			nyprev=(i-1)*depthTreadOut
+			LIN_ nxprev,nyprev,th*(i),nxprev,nyprev,th*(i)-th
+		DEL 1
+	NEXT i
+
+	FOR i=StepNumCornerOut+1 TO rnu	!!! Stair Contour/Outside/Upper
+		ADDz sst
+			nyprev=ly+flw
+			nxprev=(i-1)*depthTreadOut-ny
+			LIN_ nxprev,nyprev,th*(i),nxprev,nyprev,th*(i)-th
+		DEL 1
+	NEXT i
+
+	FOR i=1 TO StepNumCornerIn		!!! Stair Contour/Inside/Lower
+		ADDz sst
+			kxprev=flw
+			kyprev=depthTreadIn*(i-1)
+			LIN_ kxprev,kyprev,th*(i),kxprev,kyprev,th*(i)-th
+		DEL 1
+	NEXT i
+
+	FOR i=StepNumCornerIn+1 TO rnu	!!! Stair Contour/Inside/Upper
+		ADDz sst
+			kyprev=ly
+			kxprev=flw+depthTreadIn*(i-1)-ly
+			LIN_ kxprev,kyprev,th*(i),kxprev,kyprev,th*(i)-th
+		DEL 1
+	NEXT i
+
+	IF SlabYHeight > lst THEN		!!! Contour at Flight Slab
+		ADDz sst
+			LIN_ flw+lx-XDistUp,ly,ZZYZX-lst,flw+lx-XDistUp,ly+flw,ZZYZX-lst
+		DEL 1
+	ENDIF
+
+	IF SlabYHeight > lst2 THEN
+		ADDz sst
+			LIN_ 0,0,0,0,0,-lst2
+			LIN_ flw,0,0,flw,0,-lst2
+		DEL 1
+		ELSE
+		ADDz sst
+			LIN_ 0,0,0,0,0,-SlabYHeight
+			LIN_ flw,0,0,flw,0,-SlabYHeight
+		DEL 1
+	ENDIF
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *** Step Cover ** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+	GROUP "nagyharap2"
+		SECT_FILL typeFillTread, penBackFillTread, penFillTread, penLineTread
+		MATERIAL mat_tread
+
+		ADDz -sst
+		PRISM 5, sst+3,
+			-0.5,0,
+			-0.5,-2*ly-1,
+			flw+1,-2*ly-1,
+			flw+1,0,
+			-0.5,0
+		DEL 1
+
+		PRISM 5, abs(th*rnu)+(2+sst),
+			lx+flw, ly+flw+1,
+			lx+flw+2, ly+flw+1,
+			lx+flw+2, 0,
+			lx+flw, 0,
+			lx+flw, ly+flw+1
+
+		ADDz - sst
+		PRISM 5, abs(th*rnu)+3+sst,
+			flw-flw,-2*ly-1,
+			flw-flw,ly+flw+1,
+			-1,ly+flw+1,
+			-1,-2*ly-1,
+			flw-flw,-2*ly-1
+		DEL 1
+
+		PRISM 5, abs(th*rnu)+(3+sst),
+			-2,			ly+flw,
+			flw+lx+2,ly+flw,
+			flw+lx+2,ly+flw+1,
+			-2,			ly+flw+1,
+			-2,			ly+flw
+
+	ENDGROUP
+
+	GROUP "nagyharap3"
+
+		MATERIAL mat_riser
+		SECT_FILL typeFillRiser, penBackFillRiser, penFillRiser, penLineRiser
+
+		ADDz -sst
+		PRISM 5, sst+3,
+			-0.5,0,
+			-0.5,-2*ly-1,
+			flw+1,-2*ly-1,
+			flw+1,0,
+			-0.5,0
+		DEL 1
+
+		PRISM 5, abs(th*rnu)+(2+sst),
+			lx+flw, ly+flw+1,
+			lx+flw+2, ly+flw+1,
+			lx+flw+2, 0,
+			lx+flw, 0,
+			lx+flw, ly+flw+1
+
+		ADDz - sst
+		PRISM 5, abs(th*rnu)+3+sst,
+			flw-flw,-2*ly-1,
+			flw-flw,ly+flw+1,
+			-1,ly+flw+1,
+			-1,-2*ly-1,
+			flw-flw,-2*ly-1
+		DEL 1
+
+		PRISM 5, abs(th*rnu)+(3+sst),
+			-2,			ly+flw,
+			flw+lx+2,ly+flw,
+			flw+lx+2,ly+flw+1,
+			-2,			ly+flw+1,
+			-2,			ly+flw
+
+	ENDGROUP
+
+
+	GROUP "cover"	!!! *** Cover/Horizontal
+
+		IF cover and covthick > 0 THEN
+				nx=0
+				ny=-1
+				kx=flw
+				ky=-1
+
+				vernyul=0
+				kisvernyul=0
+
+			 FOR i=1 to rnu
+
+					kxp=kx
+					kyp=ky
+					nxp=nx
+					nyp=ny
+
+
+					IF depthTreadIn*i <= ly THEN
+						ky=depthTreadIn*i
+						kx=flw
+					ELSE
+						ky=ly
+						kx=flw+depthTreadIn*i-ly
+					ENDIF
+
+					IF depthTreadOut*i <= ly+flw THEN
+						ny=i*depthTreadOut
+					ELSE
+						ny=ly+flw
+						nx=i*depthTreadOut-ny
+					ENDIF
+
+				IF i=rnu THEN
+					kx=kx+1
+					nx=nx+1
+				ENDIF
+
+
+				IF (depthTreadIn*(i-1) <= ly) and (depthTreadIn*i > ly) THEN
+					kisvernyul=15
+				ELSE kisvernyul=0
+
+
+				IF (depthTreadOut*(i-1) < ly+flw) and (depthTreadOut*i > ly+flw) THEN
+					vernyul=15
+				ELSE vernyul=0
+
+
+
+						!!! *** NOSING
+
+						aa=sqr((ny-ky)*(ny-ky)+(nx-kx)*(nx-kx))
+
+						IF ABS(ny-ky)<EPS THEN
+							dy=covthicky+ns
+							ddy=covthicky
+						ELSE
+							dx=(covthicky+ns)*aa/abs(ny-ky)
+							ddx=(covthicky)*aa/abs(ny-ky)
+						ENDIF
+
+						IF nx-kx=0 THEN
+							dx=covthicky+ns
+							ddx=covthicky
+						ELSE
+							dy=(covthicky+ns)*aa/abs(nx-kx)
+							ddy=(covthicky)*aa/abs(nx-kx)
+						ENDIF
+
+							kkxp=kxp
+							kkyp=kyp
+							nnxp=nxp
+							nnyp=nyp
+
+							IF i*depthTreadIn <= ly or kisvernyul=15 THEN
+								kkyp=kyp-dy
+							ELSE
+								kkxp=kxp-dx
+							ENDIF
+
+							IF i*depthTreadOut <= ly+flw or vernyul=15 THEN
+								nnyp=nyp-dy
+							ELSE
+								nnxp=nxp-dx
+							ENDIF
+
+
+						!!! *** COVER HORIZONTAL
+
+						ADDz sst+th*i
+
+						IF cover THEN
+							MATERIAL mat_tread
+							SECT_FILL typeFillTread, penBackFillTread, penFillTread, penLineTread
+
+							IF vernyul=0 and kisvernyul=0 THEN
+								PRISM 5, covthick,
+									kx,ky,
+									kkxp,kkyp,
+									nnxp,nnyp,
+									nx,ny,
+									kx,ky
+							ELSE
+								IF vernyul=15 and kisvernyul=0 THEN
+									PRISM 6, covthick,
+										kx,ky,
+										kkxp,kkyp,
+										nnxp,nnyp,
+
+										0,ly+flw,
+
+										nx,ny,
+										kx,ky
+								ENDIF
+								IF kisvernyul=15 and vernyul=0 THEN
+									PRISM 6, covthick,
+										kx,ky,
+										flw,ly,
+										kkxp,kkyp,
+										nnxp,nnyp,
+										nx,ny,
+										kx,ky
+
+								ENDIF
+								IF vernyul=15 and kisvernyul=15 THEN
+									PRISM 7, covthick,
+										kx,ky,
+										flw,ly,
+										kkxp,kkyp,
+										nnxp,nnyp,
+										0,ly+flw,
+										nx,ny,
+										kx,ky
+								ENDIF
+							ENDIF
+						ENDIF
+
+				DEL 1
+			 NEXT i
+		ENDIF
+
+	ENDGROUP
+
+
+	GROUP "covery"	!!! *** Cover/Vertical
+
+		IF covery and covthicky > 0 THEN
+
+				nx=0
+				ny=-1
+				kx=flw
+				ky=-1
+
+				vernyul=0
+				kisvernyul=0
+
+			 FOR i=1 to rnu
+
+					kxp=kx
+					kyp=ky
+					nxp=nx
+					nyp=ny
+
+
+				IF depthTreadIn*i <= ly THEN
+						ky=depthTreadIn*i
+						kx=flw
+					ELSE
+						ky=ly
+						kx=flw+depthTreadIn*i-ly
+					ENDIF
+					IF depthTreadOut*i <= ly+flw THEN
+						ny=i*depthTreadOut
+					ELSE
+						ny=ly+flw
+						nx=i*depthTreadOut-ny
+					ENDIF
+
+
+
+				IF i=rnu THEN
+					kx=kx+1
+					nx=nx+1
+				ENDIF
+
+
+				IF (depthTreadIn*(i-1) <= ly) and depthTreadIn*i > ly THEN
+					kisvernyul=15
+				ELSE kisvernyul=0
+
+
+				IF (depthTreadOut*(i-1) < ly+flw) and depthTreadOut*i > ly+flw THEN
+					vernyul=15
+				ELSE vernyul=0
+
+
+						!!! *** NOSING
+
+						aa=sqr((ny-ky)*(ny-ky)+(nx-kx)*(nx-kx))
+
+						IF ABS(ny-ky)<EPS THEN
+							dy=covthicky+ns
+							ddy=covthicky
+						ELSE
+							dx=(covthicky+ns)*aa/abs(ny-ky)
+							ddx=(covthicky)*aa/abs(ny-ky)
+						ENDIF
+
+						IF nx-kx=0 THEN
+							dx=covthicky+ns
+							ddx=covthicky
+						ELSE
+							dy=(covthicky+ns)*aa/abs(nx-kx)
+							ddy=(covthicky)*aa/abs(nx-kx)
+						ENDIF
+
+							kkxp=kxp
+							kkyp=kyp
+							nnxp=nxp
+							nnyp=nyp
+
+							IF i*depthTreadIn <= ly or kisvernyul=15 THEN
+								kkyp=kyp-dy
+							ELSE
+								kkxp=kxp-dx
+							ENDIF
+
+							IF i*depthTreadOut <= ly+flw or vernyul=15 THEN
+								nnyp=nyp-dy
+							ELSE
+								nnxp=nxp-dx
+							ENDIF
+
+
+						ADDz sst+th*i
+
+
+						!!! *** Cover/Vertical
+
+						IF i*depthTreadIn <= ly or kisvernyul THEN
+							kkyp=kyp-ddy
+						ELSE
+							kkxp=kxp-ddx
+						ENDIF
+
+						IF i*depthTreadOut <= ly+flw or vernyul THEN
+							nnyp=nyp-ddy
+						ELSE
+							nnxp=nxp-ddx
+						ENDIF
+
+
+						ADDz -th+covthick
+							MATERIAL mat_riser
+							SECT_FILL typeFillRiser, penBackFillRiser, penFillRiser, penLineRiser
+
+							PRISM 5, th-covthick,
+								kxp, kyp,
+								kkxp, kkyp,
+								nnxp, nnyp,
+								nxp, nyp,
+								kxp, kyp
+						DEL 1
+
+				DEL 1
+			NEXT i
+		ENDIF
+
+	ENDGROUP
+
+
+	IF gs_detlevel_3D_m = DET3D_DETAILED THEN
+		IF cover THEN PLACEGROUP SUBGROUP("cover", "nagyharap2")
+		IF covery THEN PLACEGROUP SUBGROUP("covery", "nagyharap3")
+	ENDIF
+
+
+	KILLGROUP "cover"
+	KILLGROUP "covery"
+	KILLGROUP "nagyharap2"
+	KILLGROUP "nagyharap3"
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *** Hotspot/Flight ** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+	FlightUNID=1
+
+	addz covthick
+	!!! LX: Upper Flight Length
+	HOTSPOT flw,	ly,	th*rnu+sst,	FlightUNID,		lx,		1+128 : FlightUNID=FlightUNID+1
+	HOTSPOT flw-1,	ly,	th*rnu+sst, FlightUNID,		lx,		3 : FlightUNID=FlightUNID+1
+	HOTSPOT flw+lx,	ly,	th*rnu+sst, FlightUNID,		lx,		2 : FlightUNID=FlightUNID+1
+
+	HOTSPOT flw,	ly+flw,	th*rnu+sst,	FlightUNID,		lx,		1+128 : FlightUNID=FlightUNID+1
+	HOTSPOT flw-1,	ly+flw,	th*rnu+sst, FlightUNID,		lx,		3 : FlightUNID=FlightUNID+1
+	HOTSPOT flw+lx,	ly+flw,	th*rnu+sst, FlightUNID,		lx,		2 : FlightUNID=FlightUNID+1
+
+	!!! Flight Width
+	HOTSPOT 0,		0,		sst, FlightUNID,		flw,	1+256	 : FlightUNID=FlightUNID+1
+	HOTSPOT -1,		0,		sst, FlightUNID,		flw,	3 : FlightUNID=FlightUNID+1
+	HOTSPOT flw,	0,		sst, FlightUNID,		flw,	2 : FlightUNID=FlightUNID+1
+	del 1
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! *** Railing ** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! ------------------------------------------------------------------------------
+! Left rail
+! ------------------------------------------------------------------------------
+
+IF rail_m = RAILPOS_LEFT or rail_m = RAILPOS_BOTH THEN
+	if bSameRails then
+		leftRailType_m = rightRailType_m
+	endif
+
+	material fmatl
+
+	PostOffset=0
+	PostOffsetHgt=0
+
+	! ---  Rail on 1st Run -----------------------------------------------------
+	if bComplexRailLeft then
+		ymeredek=(ly+flw+roffl-depthTreadOut)*TAN(SlabAlfaOut)
+		ang=ATN(ymeredek/((ly+flw+roffl-depthTreadOut)))
+	else
+		ymeredek=(ly+flw+roffl)*TAN(SlabAlfaOut)
+		ang=ATN(ymeredek/(ly+flw+roffl))
+	endif
+
+	ADD (flw-roffl+handRailWidthL/2)-flw, 0, sst+th+covthick
+	ROTz 90
+
+	IF bSameRails=0 THEN
+		RailUNID=1100
+		!!! Distance from Slab/Stair
+		HOTSPOT 0,0,0,	RailUNID, dsl, 1+128: RailUNID=RailUNID+1
+		HOTSPOT 0,0,dsl,RailUNID, dsl, 2: RailUNID=RailUNID+1
+		HOTSPOT 0,0,-1,	RailUNID, dsl, 3: RailUNID=RailUNID+1
+
+		!!! Height of Rail
+		HOTSPOT 0,0,dsl,	RailUNID, hrl, 1+128: RailUNID=RailUNID+1
+		HOTSPOT 0,0,dsl+hrl,RailUNID, hrl, 2: RailUNID=RailUNID+1
+		HOTSPOT 0,0,dsl-1,	RailUNID, hrl, 3: RailUNID=RailUNID+1
+	ELSE
+		RailUNID=1200
+		!!! Distance from Slab/Stair
+		HOTSPOT 0,0,0,	RailUNID, dsr, 1+128: RailUNID=RailUNID+1
+		HOTSPOT 0,0,dsr,RailUNID, dsr, 2: RailUNID=RailUNID+1
+		HOTSPOT 0,0,-1,	RailUNID, dsr, 3: RailUNID=RailUNID+1
+
+		!!! Height of Rail
+		HOTSPOT 0,0,dsr,	RailUNID, hrr, 1+128: RailUNID=RailUNID+1
+		HOTSPOT 0,0,dsr+hrr,RailUNID, hrr, 2: RailUNID=RailUNID+1
+		HOTSPOT 0,0,dsr-1,	RailUNID, hrr, 3: RailUNID=RailUNID+1
+	ENDIF
+
+	lraSimple=ly+flw+roffl
+	lraComplex=(ly+flw+roffl-depthTreadOut)
+	additionXComplex=depthTreadOut/2
+	additionZComplex=0
+	hrovL=td/2-handRailWidthL/2
+	hrovR=td/2-handRailWidthL/2
+	postNumber = npl
+	side = SIDE_LEFT
+	gosub "callRailsForStair"
+
+	DEL 2
+
+	! ---  Rail on 2nd Run -----------------------------------------------------
+	IF bSameRails=0 THEN
+		ADD -flw+2*flw+lx-depthTreadOut+(depthTreadOut/2)*bComplexRailLeft,ly+flw-handRailWidthL/2+roffl, ZZYZX+sst+covthick
+
+			RailUNID=1300
+			!!! Distance from Slab/Stair
+			HOTSPOT 0,0,0,		RailUNID, dsl, 1+128: RailUNID=RailUNID+1
+			HOTSPOT 0,0,0+dsl,	RailUNID, dsl, 2: RailUNID=RailUNID+1
+			HOTSPOT 0,0,0-1,	RailUNID, dsl, 3: RailUNID=RailUNID+1
+
+			!!! Height of Rail
+			HOTSPOT 0,0,dsl,	RailUNID, hrl, 1+128: RailUNID=RailUNID+1
+			HOTSPOT 0,0,dsl+hrl,RailUNID, hrl, 2: RailUNID=RailUNID+1
+			HOTSPOT 0,0,dsl-1,	RailUNID, hrl, 3: RailUNID=RailUNID+1
+
+		DEL 1
+	ELSE
+		ADD -flw+2*flw+lx-depthTreadOut+(depthTreadOut/2)*bComplexRailLeft,ly+flw-handRailWidthL/2+roffr, ZZYZX+sst+covthick
+
+			RailUNID=1400
+			!!! Distance from Slab/Stair
+			HOTSPOT 0,0,0,		RailUNID, dsr, 1+128: RailUNID=RailUNID+1
+			HOTSPOT 0,0,0+dsr,	RailUNID, dsr, 2: RailUNID=RailUNID+1
+			HOTSPOT 0,0,0-1,	RailUNID, dsr, 3: RailUNID=RailUNID+1
+
+			!!! Height of Rail
+			HOTSPOT 0,0,dsr,	RailUNID, hrr, 1+128: RailUNID=RailUNID+1
+			HOTSPOT 0,0,dsr+hrr,RailUNID, hrr, 2: RailUNID=RailUNID+1
+			HOTSPOT 0,0,dsr-1,	RailUNID, hrr, 3: RailUNID=RailUNID+1
+
+		DEL 1
+	ENDIF
+
+	add -flw, roffl-handRailWidthL/2+ly+flw, 0
+
+	if bComplexRailLeft then
+		SimpleBarDiff=hrl-hrhl
+		ymeredek=(lx+flw-depthTreadOut+roffl)*TAN(SlabAlfaOut)
+		ang=ATN(ymeredek/(lx+flw+roffl-depthTreadOut))
+
+		ADDx flw-roffl+td/2
+		ADDz sst+th+covthick+(ly+flw)*(th*rnu)/(ly+lx+flw+flw)
+
+		ADD -handRailWidthL-td/2, -handRailWidthL/2, dsl-td/2*(th*rnu)/(ly+lx+flw+flw)+SimpleBarDiff
+	ELSE
+		SimpleBarDiff = (hrl-bhl) * (leftRailType_m = 3)
+		ymeredek=(lx+flw-depthTreadOut+roffl-handRailWidthL)*TAN(SlabAlfaOut)
+		ang=ATN(ymeredek/(lx+flw+roffl-depthTreadOut-handRailWidthL))
+
+		ADDx flw-roffl+handRailWidthL
+		ADDz sst+th+covthick+(ly+flw)*(th*rnu)/(ly+lx+flw+flw)+(handRailWidthL-roffl)*TAN(SlabAlfaOut)
+
+		ADD -handRailWidthL, -handRailWidthL/2, dsl
+	ENDIF
+
+	IF hrtl_m = HANDRAIL_RECTANGULAR & not(bComplexRailLeft) & (leftRailType_m <> 3) THEN
+		BLOCK handRailWidthL,handRailWidthL, hrl-SimpleBarDiff
+	ENDIF
+	DEL 1
+
+	lraSimple=lx+flw+roffl-depthTreadOut-handRailWidthL
+	lraComplex=lx+flw+roffl-depthTreadOut
+	additionXComplex=0
+	additionZComplex=0
+	hrovL=td/2-handRailWidthL
+	hrovR=td/2-handRailWidthL
+	postNumber = npl
+	side = SIDE_LEFT
+	gosub "callRailsForStair"
+
+	DEL 3
+ENDIF
+
+! ------------------------------------------------------------------------------
+! Right rail
+! ------------------------------------------------------------------------------
+
+IF rail_m = RAILPOS_RIGHT or rail_m = RAILPOS_BOTH THEN
+	! --- Railing on the 1st run -----------------------------------------------
+	if bComplexRailRight then
+		ymeredek=(ly-roffr-depthTreadIn)*TAN(SlabAlfa)
+		ang=ATN(ymeredek/(ly-roffr-depthTreadIn))
+	else
+		ymeredek=(ly-roffr)*TAN(SlabAlfa)
+		ang=ATN(ymeredek/(ly-roffr))
+	endif
+
+	ADD (flw+roffr-handRailWidthR/2), 0, sst+th+covthick
+	ROTz 90
+
+	!!! *** Right Railing/Lower Part
+
+	RailUNID=1000
+
+	!!! Distance from Slab/Stair
+	HOTSPOT 0,0,0,	RailUNID, dsr, 1+128: RailUNID=RailUNID+1
+	HOTSPOT 0,0,dsr,RailUNID, dsr, 2: RailUNID=RailUNID+1
+	HOTSPOT 0,0,-1,	RailUNID, dsr, 3: RailUNID=RailUNID+1
+
+	!!! Height of Rail
+	HOTSPOT 0,0,dsr,	RailUNID, hrr, 1+128: RailUNID=RailUNID+1
+	HOTSPOT 0,0,dsr+hrr,RailUNID, hrr, 2: RailUNID=RailUNID+1
+	HOTSPOT 0,0,dsr-1,	RailUNID, hrr, 3: RailUNID=RailUNID+1
+
+	!!! *** Right Railing/Lower Part
+
+	lraSimple=ly-roffr
+	lraComplex=ly-roffr-depthTreadIn
+	additionXComplex=depthTreadIn/2
+	additionZComplex=0
+	hrovL=depthTreadIn/2
+	hrovR=depthTreadIn/2
+	postNumber = npr
+	side = SIDE_RIGHT
+	gosub "callRailsForStair"
+
+	del 2
+
+	! --- Railing on the 2nd run -----------------------------------------------
+	ADD flw+lx-depthTreadIn+(depthTreadIn/2-handRailWidthR)*bComplexRailRight,ly+handRailWidthR/2-roffr, ZZYZX+sst+covthick
+
+		!!! Distance from Slab/Stair
+		HOTSPOT 0,0,0,	RailUNID, dsr, 1+128: RailUNID=RailUNID+1
+		HOTSPOT 0,0,0+dsr,RailUNID, dsr, 2: RailUNID=RailUNID+1
+		HOTSPOT 0,0,0-1,	RailUNID, dsr, 3: RailUNID=RailUNID+1
+
+		!!! Height of Rail
+		HOTSPOT 0,0,dsr,	RailUNID, hrr, 1+128: RailUNID=RailUNID+1
+		HOTSPOT 0,0,dsr+hrr,RailUNID, hrr, 2: RailUNID=RailUNID+1
+		HOTSPOT 0,0,dsr-1,	RailUNID, hrr, 3: RailUNID=RailUNID+1
+
+	DEL 1
+
+	if bComplexRailRight then
+		ymeredek=(lx-depthTreadIn-roffr)*TAN(SlabAlfa)
+		PostOffset=-depthTreadIn/2
+		ang=ATN(ymeredek/(lx-roffr-depthTreadIn))
+
+		ADDx flw+depthTreadIn
+		ADDz sst+th+covthick+(ly-roffr-depthTreadIn)*TAN(SlabAlfa)+2*roffr*TAN(SlabAlfa)+depthTreadIn*TAN(SlabAlfa)
+	else
+		ymeredek=(lx-depthTreadIn-roffr)*TAN(SlabAlfa)
+		PostOffset=0
+		ang=ATN(ymeredek/(lx-roffr-depthTreadIn))
+
+		ADDx flw+handRailWidthR
+		ADDz sst+th+covthick+(ly-roffr)*TAN(SlabAlfa)+2*roffr*TAN(SlabAlfa)
+	endif
+
+	ADDy ly-roffr+handRailWidthR/2
+	ADDx roffr
+	ADDx -handRailWidthR+PostOffset
+
+	!!! Handrails Connection at Corner/Right Side
+	SimpleBarDiff = (hrr-bhr) * (rightRailType_m = 3)
+	ADD -handRailWidthR, -handRailWidthR/2, dsr+SimpleBarDiff-2*roffr*TAN(SlabAlfa)
+		MATERIAL fmatr
+		IF NOT(bComplexRailRight) AND roffr >= 0 THEN
+			IF (rightRailType_m = 3 & btypr_m = BAR_RECTANGULAR) | hrtr_m = HANDRAIL_RECTANGULAR THEN
+				BLOCK handRailWidthR,handRailWidthR, hrr-SimpleBarDiff+2*roffr*TAN(SlabAlfa)
+			endif
+		ENDIF
+	DEL 1
+
+	lraSimple=lx-roffr-depthTreadIn
+	lraComplex=lx-roffr-depthTreadIn
+	additionXComplex=0
+	additionZComplex=0
+	hrovL=depthTreadIn/2
+	hrovR=depthTreadIn/2
+	postNumber = npr
+	side = SIDE_RIGHT
+	gosub "callRailsForStair"
+
+	DEL 5
+ENDIF
+DEL 1
+
+DEL TOP
+END
+
+! ==============================================================================
+"callRailsForStair":
+! ------------------------------------------------------------------------------
+!	lraSimple
+!	lraComplex
+!	additionXComplex
+!	additionZComplex
+!	hrovL: rail overhang start
+!	hrovR: rail overhang end
+!	postNumber:   number of posts
+!	side: SIDE_LEFT or SIDE_RIGHT
+! ==============================================================================
+	ani = ang
+	additionXComplex = additionXComplex
+	additionZComplex = additionZComplex
+	gosub "callRails"
+return
+
+! ==============================================================================
+"callRails":
+! ------------------------------------------------------------------------------
+!	ani
+!	additionXComplex
+!	additionZComplex
+!	dsComplex
+!  ------------------
+!	side: SIDE_LEFT or SIDE_RIGHT
+!	lraSimple
+!	lraComplex
+!	hrovL: rail overhang start
+!	hrovR: rail overhang end
+!	postNumber:   number of posts
+! ==============================================================================
+	if side = SIDE_LEFT then
+		railBarDepth	= bwl
+		railBarDiam		= bdl
+		railHeight		= hrl
+		railBarThk		= fthl
+		railBarType		= btypl_m
+		railFrameThk	= fthl
+		railDist		= dsl
+		railType_m		= leftRailType_m
+		railPostDiam	= pdl
+		railPostWidth	= pwl
+		railPostThk		= pthl
+		railPostType	= ptl_m
+		barNumber		= nbl
+		iBalusterStyle	= btl_m
+		railFramesWSide	= fswl
+		railFramesWTop	= ftwl
+		railFramesWBot	= fbwl
+		railBarHeight	= bhl
+		railBarFillThk	= bthl
+		balusterDist	= abdistl
+		railFrameMat	= fmatl
+		railBaluFillMat	= bmatl
+		railPostMat		= pmatl
+		balusterNumber	= nbtl
+		railFillDist	= fdfl
+!!!		railPostBaseType= gs_PostBaseTypeL_m
+		railDistFromHr	= sbhl
+!!!		railPostBaseOv	= gs_PostBaseOverhangL
+		handRailType	= hrtl_m
+		handRailWidth	= hrwl
+		handRailDiam	= hrdl
+		handRailHeight	= hrhl
+	else
+		railBarDepth	= bwr
+		railBarDiam		= bdr
+		railHeight		= hrr
+		railBarThk		= fthr
+		railBarType		= btypr_m
+		railFrameThk	= fthr
+		railDist		= dsr
+		railType_m		= rightRailType_m
+		railPostDiam	= pdr
+		railPostWidth	= pwr
+		railPostThk		= pthr
+		railPostType	= ptr_m
+		barNumber		= nbr
+		iBalusterStyle	= btr_m
+		railFramesWSide	= fswr
+		railFramesWTop	= ftwr
+		railFramesWBot	= fbwr
+		railBarHeight	= bhr
+		railBarFillThk	= bthr
+		balusterDist	= abdistr
+		railFrameMat	= fmatr
+		railBaluFillMat	= bmatr
+		railPostMat		= pmatr
+		balusterNumber	= nbtr
+		railFillDist	= fdfr
+!!!		railPostBaseType= gs_PostBaseTypeR_m
+		railDistFromHr	= sbhr
+!!!		railPostBaseOv	= gs_PostBaseOverhangR
+		handRailType	= hrtr_m
+		handRailWidth	= hrwr
+		handRailDiam	= hrdr
+		handRailHeight	= hrhr
+	endif
+
+	call "stairRails_m" parameters	railType_m				= railType_m,
+									iStairType				= 2,
+									bEnableWired02Rail		= 0,
+									bEnableNonVerticalRail	= 0,
+									additionXComplex		= additionXComplex,
+									additionZComplex		= additionZComplex,
+									ptyp_m					= 1,
+									ani						= ani,
+									ab						= 0,
+									rb						= 0,
+									rom_m					= 1,
+									rmm_m					= 1,
+									lraSimple				= lraSimple,
+									lraComplex				= lraComplex,
+									railHeight				= railHeight,
+									railDist				= railDist,
+									gs_detlevel_3D_m		= gs_detlevel_3D_m,
+									gs_cont_pen				= gs_cont_pen,
+									res						= res,
+									rescs					= rescs,
+									gs_shadow				= gs_shadow,
+									railFrameThk			= railFrameThk,
+									railFramesWSide			= railFramesWSide,
+									railFramesWTop			= railFramesWTop,
+									railFramesWBot			= railFramesWBot,
+									railBarType				= railBarType,
+									railBarDepth			= railBarDepth,
+									railBarFillThk			= railBarFillThk,
+									railBarDiam				= railBarDiam,
+									balusterDist			= balusterDist,
+									railFrameMat			= railFrameMat,
+									railBaluFillMat			= railBaluFillMat,
+									barNumber				= barNumber,
+									railBarHeight			= railBarHeight,
+									railFillDist			= railFillDist,
+									handRailType			= handRailType,
+									handRailDiam			= handRailDiam,
+									handRailWidth			= handRailWidth,
+									handRailHeight			= handRailHeight,
+									hrovL					= hrovL,
+									hrovR					= hrovR,
+									iBalusterStyle			= iBalusterStyle,
+									railPostDiam			= railPostDiam,
+									railPostWidth			= railPostWidth,
+									railPostThk				= railPostThk,
+									railPostType			= railPostType,
+									postNumber				= postNumber,
+									railPostMat				= railPostMat,
+									iParamInputType			= 1,
+									balusterNumber			= balusterNumber,
+!!!									railPostBaseType		= railPostBaseType,
+!!!									railPostBaseOv			= railPostBaseOv,
+									railDistFromHr			= railDistFromHr
+return
+

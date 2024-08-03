@@ -1,0 +1,226 @@
+!-----------3d---------------------
+if show_el < EPS then end
+if GLOB_VIEW_TYPE=2 then gs_detlevel_3D_m = gs_detlevel_2D_m
+IF gs_detlevel_3D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+
+PEN gs_cont_pen
+RESOL res
+
+gs_PipeMat = sMat
+IF rot_conn THEN
+
+	IF rot_conn = 1 THEN
+		dist_x = gs_Connections[3][1]+gs_Connections[3][23]*gs_Connections[3][4]
+		dist_y = gs_Connections[3][2]
+	ELSE
+		DIM inCoords[20][3]
+		DIM outCoords[20][3]
+
+		DIM cMatrix[3][3]
+
+		cMatrix[1][1] = gs_Connections[rot_conn][4]
+		cMatrix[1][2] = gs_Connections[rot_conn][5]
+		cMatrix[1][3] = gs_Connections[rot_conn][6]
+
+		cMatrix[2][1] = gs_Connections[rot_conn][7]
+		cMatrix[2][2] = gs_Connections[rot_conn][8]
+		cMatrix[2][3] = gs_Connections[rot_conn][9]
+
+		cMatrix[3][1] = -cMatrix[2][2]*cMatrix[1][3]+cMatrix[2][3]*cMatrix[1][2]
+		cMatrix[3][2] = -cMatrix[2][3]*cMatrix[1][1]+cMatrix[2][1]*cMatrix[1][3]
+		cMatrix[3][3] = -cMatrix[2][1]*cMatrix[1][2]+cMatrix[2][2]*cMatrix[1][1]
+
+
+		DIM tMatrix[3][3]
+
+		tMatrix[1][1] = cMatrix[1][1]
+		tMatrix[1][2] = cMatrix[2][1]
+		tMatrix[1][3] = cMatrix[3][1]
+
+		tMatrix[2][1] = cMatrix[1][2]
+		tMatrix[2][2] = cMatrix[2][2]
+		tMatrix[2][3] = cMatrix[3][2]
+
+		tMatrix[3][1] = cMatrix[1][3]
+		tMatrix[3][2] = cMatrix[2][3]
+		tMatrix[3][3] = cMatrix[3][3]
+
+
+								!!! +++ Input Coordinates +++ !!!
+
+		cx = gs_Connections[rot_conn][1]+gs_Connections[rot_conn][23]*gs_Connections[rot_conn][4]
+		cy = gs_Connections[rot_conn][2]+gs_Connections[rot_conn][23]*gs_Connections[rot_conn][5]
+		cz = gs_Connections[rot_conn][3]+gs_Connections[rot_conn][23]*gs_Connections[rot_conn][6]
+
+		PUT cx, cy, cz
+
+		Coordinates = NSP/3
+
+		FOR cnum = 1 TO Coordinates
+			inCoords[cnum][1] = GET(1)
+			inCoords[cnum][2] = GET(1)
+			inCoords[cnum][3] = GET(1)
+		NEXT cnum
+
+
+		! --- the Matrix Operation, what make the Output-Coordinates
+
+		FOR cnum = 1 TO Coordinates
+			outCoords[cnum][1] = inCoords[cnum][1]*tMatrix[1][1]+inCoords[cnum][2]*tMatrix[2][1]+inCoords[cnum][3]*tMatrix[3][1]
+			outCoords[cnum][2] = inCoords[cnum][1]*tMatrix[1][2]+inCoords[cnum][2]*tMatrix[2][2]+inCoords[cnum][3]*tMatrix[3][2]
+			outCoords[cnum][3] = inCoords[cnum][1]*tMatrix[1][3]+inCoords[cnum][2]*tMatrix[2][3]+inCoords[cnum][3]*tMatrix[3][3]
+		NEXT cnum
+
+		dist_x = outCoords[1][1]
+		dist_y = outCoords[1][2]
+	ENDIF
+
+	CALL "MEP_m_object_rotator" PARAMETERS 	rot_conn = rot_conn,
+											MEP_Position = MEP_Position,
+											dist_x = dist_x,
+											dist_y = dist_y,
+											Rotation = Rotation,
+											symbRotangle = SYMB_ROTANGLE,
+											gs_Connections = gs_Connections,
+											MEP_NumberConnections = MEP_NumberConnections,
+											MEP_NumConnectionData = MEP_NumConnectionData,
+											MEP_NumConnectedConnectionData = MEP_NumConnectedConnectionData,
+											defaultMatrix = defaultMatrix
+ENDIF
+
+IF pipe_show and not(show_axis)  THEN				! -----> duct+connection <----- !
+
+	CALL "MEP_m_Pipe_4" PARAMETERS 	MEP_Position = MEP_Position,
+									gs_Connections = gs_Connections,
+									MEP_NumberConnections = MEP_NumberConnections,
+									MEP_NumConnectionData = MEP_NumConnectionData,
+									MEP_StrConnectionData = MEP_StrConnectionData,
+									MEP_StraightLength = MEP_StraightLength,
+									gs_AddConnections = gs_AddConnections,
+									pipe_show = 1,
+									showHtps = 1,
+									useSysMat = useSysMat,
+									sMat = sMat,
+									gs_PipeMat = gs_PipeMat,
+									MEP_InsShow = 0,
+									MEP_cline_show_3D = 0,
+									gs_detlevel_3D_m = gs_detlevel_3D_m,
+									gs_cont_pen = gs_cont_pen, mep_con = mep_con, mep_data = mep_data, calledparam = 1
+
+	XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+			MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+			MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+	HOTSPOT MEP_StraightLength/2, 0, 0, 10000
+
+	ROTy 90
+	CUTPOLYA 2, 2, 0,
+		0, 0, 913,
+		MEP_NumConnectionData[1][12]/2, 360, 4013
+	DEL 1
+
+	IF ABS(gs_Connections[3][12] - gs_Connections[3][15]) < EPS THEN gs_Connections[3][15] = gs_Connections[3][15] + EPS/10
+
+	CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+			MEP_NumberConnections = MEP_NumberConnections,
+			MEP_NumConnectionData = gs_Connections,
+			gs_AddConnections = gs_AddConnections,
+			cShow3D = 1,
+			gs_ConMat = gs_PipeMat,
+			MEP_InsShow = 0,
+			MEP_cline_show_3D = 0,
+			gs_cont_pen = gs_cont_pen,
+			ConLength_1=0, ConShow_1 = 0, ConHotspotShow_1 = 0,
+			ConLength_2=0, ConShow_2 = 0, ConHotspotShow_2 = 0,
+			ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConEdit_3 = 1, MEP_StrConnectionData = MEP_StrConnectionData, mep_con = mep_con, mep_data = mep_data
+
+	CUTEND
+
+	DEL 1
+ENDIF
+
+
+IF show_axis_and or show_axis THEN			! -----> center line <----- !
+	CALL "MEP_m_Pipe_4" PARAMETERS 	MEP_Position = MEP_Position,
+									MEP_NumberConnections = MEP_NumberConnections,
+									MEP_NumConnectionData = MEP_NumConnectionData,
+									MEP_StrConnectionData = MEP_StrConnectionData,
+									MEP_StraightLength = MEP_StraightLength,
+									gs_AddConnections = gs_AddConnections,
+									pipe_show = 0,
+									MEP_InsShow = 0,
+									MEP_cline_show_3D = 1,
+									gs_cont_pen = gs_cont_pen, mep_con = mep_con, mep_data = mep_data, calledparam = 1
+
+	XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+			MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+			MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+	CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+			MEP_NumberConnections = MEP_NumberConnections,
+			MEP_NumConnectionData = gs_Connections,
+			gs_AddConnections = gs_AddConnections,
+			cShow3D = 0,
+			gs_ConMat = gs_PipeMat,
+			MEP_InsShow = 0,
+			MEP_cline_show_3D = 1,
+			gs_cont_pen = gs_cont_pen,
+			ConShow_1 = 0,
+			ConShow_2 = 0,
+			ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConEdit_3 = 0, MEP_StrConnectionData = MEP_StrConnectionData, mep_con = mep_con, mep_data = mep_data
+
+	DEL 1
+ENDIF
+
+
+IF (MEP_InsShow and show_isol and not(show_axis)) THEN				! -----> insulation <----- !
+	CALL "MEP_m_Pipe_4" PARAMETERS 	MEP_Position = MEP_Position,
+									gs_Connections = gs_Connections,
+									MEP_NumberConnections = MEP_NumberConnections,
+									MEP_NumConnectionData = MEP_NumConnectionData,
+									MEP_StrConnectionData = MEP_StrConnectionData,
+									MEP_StraightLength = MEP_StraightLength,
+									gs_AddConnections = gs_AddConnections,
+									Pipe_show = 0,
+									MEP_InsShow = 1,
+									MEP_InsThickness = MEP_InsThickness,
+									useSysMat = useSysMat,
+									sMat = sMat,
+									gs_InsMat = gs_InsMat,
+									MEP_cline_show_3D = 0,
+									gs_detlevel_3D_m = gs_detlevel_3D_m,
+									gs_cont_pen = gs_cont_pen, mep_con = mep_con, mep_data = mep_data, calledparam = 1
+
+	XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+			MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+			MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+	ROTy 90
+	CUTPOLYA 2, 2, 0,
+		0, 0, 913,
+		MEP_NumConnectionData[1][12]/2+MEP_InsThickness, 360, 4013
+	DEL 1
+
+
+	CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+			MEP_NumberConnections = MEP_NumberConnections,
+			MEP_NumConnectionData = gs_Connections,
+			gs_AddConnections = gs_AddConnections,
+			cShow3D = 0,
+			MEP_InsShow = 1,
+			MEP_InsThickness = MEP_InsThickness,
+			gs_InsMat = gs_InsMat,
+			MEP_cline_show_3D = 0,
+			gs_cont_pen = gs_cont_pen,
+			ConShow_1 = 0,
+			ConShow_2 = 0,
+			ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConEdit_3 = 1, MEP_StrConnectionData = MEP_StrConnectionData, mep_con = mep_con, mep_data = mep_data
+
+	CUTEND
+
+	DEL 1
+ENDIF
+
+
+END

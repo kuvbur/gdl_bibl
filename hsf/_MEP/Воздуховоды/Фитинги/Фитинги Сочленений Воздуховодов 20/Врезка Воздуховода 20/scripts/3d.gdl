@@ -1,0 +1,506 @@
+!-----------3d---------------------
+if show_el < EPS then end
+if GLOB_VIEW_TYPE=2 then gs_detlevel_3D_m = gs_detlevel_2D_m
+if hide_conventions and show_conventions THEN END
+IF gs_detlevel_3D_m < EPS THEN END
+if GLOB_PREVIEW_MODE = 0 and GLOB_FEEDBACK_MODE = 0 then CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+gs_DuctMat = sMat
+duct_show = duct_show*not(show_axis)
+
+PEN gs_cont_pen
+RESOL res
+
+!IF useSysMat AND MEP_StrConnectionData[1][2] <> "0" THEN
+!	gs_DuctMat = sMat
+!!	gs_InsMat = sMat
+!ENDIF
+MATERIAL gs_DuctMat
+
+DIM MEP_InclinedPartPosition[][]
+
+MEP_InclinedPartPosition[1][1] = 0
+MEP_InclinedPartPosition[1][2] = 0
+MEP_InclinedPartPosition[1][3] = 0
+
+MEP_InclinedPartPosition[2][1] = 1
+MEP_InclinedPartPosition[2][2] = 0
+MEP_InclinedPartPosition[2][3] = 0
+
+MEP_InclinedPartPosition[3][1] = 0
+MEP_InclinedPartPosition[3][2] = 1
+MEP_InclinedPartPosition[3][3] = 0
+
+unID = 1
+HOTSPOT 0, 0, 0, unID: unID=unID+1
+IF ABS(MEP_NumConnectionData[1][18]) < EPS AND ABS(MEP_NumConnectionData[2][18] - 1) < EPS THEN
+
+		! ****** rotation ****** !
+
+	XFORM   defaultMatrix[1][1], defaultMatrix[2][1], defaultMatrix[3][1], MEP_Position[1][1],
+			defaultMatrix[1][2], defaultMatrix[2][2], defaultMatrix[3][2], MEP_Position[1][2],
+			defaultMatrix[1][3], defaultMatrix[2][3], defaultMatrix[3][3], MEP_Position[1][3]
+
+	dist_y = ConPosY_1+ConLength_1/2
+
+	HOTSPOT 0, 0, 0, unID, Rotation, 6: unID=unID+1
+	HOTSPOT 0, dist_y, 0, unID, Rotation, 4+128: unID=unID+1
+	HOTSPOT 0, dist_y*COS(Rotation), dist_y*SIN(Rotation), unID, Rotation, 5: unID=unID+1
+	HOTSPOT 1, 0, 0, unID, Rotation, 7: unID=unID+1
+
+	DEL 1
+ENDIF
+
+IF arched AND ABS(MEP_TakeoffTypeID - 1) < EPS THEN
+	IF ABS(MEP_NumConnectionData[1][21] - 2) < EPS THEN
+		Take_off_Size = MEP_NumConnectionData[1][12]+MEP_NumConnectionData[1][14]*2
+		Take_off_Size_WInsThk = MEP_NumConnectionData[1][12]+MEP_NumConnectionData[1][14]*2+MEP_InsThickness
+		addPart = take_off_most_size_wo_wthk - MEP_NumConnectionData[1][12]/2
+	ELSE
+		Take_off_Size = MEP_NumConnectionData[1][13]+MEP_NumConnectionData[1][14]*2
+		Take_off_Size_WInsThk = MEP_NumConnectionData[1][12]+MEP_NumConnectionData[1][14]*2+MEP_InsThickness
+		addPart = take_off_most_size_wo_wthk - MEP_NumConnectionData[1][13]/2
+	ENDIF
+	
+	det = duct_radius^2-(Take_off_Size/2)^2
+	if det>EPS then
+		squareValue = SQR(det)
+		IF squareValue < EPS THEN
+			move_back = duct_radius
+		ELSE
+			move_back = duct_radius-SQR(squareValue)
+		ENDIF
+	else
+		move_back = duct_radius
+	endif
+
+	squareValue = duct_radius_WInsThk^2-(Take_off_Size_WInsThk/2)^2
+	IF squareValue < EPS THEN
+		move_back_WInsThk = duct_radius_WInsThk
+	ELSE
+		move_back_WInsThk = duct_radius_WInsThk-SQR(squareValue)
+	ENDIF
+ENDIF
+
+offset_y = 0
+IF ABS(MEP_TakeoffTypeID - 2) < EPS THEN offset_y = -InclPartLength/2-(addWidthIn3D/2)*arched
+
+XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+		MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+		MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+
+IF ABS(MEP_NumConnectionData[1][18]) < EPS AND ABS(MEP_NumConnectionData[2][18]) > EPS AND ABS(DuctShapeType - 1) < EPS THEN
+	IF ABS(MEP_NumConnectionData[1][21] - 2) < EPS THEN
+		Take_off_Half_Size = MEP_NumConnectionData[1][12]/2+MEP_NumConnectionData[1][14]
+	ELSE
+		Take_off_Half_Size = MEP_NumConnectionData[1][13]/2+MEP_NumConnectionData[1][14]
+	ENDIF
+	IF ABS(MEP_TakeoffTypeID - 1) < EPS AND InclPartLength > EPS THEN Take_off_Half_Size = Take_off_Half_Size + InclPartLength
+
+	IF reverse THEN
+		limit_1 = DuctWidth/2+DuctWallThickness-Take_off_Half_Size
+	ELSE
+		limit_1 = DuctDepth/2+DuctWallThickness-Take_off_Half_Size
+	ENDIF
+
+	IF limit_1 > 0 THEN
+		HOTSPOT ConPosX_1, ConPosY_1, ConPosZ_1+Take_off_Half_Size, unID, TakeoffPos, 1+128: unID=unID+1
+		HOTSPOT ConPosX_1, ConPosY_1, ConPosZ_1+Take_off_Half_Size-1, unID, TakeoffPos, 3: unID=unID+1
+		HOTSPOT ConPosX_1, ConPosY_1, ConPosZ_1+Take_off_Half_Size+TakeoffPos, unID, TakeoffPos, 2: unID=unID+1
+
+		HOTSPOT ConPosX_1, ConPosY_1, ConPosZ_1-Take_off_Half_Size, unID, TakeoffPos, 1+128: unID=unID+1
+		HOTSPOT ConPosX_1, ConPosY_1, ConPosZ_1-Take_off_Half_Size-1, unID, TakeoffPos, 3: unID=unID+1
+		HOTSPOT ConPosX_1, ConPosY_1, ConPosZ_1-Take_off_Half_Size+TakeoffPos, unID, TakeoffPos, 2: unID=unID+1
+	ENDIF
+ENDIF
+
+ADDz TakeoffPos
+
+IF duct_show and not(show_axis) THEN				! -----> duct+connection <----- !
+
+	IF ABS(DuctShapeType-1) < EPS THEN
+
+		IF reverse THEN
+			halfWidth = DuctDepth/2+DuctWallThickness
+			halfDepth = DuctWidth/2+DuctWallThickness
+		ELSE
+			halfWidth = DuctWidth/2+DuctWallThickness
+			halfDepth = DuctDepth/2+DuctWallThickness
+		ENDIF
+
+		ROTy 90
+		mm = 15
+!!		IF ABS(MEP_NumConnectionData[1][21]-1) < EPS THEN mm = 8
+
+		CUTPOLYA 4, 2, 0,
+			halfDepth, halfWidth, mm,
+			halfDepth, -halfWidth, mm,
+			-halfDepth, -halfWidth, mm,
+			-halfDepth, halfWidth, mm
+		DEL 1
+		cc = 1
+	ENDIF
+
+	IF ABS(DuctShapeType-2) < EPS THEN
+		ROTy 90
+
+!!ADDZ -0.5
+!!PRISM_ 2, 1,
+!!	0, 0, 915,
+!!	DuctWidth/2+DuctWallThickness, 360, 4015
+!!DEL 1
+
+		CUTPOLYA 2, 2, 0,
+			0, 0, 913,
+			DuctWidth/2+DuctWallThickness, 360, 4013
+		DEL 1
+		cc = 1
+	ENDIF
+
+	IF ABS(DuctShapeType-3) < EPS THEN
+		IF reverse THEN
+			halfWidth = DuctDepth/2+DuctWallThickness
+			halfDepth = DuctWidth/2+DuctWallThickness
+		ELSE
+			halfWidth = DuctWidth/2+DuctWallThickness
+			halfDepth = DuctDepth/2+DuctWallThickness
+		ENDIF
+
+		ROTy 90
+		IF ABS(halfWidth-halfDepth) < EPS THEN
+
+!!ADDZ -0.5
+!!PRISM_ 2, 1,
+!!	0, 0, 915,
+!!	DuctWidth/2+DuctWallThickness, 360, 4015
+!!DEL 1
+
+			CUTPOLYA 2, 2, 0,
+				0, 0, 913,
+				DuctWidth/2+DuctWallThickness, 360, 4013
+		ENDIF
+
+		IF halfWidth > halfDepth THEN
+
+!!ADDZ -0.5
+!!PRISM_ 5, 1,
+!!	halfDepth, halfWidth-halfDepth, 15,
+!!	halfDepth, -halfWidth+halfDepth, 15,
+!!	-halfDepth, -halfWidth+halfDepth, 1015,
+!!	-halfDepth, halfWidth-halfDepth, 15,
+!!	halfDepth, halfWidth-halfDepth, 1015
+!!DEL 1
+
+			CUTPOLYA 5, 2, 0,
+				halfDepth, halfWidth-halfDepth, 13,
+				halfDepth, -halfWidth+halfDepth, 13,
+				-halfDepth, -halfWidth+halfDepth, 1013,
+				-halfDepth, halfWidth-halfDepth, 13,
+				halfDepth, halfWidth-halfDepth, 1013
+		ENDIF
+
+		IF halfWidth < halfDepth THEN
+			rr = halfWidth
+
+!!ADDZ -0.5
+!!PRISM_ 5, 1,
+!!	halfDepth-halfWidth, halfWidth, 15,
+!!	-halfDepth+halfWidth, halfWidth, 15,
+!!	-halfDepth+halfWidth, -halfWidth, 1015,
+!!	halfDepth-halfWidth, -halfWidth, 15,
+!!	halfDepth-halfWidth, halfWidth, 1015
+!!DEL 1
+
+			CUTPOLYA 5, 2, 0,
+				halfDepth-halfWidth, halfWidth, 13,
+				-halfDepth+halfWidth, halfWidth, 13,
+				-halfDepth+halfWidth, -halfWidth, 1013,
+				halfDepth-halfWidth, -halfWidth, 13,
+				halfDepth-halfWidth, halfWidth, 1013
+		ENDIF
+		DEL 1
+		cc = 1
+	ENDIF
+
+	dd = 0
+	IF InclPartLength THEN
+		dd = 1
+		ADD ConPosX_1, ConPosY_1+InclPartLength-move_back, ConPosZ_1
+		CUTPLANE 90
+		DEL 1
+	ENDIF
+
+	CALL "MEP_m_ConnectionsMEP_4" PARAMETERS ALL SetProgram = SetProgram,
+			MEP_NumberConnections = MEP_NumberConnections,
+			MEP_NumConnectionData = gs_Connections,
+			gs_AddConnections = gs_AddConnections,
+			cShow3D = 1,
+			gs_ConMat = gs_DuctMat,
+			MEP_InsShow = 0,
+			MEP_cline_show_3D = 0,
+			gs_cont_pen = gs_cont_pen,
+			ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 1, MEP_StrConnectionData = MEP_StrConnectionData
+
+	IF dd THEN CUTEND
+
+	InclPartLength_temp = 0
+	IF InclPartLength THEN
+		InclPartLength_temp = InclPartLength
+
+		DIM NumInclinedPartData[2][25]
+
+		NumInclinedPartData[1][14] = MEP_NumConnectionData[2][14]
+		NumInclinedPartData[1][15] = 0
+		NumInclinedPartData[1][21] = MEP_NumConnectionData[2][21]
+
+		NumInclinedPartData[2][12] = MEP_NumConnectionData[1][12]
+		NumInclinedPartData[2][13] = MEP_NumConnectionData[1][13]
+		NumInclinedPartData[2][14] = MEP_NumConnectionData[1][14]
+		NumInclinedPartData[2][15] = 0
+		NumInclinedPartData[2][21] = MEP_NumConnectionData[1][21]
+
+		IF ABS(MEP_TakeoffTypeID - 1) < EPS THEN
+			IF arched THEN
+				NumInclinedPartData[1][12] = MEP_NumConnectionData[2][12]+addPart
+				NumInclinedPartData[1][13] = MEP_NumConnectionData[2][13]+addPart
+
+				XFORM	0, 1, 0, ConPosX_1,
+						1, 0, 0, ConPosY_1-move_back-(take_off_most_size - Take_off_Size/2 - InclPartLength),
+						0, 0, -1, ConPosZ_1
+
+				InclPartLength = take_off_most_size - Take_off_Size/2
+			ELSE
+				NumInclinedPartData[1][12] = MEP_NumConnectionData[2][12]
+				IF ABS(MEP_NumConnectionData[1][21] - 2) < EPS THEN
+					NumInclinedPartData[1][13] = MEP_NumConnectionData[1][12]
+				ELSE
+					NumInclinedPartData[1][13] = MEP_NumConnectionData[2][13]
+				ENDIF
+
+				XFORM	0, 1, 0, ConPosX_1,
+						1, 0, 0, ConPosY_1,
+						0, 0, -1, ConPosZ_1
+			ENDIF
+		ELSE
+			NumInclinedPartData[1][12] = MEP_NumConnectionData[2][12]+addWidthIn3D*arched
+			IF ABS(MEP_NumConnectionData[1][21] - 2) < EPS THEN
+				NumInclinedPartData[1][13] = MEP_NumConnectionData[1][12]
+			ELSE
+				NumInclinedPartData[1][13] = MEP_NumConnectionData[2][13]
+			ENDIF
+
+			XFORM	0, 1, 0, ConPosX_1-offset_y,
+					1, 0, 0, ConPosY_1-addWidthIn3D*arched,
+					0, 0, -1, ConPosZ_1
+
+			InclPartLength = InclPartLength+addWidthIn3D*arched
+		ENDIF
+
+		CALL "MEP_m_Duct_4" PARAMETERS ALL gs_detlevel_3D_m = gs_detlevel_3D_m,
+										MEP_Position = MEP_InclinedPartPosition,
+										MEP_StraightLength = InclPartLength,
+										MEP_offset_y = offset_y,
+										MEP_InsShow = 0,
+										MEP_StatusLine = 0,
+										gs_cont_pen = gs_cont_pen,
+										duct_show = 1,
+										MEP_cline_show_3D = MEP_cline_show_3D,
+										gs_DuctMat = gs_DuctMat,
+										gs_InsMat = gs_InsMat,
+										editable = 0,
+										nonEditHtps = 0,
+										MEP_NumberConnections = 2,
+										MEP_NumConnectionData = NumInclinedPartData
+		DEL 1
+	ENDIF
+
+	IF cc THEN CUTEND
+
+	InclPartLength = InclPartLength_temp
+	IF NeedHtpstoInclPartLength THEN
+		HOTSPOT ConPosX_1, ConPosY_1, ConPosZ_1, unID, InclPartLength, 1: unID=unID+1
+		HOTSPOT ConPosX_1, ConPosY_1-1, ConPosZ_1, unID, InclPartLength, 3: unID=unID+1
+		HOTSPOT ConPosX_1, ConPosY_1+InclPartLength, ConPosZ_1, unID, InclPartLength, 2: unID=unID+1
+	ENDIF
+ENDIF
+
+IF show_axis_and or show_axis THEN			! -----> center line <----- !
+	CALL "MEP_m_ConnectionsMEP_4" PARAMETERS ALL SetProgram = SetProgram,
+			MEP_NumberConnections = MEP_NumberConnections,
+			MEP_NumConnectionData = gs_Connections,
+			gs_AddConnections = gs_AddConnections,
+			cShow3D = 0,
+			gs_ConMat = gs_DuctMat,
+			MEP_InsShow = 0,
+			MEP_cline_show_3D = 1,
+			gs_cont_pen = gs_cont_pen,
+			ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 0, MEP_StrConnectionData = MEP_StrConnectionData
+ENDIF
+
+
+cc = 0: dd = 0
+IF (MEP_InsShow and show_isol and not(show_axis)) THEN				! -----> insulation <----- !
+	IF ABS(DuctShapeType-1) < EPS THEN
+		IF reverse THEN
+			halfWidth = DuctDepth/2+DuctWallThickness+MEP_InsThickness
+			halfDepth = DuctWidth/2+DuctWallThickness+MEP_InsThickness
+		ELSE
+			halfWidth = DuctWidth/2+DuctWallThickness+MEP_InsThickness
+			halfDepth = DuctDepth/2+DuctWallThickness+MEP_InsThickness
+		ENDIF
+
+		ROTy 90
+		mm = 15
+!!		IF ABS(MEP_NumConnectionData[1][21]-1) < EPS THEN mm = 8
+
+		CUTPOLYA 4, 2, 0,
+			halfDepth, halfWidth, mm,
+			halfDepth, -halfWidth, mm,
+			-halfDepth, -halfWidth, mm,
+			-halfDepth, halfWidth, mm
+		DEL 1
+		cc = 1
+	ENDIF
+
+	IF ABS(DuctShapeType-2) < EPS THEN
+		ROTy 90
+		CUTPOLYA 2, 2, 0,
+			0, 0, 913,
+			DuctWidth/2+DuctWallThickness+MEP_InsThickness, 360, 4013
+		DEL 1
+		cc = 1
+	ENDIF
+
+	IF ABS(DuctShapeType-3) < EPS THEN
+		IF reverse THEN
+			halfWidth = DuctDepth/2+DuctWallThickness+MEP_InsThickness
+			halfDepth = DuctWidth/2+DuctWallThickness+MEP_InsThickness
+		ELSE
+			halfWidth = DuctWidth/2+DuctWallThickness+MEP_InsThickness
+			halfDepth = DuctDepth/2+DuctWallThickness+MEP_InsThickness
+		ENDIF
+
+		ROTy 90
+		IF ABS(halfWidth-halfDepth) < EPS THEN
+			CUTPOLYA 2, 2, 0,
+			0, 0, 913,
+			DuctWidth/2+DuctWallThickness, 360, 4013
+		ENDIF
+
+		IF halfWidth > halfDepth THEN
+			CUTPOLYA 5, 2, 0,
+				halfDepth, halfWidth-halfDepth, 13,
+				halfDepth, -halfWidth+halfDepth, 13,
+				-halfDepth, -halfWidth+halfDepth, 1013,
+				-halfDepth, halfWidth-halfDepth, 13,
+				halfDepth, halfWidth-halfDepth, 1013
+		ENDIF
+
+		IF halfWidth < halfDepth THEN
+			rr = halfWidth
+			CUTPOLYA 5, 2, 0,
+				halfDepth-halfWidth, halfWidth, 13,
+				-halfDepth+halfWidth, halfWidth, 13,
+				-halfDepth+halfWidth, -halfWidth, 1013,
+				halfDepth-halfWidth, -halfWidth, 13,
+				halfDepth-halfWidth, halfWidth, 1013
+		ENDIF
+		DEL 1
+		cc = 1
+	ENDIF
+
+	IF InclPartLength THEN
+		dd = 1
+		ADD ConPosX_1, ConPosY_1+InclPartLength-move_back_WInsThk+MEP_InsThickness, ConPosZ_1
+		CUTPLANE 90
+		DEL 1
+	ENDIF
+
+	CALL "MEP_m_ConnectionsMEP_4" PARAMETERS ALL SetProgram = SetProgram,
+			MEP_NumberConnections = MEP_NumberConnections,
+			MEP_NumConnectionData = gs_Connections,
+			gs_AddConnections = gs_AddConnections,
+			cShow3D = 0,
+			MEP_InsShow = 1,
+			MEP_InsThickness = MEP_InsThickness,
+			gs_InsMat = gs_InsMat,
+			MEP_cline_show_3D = 0,
+			gs_cont_pen = gs_cont_pen,
+			ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 1, MEP_StrConnectionData = MEP_StrConnectionData
+
+	IF dd THEN CUTEND
+
+	IF InclPartLength THEN
+		DIM NumInclinedPartData[2][25]
+
+		NumInclinedPartData[1][14] = MEP_NumConnectionData[2][14]
+		NumInclinedPartData[1][15] = 0
+		NumInclinedPartData[1][21] = MEP_NumConnectionData[2][21]
+
+		NumInclinedPartData[2][12] = MEP_NumConnectionData[1][12]
+		NumInclinedPartData[2][13] = MEP_NumConnectionData[1][13]
+		NumInclinedPartData[2][14] = MEP_NumConnectionData[1][14]
+		NumInclinedPartData[2][15] = 0
+		NumInclinedPartData[2][21] = MEP_NumConnectionData[1][21]
+
+		IF ABS(MEP_TakeoffTypeID - 1) < EPS THEN
+			IF arched THEN
+				NumInclinedPartData[1][12] = MEP_NumConnectionData[2][12]+addPart
+				NumInclinedPartData[1][13] = MEP_NumConnectionData[2][13]+addPart
+
+				XFORM	0, 1, 0, ConPosX_1,
+						1, 0, 0, ConPosY_1+MEP_InsThickness-move_back_WInsThk-(take_off_most_size_WInsThk - Take_off_Size_WInsThk/2 - InclPartLength),
+						0, 0, -1, ConPosZ_1
+
+				InclPartLength = take_off_most_size_WInsThk - Take_off_Size_WInsThk/2
+			ELSE
+				NumInclinedPartData[1][12] = MEP_NumConnectionData[2][12]
+				IF ABS(MEP_NumConnectionData[1][21] - 2) < EPS THEN
+					NumInclinedPartData[1][13] = MEP_NumConnectionData[1][12]
+				ELSE
+					NumInclinedPartData[1][13] = MEP_NumConnectionData[2][13]
+				ENDIF
+
+				XFORM	0, 1, 0, ConPosX_1,
+						1, 0, 0, ConPosY_1+MEP_InsThickness,
+						0, 0, -1, ConPosZ_1
+
+			ENDIF
+		ELSE
+			NumInclinedPartData[1][12] = MEP_NumConnectionData[2][12]+addWidthIn3D*arched
+			IF ABS(MEP_NumConnectionData[1][21] - 2) < EPS THEN
+				NumInclinedPartData[1][13] = MEP_NumConnectionData[1][12]
+			ELSE
+				NumInclinedPartData[1][13] = MEP_NumConnectionData[2][13]
+			ENDIF
+
+			XFORM	0, 1, 0, ConPosX_1-offset_y,
+					1, 0, 0, ConPosY_1+MEP_InsThickness-addWidthIn3D*arched,
+					0, 0, -1, ConPosZ_1
+
+			InclPartLength_temp = InclPartLength
+			InclPartLength = InclPartLength+addWidthIn3D*arched
+		ENDIF
+
+		CALL "MEP_m_Duct_4" PARAMETERS ALL gs_detlevel_3D = gs_detlevel_3D,
+										MEP_Position = MEP_InclinedPartPosition,
+										MEP_StraightLength = InclPartLength,
+										MEP_offset_y = offset_y,
+										MEP_InsShow = MEP_InsShow,
+										MEP_InsThickness = MEP_InsThickness,
+										MEP_StatusLine = 0,
+										gs_cont_pen = gs_cont_pen,
+										duct_show = 0,
+										MEP_cline_show_3D = 0,
+										gs_DuctMat = gs_DuctMat,
+										gs_InsMat = gs_InsMat,
+										editable = editable,
+										nonEditHtps = 0,
+										MEP_NumberConnections = 2,
+										MEP_NumConnectionData = NumInclinedPartData
+		DEL 1
+	ENDIF
+
+	IF cc THEN CUTEND
+ENDIF
+DEL 2

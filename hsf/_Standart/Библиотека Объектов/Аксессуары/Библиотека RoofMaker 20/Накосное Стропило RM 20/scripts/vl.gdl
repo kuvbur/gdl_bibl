@@ -1,0 +1,163 @@
+
+! =================================================================================
+! Rafter parameters set by the RoofMaker Add-on:
+! "rm_ProjectedLength"			Horizontal Projection
+! "rm_ProfileWidth"				Profile Width
+! "rm_ProfileHeight"			Profile Height
+! "rm_Height"					Relative Height of Ridge
+! "rm_bRafterVisible"			Rafter Visible in 2D
+! "rm_AxisLineType"				Axis Line Type
+! "rm_OverHang"					Eaves Overhang
+! "rm_EavesAngle"				Angle to Eaves
+! "rm_iRoofEdgeAngle"			Roof Edge Angle
+! "rm_JointWidth"				Thickness of Joining Element
+! "rm_TopJointAngle"			Angle to Joining Element
+! Parameters not by the RoofMaker Add-on:
+! "rm_TopJointAngle_1"
+! "rm_TopJointAngle_2"
+! =================================================================================
+
+
+! ==============================================================================
+! Profile
+! ==============================================================================
+values "rm_RoofEdgeAngle" stEdgeType
+values "rm_iRoofEdgeAngle" 1,2,3
+
+if GLOB_MODPAR_NAME = "rm_RoofEdgeAngle" then
+	rm_iRoofEdgeAngle = 1
+	for i = 2 to vardim1(stEdgeType)
+		if rm_RoofEdgeAngle = stEdgeType[i] then
+			rm_iRoofEdgeAngle = i
+			i = vardim1(stEdgeType)
+		endif
+	next i
+	parameters rm_iRoofEdgeAngle = rm_iRoofEdgeAngle
+else
+	rm_iRoofEdgeAngle = max(min(rm_iRoofEdgeAngle,vardim1(stEdgeType)),1)
+	parameters rm_RoofEdgeAngle = stEdgeType[rm_iRoofEdgeAngle]
+endif
+
+
+! ==============================================================================
+! Geometry
+! ==============================================================================
+values "profileWidthHalf"			range (0, )
+values "rm_ProfileHeight"			range (0,)
+values "rm_ProjectedLength"			range (0,)
+values "rm_EavesAngle"				range (0,)
+!values "structuralLength"			range (0,)
+values "rm_TopJointAngle"			range (0, 180)
+
+
+if rm_JointWidth < EPS then
+	rm_JointWidth = 0
+	parameters rm_JointWidth = rm_JointWidth
+endif
+
+if rm_ProfileWidth < EPS then
+	rm_ProfileWidth = 0.001
+	parameters rm_ProfileWidth = rm_ProfileWidth
+endif
+
+if GLOB_MODPAR_NAME = "profileWidthHalf" Then
+	rm_ProfileWidth = profileWidthHalf*2
+	parameters rm_ProfileWidth = rm_ProfileWidth
+else
+	profileWidthHalf = rm_ProfileWidth/2
+	parameters profileWidthHalf = profileWidthHalf
+endif
+
+if rm_Height < 0 then
+	rm_Height = 0
+	parameters rm_Height = rm_Height
+endif
+
+if rm_OverHang < EPS then
+	rm_OverHang = 0
+	parameters rm_OverHang = rm_OverHang
+endif
+
+if GLOB_MODPAR_NAME = "overhang" then
+	rm_OverHang = overhang*sin(rm_EavesAngle)
+	parameters rm_OverHang = rm_OverHang
+else
+	overhang = rm_OverHang/sin(rm_EavesAngle)
+	parameters overhang = overhang
+endif
+
+lock "overhang"
+
+
+if GLOB_MODPAR_NAME = "structuralLength" then
+	rm_ProjectedLength	= structuralLength*cos(_pitchAngle)
+	rm_Height			= structuralLength*sin(_pitchAngle)
+	rm_StructuralLength	= structuralLength + _strutLengthPlus + overhangStrutSize - _topJointH
+	parameters rm_ProjectedLength = rm_ProjectedLength, rm_Height = rm_Height, rm_StructuralLength = rm_StructuralLength
+else
+	if GLOB_MODPAR_NAME = "rm_StructuralLength" then
+		structuralLength	= rm_structuralLength - _strutLengthPlus - overhangStrutSize + _topJointH
+		rm_ProjectedLength	= structuralLength*cos(_pitchAngle)
+		rm_Height			= structuralLength*sin(_pitchAngle)
+		parameters rm_ProjectedLength = rm_ProjectedLength, rm_Height = rm_Height, structuralLength = structuralLength
+	else
+		if GLOB_MODPAR_NAME = "rm_Height" then
+			structuralLength	= sqr(rm_ProjectedLength^2+rm_Height^2)
+			_pitchAngle			= atn(rm_Height/rm_ProjectedLength)
+			_strutLengthPlus	= rm_ProfileHeight*tan(_pitchAngle)
+			_topJointH			= _topJointPlus/cos(_pitchAngle)
+			gosub "calcOverhangStrutSize"
+			rm_StructuralLength	= structuralLength + _strutLengthPlus + overhangStrutSize - _topJointH
+			parameters structuralLength = structuralLength, _pitchAngle = _pitchAngle, rm_StructuralLength = rm_StructuralLength
+		else
+			! "rm_ProjectedLength" is the strongest parameter
+			_pitchAngle			= atn(rm_Height/rm_ProjectedLength)
+			structuralLength	= rm_ProjectedLength/cos(_pitchAngle)
+			rm_Height			= rm_ProjectedLength*tan(_pitchAngle)
+			_strutLengthPlus	= rm_ProfileHeight*tan(_pitchAngle)
+			_topJointH			= _topJointPlus/cos(_pitchAngle)
+			gosub "calcOverhangStrutSize"
+			rm_StructuralLength	= structuralLength + _strutLengthPlus + overhangStrutSize - _topJointH
+			parameters structuralLength = structuralLength, rm_Height = rm_Height, rm_StructuralLength = rm_StructuralLength
+		endif
+	endif
+endif
+
+
+! ==============================================================================
+! Lumber Size
+! ==============================================================================
+_strutLengthPlus	= rm_ProfileHeight*tan(_pitchAngle)
+_topJointH			= _topJointPlus/cos(_pitchAngle)
+gosub "calcOverhangStrutSize":
+lumberSize = structuralLength + _strutLengthPlus + overhangStrutSize - _topJointH
+parameters lumberSize = lumberSize
+
+! ==============================================================================
+call "RoofMaker_macro"	parameters all	bEnableRafter			= bEnableRafter,
+										bEnableSymbol			= bEnableSymbol,
+										bEnableResolution		= bEnableResolution,
+										gs_iDisplayStandards	= gs_iDisplayStandards,
+										iObjectType				= 11
+
+
+! ==============================================================================
+! Bounding Box
+! ==============================================================================
+_underHeight = 0
+if rm_iRoofEdgeAngle = EDGE_RECTANGULAR then
+	_underHeight = sin(_pitchAngle) * overhangStrutSize - cos(_pitchAngle) * rm_ProfileHeight/2
+else
+	_underHeight = sin(_pitchAngle) * overhangStrutSize
+endif
+
+parameters A		= overhang + rm_ProjectedLength -_topJointH*cos(_pitchAngle)				: lock "A"
+parameters B		= rm_ProfileWidth															: lock "B"
+parameters ZZYZX	= rm_Height+_profileHeightZ + _underHeight - _topJointH*sin(_pitchAngle)	: lock "ZZYZX"
+
+
+! ==============================================================================
+! Levels
+! ==============================================================================
+parameters ac_toplevel 		= rm_Height+_profileHeightZ-_topJointH*sin(_pitchAngle)
+parameters ac_bottomlevel	= -_underHeight

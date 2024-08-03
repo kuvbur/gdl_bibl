@@ -1,0 +1,1538 @@
+
+call "FM_types" parameters all
+
+!Hide all parameters from UI
+hideparameter all  "A", "B", "ZZYZX"
+
+! ------------------------------------------------------------------------------
+! Minimum Sizes
+! ------------------------------------------------------------------------------
+minRefPointDist			= counterDepth * 1.5
+minRefPointDistSquare	= minRefPointDist * minRefPointDist
+minWallPointDist		= wallCabinetDepth * 1.5
+minWallPointDistSquare	= minWallPointDist * minWallPointDist
+
+! ------------------------------------------------------------------------------
+! Layout Type
+! ------------------------------------------------------------------------------
+if GLOB_MODPAR_NAME = "layoutType" then
+	gosub "moveRefLinePoints_1"
+	if bChains[2] then gosub "moveRefLinePoints_2"
+	if bChains[3] then gosub "moveRefLinePoints_3"
+endif
+
+if iLayoutType = LAYOUT_ISLAND then
+	hideparameter	"nWallCabinet", "wallCabinetDepth"
+	lock			"nWallCabinet", "wallCabinetDepth"
+endif
+
+if iLayoutType = LAYOUT_CUSTOM then
+	values "nChains" 1, 2, 3
+	if nChains = 1 then
+		values "nChainSegment_1" range [1, nMaxSegment]
+		values "nChainSegment_2" range [1, nMaxSegment]
+		values "nChainSegment_3" range [1, nMaxSegment]
+		hideparameter	"nChainSegment_2", "nChainSegment_3"
+		lock			"nChainSegment_2", "nChainSegment_3"
+	else
+		if nChains = 2 then
+			values "nChainSegment_1" range [1, nMaxSegment-nChainSegment_2]
+			values "nChainSegment_2" range [1, nMaxSegment-nChainSegment_1]
+			values "nChainSegment_3" range [1, nMaxSegment]
+			hideparameter	"nChainSegment_3"
+			lock			"nChainSegment_3"
+		else
+			values "nChainSegment_1" range [1, nMaxSegment-nChainSegment_2-nChainSegment_3]
+			values "nChainSegment_2" range [1, nMaxSegment-nChainSegment_1-nChainSegment_3]
+			values "nChainSegment_3" range [1, nMaxSegment-nChainSegment_1-nChainSegment_2]
+		endif
+	endif
+else
+	hideparameter	"nChains", "nChainSegment_1", "nChainSegment_2", "nChainSegment_3"
+	lock			"nChains", "nChainSegment_1", "nChainSegment_2", "nChainSegment_3"
+
+	nCounterForUI	= 1
+	nSegmentForUI_1	= nTotalRefPoint - 1
+	nSegmentForUI_2	= 0
+	nSegmentForUI_3	= 0
+	if iLayoutType = LAYOUT_GALLEY | iLayoutType = LAYOUT_ISLAND then
+		nCounterForUI	= 2
+		nSegmentForUI_1	= 1
+		nSegmentForUI_2	= 1
+	endif
+	parameters	nCounterForUI	= nCounterForUI,
+				nSegmentForUI_1	= nSegmentForUI_1,
+				nSegmentForUI_2	= nSegmentForUI_2,
+				nSegmentForUI_3	= nSegmentForUI_3
+
+	values "nCounterForUI"	range [1, ]
+	values "nSegmentForUI_1"	range [1, ]
+	values "nSegmentForUI_2"	range [0, ]
+	values "nSegmentForUI_3"	range [0, ]
+endif
+
+lock "nCounterForUI", "nSegmentForUI_1", "nSegmentForUI_2", "nSegmentForUI_3"
+
+
+! ------------------------------------------------------------------------------
+! Dimensions
+! ------------------------------------------------------------------------------
+values "counterDepth"			range [0.2, ]
+values "counterHeigth"			range [toeHeigth+minSize, ]
+values "counterThickness"		range (0, ]
+values "wallCabinetHeigth"		range [minSize, ]
+values "wallCabinetDepth"		range [minSize, counterDepth]
+values "wallCabinetClearence"	range [minSize, ]
+values "toeHeigth"				range (0, ]
+
+!Bounding box
+for i = 1 to vardim1(refLinePoints)
+	put refLinePoints[i][1]
+	put oppsidePoints[i][1]
+next i
+minBoundingX = min(use(nsp))
+maxBoundingX = max(get(nsp))
+
+for i = 1 to vardim1(refLinePoints)
+	put refLinePoints[i][2]
+	put oppsidePoints[i][2]
+next i
+minBoundingY = min(use(nsp))
+maxBoundingY = max(get(nsp))
+
+A = maxBoundingX - minBoundingX
+B = maxBoundingY - minBoundingY
+
+ZZYZX = counterHeigth + wallCabinetClearence + wallCabinetHeigth
+parameters A=A, B=B, ZZYZX = ZZYZX
+lock "A", "B", "ZZYZX"
+
+if GLOB_MODPAR_NAME = "toeHeigth" then
+	for i = 1 to vardim1(ovenHeigth)
+		if ovenHeigth[i] < toeHeigth then
+			ovenHeigth[i] = toeHeigth
+			parameters ovenHeigth[i] = ovenHeigth[i]
+		endif
+	next i
+endif
+
+
+! ------------------------------------------------------------------------------
+! Move References Line Point
+! ------------------------------------------------------------------------------
+if GLOB_MODPAR_NAME = "refLinePoints_1" then
+	gosub "moveRefLinePoints_1"
+	dim tempRefLinePoints_1[][2]
+	parameters tempRefLinePoints_1 = refLinePoints_1
+else
+	dim tempRefLinePoints_1[][2]
+	parameters tempRefLinePoints_1 = refLinePoints_1
+endif
+
+if bChains[2] then
+	if GLOB_MODPAR_NAME = "refLinePoints_2" then
+		gosub "moveRefLinePoints_2"
+		dim tempRefLinePoints_2[][2]
+		parameters tempRefLinePoints_2 = refLinePoints_2
+	else
+		dim tempRefLinePoints_2[][2]
+		parameters tempRefLinePoints_2 = refLinePoints_2
+	endif
+endif
+
+if bChains[3] then
+	if GLOB_MODPAR_NAME = "refLinePoints_3" then
+		gosub "moveRefLinePoints_3"
+		dim tempRefLinePoints_3[][2]
+		parameters tempRefLinePoints_3 = refLinePoints_3
+	else
+		dim tempRefLinePoints_3[][2]
+		parameters tempRefLinePoints_3 = refLinePoints_3
+	endif
+endif
+
+
+! ------------------------------------------------------------------------------
+! 2D Representation
+! ------------------------------------------------------------------------------
+if gs_cont_pen < 1 then parameters gs_cont_pen = 4
+if gs_fill_pen < 1 then parameters gs_fill_pen = 19
+if not(bShowOverhead) then
+	hideparameter	"overheadLine"
+	lock			"overheadLine"
+endif
+
+Dot_in_mm = 25.4 / 72
+
+values "fontSize" range (0,]
+
+values "typeTextRotation" stTextRot
+values "typeTextRotation_m" 2, 1, 0
+if GLOB_MODPAR_NAME = "typeTextRotation" then
+	typeTextRotation_m = 0
+	for i = 1 to vardim1(stTextRot)
+		if typeTextRotation = stTextRot[i] then
+			typeTextRotation_m = 3 - i
+			i = vardim1(stTextRot)
+		endif
+	next i
+	parameters typeTextRotation_m = typeTextRotation_m
+else
+	typeTextRotation_m = max(min(typeTextRotation_m,2),0)
+	parameters typeTextRotation = stTextRot[3-typeTextRotation_m]
+endif
+
+if not(displayText) then
+	hideparameter	"penText",
+					"iTextPen",
+					"fontType",
+					"fontSize",
+					"typeTextRotation",
+					"typeTextRotation_m",
+					"gs_text_style_bold",
+					"gs_text_style_italic",
+					"gs_text_style_underline",
+					"gs_text_style_strike",
+					"gs_readable_angle"
+
+	lock			"penText",
+					"iTextPen",
+					"fontType",
+					"fontSize",
+					"typeTextRotation",
+					"typeTextRotation_m",
+					"gs_text_style_bold",
+					"gs_text_style_italic",
+					"gs_text_style_underline",
+					"gs_text_style_strike",
+					"gs_readable_angle"
+
+else
+	if GLOB_MODPAR_NAME = "penText" then
+		if penText< 1 then
+			penText= 1
+			parameters penText= penText
+		endif
+		iTextPen = penText
+		parameters iTextPen = iTextPen
+	else
+		if iTextPen < 1 then
+			iTextPen = 1
+			parameters iTextPen = iTextPen
+		endif
+
+		if iTextPen > 255 then
+			iTextPen = 255
+			parameters iTextPen = iTextPen
+		endif
+
+		textPen = iTextPen
+		parameters penText= penText
+	endif
+endif
+
+
+! ==============================================================================
+!
+! Accessories
+!
+! ==============================================================================
+
+! ------------------------------------------------------------------------------
+! Enlarge Accessories Number
+! ------------------------------------------------------------------------------
+parameters lastPointLength = 0
+parameters	nPrevTallCabinet	= nTallCabinet,
+			nPrevSink			= nofSink,
+			nPrevCooktops		= nofCooktops,
+			nPrevOvens			= nofOvens,
+			nPrevRefri			= nofRefrigerators,
+			nPrevDishwasher		= nofDishwasher,
+			nPrevWasher			= nofWasher
+
+
+! ------------------------------------------------------------------------------
+! Wall Cabinet
+! ------------------------------------------------------------------------------
+values "nWallCabinet" range [0, nMaxAccessory]
+if nWallCabinet > 0 then
+	if GLOB_MODPAR_NAME = "wallCabinetPos_1" | GLOB_MODPAR_NAME = "wallCabinetPos_2" then
+		if GLOB_MODPAR_NAME = "wallCabinetPos_1" then
+			moved = 1
+			gosub "moveWallLinePoints"
+		else
+			moved = 2
+			gosub "moveWallLinePoints"
+		endif
+	else
+		if GLOB_MODPAR_NAME = "nWallCabinet" | bGeometryChanged then
+			moved = 1
+			gosub "moveWallLinePoints"
+		endif
+	endif
+else
+	hideparameter	"wallCabinetPos_1",
+					"wallCabinetPos_2",
+					"wallCabinetPos2_1",
+					"wallCabinetPos2_2",
+					"nWallSegment",
+					"isWallContinuous",
+					"nWallContour",
+					"wallCoords1",
+					"wallCoords2",
+					"wallcab_mat"
+
+	lock			"wallCabinetPos_1",
+					"wallCabinetPos_2",
+					"wallCabinetPos2_1",
+					"wallCabinetPos2_2",
+					"nWallSegment",
+					"isWallContinuous",
+					"nWallContour",
+					"wallCoords1",
+					"wallCoords2",
+					"wallcab_mat"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Tall Cabinet
+! ------------------------------------------------------------------------------
+values "nTallCabinet" range [0, nMaxAccessory]
+if nTallCabinet > 0 then
+	values "tallCabinetWidth"	range [minSize, ]
+	values "tallCabinetWidth2"	range [minSize, ]
+	if GLOB_MODPAR_NAME = "tallCabinetWidth" | GLOB_MODPAR_NAME = "tallCabinetWidth2" then
+		if GLOB_MODPAR_NAME = "tallCabinetWidth" then
+			for i = 1 to nTallCabinet
+				if tallCabinetWidth[i] < minSize then
+					tallCabinetWidth[i] = minSize
+					parameters tallCabinetWidth[i] = tallCabinetWidth[i]
+				endif
+				tallCabWidthPos[i][1] = tallCabWidthPos[i][3] + cos(elementAngle[isTall[i]]) * tallCabinetWidth[i]
+				tallCabWidthPos[i][2] = tallCabWidthPos[i][4] + sin(elementAngle[isTall[i]]) * tallCabinetWidth[i]
+
+				tallCabPos[i][1] = (tallCabWidthPos[i][3] - tallCabWidthPos[i][1]) / 2 + tallCabWidthPos[i][1]
+				tallCabPos[i][2] = (tallCabWidthPos[i][4] - tallCabWidthPos[i][2]) / 2 + tallCabWidthPos[i][2]
+			next i
+			tallCabinetWidth2 = tallCabinetWidth
+			parameters tallCabWidthPos = tallCabWidthPos, tallCabinetWidth2 = tallCabinetWidth2
+		else
+			for i = 1 to nTallCabinet
+				if tallCabinetWidth2[i] < minSize then
+					tallCabinetWidth2[i] = minSize
+					parameters tallCabinetWidth2[i] = tallCabinetWidth2[i]
+				endif
+				tallCabWidthPos[i][3] = tallCabWidthPos[i][1] - cos(elementAngle[isTall[i]]) * tallCabinetWidth2[i]
+				tallCabWidthPos[i][4] = tallCabWidthPos[i][2] - sin(elementAngle[isTall[i]]) * tallCabinetWidth2[i]
+
+				tallCabPos[i][1] = (tallCabWidthPos[i][3] - tallCabWidthPos[i][1]) / 2 + tallCabWidthPos[i][1]
+				tallCabPos[i][2] = (tallCabWidthPos[i][4] - tallCabWidthPos[i][2]) / 2 + tallCabWidthPos[i][2]
+			next i
+			tallCabinetWidth = tallCabinetWidth2
+			parameters tallCabWidthPos = tallCabWidthPos, tallCabinetWidth = tallCabinetWidth
+		endif
+		parameters tallCabPos = tallCabPos
+	else
+		tallCabinetWidth2 = tallCabinetWidth
+		for i = 1 to nTallCabinet
+			tallCabWidthPos[i][1] = elementWidth[isTall[i]][1]
+			tallCabWidthPos[i][2] = elementWidth[isTall[i]][2]
+			tallCabWidthPos[i][3] = elementWidth[isTall[i]][3]
+			tallCabWidthPos[i][4] = elementWidth[isTall[i]][4]
+		next i
+		parameters tallCabWidthPos = tallCabWidthPos, tallCabinetWidth2 = tallCabinetWidth2
+	endif
+else
+	hideparameter	"nPrevTallCabinet",
+					"tallCabinetWidth",
+					"tallCabinetWidth2",
+					"tallCabPos",
+					"tallCabPos2",
+					"nSegmentTall",
+					"tallCabWidthPos"
+
+	lock			"nPrevTallCabinet",
+					"tallCabinetWidth",
+					"tallCabinetWidth2",
+					"tallCabPos",
+					"tallCabPos2",
+					"nSegmentTall",
+					"tallCabWidthPos"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Sink
+! ------------------------------------------------------------------------------
+values "sinkType" stSinkType
+values "iSinkType" ACC_SINK_ROUND, ACC_SINK_SINGLE, ACC_SINK_SINGLE_DRAIN, ACC_SINK_DOUBLE, ACC_SINK_DOUBLE_DRAIN, ACC_SINK_TRIPLE
+if GLOB_MODPAR_NAME = "sinkType" then
+	iSinkType = 1
+	for i = 1 to vardim1(stSinkType)
+		if sinkType = stSinkType[i] then
+			iSinkType = i
+			i = vardim1(stSinkType)
+		endif
+	next i
+	parameters iSinkType = iSinkType
+else
+	iSinkType = max(min(iSinkType,vardim1(stSinkType)),1)
+	parameters sinkType = stSinkType[iSinkType]
+endif
+
+if tempSinkType <> iSinkType then
+	for i = 1 to nMaxAccessory
+		sinkWidth[i]	= sinkDefaults[iSinkType]
+		sinkWidth2[i]	= sinkDefaults[iSinkType]
+	next i
+	sinkWidthHalf = sinkDefaults[iSinkType] / 2
+
+	if iSinkType = ACC_SINK_ROUND & sinkWidthHalf > counterDepth/2 then
+		sinkWidthHalf = counterDepth/2 - EPS
+		for i = 1 to nMaxAccessory
+			sinkWidth[i]	= sinkWidthHalf * 2
+			sinkWidth2[i]	= sinkWidthHalf * 2
+		next i
+	endif
+
+	parameters tempSinkType = iSinkType, sinkWidth = sinkWidth, sinkWidth2 = sinkWidth2, sinkWidthHalf = sinkWidthHalf
+endif
+
+values "nSink" range [1, nMaxAccessory]
+if nofSink > 0 then
+	dim sinkMinWidth[6]
+		sinkMinWidth[1]	= 0.20
+		sinkMinWidth[2]	= 0.20
+		sinkMinWidth[3]	= 0.40
+		sinkMinWidth[4]	= 0.40
+		sinkMinWidth[5]	= 0.66
+		sinkMinWidth[6]	= 0.66
+
+	values "sinkWidth"		range [sinkMinWidth[iSinkType], ]
+	values "sinkWidth2"		range [sinkMinWidth[iSinkType], ]
+	values "sinkWidthHalf"	range [sinkMinWidth[iSinkType]/2, counterDepth/2 - EPS]
+
+	if GLOB_MODPAR_NAME = "sinkWidthHalf" then
+		if sinkWidthHalf < sinkMinWidth[iSinkType]/2 then
+			sinkWidthHalf = sinkMinWidth[iSinkType]/2
+			parameters sinkWidthHalf = sinkWidthHalf
+		endif
+		if sinkWidthHalf > counterDepth/2 - EPS then
+			sinkWidthHalf = counterDepth/2 - EPS
+			parameters sinkWidthHalf = sinkWidthHalf
+		endif
+		for i = 1 to nMaxAccessory
+			sinkWidth[i]	= sinkWidthHalf * 2
+			sinkWidth2[i]	= sinkWidthHalf * 2
+		next i
+		parameters sinkWidth = sinkWidth, sinkWidth2 = sinkWidth2
+	endif
+	if GLOB_MODPAR_NAME = "sinkWidth" | GLOB_MODPAR_NAME = "sinkWidth2" then
+		nElementChanged = 1
+		for i = 2 to nMaxAccessory				! Width Connection
+			if abs(sinkWidth[i] - sinkWidth2[i]) > EPS then
+				nElementChanged = i
+				i = nMaxAccessory
+			endif
+		next i
+		if GLOB_MODPAR_NAME = "sinkWidth" then
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					sinkWidth[i] = sinkWidth[nElementChanged]
+					parameters sinkWidth[i] = sinkWidth[i]
+				endif
+				if sinkWidth[i] < sinkMinWidth[iSinkType] then
+					sinkWidth[i] = sinkMinWidth[iSinkType]
+					parameters sinkWidth[i] = sinkWidth[i]
+				endif
+				if i < nofSink + 1 then
+					sinkWidthPos[i][1] = sinkWidthPos[i][3] + cos(elementAngle[isSink[i]]) * sinkWidth[i]
+					sinkWidthPos[i][2] = sinkWidthPos[i][4] + sin(elementAngle[isSink[i]]) * sinkWidth[i]
+
+					sinkPos[i][1] = (sinkWidthPos[i][3] - sinkWidthPos[i][1]) / 2 + sinkWidthPos[i][1]
+					sinkPos[i][2] = (sinkWidthPos[i][4] - sinkWidthPos[i][2]) / 2 + sinkWidthPos[i][2]
+				endif
+			next i
+			sinkWidth2 = sinkWidth
+			parameters sinkWidthPos = sinkWidthPos, sinkWidth2 = sinkWidth2
+		else
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					sinkWidth2[i] = sinkWidth2[nElementChanged]
+					parameters sinkWidth2[i] = sinkWidth2[i]
+				endif
+				if sinkWidth2[i] < sinkMinWidth[iSinkType] then
+					sinkWidth2[i] = sinkMinWidth[iSinkType]
+					parameters sinkWidth2[i] = sinkWidth2[i]
+				endif
+				if i < nofSink + 1 then
+					sinkWidthPos[i][3] = sinkWidthPos[i][1] - cos(elementAngle[isSink[i]]) * sinkWidth2[i]
+					sinkWidthPos[i][4] = sinkWidthPos[i][2] - sin(elementAngle[isSink[i]]) * sinkWidth2[i]
+
+					sinkPos[i][1] = (sinkWidthPos[i][3] - sinkWidthPos[i][1]) / 2 + sinkWidthPos[i][1]
+					sinkPos[i][2] = (sinkWidthPos[i][4] - sinkWidthPos[i][2]) / 2 + sinkWidthPos[i][2]
+				endif
+			next i
+			sinkWidth = sinkWidth2
+			parameters sinkWidthPos = sinkWidthPos, sinkWidth = sinkWidth
+		endif
+		sinkWidthHalf = sinkWidth[1] / 2
+		parameters sinkPos = sinkPos, sinkWidthHalf = sinkWidthHalf
+	else
+		sinkWidth2 = sinkWidth
+		for i = 1 to nofSink
+			sinkWidthPos[i][1] = elementWidth[isSink[i]][1]
+			sinkWidthPos[i][2] = elementWidth[isSink[i]][2]
+			sinkWidthPos[i][3] = elementWidth[isSink[i]][3]
+			sinkWidthPos[i][4] = elementWidth[isSink[i]][4]
+		next i
+		sinkWidthHalf = sinkWidth[1] / 2
+		parameters sinkWidthPos = sinkWidthPos, sinkWidth2 = sinkWidth2, sinkWidthHalf = sinkWidthHalf
+	endif
+
+	if	iSinkType = ACC_SINK_ROUND	| \
+		iSinkType = ACC_SINK_SINGLE	| \
+		iSinkType = ACC_SINK_DOUBLE	| \
+		iSinkType = ACC_SINK_TRIPLE	then
+
+		hideparameter	"bMirroredSink"
+		lock			"bMirroredSink"
+	endif
+
+	if iSinkType = ACC_SINK_ROUND then
+		hideparameter	"sinkWidth", "sinkWidth2"
+		lock			"sinkWidth", "sinkWidth2"
+	else
+		hideparameter	"sinkWidthHalf"
+		lock			"sinkWidthHalf"
+	endif
+
+else
+	hideparameter	"sink_mat",
+					"nSink",
+					"nPrevSink",
+					"sinkType",
+					"iSinkType",
+					"tempSinkType",
+					"bMirroredSink",
+					"sinkWidth",
+					"sinkWidth2",
+					"sinkWidthHalf",
+					"sinkPos",
+					"sinkPos2",
+					"nSegmentSink",
+					"sinkWidthPos",
+					"sinkDefaults"
+
+	lock			"sink_mat",
+					"nSink",
+					"nPrevSink",
+					"sinkType",
+					"iSinkType",
+					"tempSinkType",
+					"bMirroredSink",
+					"sinkWidth",
+					"sinkWidth2",
+					"sinkWidthHalf",
+					"sinkPos",
+					"sinkPos2",
+					"nSegmentSink",
+					"sinkWidthPos",
+					"sinkDefaults"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Cooktop
+! ------------------------------------------------------------------------------
+values "nCooktops" range [1, nMaxAccessory]
+values "hoodHeigth"	range [minSize, ]
+
+values "cooktopType" stCooktopType
+values "iCooktopType" ACC_COOKTOP_2, ACC_COOKTOP_4, ACC_COOKTOP_5
+if GLOB_MODPAR_NAME = "cooktopType" then
+	iCooktopType = 1
+	for i = 1 to vardim1(stCooktopType)
+		if cooktopType = stCooktopType[i] then
+			iCooktopType = i
+			i = vardim1(stCooktopType)
+		endif
+	next i
+	parameters iCooktopType = iCooktopType
+else
+	iCooktopType = max(min(iCooktopType,vardim1(stCooktopType)),1)
+	parameters cooktopType = stCooktopType[iCooktopType]
+endif
+
+if iLayoutType = LAYOUT_ISLAND then
+	values "hoodType" stHoodType[2]
+	values "iHoodType" ACC_HOOD_HANGING
+else
+	values "hoodType" stHoodType
+	values "iHoodType" ACC_HOOD_WALL, ACC_HOOD_HANGING, ACC_HOOD_BUILTIN
+endif
+if GLOB_MODPAR_NAME = "hoodType" then
+	iHoodType = 1
+	for i = 1 to vardim1(stHoodType)
+		if hoodType = stHoodType[i] then
+			iHoodType = i
+			i = vardim1(stHoodType)
+		endif
+	next i
+	parameters iHoodType = iHoodType
+else
+	iHoodType = max(min(iHoodType,vardim1(stHoodType)),1)
+	parameters hoodType = stHoodType[iHoodType]
+endif
+
+if tempCooktopType <> iCooktopType then
+	for i = 1 to vardim1(cooktopWidth)
+		cooktopWidth[i]		= cooktopDefaults[iCooktopType]
+		cooktopWidth2[i]	= cooktopDefaults[iCooktopType]
+		hoodWidth[i]		= cooktopDefaults[iCooktopType]
+		if hoodWidth[i] < minHood then hoodWidth[i] = minHood
+		hoodWidth2[i]		= hoodWidth[i] / 2
+	next i
+	parameters cooktopWidth = cooktopWidth, cooktopWidth2 = cooktopWidth2 , hoodWidth = hoodWidth, hoodWidth2 = hoodWidth2
+	parameters tempCooktopType = iCooktopType
+endif
+
+if nofCooktops > 0 then
+	values "cooktopWidth"	range [minSize, ]
+	values "cooktopWidth2"	range [minSize, ]
+	values "hoodWidth"		range [minHood, ]
+	values "hoodWidth2"		range [minHood/2, ]
+
+
+	if GLOB_MODPAR_NAME = "hoodWidth" | GLOB_MODPAR_NAME = "hoodWidth2" then
+		nElementChanged = 1
+		for i = 2 to nMaxAccessory				! Width Connection
+			if abs(hoodWidth[i]/2 - hoodWidth2[i]) > EPS then
+				nElementChanged = i
+				i = nMaxAccessory
+			endif
+		next i
+		if GLOB_MODPAR_NAME = "hoodWidth" then
+			for i = nMaxAccessory to 1 step -1
+				if nElementChanged <> i then		!Width Connection
+					hoodWidth[i] = hoodWidth[nElementChanged]
+					parameters hoodWidth[i] = hoodWidth[i]
+				endif
+				if hoodWidth[i] < minHood then
+					hoodWidth[i] = minHood
+					parameters hoodWidth[i] = hoodWidth[i]
+				endif
+				hoodWidth2[i] = hoodWidth[i] / 2
+			next i
+			parameters hoodWidth2 = hoodWidth2
+		else
+			for i = nMaxAccessory to 1 step -1
+				if nElementChanged <> i then		!Width Connection
+					hoodWidth2[i] = hoodWidth2[nElementChanged]
+					parameters hoodWidth2[i] = hoodWidth2[i]
+				endif
+				if hoodWidth2[i] < minHood/2 then
+					hoodWidth2[i] = minHood/2
+					parameters hoodWidth2[i] = hoodWidth2[i]
+				endif
+				hoodWidth[i] = hoodWidth2[i] * 2
+			next i
+			parameters hoodWidth = hoodWidth
+		endif
+	else
+		for i = 1 to nMaxAccessory
+			hoodWidth2[i] = hoodWidth[i] /2
+		next i
+		parameters hoodWidth2 = hoodWidth2
+	endif
+
+	if GLOB_MODPAR_NAME = "cooktopWidth" | GLOB_MODPAR_NAME = "cooktopWidth2" then
+		nElementChanged = 1
+		for i = 2 to nMaxAccessory				! Width Connection
+			if abs(cooktopWidth[i] - cooktopWidth2[i]) > EPS then
+				nElementChanged = i
+				i = nMaxAccessory
+			endif
+		next i
+		dim deltaCooktopWidth[]
+		if GLOB_MODPAR_NAME = "cooktopWidth" then
+			for i = nMaxAccessory to 1 step -1
+				if nElementChanged <> i then		!Width Connection
+					cooktopWidth[i] = cooktopWidth[nElementChanged]
+					parameters cooktopWidth[i] = cooktopWidth[i]
+				endif
+				if cooktopWidth[i] < minSize then
+					cooktopWidth[i] = minSize
+					parameters cooktopWidth[i] = cooktopWidth[i]
+				endif
+
+				deltaCooktopWidth[i] = cooktopWidth2[i] - cooktopWidth[i]
+
+				if i < nofCooktops + 1 then
+					cooktopWidthPos[i][1] = cooktopWidthPos[i][3] + cos(elementAngle[isCooktop[i]]) * cooktopWidth[i]
+					cooktopWidthPos[i][2] = cooktopWidthPos[i][4] + sin(elementAngle[isCooktop[i]]) * cooktopWidth[i]
+
+					cooktopPos[i][1] = (cooktopWidthPos[i][3] - cooktopWidthPos[i][1]) / 2 + cooktopWidthPos[i][1]
+					cooktopPos[i][2] = (cooktopWidthPos[i][4] - cooktopWidthPos[i][2]) / 2 + cooktopWidthPos[i][2]
+				endif
+			next i
+			cooktopWidth2 = cooktopWidth
+			parameters cooktopWidthPos = cooktopWidthPos, cooktopWidth2 = cooktopWidth2
+		else
+			for i = nMaxAccessory to 1 step -1
+				if nElementChanged <> i then		!Width Connection
+					cooktopWidth2[i] = cooktopWidth2[nElementChanged]
+					parameters cooktopWidth2[i] = cooktopWidth2[i]
+				endif
+				if cooktopWidth2[i] < minSize then
+					cooktopWidth2[i] = minSize
+					parameters cooktopWidth2[i] = cooktopWidth2[i]
+				endif
+
+				deltaCooktopWidth[i] = cooktopWidth[i] - cooktopWidth2[i]
+
+				if i < nofCooktops + 1 then
+					cooktopWidthPos[i][3] = cooktopWidthPos[i][1] - cos(elementAngle[isCooktop[i]]) * cooktopWidth2[i]
+					cooktopWidthPos[i][4] = cooktopWidthPos[i][2] - sin(elementAngle[isCooktop[i]]) * cooktopWidth2[i]
+
+					cooktopPos[i][1] = (cooktopWidthPos[i][3] - cooktopWidthPos[i][1]) / 2 + cooktopWidthPos[i][1]
+					cooktopPos[i][2] = (cooktopWidthPos[i][4] - cooktopWidthPos[i][2]) / 2 + cooktopWidthPos[i][2]
+				endif
+			next i
+			cooktopWidth = cooktopWidth2
+			parameters cooktopWidthPos = cooktopWidthPos, cooktopWidth = cooktopWidth
+		endif
+		parameters cooktopPos = cooktopPos
+
+		for i = nMaxAccessory to 1 step -1
+			hoodWidth[i]	= hoodWidth[i] - deltaCooktopWidth[i]
+			if hoodWidth[i] < minHood then
+				hoodWidth[i] = minHood
+			endif
+			hoodWidth2[i]	= hoodWidth[i] / 2
+		next i
+		parameters hoodWidth = hoodWidth, hoodWidth2 = hoodWidth2
+
+	else
+		cooktopWidth2 = cooktopWidth
+		for i = 1 to nofCooktops
+			cooktopWidthPos[i][1] = elementWidth[isCooktop[i]][1]
+			cooktopWidthPos[i][2] = elementWidth[isCooktop[i]][2]
+			cooktopWidthPos[i][3] = elementWidth[isCooktop[i]][3]
+			cooktopWidthPos[i][4] = elementWidth[isCooktop[i]][4]
+		next i
+		parameters cooktopWidthPos = cooktopWidthPos, cooktopWidth2 = cooktopWidth2
+	endif
+
+	if not(bHood) then
+		hideparameter	"hoodType", "iHoodType", "hoodHeigth"
+		lock			"hoodType", "iHoodType", "hoodHeigth"
+	else
+		if iHoodType = ACC_HOOD_BUILTIN then
+			hideparameter	"hoodHeigth"
+			lock			"hoodHeigth"
+		endif
+	endif
+
+else
+	hideparameter	"cooktop_mat",
+					"hotplate_mat",
+					"hood_mat",
+					"nCooktops",
+					"nPrevCooktops",
+					"cooktopType",
+					"iCooktopType",
+					"tempCooktopType",
+					"cooktopWidth",
+					"cooktopWidth2",
+					"cooktopPos",
+					"cooktopPos2",
+					"nSegmentCooktop",
+					"cooktopWidthPos",
+					"bHood",
+					"hoodType",
+					"iHoodType",
+					"hoodHeigth",
+					"cooktopDefaults",
+					"hoodWidth",
+					"hoodWidth2"
+
+	lock			"cooktop_mat",
+					"hotplate_mat",
+					"hood_mat",
+					"nCooktops",
+					"nPrevCooktops",
+					"cooktopType",
+					"iCooktopType",
+					"tempCooktopType",
+					"cooktopWidth",
+					"cooktopWidth2",
+					"cooktopPos",
+					"cooktopPos2",
+					"nSegmentCooktop",
+					"cooktopWidthPos",
+					"bHood",
+					"hoodType",
+					"iHoodType",
+					"hoodHeigth",
+					"cooktopDefaults",
+					"hoodWidth",
+					"hoodWidth2"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Oven
+! ------------------------------------------------------------------------------
+ovenHeigthMin = toeHeigth
+ovenHeigthMax = counterHeigth+wallCabinetHeigth+wallCabinetClearence - ovenH
+values "ovenHeigth" range [ovenHeigthMin, ovenHeigthMax]
+
+values "ovenSymbType" stSymbType
+values "iOvenSymbType" SYMBTYPE_SYMBOL, SYMBTYPE_TEXT
+if GLOB_MODPAR_NAME = "ovenSymbType" then
+	iOvenSymbType = 1
+	for i = 2 to vardim1(stSymbType)
+		if ovenSymbType = stSymbType[i] then iOvenSymbType = i
+	next i
+	parameters iOvenSymbType = iOvenSymbType
+else
+	iOvenSymbType = max(min(iOvenSymbType,vardim1(stSymbType)),1)
+	parameters ovenSymbType = stSymbType[iOvenSymbType]
+endif
+
+values "nOvens" range [1, nMaxAccessory]
+if nofOvens > 0 then
+	if iOvenSymbType = SYMBTYPE_SYMBOL then
+		hideparameter "ovenText"
+		lock "ovenText"
+	endif
+
+	values "ovenWidth"	range [minSize, ]
+	values "ovenWidth2"	range [minSize, ]
+	if GLOB_MODPAR_NAME = "ovenWidth" | GLOB_MODPAR_NAME = "ovenWidth2" then
+		nElementChanged =1
+		for i = 2 to nMaxAccessory				! Width Connection
+			if abs(ovenWidth[i] - ovenWidth2[i]) > EPS then
+				nElementChanged = i
+				i = nMaxAccessory
+			endif
+		next i
+		if GLOB_MODPAR_NAME = "ovenWidth" then
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					ovenWidth[i] = ovenWidth[nElementChanged]
+					parameters ovenWidth[i] = ovenWidth[i]
+				endif
+				if ovenWidth[i] < minSize then
+					ovenWidth[i] = minSize
+					parameters ovenWidth[i] = ovenWidth[i]
+				endif
+				if i < nofOvens + 1 then
+					ovenWidthPos[i][1] = ovenWidthPos[i][3] + cos(elementAngle[isOven[i]]) * ovenWidth[i]
+					ovenWidthPos[i][2] = ovenWidthPos[i][4] + sin(elementAngle[isOven[i]]) * ovenWidth[i]
+
+					ovenPos[i][1] = (ovenWidthPos[i][3] - ovenWidthPos[i][1]) / 2 + ovenWidthPos[i][1]
+					ovenPos[i][2] = (ovenWidthPos[i][4] - ovenWidthPos[i][2]) / 2 + ovenWidthPos[i][2]
+				endif
+			next i
+			ovenWidth2 = ovenWidth
+			parameters ovenWidthPos = ovenWidthPos, ovenWidth2 = ovenWidth2
+		else
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					ovenWidth2[i] = ovenWidth2[nElementChanged]
+					parameters ovenWidth2[i] = ovenWidth2[i]
+				endif
+				if ovenWidth2[i] < minSize then
+					ovenWidth2[i] = minSize
+					parameters ovenWidth2[i] = ovenWidth2[i]
+				endif
+				if i < nofOvens + 1 then
+					ovenWidthPos[i][3] = ovenWidthPos[i][1] - cos(elementAngle[isOven[i]]) * ovenWidth2[i]
+					ovenWidthPos[i][4] = ovenWidthPos[i][2] - sin(elementAngle[isOven[i]]) * ovenWidth2[i]
+
+					ovenPos[i][1] = (ovenWidthPos[i][3] - ovenWidthPos[i][1]) / 2 + ovenWidthPos[i][1]
+					ovenPos[i][2] = (ovenWidthPos[i][4] - ovenWidthPos[i][2]) / 2 + ovenWidthPos[i][2]
+				endif
+			next i
+			ovenWidth = ovenWidth2
+			parameters ovenWidthPos = ovenWidthPos, ovenWidth = ovenWidth
+		endif
+		parameters ovenPos = ovenPos
+	else
+		ovenWidth2 = ovenWidth
+		for i = 1 to nofOvens
+			ovenWidthPos[i][1] = elementWidth[isOven[i]][1]
+			ovenWidthPos[i][2] = elementWidth[isOven[i]][2]
+			ovenWidthPos[i][3] = elementWidth[isOven[i]][3]
+			ovenWidthPos[i][4] = elementWidth[isOven[i]][4]
+		next i
+		parameters ovenWidthPos = ovenWidthPos, ovenWidth2 = ovenWidth2
+
+		if GLOB_MODPAR_NAME = "ovenHeigth" then
+			for i =1 to nofOvens
+				if ovenHeigth[i] < ovenHeigthMin then
+					ovenHeigth[i] = ovenHeigthMin
+					parameters ovenHeigth[i] = ovenHeigth[i]
+				else
+					if ovenHeigth[i] > ovenHeigthMax then
+						ovenHeigth[i] = ovenHeigthMax
+						parameters ovenHeigth[i] = ovenHeigth[i]
+					endif
+				endif
+			next i
+		endif
+	endif
+else
+	hideparameter	"oven_mat",
+					"glass_mat",
+					"nOvens",
+					"nPrevOvens",
+					"ovenWidth",
+					"ovenWidth2",
+					"ovenPos",
+					"ovenPos2",
+					"nSegmentOven",
+					"ovenWidthPos",
+					"ovenVerticalPos",
+					"ovenHeigth",
+					"ovenSymbType",
+					"iOvenSymbType",
+					"ovenText"
+
+	lock			"oven_mat",
+					"glass_mat",
+					"nOvens",
+					"nPrevOvens",
+					"ovenWidth",
+					"ovenWidth2",
+					"ovenPos",
+					"ovenPos2",
+					"nSegmentOven",
+					"ovenWidthPos",
+					"ovenVerticalPos",
+					"ovenHeigth",
+					"ovenSymbType",
+					"iOvenSymbType",
+					"ovenText"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Refrigerators
+! ------------------------------------------------------------------------------
+values "refrigeratorDepth"	range [counterDepth, ]
+values "refrigeratorHeigth"	range [counterHeigth-counterThickness, ]
+
+values "refrigeratorType" stRefrigeratorType
+values "iRefrigeratorType" ACC_REFRI_TOP, ACC_REFRI_BOTTOM, ACC_REFRI_SIDE, ACC_REFRI_FRENCH, ACC_REFRI_COMPACT
+if GLOB_MODPAR_NAME = "refrigeratorType" then
+	iRefrigeratorType = 1
+	for i = 1 to vardim1(stRefrigeratorType)
+		if refrigeratorType = stRefrigeratorType[i] then
+			iRefrigeratorType = i
+			i = vardim1(stRefrigeratorType)
+		endif
+	next i
+	parameters iRefrigeratorType = iRefrigeratorType
+else
+	iRefrigeratorType = max(min(iRefrigeratorType,vardim1(stRefrigeratorType)),1)
+	parameters refrigeratorType = stRefrigeratorType[iRefrigeratorType]
+endif
+
+
+if tempRefrigeratorType <> iRefrigeratorType then
+	if tempRefrigeratorType <> ACC_REFRI_SIDE & iRefrigeratorType = ACC_REFRI_SIDE then
+		for i = 1 to vardim1(refrigeratorWidth)
+			refrigeratorWidth[i]	= refriDefaults[ACC_REFRI_SIDE]
+			refrigeratorWidth2[i]	= refriDefaults[ACC_REFRI_SIDE]
+		next i
+		parameters refrigeratorWidth = refrigeratorWidth, refrigeratorWidth2 = refrigeratorWidth2
+	else
+		if tempRefrigeratorType = ACC_REFRI_SIDE & iRefrigeratorType <> ACC_REFRI_SIDE then
+			for i = 1 to vardim1(refrigeratorWidth)
+				refrigeratorWidth[i]	= refriDefaults[iRefrigeratorType]
+				refrigeratorWidth2[i]	= refriDefaults[iRefrigeratorType]
+			next i
+			parameters refrigeratorWidth = refrigeratorWidth, refrigeratorWidth2 = refrigeratorWidth2
+		endif
+	endif
+	parameters tempRefrigeratorType = iRefrigeratorType
+endif
+
+values "refriSymbType" stSymbType
+values "iRefriSymbType" SYMBTYPE_SYMBOL, SYMBTYPE_TEXT
+if GLOB_MODPAR_NAME = "refriSymbType" then
+	iRefriSymbType = 1
+	for i = 2 to vardim1(stSymbType)
+		if refriSymbType = stSymbType[i] then iRefriSymbType = i
+	next i
+	parameters iRefriSymbType = iRefriSymbType
+else
+	iRefriSymbType = max(min(iRefriSymbType,vardim1(stSymbType)),1)
+	parameters refriSymbType = stSymbType[iRefriSymbType]
+endif
+
+
+values "nRefrigerators" range [1, nMaxAccessory]
+if nofRefrigerators > 0 then
+	if iRefriSymbType = SYMBTYPE_SYMBOL then
+		hideparameter "refriText"
+		lock "refriText"
+	endif
+
+	values "refrigeratorWidth"	range [minSize, ]
+	values "refrigeratorWidth2"	range [minSize, ]
+	if GLOB_MODPAR_NAME = "refrigeratorWidth" | GLOB_MODPAR_NAME = "refrigeratorWidth2" then
+		nElementChanged = 1
+		for i = 2 to nMaxAccessory				! Width Connection
+			if abs(refrigeratorWidth[i] - refrigeratorWidth2[i]) > EPS then
+				nElementChanged = i
+				i = nMaxAccessory
+			endif
+		next i
+		if GLOB_MODPAR_NAME = "refrigeratorWidth" then
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					refrigeratorWidth[i] = refrigeratorWidth[nElementChanged]
+					parameters refrigeratorWidth[i] = refrigeratorWidth[i]
+				endif
+				if refrigeratorWidth[i] < minSize then
+					refrigeratorWidth[i] = minSize
+					parameters refrigeratorWidth[i] = refrigeratorWidth[i]
+				endif
+				if i < nofRefrigerators + 1 then
+					refrigeratorWidthPos[i][1] = refrigeratorWidthPos[i][3] + cos(elementAngle[isRefri[i]]) * refrigeratorWidth[i]
+					refrigeratorWidthPos[i][2] = refrigeratorWidthPos[i][4] + sin(elementAngle[isRefri[i]]) * refrigeratorWidth[i]
+
+					refrigeratorPos[i][1] = (refrigeratorWidthPos[i][3] - refrigeratorWidthPos[i][1]) / 2 + refrigeratorWidthPos[i][1]
+					refrigeratorPos[i][2] = (refrigeratorWidthPos[i][4] - refrigeratorWidthPos[i][2]) / 2 + refrigeratorWidthPos[i][2]
+				endif
+			next i
+			refrigeratorWidth2 = refrigeratorWidth
+			parameters refrigeratorWidthPos = refrigeratorWidthPos, refrigeratorWidth2 = refrigeratorWidth2
+		else
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					refrigeratorWidth2[i] = refrigeratorWidth2[nElementChanged]
+					parameters refrigeratorWidth2[i] = refrigeratorWidth2[i]
+				endif
+				if refrigeratorWidth2[i] < minSize then
+					refrigeratorWidth2[i] = minSize
+					parameters refrigeratorWidth2[i] = refrigeratorWidth2[i]
+				endif
+				if i < nofRefrigerators + 1 then
+					refrigeratorWidthPos[i][3] = refrigeratorWidthPos[i][1] - cos(elementAngle[isRefri[i]]) * refrigeratorWidth2[i]
+					refrigeratorWidthPos[i][4] = refrigeratorWidthPos[i][2] - sin(elementAngle[isRefri[i]]) * refrigeratorWidth2[i]
+
+					refrigeratorPos[i][1] = (refrigeratorWidthPos[i][3] - refrigeratorWidthPos[i][1]) / 2 + refrigeratorWidthPos[i][1]
+					refrigeratorPos[i][2] = (refrigeratorWidthPos[i][4] - refrigeratorWidthPos[i][2]) / 2 + refrigeratorWidthPos[i][2]
+				endif
+			next i
+			refrigeratorWidth = refrigeratorWidth2
+			parameters refrigeratorWidthPos = refrigeratorWidthPos, refrigeratorWidth = refrigeratorWidth
+		endif
+		parameters refrigeratorPos = refrigeratorPos
+	else
+		refrigeratorWidth2 = refrigeratorWidth
+		for i = 1 to nofRefrigerators
+			refrigeratorWidthPos[i][1] = elementWidth[isRefri[i]][1]
+			refrigeratorWidthPos[i][2] = elementWidth[isRefri[i]][2]
+			refrigeratorWidthPos[i][3] = elementWidth[isRefri[i]][3]
+			refrigeratorWidthPos[i][4] = elementWidth[isRefri[i]][4]
+		next i
+		parameters refrigeratorWidthPos = refrigeratorWidthPos, refrigeratorWidth2 = refrigeratorWidth2
+	endif
+
+	if iRefrigeratorType = ACC_REFRI_COMPACT then
+		hideparameter	"refrigeratorHeigth", "refrigeratorDepth", "bRefriWallCabinet"
+		lock			"refrigeratorHeigth", "refrigeratorDepth", "bRefriWallCabinet"
+	endif
+
+else
+	hideparameter	"refrigerator_mat",
+					"nRefrigerators",
+					"nPrevRefri",
+					"refrigeratorType",
+					"iRefrigeratorType",
+					"tempRefrigeratorType",
+					"refrigeratorHeigth",
+					"refrigeratorDepth",
+					"bRefriWallCabinet",
+					"refrigeratorWidth",
+					"refrigeratorWidth2",
+					"refrigeratorPos",
+					"refrigeratorPos2",
+					"nSegmentRefri",
+					"refrigeratorWidthPos",
+					"refriDefaults",
+					"refriSymbType",
+					"iRefriSymbType",
+					"refriText"
+
+	lock			"refrigerator_mat",
+					"nRefrigerators",
+					"nPrevRefri",
+					"refrigeratorType",
+					"iRefrigeratorType",
+					"tempRefrigeratorType",
+					"refrigeratorHeigth",
+					"refrigeratorDepth",
+					"bRefriWallCabinet",
+					"refrigeratorWidth",
+					"refrigeratorWidth2",
+					"refrigeratorPos",
+					"refrigeratorPos2",
+					"nSegmentRefri",
+					"refrigeratorWidthPos",
+					"refriDefaults",
+					"refriSymbType",
+					"iRefriSymbType",
+					"refriText"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Dishwasher
+! ------------------------------------------------------------------------------
+values "nDishwasher" range [1, nMaxAccessory]
+
+values "dishwasherSymbType" stSymbType
+values "iDishwasherSymbType" SYMBTYPE_SYMBOL, SYMBTYPE_TEXT
+if GLOB_MODPAR_NAME = "dishwasherSymbType" then
+	iDishwasherSymbType = 1
+	for i = 2 to vardim1(stSymbType)
+		if dishwasherSymbType = stSymbType[i] then iDishwasherSymbType = i
+	next i
+	parameters iDishwasherSymbType = iDishwasherSymbType
+else
+	iDishwasherSymbType = max(min(iDishwasherSymbType,vardim1(stSymbType)),1)
+	parameters dishwasherSymbType = stSymbType[iDishwasherSymbType]
+endif
+
+if nofDishwasher > 0 then
+	if iDishwasherSymbType = SYMBTYPE_SYMBOL then
+		hideparameter "dishwasherText"
+		lock "dishwasherText"
+	endif
+
+	values "dishwasherWidth"	range [minSize, ]
+	values "dishwasherWidth2"	range [minSize, ]
+	if GLOB_MODPAR_NAME = "dishwasherWidth" | GLOB_MODPAR_NAME = "dishwasherWidth2" then
+		nElementChanged = 1
+		for i = 2 to nMaxAccessory				! Width Connection
+			if abs(dishwasherWidth[i] - dishwasherWidth2[i]) > EPS then
+				nElementChanged = i
+				i = nMaxAccessory
+			endif
+		next i
+		if GLOB_MODPAR_NAME = "dishwasherWidth" then
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					dishwasherWidth[i] = dishwasherWidth[nElementChanged]
+					parameters dishwasherWidth[i] = dishwasherWidth[i]
+				endif
+				if dishwasherWidth[i] < minSize then
+					dishwasherWidth[i] = minSize
+					parameters dishwasherWidth[i] = dishwasherWidth[i]
+				endif
+				if i < nofDishwasher + 1 then
+					dishwasherWidthPos[i][1] = dishwasherWidthPos[i][3] + cos(elementAngle[isDishwash[i]]) * dishwasherWidth[i]
+					dishwasherWidthPos[i][2] = dishwasherWidthPos[i][4] + sin(elementAngle[isDishwash[i]]) * dishwasherWidth[i]
+
+					dishwasherPos[i][1] = (dishwasherWidthPos[i][3] - dishwasherWidthPos[i][1]) / 2 + dishwasherWidthPos[i][1]
+					dishwasherPos[i][2] = (dishwasherWidthPos[i][4] - dishwasherWidthPos[i][2]) / 2 + dishwasherWidthPos[i][2]
+				endif
+			next i
+			dishwasherWidth2 = dishwasherWidth
+			parameters dishwasherWidthPos = dishwasherWidthPos, dishwasherWidth2 = dishwasherWidth2
+		else
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					dishwasherWidth2[i] = dishwasherWidth2[nElementChanged]
+					parameters dishwasherWidth2[i] = dishwasherWidth2[i]
+				endif
+				if dishwasherWidth2[i] < minSize then
+					dishwasherWidth2[i] = minSize
+					parameters dishwasherWidth2[i] = dishwasherWidth2[i]
+				endif
+				if i < nofDishwasher + 1 then
+					dishwasherWidthPos[i][3] = dishwasherWidthPos[i][1] - cos(elementAngle[isDishwash[i]]) * dishwasherWidth2[i]
+					dishwasherWidthPos[i][4] = dishwasherWidthPos[i][2] - sin(elementAngle[isDishwash[i]]) * dishwasherWidth2[i]
+
+					dishwasherPos[i][1] = (dishwasherWidthPos[i][3] - dishwasherWidthPos[i][1]) / 2 + dishwasherWidthPos[i][1]
+					dishwasherPos[i][2] = (dishwasherWidthPos[i][4] - dishwasherWidthPos[i][2]) / 2 + dishwasherWidthPos[i][2]
+				endif
+			next i
+			dishwasherWidth = dishwasherWidth2
+			parameters dishwasherWidthPos = dishwasherWidthPos, dishwasherWidth = dishwasherWidth
+		endif
+		parameters dishwasherPos = dishwasherPos
+	else
+		dishwasherWidth2 = dishwasherWidth
+		for i = 1 to nofDishwasher
+			dishwasherWidthPos[i][1] = elementWidth[isDishwash[i]][1]
+			dishwasherWidthPos[i][2] = elementWidth[isDishwash[i]][2]
+			dishwasherWidthPos[i][3] = elementWidth[isDishwash[i]][3]
+			dishwasherWidthPos[i][4] = elementWidth[isDishwash[i]][4]
+		next i
+		parameters dishwasherWidthPos = dishwasherWidthPos, dishwasherWidth2 = dishwasherWidth2
+	endif
+else
+	hideparameter	"dishwasher_mat",
+					"nDishwasher",
+					"nPrevDishwasher",
+					"dishwasherWidth",
+					"dishwasherWidth2",
+					"dishwasherPos",
+					"dishwasherPos2",
+					"nSegmentDishwasher",
+					"dishwasherWidthPos",
+					"dishwasherSymbType",
+					"iDishwasherSymbType",
+					"dishwasherText"
+
+	lock			"dishwasher_mat",
+					"nDishwasher",
+					"nPrevDishwasher",
+					"dishwasherWidth",
+					"dishwasherWidth2",
+					"dishwasherPos",
+					"dishwasherPos2",
+					"nSegmentDishwasher",
+					"dishwasherWidthPos",
+					"dishwasherSymbType",
+					"iDishwasherSymbType",
+					"dishwasherText"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Washer
+! ------------------------------------------------------------------------------
+values "nWasher" range [1, nMaxAccessory]
+
+values "washerSymbType" stSymbType
+values "iWasherSymbType" SYMBTYPE_SYMBOL, SYMBTYPE_TEXT
+if GLOB_MODPAR_NAME = "washerSymbType" then
+	iWasherSymbType = 1
+	for i = 2 to vardim1(stSymbType)
+		if washerSymbType = stSymbType[i] then iWasherSymbType = i
+	next i
+	parameters iWasherSymbType = iWasherSymbType
+else
+	iWasherSymbType = max(min(iWasherSymbType,vardim1(stSymbType)),1)
+	parameters washerSymbType = stSymbType[iWasherSymbType]
+endif
+
+if nofWasher > 0 then
+	if iWasherSymbType = SYMBTYPE_SYMBOL then
+		hideparameter "washerText"
+		lock "washerText"
+	endif
+
+	values "washerWidth"	range [minSize, ]
+	values "washerWidth2"	range [minSize, ]
+	if GLOB_MODPAR_NAME = "washerWidth" | GLOB_MODPAR_NAME = "washerWidth2" then
+		nElementChanged = 1
+		for i = 2 to nMaxAccessory				! Width Connection
+			if abs(washerWidth[i] - washerWidth2[i]) > EPS then
+				nElementChanged = i
+				i = nMaxAccessory
+			endif
+		next i
+		if GLOB_MODPAR_NAME = "washerWidth" then
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then		!Width Connection
+					washerWidth[i] = washerWidth[nElementChanged]
+					parameters washerWidth[i] = washerWidth[i]
+				endif
+				if washerWidth[i] < minSize then
+					washerWidth[i] = minSize
+					parameters washerWidth[i] = washerWidth[i]
+				endif
+				if i < nofWasher + 1 then
+					washerWidthPos[i][1] = washerWidthPos[i][3] + cos(elementAngle[isWasher[i]]) * washerWidth[i]
+					washerWidthPos[i][2] = washerWidthPos[i][4] + sin(elementAngle[isWasher[i]]) * washerWidth[i]
+
+					washerPos[i][1] = (washerWidthPos[i][3] - washerWidthPos[i][1]) / 2 + washerWidthPos[i][1]
+					washerPos[i][2] = (washerWidthPos[i][4] - washerWidthPos[i][2]) / 2 + washerWidthPos[i][2]
+				endif
+			next i
+			washerWidth2 = washerWidth
+			parameters washerWidthPos = washerWidthPos, washerWidth2 = washerWidth2
+		else
+			for i = 1 to nMaxAccessory
+				if nElementChanged <> i then	!Width Connection
+					washerWidth2[i] = washerWidth2[nElementChanged]
+					parameters washerWidth2[i] = washerWidth2[i]
+				endif
+				if washerWidth2[i] < minSize then
+					washerWidth2[i] = minSize
+					parameters washerWidth2[i] = washerWidth2[i]
+				endif
+				if i < nofWasher + 1 then
+					washerWidthPos[i][3] = washerWidthPos[i][1] - cos(elementAngle[isWasher[i]]) * washerWidth2[i]
+					washerWidthPos[i][4] = washerWidthPos[i][2] - sin(elementAngle[isWasher[i]]) * washerWidth2[i]
+
+					washerPos[i][1] = (washerWidthPos[i][3] - washerWidthPos[i][1]) / 2 + washerWidthPos[i][1]
+					washerPos[i][2] = (washerWidthPos[i][4] - washerWidthPos[i][2]) / 2 + washerWidthPos[i][2]
+				endif
+			next i
+			washerWidth = washerWidth2
+			parameters washerWidthPos = washerWidthPos, washerWidth = washerWidth
+		endif
+		parameters washerPos = washerPos
+	else
+		washerWidth2 = washerWidth
+		for i = 1 to nofWasher
+			washerWidthPos[i][1] = elementWidth[isWasher[i]][1]
+			washerWidthPos[i][2] = elementWidth[isWasher[i]][2]
+			washerWidthPos[i][3] = elementWidth[isWasher[i]][3]
+			washerWidthPos[i][4] = elementWidth[isWasher[i]][4]
+		next i
+		parameters washerWidthPos = washerWidthPos, washerWidth2 = washerWidth2
+	endif
+else
+	hideparameter	"washer_mat",
+					"nWasher",
+					"nPrevWasher",
+					"washerWidth",
+					"washerWidth2",
+					"washerPos",
+					"washerPos2",
+					"nSegmentWasher",
+					"washerWidthPos",
+					"washerSymbType",
+					"iWasherSymbType",
+					"washerText"
+
+	lock			"washer_mat",
+					"nWasher",
+					"nPrevWasher",
+					"washerWidth",
+					"washerWidth2",
+					"washerPos",
+					"washerPos2",
+					"nSegmentWasher",
+					"washerWidthPos",
+					"washerSymbType",
+					"iWasherSymbType",
+					"washerText"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Minimal Space
+! ------------------------------------------------------------------------------
+values "MSFront" range [0, ]
+
+
+! ==============================================================================
+!
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+!
+! ==============================================================================
+
+! ------------------------------------------------------------------------------
+! Move References Line Point
+! ------------------------------------------------------------------------------
+"moveRefLinePoints_1":
+! ------------------------------------------------------------------------------
+
+	movedPoint = 0
+	for i = 1 to nRefPoints[1] - (iLayoutType = LAYOUT_ISLAND)*2
+		if abs(refLinePoints_1[i][1] - tempRefLinePoints_1[i][1]) > EPS | abs(refLinePoints_1[i][2] - tempRefLinePoints_1[i][2]) > EPS then	!moved points
+			movedPoint = i
+		endif
+	next i
+
+	if movedPoint > 0 & movedPoint <= nRefPoints[1] then
+		for i = 1 to nRefPoints[1] - (iLayoutType = LAYOUT_ISLAND)*2
+			if i <> movedPoint then
+				refPointDistance = (refLinePoints_1[i][1] - refLinePoints_1[movedPoint][1])^2 + (refLinePoints_1[i][2] - refLinePoints_1[movedPoint][2])^2
+				if refPointDistance < minRefPointDistSquare then
+					xo = refLinePoints_1[i][1]
+					yo = refLinePoints_1[i][2]
+					ro = minRefPointDist
+
+					if movedPoint = nRefPoints[1] then
+						s  = movedPoint - 1
+						s2 = movedPoint
+					else
+						s  = movedPoint
+						s2 = movedPoint + 1
+					endif
+
+					x1 = refLinePoints_1[s][1]
+					y1 = refLinePoints_1[s][2]
+					x2 = refLinePoints_1[s2][1]
+					y2 = refLinePoints_1[s2][2]
+
+					gosub "intersection_Circle_Line"
+
+					!Select Good Intersection Circle Line
+					cx = 0
+					cy = 0
+					if state then
+						cx = xa
+						cy = ya
+
+						refLinePoints_1[movedPoint][1] = cx
+						refLinePoints_1[movedPoint][2] = cy
+						parameters	refLinePoints_1[movedPoint][1] = refLinePoints_1[movedPoint][1],
+									refLinePoints_1[movedPoint][2] = refLinePoints_1[movedPoint][2]
+					endif
+				endif
+			endif
+		next i
+	endif
+return
+
+
+! ------------------------------------------------------------------------------
+"moveRefLinePoints_2":
+! ------------------------------------------------------------------------------
+
+	movedPoint = 0
+	for i = 1 to nRefPoints[2]
+		if abs(refLinePoints_2[i][1] - tempRefLinePoints_2[i][1]) > EPS | abs(refLinePoints_2[i][2] - tempRefLinePoints_2[i][2]) > EPS then	!moved points
+			movedPoint = i
+		endif
+	next i
+
+	if movedPoint > 0 & movedPoint <= nRefPoints[2] then
+		for i = 1 to nRefPoints[2]
+			if i <> movedPoint then
+				refPointDistance = (refLinePoints_2[i][1] - refLinePoints_2[movedPoint][1])^2 + (refLinePoints_2[i][2] - refLinePoints_2[movedPoint][2])^2
+				if refPointDistance < minRefPointDistSquare then
+					xo = refLinePoints_2[i][1]
+					yo = refLinePoints_2[i][2]
+					ro = minRefPointDist
+
+					if movedPoint = nRefPoints[2] then
+						s  = movedPoint - 1
+						s2 = movedPoint
+					else
+						s  = movedPoint
+						s2 = movedPoint + 1
+					endif
+
+					x1 = refLinePoints_2[s][1]
+					y1 = refLinePoints_2[s][2]
+					x2 = refLinePoints_2[s2][1]
+					y2 = refLinePoints_2[s2][2]
+
+					gosub "intersection_Circle_Line"
+
+					!Select Good Intersection Circle Line
+					cx = 0
+					cy = 0
+					if state then
+						cx = xa
+						cy = ya
+
+						refLinePoints_2[movedPoint][1] = cx
+						refLinePoints_2[movedPoint][2] = cy
+						parameters	refLinePoints_2[movedPoint][1] = refLinePoints_2[movedPoint][1],
+									refLinePoints_2[movedPoint][2] = refLinePoints_2[movedPoint][2]
+					endif
+				endif
+			endif
+		next i
+	endif
+return
+
+
+! ------------------------------------------------------------------------------
+"moveRefLinePoints_3":
+! ------------------------------------------------------------------------------
+
+	movedPoint = 0
+	for i = 1 to nRefPoints[3]
+		if abs(refLinePoints_3[i][1] - tempRefLinePoints_3[i][1]) > EPS | abs(refLinePoints_3[i][2] - tempRefLinePoints_3[i][2]) > EPS then	!moved points
+			movedPoint = i
+		endif
+	next i
+
+	if movedPoint > 0 & movedPoint <= nRefPoints[3] then
+		for i = 1 to nRefPoints[2]
+			if i <> movedPoint then
+				refPointDistance = (refLinePoints_3[i][1] - refLinePoints_3[movedPoint][1])^2 + (refLinePoints_3[i][2] - refLinePoints_3[movedPoint][2])^2
+				if refPointDistance < minRefPointDistSquare then
+					xo = refLinePoints_3[i][1]
+					yo = refLinePoints_3[i][2]
+					ro = minRefPointDist
+
+					if movedPoint = nRefPoints[3] then
+						s  = movedPoint - 1
+						s2 = movedPoint
+					else
+						s  = movedPoint
+						s2 = movedPoint + 1
+					endif
+
+					x1 = refLinePoints_3[s][1]
+					y1 = refLinePoints_3[s][2]
+					x2 = refLinePoints_3[s2][1]
+					y2 = refLinePoints_3[s2][2]
+
+					gosub "intersection_Circle_Line"
+
+					!Select Good Intersection Circle Line
+					cx = 0
+					cy = 0
+					if state then
+						cx = xa
+						cy = ya
+
+						refLinePoints_3[movedPoint][1] = cx
+						refLinePoints_3[movedPoint][2] = cy
+						parameters	refLinePoints_3[movedPoint][1] = refLinePoints_3[movedPoint][1],
+									refLinePoints_3[movedPoint][2] = refLinePoints_3[movedPoint][2]
+					endif
+				endif
+			endif
+		next i
+	endif
+return
+
+
+! ------------------------------------------------------------------------------
+! Move Wall Line Point
+! ------------------------------------------------------------------------------
+"moveWallLinePoints":
+! ------------------------------------------------------------------------------
+
+	for i = 1 to nWallCabinet
+		dx = wallCabinetPos_2[i][1] - wallCabinetPos_1[i][1]
+		dy = wallCabinetPos_2[i][2] - wallCabinetPos_1[i][2]
+		wallDistance = dx^2 + dy^2
+		if wallDistance < minWallPointDistSquare then
+			if abs(dx) < EPS then
+				if dy > 0 then
+					wallAngle = 90
+				else
+					wallAngle = 270
+				endif
+			else
+				wallAngle = atn(dy/dx)
+				if dx > 0 then wallAngle = wallAngle + 180
+			endif
+
+			if moved = 1 then
+				wallCabinetPos_1[i][1] = wallCabinetPos_2[i][1] + cos(wallAngle) * minWallPointDist
+				wallCabinetPos_1[i][2] = wallCabinetPos_2[i][2] + sin(wallAngle) * minWallPointDist
+				parameters	wallCabinetPos_1[i][1] = wallCabinetPos_1[i][1],
+							wallCabinetPos_1[i][2] = wallCabinetPos_1[i][2]
+			else
+				wallCabinetPos_2[i][1] = wallCabinetPos_1[i][1] - cos(wallAngle) * minWallPointDist
+				wallCabinetPos_2[i][2] = wallCabinetPos_1[i][2] - sin(wallAngle) * minWallPointDist
+				parameters	wallCabinetPos_2[i][1] = wallCabinetPos_2[i][1],
+							wallCabinetPos_2[i][2] = wallCabinetPos_2[i][2]
+			endif
+		endif
+	next i
+return

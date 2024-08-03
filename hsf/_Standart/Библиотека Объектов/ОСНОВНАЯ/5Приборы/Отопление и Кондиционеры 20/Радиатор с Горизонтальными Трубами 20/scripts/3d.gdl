@@ -1,0 +1,244 @@
+
+!!Radiator Horizontal Bars.gsm
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+IF gs_shadow=0 THEN SHADOW OFF
+IF gs_shadow=1 THEN SHADOW ON
+
+unID = 1
+
+hotspot a*0.5,b,0, unID : unID = unID + 1
+hotspot 0,0,0, unID : unID = unID + 1
+hotspot 0,b,0, unID : unID = unID + 1
+hotspot a,b,0, unID : unID = unID + 1
+hotspot a,0,0, unID : unID = unID + 1
+
+hotspot 0,0,zzyzx, unID : unID = unID + 1
+hotspot 0,b,zzyzx, unID : unID = unID + 1
+hotspot a,b,zzyzx, unID : unID = unID + 1
+hotspot a,0,zzyzx, unID : unID = unID + 1
+
+
+if gs_detlevel_3D_m = 1 then gs_resol=8
+
+pen gs_cont_pen
+resol gs_resol
+
+
+! --- start of modifying to Shaft
+
+				! --- CONNECTIONS --- !
+
+IF bShowMEP THEN
+
+	IF useSysMat THEN mat1 = sMat
+
+	if iRadiatorType = RADIATORTYPE_CURVED then
+		_ConEdit = 1
+	else
+		_ConEdit = 14
+	endif
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		ui_current_con = ui_current_con,
+		MEP_NumberConnections = MEP_NumberConnections,
+		MEP_NumConnectionData = gs_Connections,
+		gs_AddConnections = gs_AddConnections,
+		cShow3D = 1,
+		gs_ConMat = mat1,
+		MEP_InsShow = 0,
+		MEP_cline_show_3D = 0,
+		gs_cont_pen = gs_cont_pen,
+		ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = _ConEdit,
+		ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = _ConEdit
+
+
+	if iRadiatorType = RADIATORTYPE_FLAT then
+
+		material mat1
+
+		add ConPosX_1, ConPosY_1, ConPosZ_1
+		roty 90
+		prism_ 2, panelOverhang,
+			0, 0, 979,
+			ConWidth_1/2, 360, 4079
+		del 2
+
+		add ConPosX_2, ConPosY_2, ConPosZ_2
+		roty -90
+		prism_ 2, panelOverhang,
+			0, 0, 979,
+			ConWidth_2/2, 360, 4079
+		del 2
+
+	endif
+
+ENDIF
+
+! --- end of modifying to Shaft
+
+if iRadiatorType = RADIATORTYPE_FLAT then addy -panelThk
+
+! --- fastening to wall
+material mat1
+addx panelOverhang
+addz 0.05
+addy bd + panelThk
+
+for i = 1 to 2
+	for j = 1 to 2
+		block bd, connectLength, 0.005
+		addz ZZYZX - 0.13
+	next j
+	
+	del 2
+	addx A - bd - panelOverhang * 2
+next i
+
+del 4
+addy panelThk
+
+for i = 1 to 2
+	block bd, bd, ZZYZX
+	addx A - bd - panelOverhang * 2
+next i
+
+del 4
+
+! --- panels
+if iRadiatorType = RADIATORTYPE_BARS then
+
+	addx bd
+	addy bd / 2
+	roty 90
+
+	aa = (zzyzx - nb * bd) / nb
+	addx -aa / 2 - bd / 2
+	
+	for i = 1 to nb
+		cylind a - 2 * bd, bd / 2
+		addx -1 * (aa + bd)
+	next i
+
+	del nb + 4
+	
+endif
+
+if iRadiatorType = RADIATORTYPE_FLAT then
+	
+	panelDistance = (ZZYZX - (nb + nGaps) * panelHeight) / (nb + nGaps)
+	addz panelDistance / 2 + panelHeight / 2
+	roty 90
+
+	for i = 1 to nb + nGaps
+	
+		if not(bGaps) | (i % 5 <> 0) | (i = nb + nGaps) then
+			prism_ 5, A,
+				-panelHeight / 2, 0, 15,
+				-panelHeight / 2, panelThk, 15,
+				panelHeight / 2, panelThk, 15,
+				panelHeight / 2, 0, 15,
+				-panelHeight / 2, 0, -1
+		endif
+		
+		addx -panelDistance - panelHeight
+	next i
+	
+	del nb + nGaps + 2
+
+endif
+
+if iRadiatorType = RADIATORTYPE_CURVED then
+
+	bendRad = barDistance / 2
+	
+	alpha = -90
+	delta = 180 / gs_resol
+	
+	put -1, 0, -bendRad, 1,
+		-0.001, 0, -bendRad, 1
+
+	for i = 1 to gs_resol + 1
+		put bendRad * cos(alpha), 0, bendRad * sin(alpha), 1
+		alpha = alpha + delta
+	next i
+	
+	put -0.001, 0, bendRad, 1,
+		-1, 0, bendRad, 1
+	
+	add 0, bd / 2, barDistance / 2
+	
+	for i = 1 to nb
+		if i = 1 | ((i = nb) & (nb % 2 = 0)) then
+			! First tube
+			tube 2, 4, 1+2+16,
+				0, 0, 901,
+				bd / 2, 360, 4001,
+				
+				-1, 0, 0, 1,
+				0, 0, 0, 1,
+				A - bendRad, 0, 0, 1,
+				A, 0, 0, 1
+		else
+			if i = nb then
+				tube 2, 4, 1+2+32,
+					0, 0, 901,
+					bd / 2, 360, 4001,
+					
+					-1, 0, 0, 1,
+					bendRad, 0, 0, 1,
+					A, 0, 0, 1,
+					A + 1, 0, 0, 1
+			else
+				tube 2, 4, 1+2,
+					0, 0, 901,
+					bd / 2, 360, 4001,
+					
+					-1, 0, 0, 1,
+					bendRad, 0, 0, 1,
+					A - bendRad, 0, 0, 1,
+					A, 0, 0, 1
+			endif
+		endif
+		
+		if i < nb then
+			if i % 2 = 1 then
+				add A - bendRad, 0, bendRad
+				tube 2, NSP / 4, 1+2,
+					0, 0, 901,
+					bd / 2, 360, 4001,
+					use(NSP)
+				del 1
+			else
+				add bendRad, 0, bendRad
+				mulx -1
+				tube 2, NSP / 4, 1+2,
+					0, 0, 901,
+					bd / 2, 360, 4001,
+					use(NSP)
+				del 2
+			endif
+		endif
+		
+		addz barDistance
+	next i
+
+	del nb + 1
+	
+	for i = 1 to NSP
+		void = GET(1)
+	next i
+	
+endif
+
+if iRadiatorType = RADIATORTYPE_FLAT then del 1
+
+

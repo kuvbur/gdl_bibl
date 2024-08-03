@@ -1,0 +1,299 @@
+
+unID=1
+
+IF gs_detlevel_3D_m=0 then END
+IF not(gs_shadow) THEN SHADOW OFF
+
+
+! --- start of modifying to Shaft
+
+				! --- CONNECTIONS --- !
+
+IF gs_detlevel_3D_m=1 THEN RESOL 8
+IF gs_detlevel_3D_m=2 THEN RESOL 24
+
+! Show MEP Connections -------------------------------------------------------------[
+
+isavailable = 0
+isInArchiCAD = APPLICATION_QUERY ("MEPMODELER", "IsAvailable()", isavailable)
+isMEPEnabled = (isavailable OR isInArchiCAD = 0)
+if isMEPEnabled then
+	bShowMEP = 1
+	reqBMep = 0
+	success = LIBRARYGLOBAL ("LibraryGlobals13", "showMepConnect", reqBMep)
+	if success > 0 then
+		bShowMEP = reqBMep
+	endif
+else
+	bShowMEP = 0
+endif
+
+! Show MEP Connections -------------------------------------------------------------]
+
+IF bShowMEP THEN
+
+	IF useSysMat THEN
+		toe_mat			= sMat
+		count_mat		= sMat
+		bs_mat			= sMat
+		gs_cabinet_mat	= sMat
+		doorglas_mat	= sMat
+		doorframe_mat	= sMat
+		doorframe_mat_end	= sMat
+		gs_sink_mat		= sMat
+		gs_tap_mat		= sMat
+		gs_knob_mat		= sMat
+		gs_ShelfMat		= sMat
+		DrawerMat		= sMat
+		gs_con_mat		= sMat
+	ENDIF
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		ui_current_con = ui_current_con,
+		MEP_NumberConnections = MEP_NumberConnections,
+		MEP_NumConnectionData = gs_Connections,
+		gs_AddConnections = gs_AddConnections,
+		cShow3D = 1,
+		gs_ConMat = gs_con_mat,
+		MEP_InsShow = 0,
+		MEP_cline_show_3D = 0,
+		gs_cont_pen = gs_cont_pen,
+		ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 16,
+		ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = 16,
+		ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConEdit_3 = 16
+ENDIF
+
+! --- end of modifying to Shaft
+
+
+IF gs_detlevel_3D_m=1 THEN gs_resol = 4
+RESOL gs_resol
+
+PEN gs_cont_pen
+
+! Handling overhungs in case of end panels
+if dob_face then rear_cab = rear_cab
+if rear_panel then rear_cab = rear_cab + 0.02
+if left_panel then left_cab = left_cab +0.02
+if right_panel then right_cab = right_cab +0.02
+
+
+IF bDrawer THEN		!!! *** Shelf between Cabinet and Drawer
+	PEN gs_cont_pen
+	MATERIAL gs_cabinet_mat
+	ADD 0,0,zzyzx-count_th-drawer_h-0.01
+	IF gs_sink_type_m=0 then
+		base
+		prism_	5, 0.02,
+				left_cab+0.02,front_cab+fr_th1, 15,
+				left_cab+0.02,b-rear_cab-0.02-((fr_th1-0.02)*dob_face), 15,
+				a-right_cab-0.02,b-rear_cab-0.02-((fr_th1-0.02)*dob_face), 15,
+				a-right_cab-0.02,front_cab+fr_th1, 15,
+				left_cab+0.02,front_cab+fr_th1, -1
+		vert 0, 0, 0
+		vert 1, 0, 0
+		vert 0, 1, 0
+		vert 0, 0, 1
+
+		coor 2, -1, -2, -3, -4
+		body 1
+
+	ENDIF
+	DEL 1
+ENDIF
+
+! CALL GENERAL BASE CABINET
+if gs_sink_type_m=0 then
+	sink=0
+else
+	sink=1
+endif
+
+CALL "fa_gen_basecabinet" PARAMETERS a=a, b=b, zzyzx=zzyzx,
+		gs_detlevel_3D_m=gs_detlevel_3D_m, dob_face=dob_face, count_th=count_th,
+		front_cab=front_cab, rear_cab=rear_cab, left_cab=left_cab,
+		right_cab=right_cab, toe_h=toe_h, side_vis_m=side_vis_m+1,
+		sink=sink, shelf_num=shelf_num, gs_cont_pen=gs_cont_pen, gs_shadow=gs_shadow,
+		toe_mat=toe_mat, gs_cabinet_mat=gs_cabinet_mat, drawer_h=drawer_h,
+		gs_toe_type_m=gs_toe_type_m, toe_d=toe_d, ToeHtps3D=1,
+		fr_th1=fr_th1, gs_ShelfMat=gs_ShelfMat,
+		basecab_unID=unID,
+		returned_parameters unID
+
+
+! CALL COUNTERTOP and SINK
+
+	CALL "fa_counter_sink" PARAMETERS ALL countsink_unID=unID,
+		side_vis_m=side_vis_m+1,
+	returned_parameters unID
+
+! CALL DRAWER and DOOR PANEL
+
+
+FOR ii=1 TO (dob_face)+1									!*** double face
+	IF bDrawer then
+		ADD left_cab,front_cab+fr_th1,ZZYZX-count_th-drawer_h		!*** DRAWER
+		GOSUB 10
+		ADD a/2-(left_cab+right_cab)/2,-0.02,drawer_h/2
+		ROTY 90
+		IF gs_sink_type_m=0 and gs_detlevel_3D_m=2 then GOSUB 100	!*** Knob
+		DEL 3
+	ENDIF
+
+	ADD left_cab,front_cab+fr_th1,toe_h					!*** FRONT DOORS
+	door_w=a-left_cab-right_cab
+	if gs_door_type_m > 0 then GOSUB 20						!*** FRONT LEFT DOOR
+	DEL 1
+
+	door_open=0
+
+	MULy -1
+	ADDy -front_cab
+	ADD	0,-B+rear_cab,0
+	mulx-1
+	addx -A
+NEXT ii
+DEL (dob_face+1)*5
+
+! CALL END PANELS
+
+	IF rear_panel=1 and dob_face=0 then
+		door_w=a-left_cab-right_cab: door_h=ZZYZX-toe_h-count_th
+		ADD door_w+left_cab,b-rear_cab,toe_h
+		ROTZ 180
+		GOSUB 40
+		DEL 2
+	ENDIF
+
+	IF left_panel=1 then	!*** LEFT END PANEL
+		door_w=b-front_cab-rear_cab-fr_th1-(fr_th1*dob_face) : door_h=ZZYZX-toe_h-count_th
+		ADD left_cab,door_w+front_cab+fr_th1,toe_h
+		ROTZ -90
+		GOSUB 40
+		DEL 2
+	ENDIF
+
+	IF right_panel=1 then
+		door_w=b-front_cab-rear_cab-fr_th1-(fr_th1*dob_face): door_h=ZZYZX-toe_h-count_th
+		ADD a-right_cab,front_cab+fr_th1,toe_h
+		ROTZ 90
+		GOSUB 40
+		DEL 2
+	ENDIF
+
+END
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!! *** RETURN *** !!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!--- drawer
+10:
+	cabdoortyp_unID = unID
+	call "fa_cabdoortyp" parameters	gs_detlevel_3D_m	= gs_detlevel_3D_m,
+									gs_door_type_m		= _iDrawerType, 
+									gs_cust_p			= gs_cust_p,
+									gs_bevel			= gs_bevel,
+									fr_th1				= fr_th1,
+									doorframe_w			= doorframe_w, 
+									door_w				= a-left_cab-right_cab, 
+									door_h				= drawer_h,
+									vert_gnum			= 0, 
+									hor_gnum			= 0,
+									gs_knob_type_m		= 0,
+									gs_cont_pen			= gs_cont_pen, 
+									doorframe_mat		= DrawerMat, 
+									doorglas_mat		= doorglas_mat, 
+									gs_shadow			= gs_shadow,
+									gs_full_edit		= 0,
+									cabdoortyp_unID		= cabdoortyp_unID,
+									returned_parameters cabdoortyp_unID
+
+	unID = cabdoortyp_unID
+return
+
+! FRONT DOOR
+20:
+	cabdoortyp_unID=unID
+	CALL "fa_cabdoortyp" PARAMETERS ALL cabdoortyp_unID=cabdoortyp_unID,
+			returned_parameters cabdoortyp_unID
+
+	unID = cabdoortyp_unID
+RETURN
+
+! END PANELS
+40:
+	!! on rear panel there is no glas and grilles and knobs!!
+	door_ang=0
+	gs_knob_type_m=0
+
+	If iEndPanelType = 1 	then gs_door_type_m=1
+	If iEndPanelType = 2 	then gs_door_type_m=2
+	If iEndPanelType = 4 	then gs_door_type_m=11
+	If iEndPanelType = 7 	then gs_door_type_m=4
+	If iEndPanelType = 9 	then gs_door_type_m=6
+	If iEndPanelType = 99 	then gs_door_type_m=10
+
+	gs_full_edit=0
+
+	cabdoortyp_unID=unID
+	CALL "fa_cabdoortyp" PARAMETERS ALL cabdoortyp_unID=cabdoortyp_unID,
+		fr_th1=0.02,gs_cust_p=gs_cust_p_end,doorframe_w=doorframe_w_end,
+		doorframe_mat=doorframe_mat_end,doorglas_mat=doorframe_mat_end,
+		gs_bevel=gs_bevel,
+		returned_parameters cabdoortyp_unID
+
+	unID = cabdoortyp_unID
+RETURN
+
+! KNOBS/Drawer
+100:
+	IF gs_detlevel_3D_m=2 THEN
+
+		if gs_knob_type_m = 9 then
+			reqBKnobs = 0
+			success = LIBRARYGLOBAL ("LibraryGlobals13", "hideBKnobs", reqBKnobs)
+			if (success = 0 or not(reqBKnobs)) and gs_cust_knob<>"" then
+				ADDz -(left_cab+right_cab)/2
+				rotx 90
+				rotz 90
+				addx -gs_customHandleLength / 2
+				addy -gs_customHandleHeight / 2
+				call "Knob_Collection" PARAMETERS gs_ptype	= gs_cust_knob,
+													a		= gs_customHandleLength,
+													b		= gs_customHandleHeight,
+													zzyzx	= gs_customHandleDepth
+				del 5
+			endif
+		else
+			if gs_knob_type_m=1 or gs_knob_type_m=2 or gs_knob_type_m=3 or gs_knob_type_m=0 then
+				ADDz 0
+				addy -fr_th1+0.02
+				!!! knob on top drawer
+				CALL "fa_knobtyp" PARAMETERS gs_detlevel_3D_m=gs_detlevel_3D_m,
+						gs_knob_type_m=gs_knob_type_m,gs_resol=gs_resol,
+						gs_shadow=gs_shadow,gs_cont_pen=gs_cont_pen,
+						gs_knob_mat=gs_knob_mat
+				del 2
+			else
+				if gs_knob_type_m=8 then
+					roty 180
+					Addz knob_size/2
+					addy -fr_th1+0.02
+						CALL "fa_knobtyp" PARAMETERS gs_detlevel_3D_m=gs_detlevel_3D_m,
+								gs_knob_type_m=gs_knob_type_m,gs_resol=gs_resol,
+								gs_shadow=gs_shadow,gs_cont_pen=gs_cont_pen,
+								gs_knob_mat=gs_knob_mat,knob_size=knob_size
+					del 3
+				else
+					Addz knob_size/2
+					addy -fr_th1+0.02
+					CALL "fa_knobtyp" PARAMETERS gs_detlevel_3D_m=gs_detlevel_3D_m,
+							gs_knob_type_m=gs_knob_type_m,gs_resol=gs_resol,
+							gs_shadow=gs_shadow,gs_cont_pen=gs_cont_pen,
+							gs_knob_mat=gs_knob_mat,knob_size=knob_size
+					del 2
+				endif
+			endif
+		endif
+	ENDIF
+RETURN

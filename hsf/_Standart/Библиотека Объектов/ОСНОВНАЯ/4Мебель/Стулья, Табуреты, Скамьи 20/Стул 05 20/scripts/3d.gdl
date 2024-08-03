@@ -1,0 +1,223 @@
+
+IF gs_detlevel_3D_m=0 THEN END
+
+RESOL gs_resol
+PEN gs_cont_pen
+
+
+IF gs_shadow=0 THEN SHADOW OFF
+
+IF GLOB_CONTEXT>20 and GLOB_CONTEXT<40 THEN gs_detlevel_3D_m=1
+
+
+IF gs_detlevel_3D_m=1 THEN
+    gs_resol=4
+else
+    gs_resol=gs_resol
+endif
+
+unID = 1
+
+hotspot 0, 0, 0, unID : unID = unID + 1
+hotspot a, 0, 0, unID : unID = unID + 1
+hotspot a, b, 0, unID : unID = unID + 1
+hotspot 0, b, 0, unID : unID = unID + 1
+
+
+! *** LEGs
+
+!!RR=A/50		! Radius of Leg
+RR=0.01			! Radius of Leg
+leg_xy=gs_seat_height/20					! x,y Positions of leg in the height of SEAT
+arm_xy=(gs_seat_height+arm_height)/20		! x,y Positions of leg in the height of ARM
+
+leg_angle=ATN((gs_seat_height+arm_height)/20/(gs_seat_height+arm_height))
+
+
+MATERIAL gs_frame_mat
+
+IF gs_armrest=1 then
+	temp_legheight=gs_seat_height+arm_height
+	else
+	temp_legheight=gs_seat_height
+	endif
+
+	FOR nn=1 to 2
+
+		ADD RR,RR,0
+			RESOl gs_resol
+			EXTRUDE 2, (gs_seat_height+arm_height)/20, (gs_seat_height+arm_height)/20, temp_legheight, 1+2+16+32,
+				0, 0, 901,
+				RR, 360, 4001
+		del 1
+		rotz 90
+		ADDy -a
+	NEXT nn
+	del 4
+
+	IF gs_armrest=0 then temp_legheight=gs_seat_height+arm_height
+
+	ADDy b
+	muly -1
+		FOR nn=1 to 2
+			ADD RR,RR,0
+				EXTRUDE 2, (gs_seat_height+arm_height)/20, (gs_seat_height+arm_height)/20, temp_legheight, 1+2+16+32,
+					0, 0, 901,
+					RR, 360, 4001
+			del 1
+			rotz 90
+			ADDy -a
+		NEXT nn
+		del 4
+	DEL 2
+
+
+
+	! FRAMEs between legs
+	for tt3=1 to 2
+		add leg_xy+RR,leg_xy+RR,gs_seat_height-0.02-RR
+		rotz 90
+			for tt2=1 to 2
+			ARMC RR,RR,(b-2*leg_xy-2*RR)/2,0,0,90
+			mulx -1
+			addx -(b-2*leg_xy-2*RR)
+			next tt2
+			del 4
+		del 2
+	addx (a-2*leg_xy-2*RR)
+	NEXT tt3
+	del 2
+
+		add leg_xy+RR,b/2,gs_seat_height-0.02-RR
+			for tt3=1 to 2
+			ARMC RR,RR,(a-2*leg_xy-2*RR)/2,0,0,90	! under the seat
+			mulx -1
+			addx -(a-2*leg_xy-2*RR)
+			next tt3
+			del 4
+		del 1
+
+! SEATs
+ADDx leg_xy
+ADDy leg_xy
+ADDz gs_seat_height-0.02
+	CALL "fa_cushion_backrest" parameters gs_detlevel_3D_m=gs_detlevel_3D_m,
+	cush_a=a-2*leg_xy,cush_b=b-2*leg_xy,cush_h=CushThk,r1=RadCushCorner,r2=RadCushEdge,r3=r2,
+	gs_resol=gs_resol,cush_mat=gs_seat_mat
+DEL 3
+
+IF gs_armrest=1 then
+! ARM
+
+	RR2=(((b-2*arm_xy-2*RR)/2)*((b-2*arm_xy-2*RR)/2))/(arm_xy)
+	RR3=RR2+(arm_xy)							! Radius of axis
+	RR3_angle=atn(((b-2*arm_xy-2*RR)/2)/RR2)
+	RR3_y=RR*sin(RR3_angle)
+	RR3_x=RR*cos(RR3_angle)
+
+	! Overhang of arm
+	RR_y=2*RR*cos(RR3_angle)
+	RR_x=2*RR*sin(RR3_angle)
+	RR_angle=ASN(RR/RR3)
+
+	FOR tt=1 to 2
+		ADD a-arm_xy-RR,b/2,gs_seat_height+arm_height
+			RESOL 20*gs_resol
+			PRISM_ 9,0.01,
+				-RR3_x-RR_x,-((b-2*arm_xy-2*RR)/2)+RR3_y-RR_y,79,
+				1.5*RR3_x-RR_x,-((b-2*arm_xy-2*RR)/2)-1.5*RR3_y-RR_y,79,
+				-RR2,0,979,
+				RR3+2.5*RR,2*(RR3_angle+RR_angle),4079,
+				1.5*RR3_x-RR_x,((b-2*arm_xy-2*RR)/2)+1.5*RR3_y+RR_y,79,
+				-RR3_x-RR_x,((b-2*arm_xy-2*RR)/2)-RR3_y+RR_y,79,
+				-RR2+RR3_x,0,979,
+				RR3-RR,-2*(RR3_angle+RR_angle),4079,
+				-RR3_x-RR_x,-((b-2*arm_xy-2*RR)/2)+RR3_y-RR_y,1
+		del 1
+	MULx -1
+	ADDX -a
+	NEXT tt
+	del 4
+ENDIF
+
+	RESOL gs_resol
+
+	! BACKREST
+
+	backrest_thk=0.02			! thickness of Backrest
+	space=0.05					! Space between seat and backrest
+	space_y=(space)/(tan(90-leg_angle))
+	backrest_y=(zzyzx-gs_seat_height-space)/(tan(90-leg_angle))
+	r1=0.03						! radius of bottom arc
+	beta=(90-leg_angle)/2
+	r1_y=r1/tan(beta)
+	r1p_x=r1_y*cos(leg_angle)
+	r1p_y=r1_y*sin(leg_angle)
+	r1_angle=(90-beta)*2		! angle of bottom arc
+
+!!!	r2=0.1						! radius of top arc
+	gamma=(90+leg_angle)/2
+	r2_angle=(90-gamma)*2		! angle of bottom arc
+	r2_y=r2/tan(gamma)
+	r2p_x=r2_y*cos(leg_angle)
+	r2p_y=r2_y*sin(leg_angle)
+
+	ff=2*PI*3/((ZZYZX-gs_seat_height-space)*360)
+	backrest_angle=ff*360
+
+	ADDx a-(LEG_xy+2*RR+space_y)
+	ADDz gs_seat_height+space
+	ADDy backrest_thk/2+b-arm_xy-RR
+
+	ROTy -90
+	ROTx 90
+
+	RESOL 13*gs_resol
+	MATERIAL gs_back_mat
+	BPRISM_ gs_back_mat,gs_back_mat,gs_back_mat,
+		17,backrest_thk,3,
+		r1p_x,a-(2*(LEG_xy+2*RR+space_y))-r1p_y,79,
+		r1,a-(2*(LEG_xy+2*RR+space_y))-r1_y,979,
+		r1,r1_angle,4079,
+		0,a-(2*(LEG_xy+2*RR+space_y))-r1_y,79,
+		0,r1_y,79,
+		r1_y,r1,979,
+		r1,r1_angle,4079,
+		r1p_x,0,79,
+		zzyzx-gs_seat_height-space-r2p_x,backrest_y-r2p_y,79,
+		zzyzx-gs_seat_height-space-r2,backrest_y+r2_y,979,
+		r2,r2_angle,4079,
+		zzyzx-gs_seat_height-space,backrest_y+r2_y,79,
+		zzyzx-gs_seat_height-space,a-(2*(LEG_xy+2*RR+space_y))-backrest_y-r2_y,79,
+		zzyzx-gs_seat_height-space-r2,a-(2*(LEG_xy+2*RR+space_y))-backrest_y-r2_y,979,
+		r2,r2_angle,4079,
+		zzyzx-gs_seat_height-space-r2p_x,a-(2*(LEG_xy+2*RR+space_y))-backrest_y+r2p_y,79,
+		r1p_x,a-(2*(LEG_xy+2*RR+space_y))-r1p_y,1
+
+	DEL 2
+	DEL 3
+
+
+
+! Backrest
+hotspot a/2, b, 0, unID, ZZYZX, 1+128: unID=unID+1
+hotspot a/2, b, -1, unID, ZZYZX, 3: unID=unID+1
+hotspot a/2, b, ZZYZX, unID, ZZYZX, 2: unID=unID+1
+
+! Seat
+hotspot LEG_xy+RR, LEG_xy+RR, 0, unID, gs_seat_height, 1+128: unID=unID+1
+hotspot LEG_xy+RR, LEG_xy+RR, -1, unID, gs_seat_height, 3: unID=unID+1
+hotspot LEG_xy+RR, LEG_xy+RR, gs_seat_height, unID, gs_seat_height, 2: unID=unID+1
+
+hotspot A-(LEG_xy+RR), LEG_xy+RR, 0, unID, gs_seat_height, 1+128: unID=unID+1
+hotspot A-(LEG_xy+RR), LEG_xy+RR, -1, unID, gs_seat_height, 3: unID=unID+1
+hotspot A-(LEG_xy+RR), LEG_xy+RR, gs_seat_height, unID, gs_seat_height, 2: unID=unID+1
+
+hotspot A-(LEG_xy+RR), B-(LEG_xy+RR), 0, unID, gs_seat_height, 1+128: unID=unID+1
+hotspot A-(LEG_xy+RR), B-(LEG_xy+RR), -1, unID, gs_seat_height, 3: unID=unID+1
+hotspot A-(LEG_xy+RR), B-(LEG_xy+RR), gs_seat_height, unID, gs_seat_height, 2: unID=unID+1
+
+hotspot LEG_xy+RR, B-(LEG_xy+RR), 0, unID, gs_seat_height, 1+128: unID=unID+1
+hotspot LEG_xy+RR, B-(LEG_xy+RR), -1, unID, gs_seat_height, 3: unID=unID+1
+hotspot LEG_xy+RR, B-(LEG_xy+RR), gs_seat_height, unID, gs_seat_height, 2: unID=unID+1
+

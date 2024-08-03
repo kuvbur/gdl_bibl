@@ -1,0 +1,121 @@
+
+!-----------3d---------------------
+if show_el < EPS then end
+IF gs_detlevel_3D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+
+! Hot Water Boiler
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+IF useSysMat THEN MainBoxMaterial = sMat
+MATERIAL MainBoxMaterial
+PEN gs_cont_pen
+RESOL res
+
+
+				! --- HOTSPOTS --- !
+
+unID = 1
+HOTSPOT 0, dTWidth/2, 0, unID: unID=unID+1
+HOTSPOT 0, -dTWidth/2, 0, unID: unID=unID+1
+HOTSPOT dTWidth/2, 0, 0, unID: unID=unID+1
+HOTSPOT -dTWidth/2, 0, 0, unID: unID=unID+1
+
+
+				! --- MAIN BOX --- !
+
+IF gs_detlevel_3D_m = 2 THEN
+	ROTy -90
+	REVOLVE 3, 360, 1+2+16+32,
+		legHeight, dTWidth/2, 0,
+		dTHeight-chSize, dTWidth/2, 0,
+		dTHeight, dTWidth/2-chSize, 0
+	DEL 1
+ELSE
+	ADDz legHeight
+		CYLIND dTHeight-legHeight, dTWidth/2
+	DEL 1
+ENDIF
+
+CUTPOLYA 2, 2, 0,
+	0, 0, 979,
+	dTWidth/2, 360, 4079
+
+ADD -dTWidth/2-boxThick, -lowerBoxWidth/2, legHeight+lowerBoxPosition
+BLOCK dTWidth/2+boxThick, lowerBoxWidth, lowerBoxHeight
+DEL 1
+
+ADD -dTWidth/2-boxThick, -upperBoxWidth/2, dTHeight-chSize-upperBoxPosition-upperBoxHeight
+BLOCK dTWidth/2+boxThick, upperBoxWidth, upperBoxHeight
+DEL 1
+
+CUTEND
+
+
+				! --- LEGS --- !
+
+IF gs_detlevel_3D_m = 2 THEN RESOL res/2
+FOR i = 1 TO 4
+	ROTz 90*i
+	ADDx dTWidth/2-dTWidth/10
+	CYLIND legHeight, dTWidth/20
+	DEL 2
+NEXT i
+
+
+				! --- CONNECTIONS --- !
+
+RESOL res
+CUTPOLYA 2, 2, 0,
+	0, 0, 979,
+	dTWidth/2, 360, 4079
+
+IF ConStatus_1 THEN		! --- 1st CONNECTION --- !
+	ADDz legHeight+ColdWaterConHeight
+	ROTx 90
+		EXTRUDE 2, 0, 0, dTWidth/2, 1+2+16,
+			0, 0, 901,
+			ConWidth_1/2, 360, 4001
+	DEL 2
+ENDIF
+
+
+IF ConStatus_2 THEN		! --- 2nd CONNECTION --- !
+	ADDz legHeight+HotWaterConHeight
+	ROTx 90
+		EXTRUDE 2, 0, 0, dTWidth/2, 1+2+16,
+			0, 0, 901,
+			ConWidth_2/2, 360, 4001
+	DEL 2
+ENDIF
+CUTEND
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	ui_current_con = ui_current_con,
+	MEP_NumberConnections = MEP_NumberConnections,
+	MEP_NumConnectionData = gs_Connections,
+	gs_AddConnections = gs_AddConnections,
+	cShow3D = 1,
+	gs_ConMat = MainBoxMaterial,
+	MEP_InsShow = 0,
+	MEP_cline_show_3D = 0,
+	gs_cont_pen = gs_cont_pen,
+	ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 15, ConEdgeVisible_1 = 0,
+	ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = 15, ConEdgeVisible_2 = 0,
+	ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConEdit_3 = 15,
+	ConPosX_4=ConPosX_4, ConPosY_4=ConPosY_4, ConPosZ_4=ConPosZ_4, ConLength_4=ConLength_4, ConEdit_4 = 15, MEP_StrConnectionData = MEP_StrConnectionData
+END

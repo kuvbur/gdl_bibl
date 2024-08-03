@@ -1,0 +1,119 @@
+
+! =================================================================================
+! Rafter parameters set by the RoofMaker Add-on:
+! "rm_ProjectedLength"				Original Length
+! "rm_ProfileWidth"					Profile Width
+! "rm_ProfileHeight"				Profile Height
+! "rm_Height"						Profile Height
+! "rm_bRafterVisible"				Rafter Visible in 2D
+! "rm_AxisLineType"					Axis Line Type
+! "rm_PitchAngle"					Pitch Angle of Roof
+! "rm_VerticalTrimmerAngle"			Angle to Rafter
+! "rm_RafterWidth"					Thickness of Valley Rafter
+! "rm_PurlinWidth"					Width of Purlin or Trimmer
+!
+! Parameters not by the RoofMaker Add-on:
+! "rm_OverHang"
+! "rm_RoofEdgeAngle"
+! "rm_iRoofEdgeAngle"
+! "rm_jointWidth"
+! "rm_bIsTrimmerRotated"
+! "rm_bSoffit"
+! "rm_SoffitAngle"
+! "rm_CutEndPointDist"
+! =================================================================================
+
+values "profileWidthHalf"			range (0,)
+values "rm_ProfileHeight"			range (0,)
+
+if rm_ProfileWidth < EPS then
+	rm_ProfileWidth = 0.001
+	parameters rm_ProfileWidth = rm_ProfileWidth
+endif
+
+if GLOB_MODPAR_NAME = "profileWidthHalf" Then
+	rm_ProfileWidth = profileWidthHalf*2
+	parameters rm_ProfileWidth = rm_ProfileWidth
+else
+	profileWidthHalf = rm_ProfileWidth/2
+	parameters profileWidthHalf = profileWidthHalf
+endif
+
+if rm_VerticalTrimmerAngle < 5 then
+	rm_VerticalTrimmerAngle = 5
+	parameters rm_VerticalTrimmerAngle = rm_VerticalTrimmerAngle
+endif
+
+if rm_VerticalTrimmerAngle > 175 then
+	rm_VerticalTrimmerAngle = 175
+	parameters rm_VerticalTrimmerAngle = rm_VerticalTrimmerAngle
+endif
+
+values "rm_PitchAngle"	range (0,90)
+values "valleyAngle"	range (0,90)
+values "rm_Height"		range [0,)
+if rm_ProjectedLength < EPS then
+	rm_ProjectedLength = 0.001
+	parameters rm_ProjectedLength = rm_ProjectedLength
+endif
+_strutLengthPlus	= rm_ProfileHeight*tan(valleyAngle)
+if rm_StructuralLength < _strutLengthPlus+EPS then
+	rm_StructuralLength = _strutLengthPlus+0.001
+	parameters rm_StructuralLength = rm_StructuralLength
+endif
+
+if GLOB_MODPAR_NAME="rm_Height" then
+	valleyAngle			= atn(rm_Height/rm_ProjectedLength)
+	rm_PitchAngle		= abs(atn(tan(valleyAngle)/cos(rm_VerticalTrimmerAngle)))
+	gosub "calcLength"
+	gosub "calcStuctLength"
+	parameters valleyAngle = valleyAngle, rm_PitchAngle = rm_PitchAngle, rm_StructuralLength = rm_StructuralLength
+else
+	if GLOB_MODPAR_NAME="rm_StructuralLength" then
+		rm_ProjectedLength	= (rm_StructuralLength-_strutLengthPlus)*cos(valleyAngle)+_purlinProjLength+_rafterProjLength
+		rm_Height			= rm_ProjectedLength*tan(valleyAngle)
+		parameters rm_ProjectedLength = rm_ProjectedLength, rm_Height = rm_Height
+	else
+		if GLOB_MODPAR_NAME="rm_PitchAngle" then
+			valleyAngle		= abs(atn(cos(rm_VerticalTrimmerAngle)*tan(rm_PitchAngle)))
+			parameters valleyAngle = valleyAngle
+			gosub "calcLength"
+		else
+			rm_PitchAngle	= abs(atn(tan(valleyAngle)/cos(rm_VerticalTrimmerAngle)))
+			parameters rm_PitchAngle = rm_PitchAngle
+		endif
+		rm_Height			= rm_ProjectedLength*tan(valleyAngle)
+		gosub "calcStuctLength"
+		parameters rm_Height = rm_Height, rm_StructuralLength = rm_StructuralLength
+	endif
+endif
+
+! ==============================================================================
+! Lumber Size
+! ==============================================================================
+gosub "calcLength"
+gosub "calcStuctLength"
+lumberSize = rm_StructuralLength
+parameters lumberSize = lumberSize
+
+! ==============================================================================
+call "RoofMaker_macro"	parameters all	bEnableRafter			= bEnableRafter,
+										bEnableSymbol			= bEnableSymbol,
+										bEnableResolution		= bEnableResolution,
+										gs_iDisplayStandards	= gs_iDisplayStandards,
+										iObjectType				= 16
+
+
+! ==============================================================================
+! Bounding Box
+! ==============================================================================
+parameters A		= A						: lock "A"
+parameters B		= rm_ProfileWidth		: lock "B"
+parameters ZZYZX	= ZZYZX					: lock "ZZYZX"
+
+
+! ==============================================================================
+! Levels
+! ==============================================================================
+parameters ac_toplevel 		= _profileHeightZ - _purlinProjLength * tan(valleyAngle)
+parameters ac_bottomlevel	= -rm_Height + _rafterProjLength * tan(valleyAngle)

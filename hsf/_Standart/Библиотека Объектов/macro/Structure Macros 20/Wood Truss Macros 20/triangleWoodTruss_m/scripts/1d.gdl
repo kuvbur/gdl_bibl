@@ -1,0 +1,455 @@
+
+EPS = 0.0001
+
+
+!iTrussType
+TRUSS_BOWSTRING 		= 1
+TRUSS_PITCHED_COMPLEX 	= 2
+TRUSS_FLAT_HOWE 		= 3
+TRUSS_FLAT_PRATT 		= 4
+TRUSS_PITCHED_HOWE 		= 5
+TRUSS_PITCHED_PRATT		= 6
+TRUSS_SAWTOOTH 			= 7
+TRUSS_SCISSORS 			= 8
+TRUSS_WARREN	 		= 9
+TRUSS_PITCHED_FINK		= 10
+
+! ==============================================================================
+! Definitions
+! ==============================================================================
+
+!ac_symb_display_option
+	DISPLAY_PROJECTED			= 1
+	DISPLAY_OVERHEAD_PROJ		= 2
+	DISPLAY_SYMBOLIC			= 3
+	DISPLAY_OUTLINES			= 4
+	DISPLAY_OVERHEAD_ALL		= 5
+
+!ac_symb_show_projection_to
+	PROJECTION_FLOOR_PLAN_RANGE	= 1
+	PROJECTION_DISPLAY_LIMIT	= 2
+	PROJECTION_ENTIRE_ELEMENT	= 3
+	
+! const values for parameter: iDimensionSetMode
+	DIM_WIDTH_HEIGHT     = 1
+	DIM_WIDTH_ANGLE      = 2
+	DIM_WIDTH_PROPORTION = 3
+
+! const values for parameter: iEndType
+	END_PERPENDICULAR	= 1
+	END_VERTICAL		= 2
+	END_HORIZONTAL		= 3
+	END_RECTANGULAR		= 4
+	END_CUSTOM_CUT		= 5
+
+! ==============================================================================
+! Localization
+! ==============================================================================
+dim stDisplayOptions[5]
+	stDisplayOptions[1]		= `Сечение и Низ`
+	stDisplayOptions[2]		= `Сечение и Верх`
+	stDisplayOptions[3]		= `Символический Вид`
+	stDisplayOptions[4]		= `Только Контуры`
+	stDisplayOptions[5]		= `Вся Проекция`
+
+dim stProjectionTypes[3]
+	stProjectionTypes[1]	= `Согласно Диапазону Плана Этажа`
+	stProjectionTypes[2]	= `Согласно Абсолютному Диапазону`
+	stProjectionTypes[3]	= `Весь Элемент`
+
+DETLEVEL3D_OFF = 0
+DETLEVEL3D_SIMPLE = 1
+DETLEVEL3D_DETAILED = 2
+
+dim st3dDetLevelValues[3]
+	st3dDetLevelValues[1] = `Детальный`
+	st3dDetLevelValues[2] = `Простой`
+	st3dDetLevelValues[3] = `Откл.`
+
+
+! ==============================================================================
+! Parameter linking
+! ==============================================================================
+
+!tan(ang) = trussHeight / (tieBeamLength/2 + rafterHeight/sin(ang))
+!
+!sin(ang)/cos(ang) = trussHeight / (tieBeamLength/2 + rafterHeight/sin(ang))
+!
+!(sin(ang)/cos(ang))*(tieBeamLength/2 + rafterHeight/sin(ang)) = trussHeight
+!
+!(tieBeamLength/2)*(sin(ang)/cos(ang)) + rafterHeight/cos(ang) = trussHeight
+!
+!(1/cos(ang)) * ((tieBeamLength/2)*sin(ang) + rafterHeight) = trussHeight		/*cos(ang)
+!
+!(tieBeamLength/2)*sin(ang) + rafterHeight = trussHeight * cos(ang)			! cos(ang) = sqr(1-(sin(ang))^2)
+!
+!(tieBeamLength/2)*sin(ang) + rafterHeight = trussHeight * sqr(1-(sin(ang))^2)		! /^2
+!
+!((tieBeamLength/2)^2)*(sin(ang))^2 + 2*(tieBeamLength/2)*sin(ang)*rafterHeight + rafterHeight^2 = trussHeight^2 - trussHeight^2 * (sin(ang))^2
+
+if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+	pA = (tieBeamLength/2)^2 + trussHeight^2
+	pB = tieBeamLength * rafterHeight
+	pC = rafterHeight^2 - trussHeight^2
+
+	ang	= max(asn( (-pB + sqr(pB^2 - (4 * pA * pC))) / (2*pA) ), asn( (-pB - sqr(pB^2 - (4 * pA * pC))) / (2*pA) ))
+	rp	= tan(ang) * 12'
+endif
+
+if iDimensionSetMode = DIM_WIDTH_ANGLE then
+	rp = tan(ang) * 12'
+	trussHeight	= tan(ang)*(tieBeamLength/2 + rafterHeight/sin(ang))
+endif
+
+if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+	ang = atn(rp/12')
+	trussHeight	= tan(ang)*(tieBeamLength/2 + rafterHeight/sin(ang))
+endif
+
+
+! ==============================================================================
+! Calculation
+! ==============================================================================
+
+! === Overhang =============================
+
+yyMod = 0
+if iEndType = END_PERPENDICULAR then
+	xx = rafterHeight * sin(ang)
+	yy = rafterHeight * cos(ang)
+endif
+if iEndType = END_VERTICAL then
+	xx = 0
+	yy = rafterHeight / cos(ang)
+endif
+if iEndType = END_HORIZONTAL then
+	xx = rafterHeight / sin(ang)
+	yy = 0
+endif
+if iEndType = END_RECTANGULAR then
+	xx = cutPartLength
+	yy = rafterHeight / cos(ang) - cutPartLength * tan(ang)
+endif
+if iEndType = END_CUSTOM_CUT then
+	xx = cutPartLength
+	yy = rafterHeight / cos(ang) - cutPartLength * tan(ang)
+	yyMod = cutPartLength * tan(bottomFlangeAngle)
+endif
+
+if bOverhang then
+	eaveHeight = (eaveOverhang - xx) * tan(ang)
+else
+	if iEndType = END_PERPENDICULAR then
+		eaveOverhang = rafterHeight * sin(ang)
+	endif
+	if iEndType = END_VERTICAL then
+		eaveOverhang = 0
+	endif
+	if iEndType = END_HORIZONTAL then
+		eaveOverhang = rafterHeight / sin(ang)
+	endif
+	if iEndType = END_RECTANGULAR then
+		eaveOverhang = cutPartLength
+	endif
+	if iEndType = END_CUSTOM_CUT then
+		eaveOverhang = cutPartLength
+	endif
+	eaveHeight = 0
+endif
+
+
+! === Triangle width, height ===============
+
+triangleWidth 	= tieBeamLength + 2 * (rafterHeight / sin(ang))
+triangleHeight	= trussHeight
+
+
+! === "A" ZZYZX Size =============================
+
+A = tieBeamLength + 2 * eaveOverhang
+
+if iEndType = END_CUSTOM_CUT then
+	end1x = -A/2
+	end1y = -eaveHeight + yy
+	end2x = -A/2 + xx
+	end2y = -eaveHeight
+
+	end3x = -A/2
+	end3y = -eaveHeight - yyMod
+
+	x11 = end1x
+	y11 = end1y
+	x12 = end1x + cos(topFlangeAngle)
+	y12 = end1y - sin(topFlangeAngle)
+
+	x21 = end2x
+	y21 = end2y
+	x22 = end3x
+	y22 = end3y
+
+	gosub "Line - Line intersection"
+
+	if state = 1 & cx < 0 then
+		end3x = cx
+		end3y = cy
+	else
+		end3x = 0
+		end3y = 0
+	endif
+
+	dZZYZX = -end3y
+else
+	dZZYZX = eaveHeight
+endif
+
+ZZYZX = trussHeight + dZZYZX
+
+
+! =============================================================================
+! Coordinate calculation
+! =============================================================================
+
+if GLOB_SCRIPT_TYPE = 2 | GLOB_SCRIPT_TYPE = 3 then
+
+	! Main coordinates ------------------------------------------------------------
+
+	triangleOutLx = -triangleWidth / 2
+	triangleOutLy =  0
+	triangleOutRx = -triangleOutLx
+	triangleOutRy =  0
+	triangleOutTx =  0
+	triangleOutTy =  triangleHeight
+
+	tieBeamBottomLx =  triangleOutLx + rafterHeight / sin(ang)
+	tieBeamBottomLy =  triangleOutLy
+	tieBeamBottomRx = -tieBeamBottomLx
+	tieBeamBottomRy =  tieBeamBottomLy
+
+	triangleInLx =  tieBeamBottomLx + tieBeamHeight / tan(ang)
+	triangleInLy =  tieBeamBottomLy + tieBeamHeight
+	triangleInRx = -triangleInLx
+	triangleInRy =  triangleInLy
+	triangleInTx =  triangleOutTx
+	triangleInTy =  triangleOutTy - rafterHeight / cos(ang)
+
+
+	! Web beam coordinates --------------------------------------------------------
+
+	if iTrussType = TRUSS_PITCHED_COMPLEX then
+		n = 3
+		delx = (triangleOutRx + triangleInRx)/2
+		dx = delx/n
+	endif
+
+	if	iTrussType = TRUSS_PITCHED_HOWE |\
+		iTrussType = TRUSS_PITCHED_PRATT then
+
+		delx = (triangleOutRx + triangleInRx)/2
+		n = wn/2
+		dx = delx/n
+	endif
+
+	if iTrussType = TRUSS_PITCHED_FINK then
+
+		! Coordinates of axle-points
+
+		axleLx = (triangleOutLx + tieBeamBottomLx) / 2 + (tieBeamHeight / 2) / tan(ang)
+		axleLy =  triangleOutLy + tieBeamHeight / 2
+		axle1x =  axleLx / (wn)
+		axle1y =  axleLy
+		axleTx =  triangleOutTx
+		axleTy = (triangleOutTy + triangleInTy) / 2
+
+		axleDiv1x = axleLx / (2 + (wn = 5))
+		axleDiv1y = axleTy - (axleTy - axleLy) / (2 + (wn = 5))
+
+		if (wn = 5) then
+			axle2x =  axleLx / 5 * 3
+			axle2y =  axleLy
+			axleDiv2x = axleLx / 3 * 2
+			axleDiv2y = axleTy - (axleTy - axleLy) / 3 * 2
+		endif
+
+
+		! Inner coordinates
+
+		beta1 = atn((triangleInTy - axle1y) / (-axle1x))
+
+		p1T1x = triangleInTx - cos(ang) * (webBeamHeight / 2) / sin (beta1 - ang)
+		p1T1y = triangleInTy - sin(ang) * (webBeamHeight / 2) / sin (beta1 - ang)
+		p1T2x = triangleOutTx
+		p1T2y = triangleInTy - (webBeamHeight / 2) / cos(beta1)
+		p1B1x = axle1x + (tieBeamHeight / 2) / tan(beta1) - (webBeamHeight / 2) / sin(beta1)
+		p1B1y = triangleInLy
+		p1B2x = axle1x + (tieBeamHeight / 2) / tan(beta1) + (webBeamHeight / 2) / sin(beta1)
+		p1B2y = triangleInLy
+
+		x11 = axleDiv1x
+		y11 = axleDiv1y
+		x12 = p1B1x
+		y12 = p1B1y
+
+		x21 = tieBeamBottomLx
+		y21 = tieBeamBottomLy
+		x22 = triangleInTx
+		y22 = triangleInTy
+
+		gosub "Line - Line intersection"
+
+		if state = 1 & cx < 0 then
+			p2T1x = cx
+			p2T1y = cy
+		else
+			p2T1x = 0
+			p2T1y = 0
+		endif
+
+		beta2 = atn((p2T1y - p1B1y) / (p1B1x - p2T1x))
+
+		p2B2x = p1B1x + (webBeamHeight / cos(beta1 + beta2 - 90)) * cos(beta1)
+		p2B2y = p1B1y + (webBeamHeight / cos(beta1 + beta2 - 90)) * sin(beta1)
+
+		x11 = p2T1x + (webBeamHeight / cos(beta1 + beta2 - 90)) * cos(beta1)
+		y11 = p2T1y + (webBeamHeight / cos(beta1 + beta2 - 90)) * sin(beta1)
+		x12 = p2B2x
+		y12 = p2B2y
+
+		gosub "Line - Line intersection"
+
+		if state = 1 & cx < 0 then
+			p2T2x = cx
+			p2T2y = cy
+		else
+			p2T2x = 0
+			p2T2y = 0
+		endif
+
+		if (wn = 5) then
+			beta3 = atn(((p2T1y + p2T2y) / 2 - axle2y) / ((p2T1x + p2T2x) / 2 - axle2x))
+
+			p3B1x = axle2x + (tieBeamHeight / 2) / tan(beta3) - (webBeamHeight / 2) / sin(beta3)
+			p3B1y = triangleInLy
+			p3B2x = axle2x + (tieBeamHeight / 2) / tan(beta3) + (webBeamHeight / 2) / sin(beta3)
+			p3B2y = triangleInLy
+
+			x11 = p3B1x
+			y11 = p3B1y
+			x12 = p3B1x + cos(beta3)
+			y12 = p3B1y + sin(beta3)
+
+			gosub "Line - Line intersection"
+
+			if state = 1 & cx < 0 then
+				p3T1x = cx
+				p3T1y = cy
+			else
+				p3T1x = 0
+				p3T1y = 0
+			endif
+
+			x11 = p3B2x
+			y11 = p3B2y
+			x12 = p3B2x + cos(beta3)
+			y12 = p3B2y + sin(beta3)
+
+			x21 = p1B1x
+			y21 = p1B1y
+			x22 = p2T1x
+			y22 = p2T1y
+
+			gosub "Line - Line intersection"
+
+			if state = 1 & cx < 0 then
+				p3T2x = cx
+				p3T2y = cy
+			else
+				p3T2x = 0
+				p3T2y = 0
+			endif
+
+			x11 = axleDiv2x
+			y11 = axleDiv2y
+			x12 = p3B1x
+			y12 = p3B1y
+
+			x21 = tieBeamBottomLx
+			y21 = tieBeamBottomLy
+			x22 = triangleInTx
+			y22 = triangleInTy
+
+			gosub "Line - Line intersection"
+
+			if state = 1 & cx < 0 then
+				p4T1x = cx
+				p4T1y = cy
+			else
+				p4T1x = 0
+				p4T1y = 0
+			endif
+
+			beta4 = atn((p4T1y - p3B1y) / (p3B1x - p4T1x))
+
+			p4B2x = p3B1x + (webBeamHeight / cos(beta3 + beta4 - 90)) * cos(beta3)
+			p4B2y = p3B1y + (webBeamHeight / cos(beta3 + beta4 - 90)) * sin(beta3)
+
+			x11 = p4T1x + (webBeamHeight / cos(beta3 + beta4 - 90)) * cos(beta3)
+			y11 = p4T1y + (webBeamHeight / cos(beta3 + beta4 - 90)) * sin(beta3)
+			x12 = p4B2x
+			y12 = p4B2y
+
+			gosub "Line - Line intersection"
+
+			if state = 1 & cx < 0 then
+				p4T2x = cx
+				p4T2y = cy
+			else
+				p4T2x = 0
+				p4T2y = 0
+			endif
+		endif
+
+	endif
+
+endif
+
+goto "MasterEnd"
+
+
+! ==============================================================================
+"Line - Line intersection":
+! ------------------------------------------------------------------------------
+! Input variables:
+!	EPS:				epsylon
+!	x11,y11, x12,y12	line #1
+!	x21,y21, x22,y22	line #2
+!
+! Returned variables:
+!	state:				0 = no intersection point
+!						1 = valid intersection point
+!	cx, cy:				intersection point
+! ==============================================================================
+
+	lliDiv = (x11-x12) * (y21-y22) - (y11-y12) * (x21-x22)
+
+	if abs(lliDiv) > EPS then
+		! Intersection
+
+		temp1 = x11 * y12 - y11 * x12
+		temp2 = x21 * y22 - y21 * x22
+
+		tempx = temp1 * (x21-x22) - (x11-x12) * temp2
+		tempy = temp1 * (y21-y22) - (y11-y12) * temp2
+
+		state = 1
+		cx = (tempx / lliDiv)
+		cy = (tempy / lliDiv)
+	else
+		! No Intersection
+		state = 0
+		cx = 0
+		cy = 0
+	endif
+return
+
+
+"MasterEnd":

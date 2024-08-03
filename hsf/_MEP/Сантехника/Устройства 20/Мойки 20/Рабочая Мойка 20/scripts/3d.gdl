@@ -1,0 +1,159 @@
+
+! Work Sink
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+
+IF useSysMat THEN MainBoxMaterial = sMat
+MATERIAL MainBoxMaterial
+PEN gs_cont_pen
+RESOL res
+
+
+				! --- WORK SINK --- !
+
+unID = 1
+HOTSPOT 0, 0, 0, unID: unID=unID+1
+HOTSPOT A, 0, 0, unID: unID=unID+1
+HOTSPOT 0, B, 0, unID: unID=unID+1
+HOTSPOT A, B, 0, unID: unID=unID+1
+HOTSPOT 0, 0, -ZZYZX, unID: unID=unID+1
+HOTSPOT A, 0, -ZZYZX, unID: unID=unID+1
+HOTSPOT 0, B, -ZZYZX, unID: unID=unID+1
+HOTSPOT A, B, -ZZYZX, unID: unID=unID+1
+
+
+IF gs_detlevel_3D_m = 2 THEN	! Detailed
+	ADDz -ZZYZX+edgeThick
+	PRISM_ 10,ZZYZX-edgeThick,
+		0,0, 14,
+		0,B, 14,
+		A,B,14,
+		A,0,14,
+		0,0, -1,
+		edgeThick,	edgeThick, 15,
+		edgeThick,	B-edgeThick, 15,
+		A-edgeThick,B-edgeThick,15,
+		A-edgeThick,edgeThick,15,
+		edgeThick,	edgeThick, -1
+	DEL 1
+
+	CUTPOLYA 2,1,0,
+		ConPosX_3,ConPosY_3,915,
+		ConWidth_3/2,360,4015
+
+	ADDz -ZZYZX
+	PRISM_ 4,edgeThick,
+		0,0, 11,
+		0,B, 11,
+		A,B,11,
+		A,0,11
+	DEL 1
+
+	CUTEND
+
+ENDIF
+
+IF gs_detlevel_3D_m = 1 THEN	! Simple
+	ADDz -ZZYZX
+	EXTRUDE 4,0,0,ZZYZX, 1+4+16+32,
+		0,0, 0,
+		0,B, 0,
+		A,B,0,
+		A,0,0
+	DEL 1
+ENDIF
+
+ADD (ConPosX_1 + ConPosX_2)/2, (ConPosY_1 + ConPosY_2)/2, (ConPosZ_1 + ConPosZ_2)/2
+GOSUB 1000
+DEL 1
+
+DEL TOP
+RESOL res
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	ui_current_con = ui_current_con,
+	MEP_NumberConnections = MEP_NumberConnections,
+	MEP_NumConnectionData = gs_Connections,
+	gs_AddConnections = gs_AddConnections,
+	cShow3D = 1,
+	gs_ConMat = MainBoxMaterial,
+	MEP_InsShow = 0,
+	MEP_cline_show_3D = 0,
+	gs_cont_pen = gs_cont_pen,
+	ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 16,
+	ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = 16,
+	ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConEdit_3 = 15
+
+END
+
+1000:	! Tap
+
+tx = ABS(ConPosX_1 - ConPosX_2)/2
+bx = 0.006
+by = 0.030
+
+FOR i=1 TO 2
+	ADDx -tx
+	ROTx 90
+	CYLIND 0.05,0.015
+	ADDz 0.02
+	IF tx > 0.015+EPS THEN
+		ARMC 0.015, 0.015, tx, 0,0,90
+	ENDIF
+	ADDz 0.035
+	ROTz i*15
+	PRISM 12,0.007,
+		-bx, bx,
+		-bx, by,
+		 bx, by,
+		 bx, bx,
+		 by, bx,
+		 by,-bx,
+		 bx,-bx,
+		 bx,-by,
+		-bx,-by,
+		-bx,-bx,
+		-by,-bx,
+		-by, bx
+	DEL 5
+
+	MULX -1
+NEXT i
+DEL 2
+
+
+ADDy -0.02
+ROTy -90
+ARMC 0.015, 0.015, 0.02, 0,0,90
+DEL 1
+ROTx 90
+ROTy -90
+ADDz -0.01
+PRISM_ 10,0.02,
+	 0.147986393591,	0.09234439178515,	15,
+	 0.04117544321573,	0.09234439178515,	79,
+	-0.01198261107796,	0.04424275934702,	79,
+	-0.01198261107796,	0.02,				15,
+	 0.01198261107796,	0.02,				15,
+	 0.01198261107796,	0.04424275934702,	79,
+	 0.04737063515823,	0.07626465611579,	79,
+	 0.127986393591,	0.07626465611579,	15,
+	 0.127986393591,	0.05893770166193,	15,
+	 0.147986393591,	0.05893770166193,	15
+DEL 4
+
+RETURN

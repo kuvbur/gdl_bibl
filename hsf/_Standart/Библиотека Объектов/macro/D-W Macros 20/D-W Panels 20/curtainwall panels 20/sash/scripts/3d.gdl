@@ -1,0 +1,964 @@
+
+if gs_fillSash < 1 then gs_fillSash = SYMB_FILL
+if gs_penSash_bg < 1 then gs_penSash_bg = SYMB_FBGD_PEN
+if gs_penSash_fg < 1 then gs_penSash_fg = SYMB_FILL_PEN
+
+if not (gs_shadow) then shadow off
+
+sect_fill gs_fillSash, gs_penSash_bg, gs_penSash_fg, gs_frame_pen_cont
+pen gs_frame_pen
+
+
+! --- Sash frames & glazing ----------------------------------------------------
+
+if 	grill_m = SASH_NOMULLIONS | \
+	grill_m = SASH_HVGRID | \
+	grill_m = SASH_EDITABLEGRID | \
+	grill_m = SASH_HORIZONTALDIVIDED | \
+	grill_m = SASH_PRAIRIE then
+
+		gosub "sashFrame"
+endif
+
+if grill_m = SASH_EDITABLEGLASS then
+	gosub "editableGlassFieldPanel"
+endif
+
+if gs_optype_m <> OPTYPE_FIX & grill_m <> SASH_CUSTOM then
+	gosub "glazing"
+endif
+
+if	grill_m = SASH_GLASSTYPE1 | \
+	grill_m = SASH_GLASSTYPE2 | \
+	grill_m = SASH_GLASSTYPE3 then
+
+		gosub "metalStraps"
+endif
+
+if grill_m = SASH_CUSTOM then
+	gosub "customPanel"
+endif
+
+
+! --- Grids --------------------------------------------------------------------
+
+if grillPosition_m = 2 then
+	side_mat = var_mater2_grill
+else
+	side_mat = var_mater_grill
+endif
+
+gz = 0
+if grillPosition_m = 1 then gz = gs_sash_thk/2 - gs_glass_thk/2 - gth
+if grillPosition_m = 2 then gz = gs_sash_thk/2 + gs_glass_thk/2
+if grillPosition_m = 3 then gz = gs_sash_thk/2 - gth/2
+
+if grill_m = SASH_HVGRID | grill_m = SASH_HORIZONTALDIVIDED then
+	gosub "HVGrid"
+endif
+
+if grill_m = SASH_EDITABLEGRID then
+	gosub "editableGrid"
+endif
+
+if grill_m = SASH_PRAIRIE then
+	gosub "prairieStyle"
+endif
+
+
+! --- Oplines & Handle ---------------------------------------------------------
+
+gosub "Oplines"
+
+
+if isWindow then
+	if bEnableWindowHandle gosub "WindowHandle"
+else
+	if gs_handle_typ_m <> 0 then
+		gosub "Handles"
+	endif
+endif
+
+
+! ------------------------------------------------------------------------------
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ------------------------------------------------------------------------------
+
+! ------------------------------------------------------------------------------
+! --- Sash Frame ---
+! ------------------------------------------------------------------------------
+"sashFrame":
+	! --- Handling Inside-outside sash ---
+
+	if gs_frame_mat = gs_frame_mat2 then		! One body, in case of similar materials
+		in_out_cikl = 1
+
+		var_mater	= gs_frame_mat
+		var_mater2	= gs_frame_mat
+
+		out_thk		= 0
+		part_thk	= gs_sash_thk
+
+		in_out_mask		= 15
+		in_out_mask2	= 13
+
+	else										! Two bodies, different materials
+		in_out_cikl = 2
+
+		! --- Inside-outside Material Control ---
+
+		temp_frame_mat = gs_frame_mat
+		temp_frame_mat2 = gs_frame_mat2
+
+		if gs_opening_dir_m = 1 then
+			gs_frame_mat=temp_frame_mat
+			gs_frame_mat2=temp_frame_mat2
+		else
+			gs_frame_mat=temp_frame_mat2
+			gs_frame_mat2=temp_frame_mat
+		endif
+
+		var_mater = gs_frame_mat
+		var_mater2 = gs_frame_mat2
+
+		if gs_detlevel_3D_num = 2 then
+			out_thk = gs_sash_thk/2
+			part_thk = out_thk
+		else
+			out_thk = gs_sash_thk/2-gs_glass_thk/2
+			part_thk = out_thk
+		endif
+
+		in_out_mask = 11
+		in_out_mask2 = 9
+	endif
+
+
+	! --- Handling Inner-outer Grill ---
+
+	if gs_grill_mat = gs_grill_mat2 then	! One body, in case of similar materials
+		in_out_cikl_gr = 1
+
+		var_mater_grill = gs_grill_mat
+		var_mater2_grill = gs_grill_mat
+
+		part_thk_grill = gth
+	else
+
+		! --- Inside-outside Material Control ---
+
+		temp_grill_mat = gs_grill_mat
+		temp_grill_mat2 = gs_grill_mat2
+
+		if gs_opening_dir_m = 1 then
+			gs_grill_mat=temp_grill_mat
+			gs_grill_mat2=temp_grill_mat2
+		else
+			gs_grill_mat=temp_grill_mat2
+			gs_grill_mat2=temp_grill_mat
+		endif
+
+		var_mater_grill = gs_grill_mat
+		var_mater2_grill = gs_grill_mat2
+
+		if grillPosition_m = 2 or grillPosition_m = 1 or (grillPosition_m = 3 and gs_glass_thk>=gth ) then		!!Inside, Outside position
+			in_out_cikl_gr = 1
+			out_thk_grill = gth
+			part_thk_grill = out_thk_grill
+		else									! Throughout position
+			in_out_cikl_gr = 2
+			out_thk_grill = gth/2 - gs_glass_thk/2
+			part_thk_grill = out_thk_grill
+		endif
+	endif
+
+	if gs_optype_m <> OPTYPE_FIX then		! Not Fixed
+		sect_fill gs_fillSash, gs_penSash_bg, gs_penSash_fg, gs_frame_pen_cont
+		pen gs_frame_pen
+		material gs_frame_mat
+
+		! --- Mitered Joint ------------------------------------------------
+
+		if gs_SashText_typ_num = 1 then
+			for ijk = 1 to in_out_cikl
+				material var_mater
+				base
+				sprism_{2} var_mater2,var_mater,var_mater2,
+					4,			!!!part_thk,
+					0,0, 0,1, 0, 0,
+					0,0, 0,1, part_thk, 0,
+					-a/2,0,							in_out_mask,	var_mater2,
+					-a/2,b,							8,				var_mater2,
+					-a/2+gs_sash_width,b-gs_sash_width,		in_out_mask,	var_mater2,
+					-a/2+gs_sash_width,gs_sash_width,		8,				var_mater
+				sprism_{2} var_mater2,var_mater,var_mater2,
+					4,
+					0,0, 0,1, 0, 0,
+					0,0, 0,1, part_thk, 0,
+					a/2,0,							in_out_mask,	var_mater2,
+					a/2,b,							8,				var_mater2,
+					a/2-gs_sash_width,b-gs_sash_width,		in_out_mask,	var_mater,
+					a/2-gs_sash_width,gs_sash_width,		8,				var_mater2
+				vert 0, 0, 0
+				vert 0, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				coor 5, -1, -2, -3, -4
+				body 1
+
+				base
+				sprism_{2} var_mater2,var_mater,var_mater2,
+					4,
+					0,0, 0,1, 0, 0,
+					0,0, 0,1, part_thk, 0,
+					-a/2,0,							8,				var_mater2,
+					-a/2+gs_sash_width,gs_sash_width,		in_out_mask,	var_mater2,
+					a/2-gs_sash_width,gs_sash_width,		8,				var_mater,
+					a/2,0,							in_out_mask,	var_mater2
+				sprism_{2} var_mater2,var_mater,var_mater2,
+					4,
+					0,0, 0,1, 0, 0,
+					0,0, 0,1, part_thk, 0,
+					-a/2,b,							10,				var_mater2,
+					-a/2+gs_sash_width,b-gs_sash_width,		in_out_mask,	var_mater,
+					a/2-gs_sash_width,b-gs_sash_width,		8,				var_mater2,
+					a/2,b,							in_out_mask,	var_mater2
+				vert 0, 0, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				vert 0, 1, 0
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				addz part_thk
+				part_thk= gs_sash_thk-out_thk
+
+				var_mater = gs_frame_mat2
+				var_mater2 = gs_frame_mat2
+
+				in_out_mask = 14
+			next ijk
+			del in_out_cikl
+		endif
+
+		! --- Butt Joint ---------------------------------------------------
+
+		if gs_SashText_typ_num = 2 then
+			for ijk = 1 to in_out_cikl
+				material var_mater
+				base
+				sprism_{2} var_mater2,var_mater,var_mater2,
+					4,
+					0,0, 0,1, 0, 0,
+					0,0, 0,1, part_thk, 0,
+					-a/2,gs_sash_width,					in_out_mask2,	var_mater2,
+					-a/2,b-gs_sash_width,				8,				var_mater2,
+					-a/2+gs_sash_width,b-gs_sash_width,		in_out_mask,	var_mater2,
+					-a/2+gs_sash_width,gs_sash_width,		8,				var_mater
+				sprism_{2} var_mater2,var_mater,var_mater2,
+					4,
+					0,0, 0,1, 0, 0,
+					0,0, 0,1, part_thk, 0,
+					a/2,gs_sash_width,					in_out_mask2,	var_mater2,
+					a/2,b-gs_sash_width,				8,				var_mater2,
+					a/2-gs_sash_width,b-gs_sash_width,		in_out_mask,	var_mater,
+					a/2-gs_sash_width,gs_sash_width,		8,				var_mater2
+				vert 0, 0, 0
+				vert 0, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				coor 5, -1, -2, -3, -4
+				body 1
+
+				base
+				sprism_{2} var_mater2,var_mater,var_mater2,
+					6,
+					0,0, 0,1, 0, 0,
+					0,0, 0,1, part_thk, 0,
+					-a/2,0,							in_out_mask,	var_mater2,
+					-a/2,gs_sash_width,					8,				var_mater2,
+					-a/2+gs_sash_width,gs_sash_width,		in_out_mask,	var_mater2,
+					a/2-gs_sash_width,gs_sash_width,		10,				var_mater,
+					a/2,gs_sash_width,					in_out_mask2,	var_mater2,
+					a/2,0,							in_out_mask,	var_mater2
+
+				sprism_{2} var_mater2,var_mater,var_mater2,
+					6,
+					0,0, 0,1, 0, 0,
+					0,0, 0,1, part_thk, 0,
+					-a/2,b,							in_out_mask,	var_mater2,
+					-a/2,b-gs_sash_width,				8,				var_mater2,
+					-a/2+gs_sash_width,b-gs_sash_width,		in_out_mask,	var_mater,
+					a/2-gs_sash_width,b-gs_sash_width,		10,				var_mater2,
+					a/2,b-gs_sash_width,				in_out_mask2,	var_mater2,
+					a/2,b,							in_out_mask,	var_mater2
+				vert 0, 0, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				vert 0, 1, 0
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				addz part_thk
+				part_thk= gs_sash_thk-out_thk
+
+				var_mater = gs_frame_mat2
+				var_mater2 = gs_frame_mat2
+
+				in_out_mask = 14
+				in_out_mask2 = 12
+			next ijk
+			del in_out_cikl
+		endif
+	else
+
+		! --- Fixed --------------------------------------------------------
+
+		pen gs_glass_pen
+		material gs_glass_mat
+
+		addz gs_sash_thk/2-gs_glass_thk/2-gs_frame_thk/2
+		prism_ 5,gs_glass_thk,
+			-a/2+gs_rebate_width, gs_rebate_width, 5,
+			a/2-gs_rebate_width, gs_rebate_width, 5,
+			a/2-gs_rebate_width, b-gs_rebate_width, 5,
+			-a/2+gs_rebate_width, b-gs_rebate_width, 5,
+			-a/2+gs_rebate_width, gs_rebate_width, -1
+
+		del 1
+	endif
+
+	body -1
+return
+
+
+! ------------------------------------------------------------------------------
+! --- Glazing ---
+! ------------------------------------------------------------------------------
+"glazing":
+	pen gs_glass_pen
+	material gs_glass_mat
+
+	addz gs_sash_thk/2-gs_glass_thk/2
+	if grill_m = 4 | grill_m = 5 | grill_m = 6 then
+		sideDiff = 0
+	else
+		sideDiff = gs_sash_width
+	endif
+	if grill_m <> 7 then
+		glassFromLeft	= sideDiff
+		glassFromRight	= sideDiff
+		glassFromTop	= sideDiff
+		glassFromBottom = sideDiff
+	endif
+
+	prism_ 5,gs_glass_thk,
+			-a/2 + glassFromLeft,	glassFromBottom,	15,
+			 a/2 - glassFromRight,	glassFromBottom,	15,
+			 a/2 - glassFromRight,	b - glassFromTop,	15,
+			-a/2 + glassFromLeft,	b - glassFromTop,	15,
+			-a/2 + glassFromLeft,	glassFromBottom,	-1
+	del 1
+return
+
+
+! ------------------------------------------------------------------------------
+! --- Panel for type 7
+! ------------------------------------------------------------------------------
+"editableGlassFieldPanel":
+	pen gs_frame_pen
+	material gs_frame_mat
+	prism_ 10, gs_sash_thk,
+		-a/2,					0,					15,
+		 a/2,					0,					15,
+		 a/2,					b,					15,
+		-a/2,					b,					15,
+		-a/2,					0,					-1,
+		-a/2 + glassFromLeft,	glassFromBottom,	15,
+		 a/2 - glassFromRight,	glassFromBottom,	15,
+		 a/2 - glassFromRight,	b - glassFromTop,	15,
+		-a/2 + glassFromLeft,	b - glassFromTop,	15,
+		-a/2 + glassFromLeft,	glassFromBottom,	-1
+return
+
+
+! ------------------------------------------------------------------------------
+! --- Steel elements for type 4, 5, 6
+! ------------------------------------------------------------------------------
+"metalStraps":
+	pen gs_frame_pen
+	material gs_frame_mat
+
+	if grill_m = 4 then
+		topLength = a
+	else
+		topLength = min (0.2, a/4)
+	endif
+	if grill_m = 4 | grill_m = 5 then
+		bottomLength = a
+	else
+		bottomLength = min (0.2, a/4)
+	endif
+	elementThk = (gs_sash_thk - gs_glass_thk) / 2
+
+	if gs_optype_m <> OPTYPE_SIDEHUNG & gs_optype_m <> OPTYPE_BOTTOMHUNG & gs_optype_m <> OPTYPE_TILTTURN \
+			& gs_optype_m <> OPTYPE_TOPHUNG & gs_optype_m <> OPTYPE_REVERSIBLE then
+		mulx -1
+	endif
+
+	for i = 1 to 2
+		prism_ 5, elementThk,
+			-a/2, 0, 15,
+			-a/2 + bottomLength, 0, 15,
+			-a/2 + bottomLength, gs_sash_width, 15,
+			-a/2, gs_sash_width, 15,
+			-a/2, 0, 15
+
+		prism_ 5, elementThk,
+			-a/2, b, 15,
+			-a/2 + topLength, b, 15,
+			-a/2 + topLength, b - gs_sash_width, 15,
+			-a/2, b - gs_sash_width, 15,
+			-a/2, b, 15
+
+		addz elementThk + gs_glass_thk
+	next i
+
+	del 2
+
+	if gs_optype_m <> OPTYPE_SIDEHUNG & gs_optype_m <> OPTYPE_BOTTOMHUNG & gs_optype_m <> OPTYPE_TILTTURN \
+			& gs_optype_m <> OPTYPE_TOPHUNG & gs_optype_m <> OPTYPE_REVERSIBLE then
+		del 1
+	endif
+return
+
+! ------------------------------------------------------------------------------
+! --- Opening line in 3D ---
+! ------------------------------------------------------------------------------
+"Oplines":
+
+	! --- Request globals for Opening Lines and Hotspots ---------------------------
+
+	bOplines3d				= 0
+	opLineType3dIn			= 1
+	opLineType3dOut			= 1
+	gs_opline_style_m		= 1
+	gs_opLinePen			= 1
+
+	call "OpeningOptions" parameters gs_opening_dir_m	= 1,
+									bWindow				= isWindow,
+									bOverride_MVO_3D	= bOverride_MVO_3D,
+									or_bOplines3d		= or_bOplines3d,
+									or_iOpLineType3dIn	= or_iOpLineType3dIn,
+									or_iOpLineType3dOut	= or_iOpLineType3dOut,
+									or_iOplineStyle		= or_iOplineStyle,
+									or_opLinePen		= or_opLinePen,
+									bEnableSecondaryOpLineTypes = 0,
+							returned_parameters bOplines3d,
+												opLineType3dIn,
+												opLineType3dOut,
+												dummy,
+												gs_opline_style_m,
+												gs_opLinePen
+
+
+	if bOplines3d then
+		SASH_FIXED			= 1		! Fixed Glass
+		SASH_FIXED_SCREW	= 2		! Fixed Sash
+		SASH_SIDE_HUNG		= 3		! Side Hung
+		SASH_SIDE_HUNG_M	= 4		! Side Hung Mirrored
+		SASH_TILT_TURN		= 5		! Tilt and Turn
+		SASH_TILT_TURN_M	= 6		! Tilt and Turn Mirrored
+		SASH_BOTTOM_HUNG	= 7		! Bottom Hung
+		SASH_TOP_HUNG		= 8		! Top Hung
+		SASH_HOR_PIVOT		= 9		! Horizontal Pivot Hung
+		SASH_VER_PIVOT		= 10	! Vertical Pivotted
+		SASH_TILT_SLIDE		= 11	! Tilt and Slide
+		SASH_LEFT_SLIDING	= 12	! Left Sliding
+		SASH_RIGHT_SLIDING	= 13	! Right Sliding
+		SASH_UP_SLIDING		= 14	! Sliding Up
+		SASH_DOWN_SLIDING	= 15	! Sliding Down
+
+		iOpeningType = SASH_FIXED
+		if gs_optype_m = OPTYPE_SIDEHUNG then iOpeningType = SASH_SIDE_HUNG
+		if gs_optype_m = OPTYPE_SIDEHUNGMIRRORED  then iOpeningType = SASH_SIDE_HUNG_M
+		if gs_optype_m = OPTYPE_BOTTOMHUNG then iOpeningType = SASH_BOTTOM_HUNG
+		if gs_optype_m = OPTYPE_TOPHUNG then iOpeningType = SASH_TOP_HUNG
+		if gs_optype_m = OPTYPE_SLIDINGUP then iOpeningType = SASH_UP_SLIDING
+		if gs_optype_m = OPTYPE_SLIDINGDOWN then iOpeningType = SASH_DOWN_SLIDING
+		if gs_optype_m = OPTYPE_REVERSIBLE then iOpeningType = SASH_VER_PIVOT
+		if gs_optype_m = OPTYPE_TILTTURNMIRRORED then iOpeningType = SASH_TILT_TURN_M
+		if gs_optype_m = OPTYPE_TILTTURN then iOpeningType = SASH_TILT_TURN
+		if gs_optype_m = OPTYPE_FIXWITHFRAME then iOpeningType = SASH_FIXED_SCREW
+
+
+		!for USA sliding door opening line functions
+		if OpeningWidthTolerance > EPS then
+			if	gs_optype_m = OPTYPE_SLIDINGDOWN |\
+				gs_optype_m = OPTYPE_SLIDINGUP |\
+				gs_optype_m = OPTYPE_SLIDINGLEFT |\
+				gs_optype_m = OPTYPE_SLIDINGRIGHT then
+				gs_opline_style_m = 1			!disregarding MVO settings in USA
+			endif
+			PanelOpWidth = opWidth3d
+			if gs_optype_m = OPTYPE_SLIDINGDOWN then
+				if (PanelOpWidth - OpeningWidthTolerance < eps) then
+					iOpeningType = SASH_UP_SLIDING
+				else
+					iOpeningType = SASH_DOWN_SLIDING
+				endif
+			endif
+			if gs_optype_m = OPTYPE_SLIDINGUP then
+				if (PanelOpWidth - OpeningWidthTolerance < eps) then
+					iOpeningType = SASH_DOWN_SLIDING
+				else
+					iOpeningType = SASH_UP_SLIDING
+				endif
+			endif
+			if gs_optype_m = OPTYPE_SLIDINGLEFT then
+				if (PanelOpWidth - OpeningWidthTolerance < eps) then
+					iOpeningType = SASH_RIGHT_SLIDING
+				else
+					iOpeningType = SASH_LEFT_SLIDING
+				endif
+			endif
+			if gs_optype_m = OPTYPE_SLIDINGRIGHT then
+				if (PanelOpWidth - OpeningWidthTolerance < eps) then
+					iOpeningType = SASH_LEFT_SLIDING
+				else
+					iOpeningType = SASH_RIGHT_SLIDING
+				endif
+			endif
+		else
+			!sliding doors: opening line directions are reversed in other languages
+			if gs_optype_m = OPTYPE_SLIDINGRIGHT then iOpeningType = SASH_LEFT_SLIDING
+			if gs_optype_m = OPTYPE_SLIDINGLEFT then iOpeningType = SASH_RIGHT_SLIDING
+		endif
+
+		opLineDist = gs_sash_thk
+
+		add a/2, 0, (gs_sash_thk/2 - opLineDist/2)
+		mulx -1
+		call "OpeningLines" parameters a	= a,
+						b					= b,
+						frameThickness		= opLineDist,
+						iOpeningType		= iOpeningType,
+						opLineType3dIn		= opLineType3dIn,
+						opLineType3dOut		= opLineType3dOut,
+						gs_opline_style_m	= gs_opline_style_m,
+						gs_opLinePen		= gs_opLinePen
+
+		del 2
+	endif
+
+return
+
+
+! ------------------------------------------------------------------------------
+! --- Handle ---
+! ------------------------------------------------------------------------------
+"Handles":
+	pen gs_frame_pen
+	addy gs_han_height
+
+	if gs_optype_m = OPTYPE_SIDEHUNG or gs_optype_m = OPTYPE_BOTTOMHUNG or gs_optype_m = OPTYPE_TILTTURN \
+			or gs_optype_m = OPTYPE_TOPHUNG or gs_optype_m = OPTYPE_REVERSIBLE then
+		addx a/2 - gs_han_pos
+	else
+		addx -a/2 + gs_han_pos
+	endif
+
+	if not (flipHandle) then mulx -1
+	addz gs_sash_thk
+
+	reqBHandles		= 0
+	reqBHandlesTemp = 0
+	success = LIBRARYGLOBAL ("LibraryGlobals13", "hideBDoorHandles", reqBHandlesTemp)
+	if success > 0 then
+		reqBHandles = reqBHandlesTemp
+	endif
+
+	if not(reqBHandles) then
+		if gs_handle_typ_m = 99 then
+			if gs_cust_handle<>"" then
+				call "DW_Hardware_Collection" parameters gs_ptype=gs_cust_handle
+			endif
+		else
+			call "da_handletyp" parameters a		= a,
+								b					= b,
+								gs_detlevel_3d_m	= gs_detlevel_3d_m,
+								gs_handle_typ_m		= gs_handle_typ_m,
+								res					= gs_resol,
+								gs_shadow			= gs_shadow,
+								gs_handle_mat		= matHandle,
+								gs_handle_ac_mat	= matHandleAcc,
+								dist				= a - gs_sash_width
+		endif
+		del 1
+		mulz -1
+		if gs_handle_typ_m = 99 then
+			if gs_cust_handle<>"" then
+				call "DW_Hardware_Collection" parameters gs_ptype = gs_cust_handle
+			endif
+		else
+			call "da_handletyp" parameters a		= a,
+								b					= b,
+								gs_detlevel_3d_m	= gs_detlevel_3d_m,
+								gs_handle_typ_m		= gs_handle_typ_m,
+								res					= gs_resol,
+								gs_shadow			= gs_shadow,
+								gs_handle_mat		= matHandle,
+								gs_handle_ac_mat	= matHandleAcc,
+								dist				= a - gs_sash_width
+		endif
+		del 4 - flipHandle
+	endif
+return
+
+
+! ------------------------------------------------------------------------------
+! --- Grids ---
+! ------------------------------------------------------------------------------
+
+! --- H-V Grid -----------------------------------------------------------------
+"HVGrid":
+	for ijk= 1 to in_out_cikl_gr
+
+! --- Vertical grids ---
+
+		if nVertPanel > 0 then
+			base
+			for i = 1 to nVertPanel
+				addx (a-2*gs_sash_width+grillWidth_vert+2*fix_sh_grmod)/(nVertPanel+1)
+				add  -a/2+gs_sash_width-grillWidth_vert/2-fix_sh_grmod, 0, gz-fix_sh_grshift
+				sprism_ var_mater2_grill,var_mater_grill,side_mat,
+					4,
+					0,0, 0,1, part_thk_grill, 0,
+					-grillWidth_vert/2,gs_sash_width-fix_sh_grmod,		15,		!var_mater_grill,
+					grillWidth_vert/2,gs_sash_width-fix_sh_grmod,		15,		!var_mater_grill,
+					grillWidth_vert/2,b-gs_sash_width+fix_sh_grmod,		15,		!var_mater_grill,
+					-grillWidth_vert/2,b-gs_sash_width+fix_sh_grmod,		15		!var_mater_grill
+
+				del 1
+			next i
+
+			del nVertPanel
+
+			vert 0, 0, 0
+			vert 0, 1, 0
+			vert 1, 0, 0
+			vert 0, 0, 1
+			coor 5, -1, -2, -3, -4
+			body 1
+		endif
+
+! --- Horizontal grids ---
+
+		if nHorPanel>=1 then
+			for i = 1 to nVertPanel+1
+				for j = 1 to nHorPanel
+					addy (b-2*gs_sash_width+grillWidth_hor+2*fix_sh_grmod)/(nHorPanel+1)
+					add -(a-2*gs_sash_width+2*fix_sh_grmod)/2+hgnn/2, gs_sash_width-grillWidth_hor/2-fix_sh_grmod, gz-fix_sh_grshift
+
+					sprism_ var_mater2_grill,var_mater_grill,side_mat,
+						4,
+						0,0, 0,1, part_thk_grill, 0,
+						-hgnn/2,-grillWidth_hor/2,		15,		!var_mater_grill,
+						hgnn/2,-grillWidth_hor/2,		15,		!var_mater_grill,
+						hgnn/2,grillWidth_hor/2,		15,		!var_mater_grill,
+						-hgnn/2,grillWidth_hor/2,		15		!var_mater_grill
+
+					del 1
+				next j
+				del nHorPanel
+
+				addx (a-2*gs_sash_width+grillWidth_vert+2*fix_sh_grmod)/(nVertPanel+1)
+			next i
+
+			del nVertPanel+1
+			body -1
+		endif
+
+		addz part_thk_grill
+		part_thk_grill = gth - out_thk_grill
+		var_mater_grill = gs_grill_mat2
+		var_mater2_grill = gs_grill_mat2
+		side_mat = gs_grill_mat2
+	next ijk
+	del in_out_cikl_gr
+return
+
+
+
+! --- Editable Grid ------------------------------------------------------------
+"editableGrid":
+	for ijk= 1 to in_out_cikl_gr
+		if nVertPanel>=1 then
+			if ijk = 1 then
+				group "verticalg"
+			else
+				group "verticalg2"
+			endif
+
+			add  (-a/2+gs_sash_width-grillWidth_vert/2-fix_sh_grmod), 0, gz-fix_sh_grshift
+			for i = 1 to nVertPanel
+				addx vergrid[i][1]
+				sprism_ var_mater2_grill,var_mater_grill,side_mat,
+					4,
+					0,0, 0,1, part_thk_grill, 0,
+					-grillWidth_vert/2,vergrid[i][2],15,
+					grillWidth_vert/2,vergrid[i][2],15,
+					grillWidth_vert/2,vergrid[i][3],15,
+					-grillWidth_vert/2,vergrid[i][3],15
+
+				del 1
+			next i
+			del 1
+			endgroup
+		endif
+
+! --- Horizontal grids ---
+
+		if nHorPanel > 0 then
+			if ijk = 1 then
+				group "horizontalg"
+			else
+				group "horizontalg2"
+			endif
+
+			add -a/2 , -grillWidth_hor/2+gs_sash_width-fix_sh_grmod, gz-fix_sh_grshift
+			for i = 1 to nHorPanel
+				addy horgrid[i][1]
+
+				sprism_ var_mater2_grill,var_mater_grill,side_mat,
+					4,
+					0,0, 0,1, part_thk_grill, 0,
+					0+horgrid[i][2],-grillWidth_hor/2,15,
+					horgrid[i][3],-grillWidth_hor/2,15,
+					horgrid[i][3],grillWidth_hor/2,15,
+					0+horgrid[i][2],grillWidth_hor/2,15
+
+				del 1
+			next i
+			del 1
+			endgroup
+		endif
+
+		if ijk = 1 then
+			if nVertPanel>=1 and nHorPanel>=1 then placegroup(addgroup("verticalg","horizontalg"))
+			if nVertPanel>=1 and nHorPanel<1 then placegroup("verticalg")
+			if nVertPanel<1 and nHorPanel>=1 then placegroup("horizontalg")
+		else
+			if nVertPanel>=1 and nHorPanel>=1 then placegroup(addgroup("verticalg2","horizontalg2"))
+			if nVertPanel>=1 and nHorPanel<1 then placegroup("verticalg2")
+			if nVertPanel<1 and nHorPanel>=1 then placegroup("horizontalg2")
+		endif
+
+		addz part_thk_grill
+
+		part_thk_grill = gth - out_thk_grill
+
+		var_mater_grill = gs_grill_mat2
+		var_mater2_grill = gs_grill_mat2
+		side_mat = gs_grill_mat2
+	next ijk
+	del in_out_cikl_gr
+return
+
+
+! --- Custom Panel -------------------------------------------------------------
+"customPanel":
+	if gs_cust_panel <> "" then
+		addx -a/2
+		if isWindow then
+			call "Window_Panel_Collection" parameters	a			= a,
+														b			= b,
+														zzyzx		= gs_sash_thk,
+														gs_ptype	= gs_cust_panel
+		else
+			call "Door_Panel_Collection" parameters		a			= a,
+														b			= b,
+														zzyzx		= gs_sash_thk,
+														gs_ptype	= gs_cust_panel
+		endif
+		del 1
+	endif
+return
+
+
+! --- PRAIRIE STYLE ------------------------------------------------------------
+"prairieStyle":
+	gw = grillWidth_hor
+	sx=-a/2+gs_sash_width
+	sx2=-sx
+	sy=gs_sash_width
+	dy3=(b-2*(gs_sash_width)-6"-3*gw)/5
+	sx3=a-2*(gs_sash_width)
+	pw=gw
+	addz gs_sash_thk/2-gth/2
+
+	prism_ 75, gth,
+		sx,sy,15,
+		sx2,sy,15,
+		sx2,b-sy,15,
+		sx,b-sy,15,
+		sx,sy,-1,
+
+		sx+pw,sy+pw,15,
+		sx+pw+3",sy+pw,15,
+		sx+pw+3",sy+pw+3",15,
+		sx+pw,sy+pw+3",15,
+		sx+pw,sy+pw,-1,
+
+		sx2-pw,sy+pw,15,
+		sx2-pw-3",sy+pw,15,
+		sx2-pw-3",sy+pw+3",15,
+		sx2-pw,sy+pw+3",15,
+		sx2-pw,sy+pw,-1,
+
+		sx+pw,b-sy-pw,15,
+		sx+pw+3",b-sy-pw,15,
+		sx+pw+3",b-sy-pw-3",15,
+		sx+pw,b-sy-pw-3",15,
+		sx+pw,b-sy-pw,-1,
+
+		sx2-pw,b-sy-pw,15,
+		sx2-pw-3",b-sy-pw,15,
+		sx2-pw-3",b-sy-pw-3",15,
+		sx2-pw,b-sy-pw-3",15,
+		sx2-pw,b-sy-pw,-1,
+
+		sx+2*pw+3",b-sy-pw,15,
+		sx2-2*pw-3",b-sy-pw,15,
+		sx2-2*pw-3",b-sy-pw-3",15,
+		sx+2*pw+3",b-sy-pw-3",15,
+		sx+2*pw+3",b-sy-pw,-1,
+
+		sx+2*pw+3",sy+pw,15,
+		sx2-2*pw-3",sy+pw,15,
+		sx2-2*pw-3",sy+pw+3",15,
+		sx+2*pw+3",sy+pw+3",15,
+		sx+2*pw+3",sy+pw,-1,
+
+		sx+pw,sy+2*pw+3",15,
+		sx+pw+3",sy+2*pw+3",15,
+		sx+pw+3",b-sy-2*pw-3",15,
+		sx+pw,b-sy-2*pw-3",15,
+		sx+pw,sy+2*pw+3",-1,
+
+		sx2-pw,sy+2*pw+3",15,
+		sx2-pw-3",sy+2*pw+3",15,
+		sx2-pw-3",b-sy-2*pw-3",15,
+		sx2-pw,b-sy-2*pw-3",15,
+		sx2-pw,sy+2*pw+3",-1,
+
+		sx+2*pw+3",sy+2*pw+3",15,
+		sx+2*pw+3",sy+2*pw+3"+3*dy3-pw,15,
+		sx+sx3/2-pw/2,sy+2*pw+3"+3*dy3-pw,15,
+		sx+sx3/2-pw/2,sy+2*pw+3",15,
+		sx+2*pw+3",sy+2*pw+3",-1,
+
+		sx2-2*pw-3",sy+2*pw+3",15,
+		sx2-2*pw-3",sy+2*pw+3"+3*dy3-pw,15,
+		sx+sx3/2+pw/2,sy+2*pw+3"+3*dy3-pw,15,
+		sx+sx3/2+pw/2,sy+2*pw+3",15,
+		sx2-2*pw-3",sy+2*pw+3",-1,
+
+		sx+2*pw+3",sy+2*pw+3"+4*dy3-pw,15,
+		sx+2*pw+3",sy+2*pw+3"+3*dy3,15,
+		sx+sx3/2-pw/2,sy+2*pw+3"+3*dy3,15,
+		sx+sx3/2-pw/2,sy+2*pw+3"+4*dy3-pw,15,
+		sx+2*pw+3",sy+2*pw+3"+4*dy3-pw,-1,
+
+		sx2-2*pw-3",sy+2*pw+3"+4*dy3-pw,15,
+		sx2-2*pw-3",sy+2*pw+3"+3*dy3,15,
+		sx+sx3/2+pw/2,sy+2*pw+3"+3*dy3,15,
+		sx+sx3/2+pw/2,sy+2*pw+3"+4*dy3-pw,15,
+		sx2-2*pw-3",sy+2*pw+3"+4*dy3-pw,-1,
+
+		sx+2*pw+3",sy+2*pw+3"+5*dy3-pw,15,
+		sx+2*pw+3",sy+2*pw+3"+4*dy3,15,
+		sx+sx3/2-pw/2,sy+2*pw+3"+4*dy3,15,
+		sx+sx3/2-pw/2,sy+2*pw+3"+5*dy3-pw,15,
+		sx+2*pw+3",sy+2*pw+3"+5*dy3-pw,-1,
+
+		sx2-2*pw-3",sy+2*pw+3"+5*dy3-pw,15,
+		sx2-2*pw-3",sy+2*pw+3"+4*dy3,15,
+		sx+sx3/2+pw/2,sy+2*pw+3"+4*dy3,15,
+		sx+sx3/2+pw/2,sy+2*pw+3"+5*dy3-pw,15,
+		sx2-2*pw-3",sy+2*pw+3"+5*dy3-pw,-1
+
+	del 1
+return
+
+
+"WindowHandle":
+
+	pen gs_frame_pen
+
+	if gs_handle_type_win_m <> 0 & gs_window_handle then
+		gs_handle_rot_win	= 0
+
+		if gs_opening_dir_m = 2 then
+
+			if gs_optype_m = OPTYPE_SIDEHUNG | gs_optype_m = OPTYPE_TILTTURN then
+				add a/2 - gs_sash_width/2, b/2, 0
+			endif
+			if gs_optype_m = OPTYPE_SIDEHUNGMIRRORED | gs_optype_m = OPTYPE_TILTTURNMIRRORED then
+				add -a/2 + gs_sash_width/2, b/2, 0
+			endif
+			if gs_optype_m = OPTYPE_BOTTOMHUNG then
+				add 0, b - gs_sash_width/2, 0
+				gs_handle_rot_win = 90
+			endif
+			if gs_optype_m = OPTYPE_TOPHUNG then
+				add 0, gs_sash_width/2, 0
+				gs_handle_rot_win = 90
+			endif
+			roty 180
+		else
+			if gs_optype_m = OPTYPE_SIDEHUNG | gs_optype_m = OPTYPE_TILTTURN then
+				add a/2 - gs_sash_width/2, b/2, gs_sash_thk
+			endif
+			if gs_optype_m = OPTYPE_SIDEHUNGMIRRORED | gs_optype_m = OPTYPE_TILTTURNMIRRORED then
+				add -a/2 + gs_sash_width/2, b/2, gs_sash_thk
+			endif
+			if gs_optype_m = OPTYPE_BOTTOMHUNG then
+				add 0, b - gs_sash_width/2, gs_sash_thk
+				gs_handle_rot_win = -90
+			endif
+			if gs_optype_m = OPTYPE_TOPHUNG then
+				add 0, gs_sash_width/2, gs_sash_thk
+				gs_handle_rot_win = -90
+			endif
+			mulx -1
+		endif
+
+		handleUnID = 24000 + CasementID * 10
+
+		hotspot 0, 									gs_handle_win_pos[CasementID][2],	0, handleUnID , gs_handle_win_pos[CasementID][1], 1 + 128	: handleUnID = handleUnID + 1
+		hotspot gs_handle_win_pos[CasementID][1],	gs_handle_win_pos[CasementID][2],	0, handleUnID , gs_handle_win_pos[CasementID][1], 2		: handleUnID = handleUnID + 1
+		hotspot -1, 								gs_handle_win_pos[CasementID][2],	0, handleUnID , gs_handle_win_pos[CasementID][1], 3		: handleUnID = handleUnID + 1
+
+		hotspot gs_handle_win_pos[CasementID][1],	0,									0, handleUnID , gs_handle_win_pos[CasementID][2], 1 + 128		: handleUnID = handleUnID + 1
+		hotspot gs_handle_win_pos[CasementID][1],	gs_handle_win_pos[CasementID][2],	0, handleUnID , gs_handle_win_pos[CasementID][2], 2			: handleUnID = handleUnID + 1
+		hotspot gs_handle_win_pos[CasementID][1],	-1,									0, handleUnID , gs_handle_win_pos[CasementID][2], 3			: handleUnID = handleUnID + 1
+
+		add gs_handle_win_pos[CasementID][1],		gs_handle_win_pos[CasementID][2],	0
+
+		if gs_opening_dir_m = 2 then mulx -1
+		call "DoorHandle" parameters	gs_window_handle			= gs_window_handle,
+										gs_handle_type_win			= gs_handle_type_win,
+										gs_handle_type_win_m		= gs_handle_type_win_m,
+										gs_cust_handle_win			= gs_cust_handle_win,
+										gs_handle_rot_win			= gs_handle_rot_win,
+										gs_handle_win_mat			= gs_handle_win_mat,
+										gs_handle_win_pos			= gs_handle_win_pos,
+										iHandleWinCategoryEnable	= 1,
+										bWindow						= 1
+
+		del 2 + (gs_opening_dir_m = 2)
+	endif
+return
+
+

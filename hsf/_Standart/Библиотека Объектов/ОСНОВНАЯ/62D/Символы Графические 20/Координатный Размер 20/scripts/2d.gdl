@@ -1,0 +1,417 @@
+
+! --------- mm conversion
+
+markerSize = markerSize_mm / 1000 * GLOB_SCALE
+
+customOrigSize_mm = 10
+customOrigSize = customOrigSize_mm / 1000 * GLOB_SCALE
+
+!=============================================================================
+! ----------- Project Coordinates (meter, X/Y)
+!=============================================================================
+
+text_x_coor = ""
+text_y_coor = ""
+text_z_coor = ""
+
+if iCoorSystem = PROJECT_COOR then
+	x_coor = SYMB_POS_X + GLOB_WORLD_ORIGO_OFFSET_X - CustomOrigX*bCustomOrig
+	y_coor = SYMB_POS_Y + GLOB_WORLD_ORIGO_OFFSET_Y - CustomOrigY*bCustomOrig
+	z_coor = SYMB_POS_Z - ref_height 				- CustomOrigZ*bCustomOrig
+
+	text_x_coor = STR(workingLengthUnit, x_coor)
+	text_y_coor = STR(workingLengthUnit, y_coor)
+	text_z_coor = STR(workingLengthUnit, z_coor)
+endif
+
+
+!=============================================================================
+! World Coordinates (Degree, Longitude/Latitude)
+!=============================================================================
+
+! ------ LATITUDE  = Y (NORTH/SOUTH)
+! ------ LONGITUDE = X (EAST/WEST)
+
+! ----- Distance between marker and origin in AC X-Y dimension
+dist_X = SYMB_POS_X + GLOB_WORLD_ORIGO_OFFSET_X - CustomOrigX*bCustomOrig
+dist_Y = SYMB_POS_Y + GLOB_WORLD_ORIGO_OFFSET_Y - CustomOrigY*bCustomOrig
+
+! ----- Distance between marker and origin
+dist = ABS(SQR(dist_X^2 + dist_Y^2))
+
+! ------- Absolute angles of the distance line (marker-origin vector)
+alfa_dist = 0
+if ABS(dist_X)>EPS then
+	if dist_X > EPS and dist_Y > EPS then alfa_dist = ATN(dist_Y/dist_X)
+	if dist_X < EPS and dist_Y > EPS then alfa_dist = ATN(dist_Y/dist_X) + 180
+	if dist_X > EPS and dist_Y < EPS then alfa_dist = ATN(dist_Y/dist_X) + 360
+	if dist_X < EPS and dist_Y < EPS then alfa_dist = ATN(dist_Y/dist_X) + 180
+else
+	if dist_Y > EPS then alfa_dist =  90
+	if dist_Y < EPS then alfa_dist = 270
+endif
+
+alfa_north = GLOB_NORTH_DIR - 90
+alfa_calc = alfa_dist - alfa_north
+
+! --------- Adjusted Longitude-Latitude distances according to the North direction - (North direction could be rotated - default is 90)
+x_rotated = dist * COS(alfa_calc)
+y_rotated = dist * SIN(alfa_calc)
+
+
+! -------- Earth radius in meter
+
+if iCoorSystem = WORLD_COOR_PROJ then
+	ANGLE_LAT_ORIG  = GLOB_PROJECT_LATITUDE
+	ANGLE_LONG_ORIG = GLOB_PROJECT_LONGITUDE
+else
+	_multiplyLat = 1 - 2 * (iLatitudeRef = LAT_SOUTH)
+	_multiplyLon = 1 - 2 * (iLongitudeRef = LONG_WEST)
+
+	ANGLE_LAT_ORIG  = _multiplyLat * (iLatitudeDegree  + iLatitudeMinute /60 + rLatitudeSecond /3600)
+	ANGLE_LONG_ORIG = _multiplyLon * (iLongitudeDegree + iLongitudeMinute/60 + rLongitudeSecond/3600)
+endif
+
+! --------- Default earth radius on equator
+! --- there are 9 zones in every 10 degrees, the radius are valid in the zone centers (5,15,25... degress)
+! --- these radiuses are curveture radius based on 1-degree-distance and circle circumference in zone centers
+
+CURV_RADIUS    = 6335440.942		! ---- Equator
+
+! -------- Radius at zone centers
+CURV_RADIUS_05 = 6335924.174
+CURV_RADIUS_15 = 6339704.722
+CURV_RADIUS_25 = 6346819.884
+CURV_RADIUS_35 = 6356427.240
+CURV_RADIUS_45 = 6367381.849
+CURV_RADIUS_55 = 6378367.914
+CURV_RADIUS_65 = 6388055.026
+CURV_RADIUS_75 = 6395260.887
+CURV_RADIUS_85 = 6399100.621
+
+if abs(iLatitudeDegree) > -EPS 	and abs(iLatitudeDegree) < 10+EPS then CURV_RADIUS = CURV_RADIUS_05
+if abs(iLatitudeDegree) > 10 	and abs(iLatitudeDegree) < 20+EPS then CURV_RADIUS = CURV_RADIUS_15
+if abs(iLatitudeDegree) > 20 	and abs(iLatitudeDegree) < 30+EPS then CURV_RADIUS = CURV_RADIUS_25
+if abs(iLatitudeDegree) > 30 	and abs(iLatitudeDegree) < 40+EPS then CURV_RADIUS = CURV_RADIUS_35
+if abs(iLatitudeDegree) > 40 	and abs(iLatitudeDegree) < 50+EPS then CURV_RADIUS = CURV_RADIUS_45
+if abs(iLatitudeDegree) > 50 	and abs(iLatitudeDegree) < 60+EPS then CURV_RADIUS = CURV_RADIUS_55
+if abs(iLatitudeDegree) > 60 	and abs(iLatitudeDegree) < 70+EPS then CURV_RADIUS = CURV_RADIUS_65
+if abs(iLatitudeDegree) > 70 	and abs(iLatitudeDegree) < 80+EPS then CURV_RADIUS = CURV_RADIUS_75
+if abs(iLatitudeDegree) > 80 	and abs(iLatitudeDegree) < 90+EPS then CURV_RADIUS = CURV_RADIUS_85
+
+
+LAT_RADIUS 		= CURV_RADIUS
+LONG_RADIUS 	= LAT_RADIUS * COS(ANGLE_LAT_ORIG)
+
+CIRCUMFERENCE_LONG = 2 * LONG_RADIUS * PI
+CIRCUMFERENCE_LAT  = 2 * LAT_RADIUS  * PI
+
+angle_x_long = x_rotated / CIRCUMFERENCE_LONG * 360
+angle_y_lat  = y_rotated / CIRCUMFERENCE_LAT  * 360
+
+
+! --------- Decimal angles
+ANGLE_LAT_MARKER  = ANGLE_LAT_ORIG  + angle_y_lat
+ANGLE_LONG_MARKER = ANGLE_LONG_ORIG + angle_x_long
+
+! --------- Degree/Minute/Second angles
+LAT_DEGREE  = INT(ABS(ANGLE_LAT_MARKER ))
+LONG_DEGREE = INT(ABS(ANGLE_LONG_MARKER))
+
+LAT_MINUTE  = INT((ABS(ANGLE_LAT_MARKER ) - LAT_DEGREE )*60)
+LONG_MINUTE = INT((ABS(ANGLE_LONG_MARKER) - LONG_DEGREE)*60)
+
+LAT_SECOND  = (ABS(ANGLE_LAT_MARKER ) - LAT_DEGREE  - LAT_MINUTE /60)*3600
+LONG_SECOND = (ABS(ANGLE_LONG_MARKER) - LONG_DEGREE - LONG_MINUTE/60)*3600
+
+
+! -------------- North/South, East/West
+
+LAT_LETTER  = `С`
+LONG_LETTER = `В`
+
+if ANGLE_LAT_MARKER < -EPS then
+	LAT_LETTER = `Ю`
+endif
+
+if ANGLE_LONG_MARKER < -EPS then
+	LONG_LETTER = `З`
+endif
+
+
+if iCoorSystem = WORLD_COOR_CUST or iCoorSystem = WORLD_COOR_PROJ  then
+	text_x_coor = LONG_LETTER + " " + STR(LONG_DEGREE,1,0) + "° " + STR(LONG_MINUTE,1,0) + "' " + STR(LONG_SECOND,3,2) + "''"
+	text_y_coor = LAT_LETTER  + " " + STR(LAT_DEGREE, 1,0) + "° " + STR(LAT_MINUTE, 1,0) + "' " + STR(LAT_SECOND, 3,2) + "''"
+
+	text_z_coor = STR(workingLengthUnit, elevWorldCoor + SYMB_POS_Z - CustomOrigZ*bCustomOrig)
+endif
+
+unID = 1
+
+!=============================================================================
+! Text Styles
+!=============================================================================
+
+define style "headerStyle" 		strFontTypeHeader, 		fontSizeHeader_mm,		1,	1 * bBoldHeader + 2 * bItalicHeader + 4 * bUnderlinedHeader
+define style "coorStyle" 		strFontTypeCoor, 		fontSizeCoor_mm,		1,	1 * bBoldCoor + 2 * bItalicCoor + 4 * bUnderlinedCoor
+define style "IDStyle" 			strFontTypeID, 			fontSizeID_mm,			1,	1 * bBoldID + 2 * bItalicID + 4 * bUnderlinedID
+define style "customOrigStyle" 	strFontTypeCustOrig,	fontSizeCustOrig_mm,	2,	1 * bBoldCustOrig + 2 * bItalicCustOrig + 4 * bUnderlinedCustOrig
+
+set style "headerStyle"
+req_header = REQUEST ("Height_of_style", "headerStyle", hstyle_header)
+styleHeight_header = hstyle_header/1000*GLOB_SCALE
+
+set style "coorStyle"
+req_coor = REQUEST ("Height_of_style", "coorStyle", hstyle_coor)
+styleHeight_coor = hstyle_coor/1000*GLOB_SCALE
+
+set style "IDStyle"
+req_id = REQUEST ("Height_of_style", "IDStyle", hstyle_id)
+styleHeight_id = hstyle_id/1000*GLOB_SCALE
+
+set style "customOrigStyle"
+req_custOrig = REQUEST ("Height_of_style", "customOrigStyle", hstyle_custOrig)
+styleHeight_custOrig = hstyle_custOrig/1000*GLOB_SCALE
+
+angleViewRot = 0
+rrr = REQUEST ("View_Rotangle", "", angleViewRot)
+totalRotate = (SYMB_ROTANGLE + angleViewRot) MOD 360
+
+bReadableTexts		= (iTypeTextRotation = ORIENTATION_READABLE) and (totalRotate > (90 + EPS) and totalRotate < (90 + 180 + EPS))
+bHorizontalTexts	= (iTypeTextRotation = ORIENTATION_HORIZONTAL)
+
+rot2 -SYMB_ROTANGLE * (iTypeTextRotation = ORIENTATION_HORIZONTAL)
+
+!=============================================================================
+! Marker
+!=============================================================================
+
+hotspot2 0,0
+
+pen penMarker
+
+if iMarkerStyle2D = TRIANGLE_EMPTY or iMarkerStyle2D = TRIANGLE_FILLED then
+	if iMarkerStyle2D = TRIANGLE_FILLED then
+		_frameFill = 3
+	else
+		_frameFill = 1
+	endif
+
+	fill gs_fill_type
+	poly2_b 4, _frameFill, gs_fill_pen,gs_back_pen,
+		0,0,1,
+		-markerSize/2,markerSize,1,
+		markerSize/2,markerSize,1,
+		0,0,-1
+endif
+
+if iMarkerStyle2D = CROSS_WITH_CIRCLE or iMarkerStyle2D = CROSS_IN_CIRCLE or \
+	iMarkerStyle2D = CROSS then
+		line2 -markerSize/2,0,markerSize/2,0
+		line2 0,-markerSize/2,0,markerSize/2
+endif
+
+if iMarkerStyle2D = CROSS_WITH_CIRCLE or iMarkerStyle2D = CROSS_IN_CIRCLE then
+	r_circle = markerSize/2
+	if iMarkerStyle2D = CROSS_WITH_CIRCLE then r_circle = markerSize/4
+	if iMarkerStyle2D = CROSS_IN_CIRCLE 	then r_circle = markerSize/2
+
+	circle2 0,0,r_circle
+endif
+
+
+!=============================================================================
+! Custom Origin
+!=============================================================================
+
+if bCustomOrig and bShowCustomOrig then
+	rot2 -SYMB_ROTANGLE + SYMB_ROTANGLE * (iTypeTextRotation = ORIENTATION_HORIZONTAL)
+	add2 -(SYMB_POS_X + GLOB_WORLD_ORIGO_OFFSET_X), -(SYMB_POS_Y + GLOB_WORLD_ORIGO_OFFSET_Y)
+
+	hotspot2 0,				CustomOrigY,		unID, CustomOrigX, 	1+128
+	unID=unID+1
+	hotspot2 CustomOrigX,	CustomOrigY,		unID, CustomOrigX, 	2
+	unID=unID+1
+	hotspot2 -1,			CustomOrigY,		unID, CustomOrigX, 	3
+	unID=unID+1
+
+	hotspot2 CustomOrigX,	0,					unID, CustomOrigY, 	1+128
+	unID=unID+1
+	hotspot2 CustomOrigX,	CustomOrigY,		unID, CustomOrigY, 	2
+	unID=unID+1
+	hotspot2 CustomOrigX,	-1,					unID, CustomOrigY, 	3
+	unID=unID+1
+
+	pen penFontCustOrig
+
+	add2 CustomOrigX, CustomOrigY
+
+	rot2 SYMB_ROTANGLE * NOT(bHorizontalTexts) + 180 * bReadableTexts
+	add2 0, (customOrigSize + styleHeight_custOrig) * bReadableTexts
+
+	set style "customOrigStyle"
+	text2 0, -customOrigSize / 2, `Специальное Начало`
+
+	del 2
+
+	pen penMarker
+
+	rot2 45
+	circle2 0,0,customOrigSize/2
+	line2 -customOrigSize/2, 0, customOrigSize/2, 0
+	line2 0, -customOrigSize/2, 0, customOrigSize/2
+	del 2
+
+	del 2
+endif
+
+
+!=============================================================================
+! ID at Symbol
+!=============================================================================
+
+if bShowMarkerID then
+
+	hotspot2 0,			ID_Y,	unID, ID_X, 	1+128
+	unID=unID+1
+	hotspot2 ID_X,		ID_Y,	unID, ID_X, 	2
+	unID=unID+1
+	hotspot2 -1,		ID_Y,	unID, ID_X, 	3
+	unID=unID+1
+
+	hotspot2 ID_X,		0,		unID, ID_Y, 	1+128
+	unID=unID+1
+	hotspot2 ID_X,		ID_Y,	unID, ID_Y, 	2
+	unID=unID+1
+	hotspot2 ID_X,		-1,		unID, ID_Y, 	3
+	unID=unID+1
+
+
+	pen penFontID
+	set style "IDStyle"
+
+	add2 ID_X, ID_Y
+	text2 0,0,id_text
+	del 1
+
+endif
+
+
+!=============================================================================
+! Stamp
+!=============================================================================
+
+hotspot2 0,				stamp_Y,	unID, stamp_X, 	1+128
+unID=unID+1
+hotspot2 stamp_X,		stamp_Y,	unID, stamp_X, 	2
+unID=unID+1
+hotspot2 -1,			stamp_Y,	unID, stamp_X, 	3
+unID=unID+1
+
+hotspot2 stamp_X,		0,			unID, stamp_Y, 	1+128
+unID=unID+1
+hotspot2 stamp_X,		stamp_Y,	unID, stamp_Y, 	2
+unID=unID+1
+hotspot2 stamp_X,		-1,			unID, stamp_Y, 	3
+unID=unID+1
+
+
+add2 stamp_X, stamp_Y
+
+delnum = 0
+
+pen penFontHeader
+set style "headerStyle"
+
+if bHeader then
+	if not(bID) then
+		id_text = ""
+		divider = ""
+	else
+		divider = " "
+	endif
+
+	if bAddText and strAddTextContent<>"" then
+		addtext = divider + strAddTextContent
+	else
+		addtext = ""
+	endif
+
+	text2D			= id_text + addtext
+	textHeight2D	= styleHeight_header
+	gosub "textRotation"
+
+	text2 0, 0, text2D
+
+	gosub "textRotationDelete"
+
+	if bID or bAddText then
+		add2 0, -textHeight2D
+		delnum = delnum + 1
+	endif
+endif
+
+pen penFontCoor
+set style "coorStyle"
+
+if bShowCoorX then
+	text2D			= strPrefix1 + " " + text_x_coor
+	textHeight2D	= styleHeight_coor
+	gosub "textRotation"
+
+	text2 0, 0, text2D
+
+	gosub "textRotationDelete"
+
+	add2 0, -textHeight2D
+	delnum = delnum + 1
+endif
+
+if bShowCoorY then
+	text2D			= strPrefix2 + " " + text_y_coor
+	textHeight2D	= styleHeight_coor
+	gosub "textRotation"
+
+	text2 0, 0, text2D
+
+	gosub "textRotationDelete"
+
+	add2 0, -textHeight2D
+	delnum = delnum + 1
+endif
+
+if bHeight and bShowCoorZ then
+	text2D			= strPrefix3 + " " + text_z_coor
+	textHeight2D	= styleHeight_coor
+	gosub "textRotation"
+
+	text2 0, 0, text2D
+
+	gosub "textRotationDelete"
+endif
+
+del delnum
+
+del 1
+
+del 1
+
+!================================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+!================================================================================
+
+"textRotation":
+
+	if bReadableTexts then
+		add2 STW(text2D) / 1000 * GLOB_SCALE, -textHeight2D
+		rot2 180
+	endif
+
+return
+
+"textRotationDelete":
+
+	if bReadableTexts then del 2
+
+return
+

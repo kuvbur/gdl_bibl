@@ -1,0 +1,578 @@
+
+
+! ==============================================================================
+! Simple Detail Level
+! ==============================================================================
+
+if	gs_optype_m = SASH_FIXED |\
+	gs_optype_m = SASH_HOR_PIVOT |\
+	gs_optype_m = SASH_VER_PIVOT |\
+	gs_optype_m = SASH_VER_PIVOT_M |\
+	gs_optype_m = SASH_SLIDING_HOR |\
+	gs_optype_m = SASH_SLIDING_HOR_M |\
+	gs_optype_m = SASH_DOUBLE_SLIDING_HOR |\
+	gs_optype_m = SASH_DOUBLE_SLIDING_HOR_M |\
+	gs_optype_m = SASH_SLIDING_VER |\
+	gs_optype_m = SASH_DOUBLE_SLIDING_VER then
+
+	if lod3D = 1 | lod3D = 5 | gs_optype_m = SASH_FIXED then
+		addy gs_rebate_width
+		A = A - 2*gs_rebate_width
+		B = B - 2*gs_rebate_width
+		if iMullionStyle = MULLION_SOLID_PANEL then
+			addz -gs_frame_thk
+		endif
+	else
+		if	gs_optype_m = SASH_HOR_PIVOT |\
+			gs_optype_m = SASH_VER_PIVOT |\
+			gs_optype_m = SASH_VER_PIVOT_M then
+			addz -gs_sash_thk
+		else
+			addz -gs_frame_thk
+		endif
+	endif
+else
+	if lod3D <> 1 & lod3D <> 5 then
+		addz -gs_rebate_depth
+	endif
+endif
+
+if lod3D = 1 | lod3D = 5 then
+	vgn = 0
+	hgn = 0
+
+	if iMullionStyle = MULLION_CUSTOM then
+		iMullionStyle = MULLION_NONE
+	endif
+
+	gs_full_edit = 0
+endif
+
+
+gs_sash_width = gs_sash_width * (gs_optype_m <> SASH_FIXED)
+
+if abs(eyebrows_unID)<EPS then
+	unID = 0
+else
+	unID = eyebrows_unID
+endif
+
+if GLOB_CONTEXT = 6 then	! Window Schedule - 3D view should NOT display sash in open position
+	openingAngle_01 = 0
+endif
+
+resol res
+
+
+! =============================================================================
+! Curved top calculation
+! =============================================================================
+
+ace = a/2
+bce = b - gs_shoulderHeight
+
+mce = ace - r1
+nce = bce - r1
+cce = sqr(mce^2 + nce^2)/2
+fce = ((2*cce^2)/nce)-nce
+r2	= fce + bce
+alphace = 90-(2*asn(cce/(fce + nce)))
+
+
+! =============================================================================
+! Handling Inner-outer Sash
+! =============================================================================
+
+if gs_frame_mat = gs_frame_mat2 then				! One body, in case of similar materials
+	in_out_cikl = 1
+
+	gs_frame_mat2 = gs_frame_mat
+
+	out_thk = 0
+	part_thk = gs_sash_thk
+
+	in_out_mask = 15
+	in_out_mask2 = 13
+	in_out_mask3 = 79
+else												! two bodies
+	in_out_cikl = 2
+
+	! Inner-outer Material Control
+	if bOpeningDirectionInside then
+		temp_frame_mat	= gs_frame_mat
+		gs_frame_mat	= gs_frame_mat2
+		gs_frame_mat2	= temp_frame_mat
+	endif
+
+	out_thk = gs_sash_thk/2-gs_glass_thk/2
+	part_thk = out_thk
+
+	in_out_mask = 11
+	in_out_mask2 = 9
+	in_out_mask3 = 75
+endif
+var_mater = gs_frame_mat
+var_mater2 = gs_frame_mat2
+
+
+! =============================================================================
+! 3D Window Model
+! =============================================================================
+
+sect_fill gs_fillSash, gs_penSash_bg, gs_pensash_fg, gs_frame_pen_cont
+
+
+! =============================================================================
+! Frame
+! =============================================================================
+
+
+if ((iMullionStyle <> MULLION_CUSTOM & iMullionStyle<> MULLION_SOLID_PANEL)| abs(gs_glass_thk) < EPS) & (lod3D = 2) & (gs_optype_m <> SASH_FIXED) then
+
+	pen gs_frame_pen
+	material gs_frame_mat
+
+	for ijk = 1 to in_out_cikl
+		material var_mater
+
+		if gs_SashText_typ_num = 1 then
+			base
+			sprism_{2} var_mater2,var_mater,var_mater2,
+				15,
+				0,0, 0,1, 0, 0,
+				0,0, 0,1, part_thk, 0,
+				 a/2,					0,					in_out_mask,		var_mater,
+				 a/2,					gs_shoulderHeight,	in_out_mask3,		var_mater,
+				 r1,					alphace,			2000+in_out_mask3,	var_mater,
+				 r2,					90-alphace,			2000+in_out_mask3,	var_mater,
+				 r2,					90-alphace,			2000+in_out_mask3,	var_mater,
+				 r1,					alphace,			2000+in_out_mask3,	var_mater,
+				-a/2,					gs_shoulderHeight,	in_out_mask3,		var_mater,
+				-a/2,					0,					10,					var_mater,
+				-a/2+gs_sash_width,		gs_sash_width,		in_out_mask,		var_mater,
+				-a/2+gs_sash_width,		gs_shoulderHeight,	in_out_mask3,		var_mater,
+				 r1-gs_sash_width,		-alphace,			2000+in_out_mask3,	var_mater,
+				 r2-gs_sash_width,		-90+alphace,		2000+in_out_mask3,	var_mater,
+				 r2-gs_sash_width,		-90+alphace,		2000+in_out_mask3,	var_mater,
+				 r1-gs_sash_width,		-alphace,			2000+in_out_mask3,	var_mater,
+				a/2-gs_sash_width,		gs_sash_width,		10,					var_mater
+			vert 0, 0, 0
+			vert 0, 1, 0
+			vert 1, 0, 0
+			vert 0, 0, 1
+			coor 2, -1, -2, -3, -4
+			body 1
+
+			sprism_{2} var_mater2,var_mater,var_mater2,
+				4,
+				0,0, 0,1, 0, 0,
+				0,0, 0,1, part_thk, 0,
+				-a/2,					0,				10,				var_mater,
+				-a/2+gs_sash_width,		gs_sash_width,	in_out_mask,	var_mater,
+				a/2-gs_sash_width,		gs_sash_width,	10,				var_mater,
+				a/2,					0,				15,				var_mater
+		endif
+
+		if gs_SashText_typ_num = 2 then
+			base
+			sprism_{2} var_mater2,var_mater,var_mater2,
+				15,
+				0,0, 0,1, 0, 0,
+				0,0, 0,1, part_thk, 0,
+				 a/2,					gs_sash_width,		in_out_mask2,		var_mater,
+				 a/2,					gs_shoulderHeight,	in_out_mask3,		var_mater,
+				 r1,					alphace,			2000+in_out_mask3,	var_mater,
+				 r2,					90-alphace,			2000+in_out_mask3,	var_mater,
+				 r2,					90-alphace,			2000+in_out_mask3,	var_mater,
+				 r1,					alphace,			2000+in_out_mask3,	var_mater,
+				-a/2,					gs_shoulderHeight,	in_out_mask3,		var_mater,
+				-a/2,					gs_sash_width,		8,					var_mater,
+				-a/2+gs_sash_width,		gs_sash_width,		in_out_mask,		var_mater,
+				-a/2+gs_sash_width,		gs_shoulderHeight,	in_out_mask3,		var_mater,
+				 r1-gs_sash_width,		-alphace,			2000+in_out_mask3,	var_mater,
+				 r2-gs_sash_width,		-90+alphace,		2000+in_out_mask3,	var_mater,
+				 r2-gs_sash_width,		-90+alphace,		2000+in_out_mask3,	var_mater,
+				 r1-gs_sash_width,		-alphace,			2000+in_out_mask3,	var_mater,
+				a/2-gs_sash_width,		gs_sash_width,		10,					var_mater
+			vert 0, 0, 0
+			vert 0, 1, 0
+			vert 1, 0, 0
+			vert 0, 0, 1
+			coor 2, -1, -2, -3, -4
+			body 1
+
+			sprism_{2} var_mater2,var_mater,var_mater2,
+				6,
+				0,0, 0,1, 0, 0,
+				0,0, 0,1, part_thk, 0,
+				-a/2,					gs_sash_width,		8,				var_mater,
+				-a/2+gs_sash_width,		gs_sash_width,		in_out_mask,	var_mater,
+				a/2-gs_sash_width,		gs_sash_width,		10,				var_mater,
+				a/2,					gs_sash_width,		in_out_mask2,	var_mater,
+				a/2,					0,					15,				var_mater,
+				-a/2,					0,					in_out_mask,	var_mater
+		endif
+		body -1
+
+		addz part_thk
+		part_thk = gs_sash_thk-out_thk
+
+		var_mater = gs_frame_mat2
+		var_mater2 = gs_frame_mat2
+
+		in_out_mask = 14
+		in_out_mask2 = 12
+		in_out_mask3 = 78
+	next ijk
+	del in_out_cikl
+endif
+
+
+! =============================================================================
+! Grill
+! =============================================================================
+
+if iMullionStyle <> MULLION_CUSTOM & iMullionStyle <> MULLION_SOLID_PANEL then
+
+	pen gs_sash_pen
+
+	if iMullionStyle <> MULLION_NONE then
+		hgnn = ((a - 2*gs_sash_width + gw)/(vgn + 1)) - gw	! Glass pane width between grids
+
+		! Handling Inner-outer Grill -----------
+		if gs_grill_mat = gs_grill_mat2 then				! One body, in case of similar materials
+			in_out_cikl_gr		= 1
+
+			var_mater_grill		= gs_grill_mat
+			var_mater2_grill	= gs_grill_mat
+
+			out_thk_grill		= 0
+			part_thk_grill		= gth
+		else
+			! Inner-outer Material Control -----------
+			temp_grill_mat	= gs_grill_mat
+			temp_grill_mat2	= gs_grill_mat2
+			if not(bOpeningDirectionInside) then
+				gs_grill_mat	= temp_grill_mat
+				gs_grill_mat2	= temp_grill_mat2
+			else
+				gs_grill_mat	= temp_grill_mat2
+				gs_grill_mat2	= temp_grill_mat
+			endif
+			! ----------------------------------------
+
+			var_mater_grill		= gs_grill_mat
+			var_mater2_grill	= gs_grill_mat2
+
+			if iMullionPosition = MULLION_INSIDE or iMullionPosition = MULLION_OUTSIDE or (iMullionPosition = MULLION_THROUGHOUT and gs_glass_thk>=gth ) then		! Inside, Outside position
+				in_out_cikl_gr	= 1
+				out_thk_grill	= gth
+				part_thk_grill	= out_thk_grill
+			else									! Throughout position
+				in_out_cikl_gr	= 2
+				out_thk_grill	= gth/2 - gs_glass_thk/2
+				part_thk_grill	= out_thk_grill
+			endif
+		endif
+
+		if iMullionPosition = MULLION_INSIDE then
+			side_mat = var_mater2_grill
+		else
+			side_mat = var_mater_grill
+		endif
+
+		material gs_grill_mat
+
+		if iMullionPosition = MULLION_THROUGHOUT then
+			gz = (gs_optype_m <> SASH_FIXED) * gs_sash_thk/2 - gth/2
+		else
+			if (iMullionPosition = MULLION_INSIDE) exor not(bOpeningDirectionInside) then
+				gz = (gs_optype_m <> SASH_FIXED) * gs_sash_thk/2 + gs_glass_thk/2
+			else
+				gz = (gs_optype_m <> SASH_FIXED) * gs_sash_thk/2 - gs_glass_thk/2 - gth
+			endif
+		endif
+		gz = gz - (gs_optype_m = SASH_FIXED) * gs_rebate_depth
+
+		! H-V STYLE GRID -------------------------------
+
+		material gs_grill_mat
+
+		for ijk= 1 to in_out_cikl_gr
+
+			! Cutplanes at curve
+
+			beta=360/res
+
+			!at radius r1
+			nsr1=max(1, int(alphace/beta))
+			if alphace/beta-int(alphace/beta)>=0.5 then nsr1=nsr1+1
+			beta1=alphace/nsr1
+			devr1=(r1-gs_sash_width)-(r1-gs_sash_width)*cos(beta1/2)
+
+			!at radius r2
+			gammae=180-2*alphace
+			nsr2=max(1,2*int((gammae/2)/beta))
+			if (gammae/2)/beta-int((gammae/2)/beta)>=0.5 then nsr2=nsr2+2
+			beta2=gammae/nsr2
+			devr2=(r2-gs_sash_width)-(r2-gs_sash_width)*cos(beta2/2)
+
+			! Cut Plane for grids (at curve)
+
+			add (r2-r1)*sin(gammae/2), gs_shoulderHeight, 0      !at radius r1 right
+			rotz beta1/2
+			for i=1 to  nsr1 step 1
+				addx r1-gs_sash_width-devr1
+				cutplane 0,1,1,0
+				del 1
+				rotz beta1
+			next i
+			del nsr1+2
+
+			add -(r2-r1)*sin(gammae/2), gs_shoulderHeight, 0      !at radius r1 left
+			rotz -beta1/2
+			for i=1 to  nsr1 step 1
+				addx -(r1-gs_sash_width-devr1)
+				cutplane 0,1,1,1
+				del 1
+				rotz -beta1
+			next i
+			del nsr1+2
+
+			addy b-r2                            !at radius r2
+			rotz alphace+beta2/2
+			for i=1 to  nsr2 step 1
+				addx r2-gs_sash_width-devr2
+				cutplane 0,1,1,0
+				del 1
+				rotz beta2
+			next i
+			del nsr2+2
+
+			for i=1 to vgn
+				addx (a-2*gs_sash_width+gw)/(vgn+1)
+				add  -a/2+gs_sash_width-gw/2, 0, gz
+				if gw > EPS then
+					sprism_ var_mater2_grill,var_mater_grill,side_mat,		! Vertical grids -----------
+						5,
+						0,0, 0,1, part_thk_grill, 0,
+						-gw/2,gs_sash_width,15,
+						 gw/2,gs_sash_width,15,
+						 gw/2,b-gs_sash_width,15,
+						-gw/2,b-gs_sash_width,15,
+						-gw/2,gs_sash_width,-1
+				else
+					lin_ 0, gs_sash_width, 0, 0, b-gs_sash_width, 0
+				endif
+				del 1
+			next i
+			del vgn
+
+			for i=1 to vgn+1
+				for j=1 to hgn
+					addy (b-2*gs_sash_width+gw)/(hgn+1)
+					add -(a-2*gs_sash_width)/2+hgnn/2, gs_sash_width-gw/2, gz
+					if gw > EPS then
+						sprism_ var_mater2_grill,var_mater_grill,side_mat,
+							5,
+							0,0, 0,1, part_thk_grill, 0,
+							-hgnn/2,-gw/2,15,
+							 hgnn/2,-gw/2,15,
+							 hgnn/2,gw/2,15,
+							-hgnn/2,gw/2,15,
+							-hgnn/2,-gw/2,-1
+					else
+						lin_ -hgnn/2, 0, 0, hgnn/2, 0, 0
+					endif
+					del 1
+				next j
+				del hgn
+				addx (a-2*gs_sash_width+gw)/(vgn+1)
+			next i
+			del vgn+1
+			body -1
+
+			for i=1 to nsr2+2*nsr1 step 1
+				cutend
+			next i
+
+			addz part_thk_grill
+
+			part_thk_grill = gth - out_thk_grill
+
+			var_mater_grill = gs_grill_mat2
+			var_mater2_grill = gs_grill_mat2
+			side_mat = gs_grill_mat2
+
+		next ijk
+		del in_out_cikl_gr
+	endif
+
+
+! =============================================================================
+! Glazing
+! =============================================================================
+
+	if abs(gs_glass_thk) > EPS then
+		pen gs_glass_pen
+		material gs_glass_mat
+
+		if gs_optype_m <> SASH_FIXED then
+			if lod3d = 5 then	!!chinese
+				addz -gs_sash_thk
+				gl_chi_thk = gs_sash_thk
+				gl_chi_mask = 13
+			else
+				if lod3D = 1 then	! Simple
+					addz -gs_frame_thk/2 - gs_glass_thk/2
+				else
+					addz gs_sash_thk/2-gs_glass_thk/2
+				endif
+				gl_chi_thk = gs_glass_thk
+				gl_chi_mask = 5
+			endif
+		else
+			if lod3D = 5 then	! Chinese
+				addz -gs_frame_thk
+				gl_chi_thk = gs_frame_thk
+				gl_chi_mask = 13
+			else
+				if lod3D = 1 then	! Simple
+					addz -gs_frame_thk/2 - gs_glass_thk/2
+				else
+					addz -gs_rebate_depth - gs_glass_thk/2
+				endif
+				gl_chi_thk = gs_glass_thk
+				gl_chi_mask = 5
+			endif
+		endif
+
+		body -1
+
+		prism_ 9,gl_chi_thk,
+			-a/2+gs_sash_width,		gs_sash_width,		gl_chi_mask,
+			 a/2-gs_sash_width,		gs_sash_width,		gl_chi_mask,
+			 a/2-gs_sash_width,		gs_shoulderHeight,	gl_chi_mask,
+			 r1-gs_sash_width,		alphace,			2000+gl_chi_mask,
+			 r2-gs_sash_width,		90-alphace,			2000+gl_chi_mask,
+			 r2-gs_sash_width,		90-alphace,			2000+gl_chi_mask,
+			 r1-gs_sash_width,		alphace,			2000+gl_chi_mask,
+			-a/2+gs_sash_width,		gs_shoulderHeight,	gl_chi_mask,
+			-a/2+gs_sash_width,		gs_sash_width,		-1
+
+		base
+		vert 0, 0, 0
+		vert 1, 0, 0
+		vert 0, 1, 0
+		vert 0, 0, 1
+		coor 2, -1, -2, -3, -4
+		body -1
+
+		del 1
+	endif
+endif
+
+! =============================================================================
+! Solid Panel
+! =============================================================================
+
+if iMullionStyle = MULLION_SOLID_PANEL then
+
+	if lod3d = 5 then	!!chinese
+		gl_chi_mask = 13
+	else
+		gl_chi_mask = 15
+	endif
+
+	sprism_{2} gs_panel_mat2, gs_panel_mat,gs_panel_mat,
+		9,
+		0,0, 0,1, 0, 0,
+		0,0, 0,1, gs_sash_thk, 0,
+		-a/2+gs_sash_width,		gs_sash_width,		gl_chi_mask,gs_panel_mat2,
+		 a/2-gs_sash_width,		gs_sash_width,		gl_chi_mask,gs_panel_mat2,
+		 a/2-gs_sash_width,		gs_shoulderHeight,	gl_chi_mask,gs_panel_mat2,
+		 r1-gs_sash_width,		alphace,			2000+gl_chi_mask,gs_panel_mat2,
+		 r2-gs_sash_width,		90-alphace,			2000+gl_chi_mask,gs_panel_mat2,
+		 r2-gs_sash_width,		90-alphace,			2000+gl_chi_mask,gs_panel_mat2,
+		 r1-gs_sash_width,		alphace,			2000+gl_chi_mask,gs_panel_mat2,
+		-a/2+gs_sash_width,		gs_shoulderHeight,	gl_chi_mask,gs_panel_mat2,
+		-a/2+gs_sash_width,		gs_sash_width,		-1,gs_panel_mat2
+
+endif
+
+! =============================================================================
+! Custom Panel
+! =============================================================================
+
+if iMullionStyle = MULLION_CUSTOM & gs_cust_panel <> "" then
+	! Cutplanes at curve
+
+	beta=360/res
+
+	!at radius r1
+	nsr1=int(alphace/beta)
+	if alphace/beta-int(alphace/beta)>=0.5 then nsr1=nsr1+1
+	beta1=alphace/nsr1
+	devr1=r1-r1*cos(beta1/2)
+
+	!at radius r2
+	gammae=180-2*alphace
+	nsr2=2*int((gammae/2)/beta)
+	if (gammae/2)/beta-int((gammae/2)/beta)>=0.5 then nsr2=nsr2+2
+	beta2=gammae/nsr2
+	devr2=r2-r2*cos(beta2/2)
+
+	! Cut Plane for grids (at curve)
+
+	add (r2-r1)*sin(gammae/2), gs_shoulderHeight, 0      !at radius r1 right
+	rotz beta1/2
+	for i=1 to  nsr1 step 1
+		addx r1-devr1
+		cutplane 0,1,1,0
+		del 1
+		rotz beta1
+	next i
+	del nsr1+2
+
+	add -(r2-r1)*sin(gammae/2), gs_shoulderHeight, 0      !at radius r1 left
+	rotz -beta1/2
+	for i=1 to  nsr1 step 1
+		addx -(r1-devr1)
+		cutplane 0,1,1,1
+		del 1
+		rotz -beta1
+	next i
+	del nsr1+2
+
+	addy b-r2                            !at radius r2
+	rotz alphace+beta2/2
+	for i=1 to  nsr2 step 1
+		addx r2-devr2
+		cutplane 0,1,1,0
+		del 1
+		rotz beta2
+	next i
+	del nsr2+2
+
+	if gs_optype_m = SASH_FIXED then
+		addz -gs_rebate_depth - gs_glass_thk/2
+		panelThk = gs_glass_thk
+	else
+		panelThk = gs_sash_thk
+	endif
+
+	addx -A/2
+	call "Window_Panel_Collection" parameters a=a, b=b, zzyzx=panelThk, gs_ptype=gs_cust_panel
+	del 1
+
+	if gs_optype_m = SASH_FIXED then del 1
+
+	for i=1 to nsr2+2*nsr1 step 1
+		cutend
+	next i
+endif
+
+
+eyebrows_unID = unID
+
+end eyebrows_unID

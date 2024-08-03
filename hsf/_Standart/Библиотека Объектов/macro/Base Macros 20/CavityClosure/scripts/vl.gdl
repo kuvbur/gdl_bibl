@@ -1,0 +1,1377 @@
+
+! Contact person: <JT, TZs>
+
+! ==============================================================================
+! This macro draws the cavity closure and turned plasters
+! ------------------------------------------------------------------------------
+! Input parameters:
+!	gs_maxPlasterThk:	wall skin classification parameter (length)
+!						consider Skin as Plaster if it is thinner this
+!	gs_bAutoTurnIn:		automatic plaster return at Outside Face (0 / 1)
+!	gs_bAutoTurnOut:	automatic plaster return at Inside Face (0 / 1)
+!	gs_bOverIn:			number of turned plaster skins at Outside Face (integer)
+!	gs_bOverOut:		number of turned plaster skins at Inside Face (integer)
+!	iClosureType:		controls the method being used for internal cavity closure (integer)
+!	gs_nTurn:			number of turned skins in traditional mode (integer value)
+!	gs_bJoint:			is there an insulation strip at the front
+!						 side of the turned skins (0 / 1) [MODE1]
+!	stCavityClosureSide:	string table for gs_gs_cavity_side
+!	stCavityClosureTurnDir:	string table for gs_nTurnDir
+! ==============================================================================
+
+
+! =============================================================================
+! Closure Type: String Parameter - Integer Parameter
+! =============================================================================
+
+if GLOB_MODPAR_NAME = "gs_closure_type" then
+	gs_closure_type_int = 1
+	for i=2 to vardim1(stClosureTypes)
+		if gs_closure_type = stClosureTypes[i] then
+			gs_closure_type_int = i
+			i = vardim1(stClosureTypes)
+		endif
+	next i
+	parameters gs_closure_type_int = gs_closure_type_int
+else
+	gs_closure_type = stClosureTypes[min(max(1,gs_closure_type_int),vardim1(stClosureTypes))]
+	parameters gs_closure_type = gs_closure_type
+endif
+
+
+! =============================================================================
+! Set up Closure Defaults
+! =============================================================================
+
+if GLOB_MODPAR_NAME = "gs_closure_type" | GLOB_MODPAR_NAME = "gs_closure_type_int" then
+
+	bRevealChanged = 0
+
+	iClosureType = gs_closure_type_int - 1
+
+	if	iClosureType = CLOSURE_NO |\
+		iClosureType = CLOSURE_TRADITIONAL |\
+		iClosureType = CLOSURE_PREFABRICATED |\
+		iClosureType = CLOSURE_VARIABLE |\
+		iClosureType = CLOSURE_DUTCH_VARIABLE then
+
+		gs_useWallFinishSkin	= 0
+		gs_maxPlasterThk		= 0.040
+		gs_turn_plaster_show_3D	= 0
+		gs_bAutoTurnOut			= 0
+		gs_bOverOut				= 0
+		gs_bAutoTurnIn			= 0
+		gs_bOverIn				= 0
+
+		parameters	gs_useWallFinishSkin	= gs_useWallFinishSkin,
+					gs_maxPlasterThk		= gs_maxPlasterThk,
+					gs_turn_plaster_show_3D	= gs_turn_plaster_show_3D,
+					gs_bAutoTurnOut			= gs_bAutoTurnOut,
+					gs_bOverOut				= gs_bOverOut,
+					gs_bAutoTurnIn			= gs_bAutoTurnIn,
+					gs_bOverIn				= gs_bOverIn
+	endif
+
+	if iClosureType = CLOSURE_TRADITIONAL then
+		iCavityClosureSide		= CAVITY_SIDE_BOTH
+		gs_nTurn				= 1
+		iCavityClosureTurnDir	= CAVITY_TURN_REFERENCE
+		gs_bJoint				= 1
+		gs_thkJoint				= 0.025
+
+		parameters	iCavityClosureSide		= iCavityClosureSide,
+					gs_nTurn				= gs_nTurn,
+					iCavityClosureTurnDir	= iCavityClosureTurnDir,
+					gs_bJoint				= gs_bJoint,
+					gs_thkJoint				= gs_thkJoint
+	endif
+
+	if iClosureType = CLOSURE_PREFABRICATED then
+		iCavityClosureSide		= CAVITY_SIDE_BOTH
+		gs_widthPlug			= 0.150
+
+		parameters	iCavityClosureSide	= iCavityClosureSide,
+					gs_widthPlug		= gs_widthPlug
+	endif
+
+	if iClosureType = CLOSURE_CUSTOM then
+		iCustomCCEditJambSide = EDITED_JAMB_SIDE_BOTH
+		iCustomCCEditWallSide = EDITED_WALL_FACE_OUTSIDE
+		iCustomCCEditSkin = EDITED_SKIN_1
+
+		parameters	iCustomCCEditJambSide = iCustomCCEditJambSide,
+					iCustomCCEditWallSide = iCustomCCEditWallSide,
+					iCustomCCEditSkin = iCustomCCEditSkin
+
+		for i=1 to vardim1(gs_custom_cc_array_left)
+			gs_custom_cc_array_left[i][CUSTOMCC_BITFIELD]	= 0
+			gs_custom_cc_array_left[i][CUSTOMCC_THICKNESS]	= defaultCustomClosureThickness
+			gs_custom_cc_array_left[i][CUSTOMCC_OVERHANG]	= 0
+			gs_custom_cc_array_left[i][CUSTOMCC_PEN]		= 1
+		next i
+		parameters gs_custom_cc_array_left = gs_custom_cc_array_left
+
+		for i=1 to vardim1(gs_custom_cc_array_right)
+			gs_custom_cc_array_right[i][CUSTOMCC_BITFIELD]	= 0
+			gs_custom_cc_array_right[i][CUSTOMCC_THICKNESS]	= defaultCustomClosureThickness
+			gs_custom_cc_array_right[i][CUSTOMCC_OVERHANG]	= 0
+			gs_custom_cc_array_right[i][CUSTOMCC_PEN]		= 1
+		next i
+		parameters gs_custom_cc_array_right = gs_custom_cc_array_right
+	endif
+
+	if iClosureType = CLOSURE_VARIABLE then
+
+		bRevealChanged = 1
+
+		gs_reveal_type_int			= REVEAL_NO + 1
+		gs_wido_sill				= 0.090
+		AC_wido_sill				= 0.090
+		gs_reveal_type_bottom_int	= 1	! REVEAL_BOTTOM_UNIFORM
+
+		parameters	gs_reveal_type_int			= gs_reveal_type_int,
+					gs_wido_sill				= gs_wido_sill,
+					AC_wido_sill				= AC_wido_sill,
+					gs_reveal_type_bottom_int	= gs_reveal_type_bottom_int
+
+		gs_cc_dutch_ClosureToSkin		= 1
+		gs_cc_dutch_ClosureToSide		= 2
+		gs_cc_dutch_ShowLeft			= 1
+		gs_cc_dutch_ShowRight			= 1
+		gs_cc_dutch_ShowTop				= 0
+		gs_cc_dutch_ShowBottom			= 0
+		gs_cc_dutch_ClosureToSkin		= 1
+		iCavityClosureSide				= CAVITY_SIDE_BOTH
+		iCavityClosureTurnDir			= CAVITY_TURN_REFERENCE
+		gs_cc_dutch_TurnToClosure		= 0
+		gs_cc_dutch_TurnToClosureOffs	= 0
+		gs_cc_dutch_widthJoint			= 0.038
+		gs_cc_dutch_thkJoint			= 0.1
+
+		parameters	gs_cc_dutch_ClosureToSkin		= gs_cc_dutch_ClosureToSkin,
+					gs_cc_dutch_ClosureToSide		= gs_cc_dutch_ClosureToSide,
+					gs_cc_dutch_ShowLeft			= gs_cc_dutch_ShowLeft,
+					gs_cc_dutch_ShowRight			= gs_cc_dutch_ShowRight,
+					gs_cc_dutch_ShowTop				= gs_cc_dutch_ShowTop,
+					gs_cc_dutch_ShowBottom			= gs_cc_dutch_ShowBottom,
+					gs_cc_dutch_ClosureToSkin		= gs_cc_dutch_ClosureToSkin,
+					iCavityClosureSide				= iCavityClosureSide,
+					iCavityClosureTurnDir			= iCavityClosureTurnDir,
+					gs_cc_dutch_TurnToClosure		= gs_cc_dutch_TurnToClosure,
+					gs_cc_dutch_TurnToClosureOffs	= gs_cc_dutch_TurnToClosureOffs,
+					gs_cc_dutch_widthJoint			= gs_cc_dutch_widthJoint,
+					gs_cc_dutch_thkJoint			= gs_cc_dutch_thkJoint
+	endif
+
+	if iClosureType = CLOSURE_DUTCH_VARIABLE then
+
+		bRevealChanged = 1
+
+		gs_reveal_type_int			= REVEAL_NO + 1
+		gs_wido_sill				= 0.090
+		AC_wido_sill				= 0.090
+		gs_reveal_type_bottom_int	= 1	! REVEAL_BOTTOM_UNIFORM
+
+		parameters	gs_reveal_type_int			= gs_reveal_type_int,
+					gs_wido_sill				= gs_wido_sill,
+					AC_wido_sill				= AC_wido_sill,
+					gs_reveal_type_bottom_int	= gs_reveal_type_bottom_int
+
+		gs_cc_dutch_ClosureToSkin		= 1
+		gs_cc_dutch_ClosureToSide		= 1
+		gs_cc_dutch_ShowLeft			= 1
+		gs_cc_dutch_ShowRight			= 1
+		gs_cc_dutch_ShowTop				= 0
+		gs_cc_dutch_ShowBottom			= 0
+		gs_cc_dutch_ClosureToSkin		= 1
+		iCavityClosureSide				= CAVITY_SIDE_BOTH
+		iCavityClosureTurnDir			= CAVITY_TURN_OPPOSITE
+		gs_cc_dutch_TurnToClosure		= 0
+		gs_cc_dutch_TurnToClosureOffs	= 0
+		gs_cc_dutch_widthJoint			= 0.038
+		gs_cc_dutch_thkJoint			= 0.1
+		gs_cc_dutch_GapAtOutsideSkin	= 1
+
+		parameters	gs_cc_dutch_ClosureToSkin		= gs_cc_dutch_ClosureToSkin,
+					gs_cc_dutch_ClosureToSide		= gs_cc_dutch_ClosureToSide,
+					gs_cc_dutch_ShowLeft			= gs_cc_dutch_ShowLeft,
+					gs_cc_dutch_ShowRight			= gs_cc_dutch_ShowRight,
+					gs_cc_dutch_ShowTop				= gs_cc_dutch_ShowTop,
+					gs_cc_dutch_ShowBottom			= gs_cc_dutch_ShowBottom,
+					gs_cc_dutch_ClosureToSkin		= gs_cc_dutch_ClosureToSkin,
+					iCavityClosureSide				= iCavityClosureSide,
+					iCavityClosureTurnDir			= iCavityClosureTurnDir,
+					gs_cc_dutch_TurnToClosure		= gs_cc_dutch_TurnToClosure,
+					gs_cc_dutch_TurnToClosureOffs	= gs_cc_dutch_TurnToClosureOffs,
+					gs_cc_dutch_widthJoint			= gs_cc_dutch_widthJoint,
+					gs_cc_dutch_thkJoint			= gs_cc_dutch_thkJoint,
+					gs_cc_dutch_GapAtOutsideSkin	= gs_cc_dutch_GapAtOutsideSkin
+	endif
+
+	if iClosureType = CLOSURE_PLASTER_REVEAL then
+
+		bRevealChanged = 1
+
+		gs_reveal_type_int			= REVEAL_POSITIVE + 1
+		gs_wido_sill				= 0.115
+		AC_wido_sill				= 0.115
+		gs_reveal_type_bottom_int	= 2	! REVEAL_BOTTOM_NO
+		gs_reveal_uniform			= 1
+		gs_reveal_right				= 0.040
+		gs_reveal_left				= 0.040
+		gs_reveal_top				= 0.040
+		gs_reveal_bottom			= 0.040
+
+		parameters	gs_reveal_type_int			= gs_reveal_type_int,
+					gs_wido_sill				= gs_wido_sill,
+					AC_wido_sill				= AC_wido_sill,
+					gs_reveal_type_bottom_int	= gs_reveal_type_bottom_int,
+					gs_reveal_uniform			= gs_reveal_uniform,
+					gs_reveal_right				= gs_reveal_right,
+					gs_reveal_left				= gs_reveal_left,
+					gs_reveal_top				= gs_reveal_top,
+					gs_reveal_bottom			= gs_reveal_bottom
+
+		! Outside Face
+		gs_custom_cc_array_left[1][CUSTOMCC_BITFIELD]	= 1 + 2
+		gs_custom_cc_array_left[1][CUSTOMCC_THICKNESS]	= 0.040
+		gs_custom_cc_array_left[1][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[1][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[2][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[2][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[2][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[2][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[3][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[3][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[3][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[3][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[4][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_PEN]		= 1
+
+		! Inside Face
+		gs_custom_cc_array_left[5][CUSTOMCC_BITFIELD]	= 1 + 16
+		gs_custom_cc_array_left[5][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_left[5][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[5][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[6][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[7][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[8][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_PEN]		= 1
+
+		parameters gs_custom_cc_array_left = gs_custom_cc_array_left
+
+		! Outside Face
+		gs_custom_cc_array_right[1][CUSTOMCC_BITFIELD]	= 1 + 2
+		gs_custom_cc_array_right[1][CUSTOMCC_THICKNESS]	= 0.040
+		gs_custom_cc_array_right[1][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[1][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[2][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[2][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[2][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[2][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[3][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[3][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[3][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[3][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[4][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_PEN]		= 1
+
+		! Inside Face
+		gs_custom_cc_array_right[5][CUSTOMCC_BITFIELD]	= 1 + 16
+		gs_custom_cc_array_right[5][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_right[5][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[5][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[6][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[7][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[8][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_PEN]		= 1
+
+		parameters gs_custom_cc_array_right = gs_custom_cc_array_right
+	endif
+
+	if iClosureType = CLOSURE_INSULATED_REVEAL then
+
+		bRevealChanged = 1
+
+		gs_reveal_type_int				= REVEAL_DOUBLE + 1
+		gs_reveal_doubleOuterTypeInt	= REVEAL_POSITIVE + 1
+		gs_reveal_doubleInnerTypeInt	= REVEAL_NO + 1
+		gs_wido_sill					= 0.250
+		AC_wido_sill					= 0.250
+		gs_reveal_type_bottom_int		= 2	! REVEAL_BOTTOM_NO
+		gs_reveal_uniform				= 1
+		gs_reveal_right					= 0.065
+		gs_reveal_left					= 0.065
+		gs_reveal_top					= 0.065
+		gs_reveal_bottom				= 0.065
+		gs_reveal_double_innerRight		= 0
+		gs_reveal_double_innerLeft		= 0
+		gs_reveal_double_innerTop		= 0
+		gs_reveal_double_innerBottom	= 0
+
+		parameters	gs_reveal_type_int				= gs_reveal_type_int,
+					gs_reveal_doubleOuterTypeInt	= gs_reveal_doubleOuterTypeInt,
+					gs_reveal_doubleInnerTypeInt	= gs_reveal_doubleInnerTypeInt,
+					gs_wido_sill					= gs_wido_sill,
+					AC_wido_sill					= AC_wido_sill,
+					gs_reveal_type_bottom_int		= gs_reveal_type_bottom_int,
+					gs_reveal_uniform				= gs_reveal_uniform,
+					gs_reveal_right					= gs_reveal_right,
+					gs_reveal_left					= gs_reveal_left,
+					gs_reveal_top					= gs_reveal_top,
+					gs_reveal_bottom				= gs_reveal_bottom,
+					gs_reveal_double_innerRight		= gs_reveal_double_innerRight,
+					gs_reveal_double_innerLeft		= gs_reveal_double_innerLeft,
+					gs_reveal_double_innerTop		= gs_reveal_double_innerTop,
+					gs_reveal_double_innerBottom	= gs_reveal_double_innerBottom
+
+		iCustomCCEditJambSide = EDITED_JAMB_SIDE_BOTH
+		iCustomCCEditWallSide = EDITED_WALL_FACE_OUTSIDE
+		iCustomCCEditSkin = EDITED_SKIN_1
+
+		parameters	iCustomCCEditJambSide = iCustomCCEditJambSide,
+					iCustomCCEditWallSide = iCustomCCEditWallSide,
+					iCustomCCEditSkin = iCustomCCEditSkin
+
+		! Outside Face
+		gs_custom_cc_array_left[1][CUSTOMCC_BITFIELD]	= 1 + 2
+		gs_custom_cc_array_left[1][CUSTOMCC_THICKNESS]	= 0.025
+		gs_custom_cc_array_left[1][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[1][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[2][CUSTOMCC_BITFIELD]	= 1 + 2 + 8
+		gs_custom_cc_array_left[2][CUSTOMCC_THICKNESS]	= 0.040
+		gs_custom_cc_array_left[2][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[2][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[3][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[3][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[3][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[3][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[4][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_PEN]		= 1
+
+		! Inside Face
+		gs_custom_cc_array_left[5][CUSTOMCC_BITFIELD]	= 1 + 16
+		gs_custom_cc_array_left[5][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_left[5][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[5][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[6][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[7][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[8][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_PEN]		= 1
+
+		parameters gs_custom_cc_array_left = gs_custom_cc_array_left
+
+		! Outside Face
+		gs_custom_cc_array_right[1][CUSTOMCC_BITFIELD]	= 1 + 2
+		gs_custom_cc_array_right[1][CUSTOMCC_THICKNESS]	= 0.025
+		gs_custom_cc_array_right[1][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[1][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[2][CUSTOMCC_BITFIELD]	= 1 + 2 + 8
+		gs_custom_cc_array_right[2][CUSTOMCC_THICKNESS]	= 0.040
+		gs_custom_cc_array_right[2][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[2][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[3][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[3][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[3][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[3][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[4][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_PEN]		= 1
+
+		! Inside Face
+		gs_custom_cc_array_right[5][CUSTOMCC_BITFIELD]	= 1 + 16
+		gs_custom_cc_array_right[5][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_right[5][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[5][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[6][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[7][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[8][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_PEN]		= 1
+
+		parameters gs_custom_cc_array_right = gs_custom_cc_array_right
+	endif
+
+	if iClosureType = CLOSURE_INSULATED_FOR_RENOVATION then
+
+		bRevealChanged = 1
+
+		gs_reveal_type_int				= REVEAL_DOUBLE + 1
+		gs_reveal_doubleOuterTypeInt	= REVEAL_POSITIVE + 1
+		gs_reveal_doubleInnerTypeInt	= REVEAL_POSITIVE + 1
+		gs_wido_sill					= 0.28
+		AC_wido_sill					= 0.28
+		gs_reveal_type_bottom_int		= 2	! REVEAL_BOTTOM_NO
+		gs_reveal_uniform				= 1
+		gs_reveal_right					= 0.055
+		gs_reveal_left					= 0.055
+		gs_reveal_top					= 0.055
+		gs_reveal_bottom				= 0.055
+		gs_reveal_double_innerRight		= 0.055
+		gs_reveal_double_innerLeft		= 0.055
+		gs_reveal_double_innerTop		= 0.055
+		gs_reveal_double_innerBottom	= 0.055
+
+		parameters	gs_reveal_type_int				= gs_reveal_type_int,
+					gs_reveal_doubleOuterTypeInt	= gs_reveal_doubleOuterTypeInt,
+					gs_reveal_doubleInnerTypeInt	= gs_reveal_doubleInnerTypeInt,
+					gs_wido_sill					= gs_wido_sill,
+					AC_wido_sill					= AC_wido_sill,
+					gs_reveal_type_bottom_int		= gs_reveal_type_bottom_int,
+					gs_reveal_uniform				= gs_reveal_uniform,
+					gs_reveal_right					= gs_reveal_right,
+					gs_reveal_left					= gs_reveal_left,
+					gs_reveal_top					= gs_reveal_top,
+					gs_reveal_bottom				= gs_reveal_bottom,
+					gs_reveal_double_innerRight		= gs_reveal_double_innerRight,
+					gs_reveal_double_innerLeft		= gs_reveal_double_innerLeft,
+					gs_reveal_double_innerTop		= gs_reveal_double_innerTop,
+					gs_reveal_double_innerBottom	= gs_reveal_double_innerBottom
+
+		iCustomCCEditJambSide = EDITED_JAMB_SIDE_BOTH
+		iCustomCCEditWallSide = EDITED_WALL_FACE_OUTSIDE
+		iCustomCCEditSkin = EDITED_SKIN_1
+
+		! Outside Face
+		gs_custom_cc_array_left[1][CUSTOMCC_BITFIELD]	= 1 + 16
+		gs_custom_cc_array_left[1][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_left[1][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[1][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[2][CUSTOMCC_BITFIELD]	= 1 + 2
+		gs_custom_cc_array_left[2][CUSTOMCC_THICKNESS]	= 0.030
+		gs_custom_cc_array_left[2][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[2][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[3][CUSTOMCC_BITFIELD]	= 1
+		gs_custom_cc_array_left[3][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_left[3][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[3][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[4][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[4][CUSTOMCC_PEN]		= 1
+
+		! Inside Face
+		gs_custom_cc_array_left[5][CUSTOMCC_BITFIELD]	= 1 + 16
+		gs_custom_cc_array_left[5][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_left[5][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[5][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[6][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[6][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[7][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[7][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_left[8][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_left[8][CUSTOMCC_PEN]		= 1
+
+		parameters gs_custom_cc_array_left = gs_custom_cc_array_left
+
+		! Outside Face
+		gs_custom_cc_array_right[1][CUSTOMCC_BITFIELD]	= 1 + 16
+		gs_custom_cc_array_right[1][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_right[1][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[1][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[2][CUSTOMCC_BITFIELD]	= 1 + 2
+		gs_custom_cc_array_right[2][CUSTOMCC_THICKNESS]	= 0.030
+		gs_custom_cc_array_right[2][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[2][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[3][CUSTOMCC_BITFIELD]	= 1
+		gs_custom_cc_array_right[3][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_right[3][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[3][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[4][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[4][CUSTOMCC_PEN]		= 1
+
+		! Inside Face
+		gs_custom_cc_array_right[5][CUSTOMCC_BITFIELD]	= 1 + 16
+		gs_custom_cc_array_right[5][CUSTOMCC_THICKNESS]	= 0.015
+		gs_custom_cc_array_right[5][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[5][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[6][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[6][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[7][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[7][CUSTOMCC_PEN]		= 1
+
+		gs_custom_cc_array_right[8][CUSTOMCC_BITFIELD]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_THICKNESS]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_OVERHANG]	= 0
+		gs_custom_cc_array_right[8][CUSTOMCC_PEN]		= 1
+
+		parameters gs_custom_cc_array_right = gs_custom_cc_array_right
+	endif
+
+	if iClosureType = CLOSURE_FINISH then
+
+		bRevealChanged = 1
+
+		gs_reveal_type_int			= REVEAL_POSITIVE + 1
+		gs_reveal_type_bottom_int	= 2	! REVEAL_BOTTOM_NO
+		gs_reveal_uniform			= 1
+		gs_reveal_right				= 0.060
+		gs_reveal_left				= 0.060
+		gs_reveal_top				= 0.060
+		gs_reveal_bottom			= 0.060
+
+		bDefaultElem		= (GLOB_INTGUID = "" | GLOB_INTGUID = "{00000000-0000-0000-0000-000000000000}")
+		if not(bDefaultElem) & bCompositeWall then
+			summThk = 0
+			for i=1 to min(2, WALL_SKINS_NUMBER)
+				summThk = summThk + WALL_SKINS_PARAMS[i][SKIN_THICKNESS]
+			next i
+			gs_wido_sill = summThk
+			AC_wido_sill = summThk
+		else
+			gs_wido_sill = 0.255
+			AC_wido_sill = 0.255
+		endif
+
+		parameters	gs_reveal_type_int			= gs_reveal_type_int,
+					gs_wido_sill				= gs_wido_sill,
+					AC_wido_sill				= AC_wido_sill,
+					gs_reveal_type_bottom_int	= gs_reveal_type_bottom_int,
+					gs_reveal_uniform			= gs_reveal_uniform,
+					gs_reveal_right				= gs_reveal_right,
+					gs_reveal_left				= gs_reveal_left,
+					gs_reveal_top				= gs_reveal_top,
+					gs_reveal_bottom			= gs_reveal_bottom
+
+		iCavityClosureSide		= CAVITY_SIDE_BOTH
+		gs_nTurn				= 1
+		iCavityClosureTurnDir	= CAVITY_TURN_REFERENCE
+		gs_bJoint				= 0
+
+		parameters	iCavityClosureSide		= iCavityClosureSide,
+					gs_nTurn				= gs_nTurn,
+					iCavityClosureTurnDir	= iCavityClosureTurnDir,
+					gs_bJoint				= gs_bJoint
+
+		gs_useWallFinishSkin	= 0
+		gs_maxPlasterThk		= 0.040
+		gs_turn_plaster_show_3D	= 0
+		gs_bAutoTurnOut			= 1
+		gs_bOverOut				= 1
+		gs_bAutoTurnIn			= 1
+		gs_bOverIn				= 1
+
+		parameters	gs_useWallFinishSkin	= gs_useWallFinishSkin,
+					gs_maxPlasterThk		= gs_maxPlasterThk,
+					gs_turn_plaster_show_3D	= gs_turn_plaster_show_3D,
+					gs_bAutoTurnOut			= gs_bAutoTurnOut,
+					gs_bOverOut				= gs_bOverOut,
+					gs_bAutoTurnIn			= gs_bAutoTurnIn,
+					gs_bOverIn				= gs_bOverIn
+	endif
+
+	if iClosureType = CLOSURE_AIR_SPACE then
+
+		bRevealChanged = 1
+
+		gs_reveal_type_int			= REVEAL_NO + 1
+		gs_reveal_type_bottom_int	= 1	! REVEAL_BOTTOM_UNIFORM
+
+		bDefaultElem		= (GLOB_INTGUID = "" | GLOB_INTGUID = "{00000000-0000-0000-0000-000000000000}")
+		if not(bDefaultElem) & bCompositeWall then
+			summThk = 0
+			for i=1 to min(3, WALL_SKINS_NUMBER)
+				summThk = summThk + WALL_SKINS_PARAMS[i][SKIN_THICKNESS]
+			next i
+			gs_wido_sill = summThk
+			AC_wido_sill = summThk
+		else
+			gs_wido_sill = 0.120
+			AC_wido_sill = 0.120
+		endif
+
+		parameters	gs_reveal_type_int			= gs_reveal_type_int,
+					gs_wido_sill				= gs_wido_sill,
+					AC_wido_sill				= AC_wido_sill,
+					gs_reveal_type_bottom_int	= gs_reveal_type_bottom_int
+
+		iCavityClosureSide		= CAVITY_SIDE_BOTH
+		gs_widthPlug			= 0.050
+
+		parameters	iCavityClosureSide	= iCavityClosureSide,
+					gs_widthPlug		= gs_widthPlug
+
+		gs_useWallFinishSkin	= 0
+		gs_maxPlasterThk		= 0.040
+		gs_turn_plaster_show_3D	= 1
+		gs_bAutoTurnOut			= 1
+		gs_bOverOut				= 0
+		gs_bAutoTurnIn			= 0
+		gs_bOverIn				= 2
+
+		parameters	gs_useWallFinishSkin	= gs_useWallFinishSkin,
+					gs_maxPlasterThk		= gs_maxPlasterThk,
+					gs_turn_plaster_show_3D	= gs_turn_plaster_show_3D,
+					gs_bAutoTurnOut			= gs_bAutoTurnOut,
+					gs_bOverOut				= gs_bOverOut,
+					gs_bAutoTurnIn			= gs_bAutoTurnIn,
+					gs_bOverIn				= gs_bOverIn
+	endif
+
+	if bRevealChanged then
+		parameters gs_reveal_auto_changed_by_cc = 1
+	endif
+else
+	if GLOB_MODPAR_NAME = "" & GLOB_UI_BUTTON_ID = 0 then
+		parameters gs_reveal_auto_changed_by_cc = 0
+	endif
+endif
+
+
+! =============================================================================
+
+bEnableTraditionalCavityClosure		= (	bittest(gs_ClosureTypeEnable, CLOSURE_TRADITIONAL) |\
+										bittest(gs_ClosureTypeEnable, CLOSURE_TRADITIONAL_PRESETS) )
+bEnablePrefabricatedCavityClosure	= (	bittest(gs_ClosureTypeEnable, CLOSURE_PREFABRICATED) |\
+										bittest(gs_ClosureTypeEnable, CLOSURE_PREFABRICATED_PRESETS) )
+bEnableCustomCavityClosure			= (	bittest(gs_ClosureTypeEnable, CLOSURE_CUSTOM) |\
+										bittest(gs_ClosureTypeEnable, CLOSURE_CUSTOM_PRESETS) )
+
+if bEnableTraditionalCavityClosure | bEnablePrefabricatedCavityClosure then
+	if iClosureType = CLOSURE_VARIABLE | iClosureType = CLOSURE_DUTCH_VARIABLE then
+		values "gs_cavity_side"		stCavityClosureSide[4], stCavityClosureSide[1], stCavityClosureSide[2], stCavityClosureSide[3]
+		values "iCavityClosureSide"	CAVITY_SIDE_NONE, CAVITY_SIDE_BOTH, CAVITY_SIDE_LEFT, CAVITY_SIDE_RIGHT
+	endif
+	if	iClosureType = CLOSURE_TRADITIONAL |\
+		iClosureType = CLOSURE_PREFABRICATED |\
+		iClosureType = CLOSURE_FINISH |\
+		iClosureType = CLOSURE_AIR_SPACE then
+		values "gs_cavity_side"		stCavityClosureSide[1], stCavityClosureSide[2], stCavityClosureSide[3]
+		values "iCavityClosureSide"	CAVITY_SIDE_BOTH, CAVITY_SIDE_LEFT, CAVITY_SIDE_RIGHT
+	endif
+
+	if GLOB_MODPAR_NAME = "gs_cavity_side" then
+		iCavityClosureSide = CAVITY_SIDE_BOTH
+		for i = 2 to vardim1(stCavityClosureSide)
+			if gs_cavity_side = stCavityClosureSide[i] then
+				iCavityClosureSide = i
+				i = vardim1(stCavityClosureSide)
+			endif
+		next i
+		parameters iCavityClosureSide = iCavityClosureSide
+	else
+		gs_cavity_side = stCavityClosureSide[min(max(1,iCavityClosureSide),vardim1(stCavityClosureSide))]
+		parameters gs_cavity_side = gs_cavity_side
+	endif
+
+	values "gs_nTurnDir" stCavityClosureTurnDir
+	values "iCavityClosureTurnDir" CAVITY_TURN_REFERENCE, CAVITY_TURN_OPPOSITE
+
+	if GLOB_MODPAR_NAME = "gs_nTurnDir" then
+		iCavityClosureTurnDir = CAVITY_SIDE_BOTH
+		for i = 2 to vardim1(stCavityClosureTurnDir)
+			if gs_nTurnDir = stCavityClosureTurnDir[i] then
+				iCavityClosureTurnDir = i
+				i = vardim1(stCavityClosureTurnDir)
+			endif
+		next i
+		parameters iCavityClosureTurnDir = iCavityClosureTurnDir
+	else
+		gs_nTurnDir = stCavityClosureTurnDir[min(max(1,iCavityClosureTurnDir),vardim1(stCavityClosureTurnDir))]
+		parameters gs_nTurnDir = gs_nTurnDir
+	endif
+
+	values "gs_nTurn"			range [0, )
+	values "gs_thkJoint"		range (0, )
+	values "gs_widthPlug"		range (0, )
+endif
+
+
+! ==============================================================================
+! Hide and lock Cavity Closure parameters
+! ==============================================================================
+
+if	iClosureType = CLOSURE_NO |\
+	iClosureType = CLOSURE_SOLID_WALL |\
+	iClosureType = CLOSURE_STUD_WALL |\
+	iClosureType = CLOSURE_STUD_WALL_SIDING |\
+	iClosureType = CLOSURE_BRICK_VENEER then
+	hideparameter	"gs_cavity_side",
+				"iCavityClosureSide",
+				"gs_nTurn",
+				"gs_nTurnDir",
+				"iCavityClosureTurnDir",
+				"gs_bJoint",
+				"gs_showJoint",
+				"gs_thkJoint",
+				"gs_penJoint",
+				"gs_ltJoint",
+				"gs_fillJoint",
+				"gs_penJointFg",
+				"gs_penJointBg",
+				"gs_widthPlug",
+				"gs_penPlug",
+				"gs_ltPlug",
+				"gs_fillPlug",
+				"gs_penPlugFg",
+				"gs_penPlugBg",
+				"gs_custom_cc_array_left",
+				"gs_custom_cc_array_right",
+				"iCustomCCEditJambSide",
+				"iCustomCCEditWallSide",
+				"iCustomCCEditSkin",
+				"gs_custom_cc_turn_in",
+				"iCustomCCThicknessType",
+				"gs_custom_cc_thickness",
+				"iCustomCCOrientation",
+				"gs_custom_cc_separator",
+				"gs_custom_cc_separator_pen",
+				"gs_custom_cc_overhang",
+				"gs_custom_cc_last_sel_side",
+				"gs_cc_dutch_ShowLeft",
+				"gs_cc_dutch_ShowRight",
+				"gs_cc_dutch_ShowTop",
+				"gs_cc_dutch_ShowBottom",
+				"gs_cc_dutch_ClosureToSkin",
+				"gs_cc_dutch_ClosureToSide_str",
+				"gs_cc_dutch_ClosureToSide",
+				"gs_cc_dutch_TurnToClosure",
+				"gs_cc_dutch_TurnToClosureOffs",
+				"gs_cc_dutch_widthJoint",
+				"gs_cc_dutch_thkJoint",
+				"gs_cc_dutch_matJointCustom",
+				"gs_cc_dutch_matJoint"
+
+	lock	"gs_cavity_side",
+		"iCavityClosureSide",
+		"gs_nTurn",
+		"gs_nTurnDir",
+		"iCavityClosureTurnDir",
+		"gs_bJoint",
+		"gs_showJoint",
+		"gs_thkJoint",
+		"gs_penJoint",
+		"gs_ltJoint",
+		"gs_fillJoint",
+		"gs_penJointFg",
+		"gs_penJointBg",
+		"gs_widthPlug",
+		"gs_penPlug",
+		"gs_ltPlug",
+		"gs_fillPlug",
+		"gs_penPlugFg",
+		"gs_penPlugBg",
+		"gs_custom_cc_array_left",
+		"gs_custom_cc_array_right",
+		"iCustomCCEditJambSide",
+		"iCustomCCEditWallSide",
+		"iCustomCCEditSkin",
+		"gs_custom_cc_turn_in",
+		"iCustomCCThicknessType",
+		"gs_custom_cc_thickness",
+		"iCustomCCOrientation",
+		"gs_custom_cc_separator",
+		"gs_custom_cc_separator_pen",
+		"gs_custom_cc_overhang",
+		"gs_custom_cc_last_sel_side",
+		"gs_cc_dutch_ShowLeft",
+		"gs_cc_dutch_ShowRight",
+		"gs_cc_dutch_ShowTop",
+		"gs_cc_dutch_ShowBottom",
+		"gs_cc_dutch_ClosureToSkin",
+		"gs_cc_dutch_ClosureToSide_str",
+		"gs_cc_dutch_ClosureToSide",
+		"gs_cc_dutch_TurnToClosure",
+		"gs_cc_dutch_TurnToClosureOffs",
+		"gs_cc_dutch_widthJoint",
+		"gs_cc_dutch_thkJoint",
+		"gs_cc_dutch_matJointCustom",
+		"gs_cc_dutch_matJoint"
+
+	if bittest(gs_ClosureTypeEnable, CLOSURE_DUTCH_VARIABLE) then
+		hideparameter "gs_cc_dutch_GapAtOutsideSkin"
+		lock "gs_cc_dutch_GapAtOutsideSkin"
+	endif
+endif
+
+
+! ==============================================================================
+! Common parameters of Traditional and Prefabricated Closures
+! ==============================================================================
+
+if not(	iClosureType = CLOSURE_TRADITIONAL |\
+		iClosureType = CLOSURE_VARIABLE |\
+		iClosureType = CLOSURE_DUTCH_VARIABLE  |\
+		iClosureType = CLOSURE_PREFABRICATED |\
+		iClosureType = CLOSURE_FINISH |\
+		iClosureType = CLOSURE_AIR_SPACE) then
+	hideparameter	"gs_cavity_side", "iCavityClosureSide"
+	lock			"gs_cavity_side", "iCavityClosureSide"
+endif
+
+
+! ==============================================================================
+! Traditional Cavity Closure
+! ==============================================================================
+
+if	iClosureType = CLOSURE_TRADITIONAL |\
+	iClosureType = CLOSURE_FINISH then
+	bHasAnyJoint = not(gs_stack_left | bLeftCornerFunction) | not(gs_stack_right | bRightCornerFunction)
+	if gs_nTurn = 0 then
+		hideparameter	"gs_bJoint", "gs_nTurnDir", "iCavityClosureTurnDir"
+		lock			"gs_bJoint", "gs_nTurnDir", "iCavityClosureTurnDir"
+	endif
+	if gs_nTurn = 0 | not(gs_bJoint) | not(bHasAnyJoint) then
+		hideparameter	"gs_showJoint", "gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+		lock			"gs_showJoint", "gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+	endif
+else
+	if iClosureType = CLOSURE_VARIABLE | iClosureType = CLOSURE_DUTCH_VARIABLE then
+		lock			"gs_bJoint", "gs_showJoint", "gs_thkJoint"
+		hideparameter	"gs_bJoint", "gs_showJoint", "gs_thkJoint"
+	else
+		lock			"gs_nTurnDir", "iCavityClosureTurnDir", "gs_nTurn", "gs_bJoint", "gs_showJoint",
+						"gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+
+		hideparameter	"gs_nTurnDir", "iCavityClosureTurnDir", "gs_nTurn", "gs_bJoint", "gs_showJoint",
+						"gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+	endif
+endif
+
+
+! ==============================================================================
+! Variable Closure, Dutch Closure
+! ==============================================================================
+
+if iClosureType = CLOSURE_VARIABLE | iClosureType = CLOSURE_DUTCH_VARIABLE then
+	values "gs_cc_dutch_ClosureToSkin" 1,2,3,4
+	values "gs_cc_dutch_ClosureToSide" 1,2
+	values "gs_cc_dutch_ClosureToSide_str" stDutchClosureToSide
+	values "gs_cc_dutch_widthJoint" range(0,]
+	values "gs_cc_dutch_thkJoint"	range(0,]
+	hideparameter "gs_cc_dutch_ClosureToSide"
+	if GLOB_MODPAR_NAME = "gs_cc_dutch_ClosureToSide_str" then
+		gs_cc_dutch_ClosureToSide = 1
+		if gs_cc_dutch_ClosureToSide_str = stDutchClosureToSide[2] then gs_cc_dutch_ClosureToSide = 2
+		parameters gs_cc_dutch_ClosureToSide = gs_cc_dutch_ClosureToSide
+	else
+		gs_cc_dutch_ClosureToSide = max(1, gs_cc_dutch_ClosureToSide)
+		gs_cc_dutch_ClosureToSide = min(2, gs_cc_dutch_ClosureToSide)
+		gs_cc_dutch_ClosureToSide_str = stDutchClosureToSide[gs_cc_dutch_ClosureToSide]
+		parameters gs_cc_dutch_ClosureToSide_str = gs_cc_dutch_ClosureToSide_str
+	endif
+
+	if iClosureType = CLOSURE_VARIABLE then
+		if gs_cc_dutch_TurnToClosure then
+			lock "gs_cc_dutch_TurnToClosureOffs"
+		endif
+	else
+		lock "gs_cc_dutch_TurnToClosure"
+		hideparameter "gs_cc_dutch_TurnToClosure"
+	endif
+
+! Parameter Settings for Dutch Closure =========================================
+
+	if iClosureType = CLOSURE_DUTCH_VARIABLE then
+
+		if not(gs_cc_dutch_GapAtOutsideSkin) then
+			lock "gs_cc_dutch_TurnToClosureOffs"
+		endif
+
+		iCavityClosureTurnDir		= CAVITY_TURN_OPPOSITE
+		gs_cc_dutch_ClosureToSkin	= 1
+		gs_cc_dutch_TurnToClosure 	= not(gs_cc_dutch_GapAtOutsideSkin)
+		gs_cc_dutch_ClosureToSide	= 1		! Outside
+
+		parameters	iCavityClosureTurnDir		= iCavityClosureTurnDir,
+					gs_cc_dutch_ClosureToSkin	= gs_cc_dutch_ClosureToSkin,
+					gs_cc_dutch_TurnToClosure	= gs_cc_dutch_TurnToClosure,
+					gs_cc_dutch_ClosureToSide	= gs_cc_dutch_ClosureToSide
+
+		lock	"gs_nTurnDir",
+				"iCavityClosureTurnDir",
+				"gs_cc_dutch_ClosureToSkin",
+				"gs_cc_dutch_ClosureToSide_str",
+				"gs_cc_dutch_ClosureToSide",
+				"gs_cc_dutch_TurnToClosure"
+		hideparameter	"gs_nTurnDir",
+						"iCavityClosureTurnDir",
+						"gs_cc_dutch_ClosureToSkin",
+						"gs_cc_dutch_ClosureToSide_str",
+						"gs_cc_dutch_ClosureToSide",
+						"gs_cc_dutch_TurnToClosure"
+	else
+		if bittest(gs_ClosureTypeEnable, CLOSURE_DUTCH_VARIABLE) then
+			lock "gs_cc_dutch_GapAtOutsideSkin"
+			hideparameter "gs_cc_dutch_GapAtOutsideSkin"
+		endif
+	endif
+
+! End of Parameter Settings for Dutch Closure ==================================
+
+	if not(iClosureType = CLOSURE_DUTCH_VARIABLE) then
+		if not((gs_cc_dutch_ShowLeft & bCavityCloserLeft) | (gs_cc_dutch_ShowRight & bCavityCloserRight)) then
+			lock			"gs_cc_dutch_TurnToClosure", "gs_cc_dutch_TurnToClosureOffs"
+			hideparameter	"gs_cc_dutch_TurnToClosure", "gs_cc_dutch_TurnToClosureOffs"
+		endif
+	endif
+
+	if not((gs_cc_dutch_ShowLeft & not(gs_stack_left)) | \
+		   (gs_cc_dutch_ShowRight & not(gs_stack_right)) | \
+		   (gs_cc_dutch_ShowTop & not(gs_stack_top)) | \
+		   (gs_cc_dutch_ShowBottom & not(gs_stack_bottom))) then
+		lock			"gs_ltJoint", "gs_penJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+		hideparameter	"gs_ltJoint", "gs_penJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+	endif
+
+	if not(gs_cc_dutch_matJointCustom) then
+		lock			"gs_cc_dutch_matJoint"
+		hideparameter	"gs_cc_dutch_matJoint"
+	endif
+
+	if iCavityClosureSide = CAVITY_SIDE_NONE then
+		lock			"gs_nTurnDir", "iCavityClosureTurnDir", "gs_nTurn"
+		hideparameter	"gs_nTurnDir", "iCavityClosureTurnDir", "gs_nTurn"
+	endif
+
+	if not((gs_cc_dutch_ShowTop & not(gs_stack_top)) | \
+		   (gs_cc_dutch_ShowBottom & not(gs_stack_bottom))) then
+		lock			"gs_cc_dutch_matJointCustom", "gs_cc_dutch_matJoint"
+		hideparameter	"gs_cc_dutch_matJointCustom", "gs_cc_dutch_matJoint"
+	endif
+
+	if iWindowShape <> SHAPE_RECTANGULAR then
+		lock			"gs_cc_dutch_ShowTop", "gs_cc_dutch_ShowBottom", "gs_cc_dutch_matJointCustom", "gs_cc_dutch_matJoint"
+		hideparameter	"gs_cc_dutch_ShowTop", "gs_cc_dutch_ShowBottom", "gs_cc_dutch_matJointCustom", "gs_cc_dutch_matJoint"
+	endif
+else
+	lock			"gs_cc_dutch_ShowLeft",
+					"gs_cc_dutch_ShowRight",
+					"gs_cc_dutch_ShowTop",
+					"gs_cc_dutch_ShowBottom",
+					"gs_cc_dutch_ClosureToSkin",
+					"gs_cc_dutch_ClosureToSide_str",
+					"gs_cc_dutch_ClosureToSide",
+					"gs_cc_dutch_TurnToClosure",
+					"gs_cc_dutch_TurnToClosureOffs",
+					"gs_cc_dutch_widthJoint",
+					"gs_cc_dutch_thkJoint",
+					"gs_cc_dutch_matJointCustom",
+					"gs_cc_dutch_matJoint"
+
+	hideparameter	"gs_cc_dutch_ShowLeft",
+					"gs_cc_dutch_ShowRight",
+					"gs_cc_dutch_ShowTop",
+					"gs_cc_dutch_ShowBottom",
+					"gs_cc_dutch_ClosureToSkin",
+					"gs_cc_dutch_ClosureToSide_str",
+					"gs_cc_dutch_ClosureToSide",
+					"gs_cc_dutch_TurnToClosure",
+					"gs_cc_dutch_TurnToClosureOffs",
+					"gs_cc_dutch_widthJoint",
+					"gs_cc_dutch_thkJoint",
+					"gs_cc_dutch_matJointCustom",
+					"gs_cc_dutch_matJoint"
+
+	if bittest(gs_ClosureTypeEnable, CLOSURE_DUTCH_VARIABLE) then
+		hideparameter "gs_cc_dutch_GapAtOutsideSkin"
+		lock "gs_cc_dutch_GapAtOutsideSkin"
+	endif
+endif
+
+
+! ==============================================================================
+! Prefabricated Cavity Closure
+! ==============================================================================
+
+if	iClosureType = CLOSURE_PREFABRICATED |\
+	iClosureType = CLOSURE_AIR_SPACE then
+	bHasAnyJoint = not(gs_stack_left | bLeftCornerFunction) | not(gs_stack_right | bRightCornerFunction)
+
+	if not(bHasAnyJoint) then
+		lock			"gs_penPlug", "gs_ltPlug", "gs_fillPlug", "gs_penPlugFg", "gs_penPlugBg"
+		hideparameter	"gs_penPlug", "gs_ltPlug", "gs_fillPlug", "gs_penPlugFg", "gs_penPlugBg"
+	endif
+else
+	lock			"gs_widthPlug", "gs_penPlug", "gs_ltPlug", "gs_fillPlug", "gs_penPlugFg", "gs_penPlugBg"
+	hideparameter	"gs_widthPlug", "gs_penPlug", "gs_ltPlug", "gs_fillPlug", "gs_penPlugFg", "gs_penPlugBg"
+endif
+
+
+! ==============================================================================
+! Custom Cavity Closure
+! ==============================================================================
+
+if	iClosureType = CLOSURE_CUSTOM |\
+	iClosureType = CLOSURE_PLASTER_REVEAL |\
+	iClosureType = CLOSURE_INSULATED_REVEAL |\
+	iClosureType = CLOSURE_INSULATED_FOR_RENOVATION then
+	values{2} "iCustomCCEditJambSide" 	EDITED_JAMB_SIDE_BOTH, `Редактирование Обоих Откосов`,
+									EDITED_JAMB_SIDE_LEFT, `Редактирование Левого Откоса`,
+									EDITED_JAMB_SIDE_RIGHT, `Редактирование Правого Откоса`
+	values{2} "iCustomCCEditWallSide" 	EDITED_WALL_FACE_OUTSIDE, `Снаружи`,
+									EDITED_WALL_FACE_INSIDE, `Внутри`
+	values{2} "iCustomCCEditSkin" 	EDITED_SKIN_1, `1. Слой`,
+								EDITED_SKIN_2, `2. Слой`,
+								EDITED_SKIN_3, `3. Слой`,
+								EDITED_SKIN_4, `4. Слой`
+
+	values{2} "iCustomCCThicknessType" 	THICKNESS_TYPE_ORIGINAL, `Исходная`,
+										THICKNESS_TYPE_CUSTOM, `Специальный`
+	values "gs_custom_cc_thickness"			range[0,]
+	values "gs_custom_cc_overhang"			range[0,]
+	values{2} "iCustomCCOrientation" 	ORIENTATION_ORIGINAL, `Исходная`,
+									ORIENTATION_TURNED_IN, `Поворот Внутрь`
+
+	hideparameter	"gs_useWallFinishSkin",
+					"gs_maxPlasterThk",
+					"gs_bAutoTurnOut",
+					"gs_bOverOut",
+					"gs_bAutoTurnIn",
+					"gs_bOverIn"
+
+	bHasAnyPlasterSkin = 0
+	for idx = 1 to vardim1(gs_custom_cc_array_left)
+		iBitfield = gs_custom_cc_array_left[idx][CUSTOMCC_BITFIELD]
+		bHasAnyPlasterSkin = bHasAnyPlasterSkin | (bittest(iBitfield, 0) & bittest(iBitfield, 4))
+	next idx
+	for idx = 1 to vardim1(gs_custom_cc_array_right)
+		iBitfield = gs_custom_cc_array_right[idx][CUSTOMCC_BITFIELD]
+		bHasAnyPlasterSkin = bHasAnyPlasterSkin | (bittest(iBitfield, 0) & bittest(iBitfield, 4))
+	next idx
+	if not(bHasAnyPlasterSkin) then
+		lock "gs_turn_plaster_show_3D", "gs_turn_plaster_dim_2D"
+	endif
+else
+	lock	"iCustomCCEditJambSide",
+		"iCustomCCEditWallSide",
+		"iCustomCCEditSkin",
+		"gs_custom_cc_turn_in",
+		"iCustomCCThicknessType",
+		"gs_custom_cc_thickness",
+		"iCustomCCOrientation",
+		"gs_custom_cc_separator",
+		"gs_custom_cc_separator_pen",
+		"gs_custom_cc_overhang",
+		"gs_custom_cc_plaster"
+
+	hideparameter	"iCustomCCEditJambSide",
+				"iCustomCCEditWallSide",
+				"iCustomCCEditSkin",
+				"gs_custom_cc_turn_in",
+				"iCustomCCThicknessType",
+				"gs_custom_cc_thickness",
+				"iCustomCCOrientation",
+				"gs_custom_cc_separator",
+				"gs_custom_cc_separator_pen",
+				"gs_custom_cc_overhang",
+				"gs_custom_cc_plaster"
+endif
+
+hideparameter "gs_custom_cc_last_sel_side"
+lock "gs_custom_cc_last_sel_side"
+
+
+! ==============================================================================
+! Fill gs_custom_cc_array_left and gs_custom_cc_array_right Arrays
+! ==============================================================================
+
+if bEnableCustomCavityClosure then
+	idx = 1
+	if iCustomCCEditSkin = EDITED_SKIN_2 then idx = 2
+	if iCustomCCEditSkin = EDITED_SKIN_3 then idx = 3
+	if iCustomCCEditSkin = EDITED_SKIN_4 then idx = 4
+
+	if iCustomCCEditWallSide = EDITED_WALL_FACE_INSIDE then	! Inside Face
+		idx = idx + 4
+	endif
+
+	if	GLOB_MODPAR_NAME = "gs_custom_cc_turn_in" | \
+		GLOB_MODPAR_NAME = "gs_custom_cc_plaster" | \
+		GLOB_MODPAR_NAME = "iCustomCCThicknessType" | \
+		GLOB_MODPAR_NAME = "gs_custom_cc_thickness" | \
+		GLOB_MODPAR_NAME = "iCustomCCOrientation" | \
+		GLOB_MODPAR_NAME = "gs_custom_cc_separator" | \
+		GLOB_MODPAR_NAME = "gs_custom_cc_separator_pen" | \
+		GLOB_MODPAR_NAME = "gs_custom_cc_overhang" then
+
+		iBitfield = 0
+		iBitfield = bitset(iBitfield, 0,  gs_custom_cc_turn_in)
+		iBitfield = bitset(iBitfield, 1, (iCustomCCThicknessType = THICKNESS_TYPE_CUSTOM))
+		iBitfield = bitset(iBitfield, 2, (iCustomCCOrientation = ORIENTATION_TURNED_IN))
+		iBitfield = bitset(iBitfield, 3,  gs_custom_cc_separator)
+		iBitfield = bitset(iBitfield, 4,  gs_custom_cc_plaster)
+
+		if iCustomCCEditJambSide = EDITED_JAMB_SIDE_BOTH | iCustomCCEditJambSide = EDITED_JAMB_SIDE_LEFT then	! Left or Both
+			gs_custom_cc_array_left[idx][CUSTOMCC_BITFIELD]		= iBitfield
+			gs_custom_cc_array_left[idx][CUSTOMCC_THICKNESS]	= gs_custom_cc_thickness
+			gs_custom_cc_array_left[idx][CUSTOMCC_OVERHANG]		= gs_custom_cc_overhang
+			gs_custom_cc_array_left[idx][CUSTOMCC_PEN]			= gs_custom_cc_separator_pen
+			parameters gs_custom_cc_array_left = gs_custom_cc_array_left
+		endif
+		if iCustomCCEditJambSide = EDITED_JAMB_SIDE_BOTH | iCustomCCEditJambSide = EDITED_JAMB_SIDE_RIGHT then	! Right or Both
+			gs_custom_cc_array_right[idx][CUSTOMCC_BITFIELD]	= iBitfield
+			gs_custom_cc_array_right[idx][CUSTOMCC_THICKNESS]	= gs_custom_cc_thickness
+			gs_custom_cc_array_right[idx][CUSTOMCC_OVERHANG]	= gs_custom_cc_overhang
+			gs_custom_cc_array_right[idx][CUSTOMCC_PEN]			= gs_custom_cc_separator_pen
+			parameters gs_custom_cc_array_right = gs_custom_cc_array_right
+		endif
+
+		! Set plaster status
+		if (GLOB_MODPAR_NAME = "gs_custom_cc_plaster" | GLOB_MODPAR_NAME = "gs_custom_cc_turn_in") then
+			if gs_custom_cc_turn_in & gs_custom_cc_plaster then
+				for i = 1 + (iCustomCCEditWallSide = EDITED_WALL_FACE_INSIDE) * 4 to idx - 1
+					iBitfield = round_int(gs_custom_cc_array_left[i][CUSTOMCC_BITFIELD])
+					iBitfield = bitset(iBitfield, 0,  1)
+					iBitfield = bitset(iBitfield, 4,  1)
+					gs_custom_cc_array_left[i][CUSTOMCC_BITFIELD] = iBitfield
+
+					iBitfield = round_int(gs_custom_cc_array_right[i][CUSTOMCC_BITFIELD])
+					iBitfield = bitset(iBitfield, 0,  1)
+					iBitfield = bitset(iBitfield, 4,  1)
+					gs_custom_cc_array_right[i][CUSTOMCC_BITFIELD] = iBitfield
+				next i
+			else
+				for i = idx + 1 to 4 + (iCustomCCEditWallSide = EDITED_WALL_FACE_INSIDE) * 4
+					iBitfield = round_int(gs_custom_cc_array_left[i][CUSTOMCC_BITFIELD])
+					iBitfield = bitset(iBitfield, 4,  0)
+					gs_custom_cc_array_left[i][CUSTOMCC_BITFIELD] = iBitfield
+
+					iBitfield = round_int(gs_custom_cc_array_right[i][CUSTOMCC_BITFIELD])
+					iBitfield = bitset(iBitfield, 4,  0)
+					gs_custom_cc_array_right[i][CUSTOMCC_BITFIELD] = iBitfield
+				next i
+			endif
+			parameters	gs_custom_cc_array_left  = gs_custom_cc_array_left,
+						gs_custom_cc_array_right = gs_custom_cc_array_right
+		endif
+
+		! Set plaster status on both left and right side
+		if iCustomCCEditJambSide = EDITED_JAMB_SIDE_LEFT then	! Left
+			gs_custom_cc_array_right[idx][CUSTOMCC_BITFIELD]	= bitset(gs_custom_cc_array_right[idx][CUSTOMCC_BITFIELD], 4, gs_custom_cc_plaster)
+			if gs_custom_cc_turn_in & gs_custom_cc_plaster then
+				gs_custom_cc_array_right[idx][CUSTOMCC_BITFIELD]	= bitset(gs_custom_cc_array_right[idx][CUSTOMCC_BITFIELD], 0, 1)
+			endif
+			parameters gs_custom_cc_array_right = gs_custom_cc_array_right
+		endif
+		if iCustomCCEditJambSide = EDITED_JAMB_SIDE_RIGHT then	! Right
+			gs_custom_cc_array_left[idx][CUSTOMCC_BITFIELD]	= bitset(gs_custom_cc_array_left[idx][CUSTOMCC_BITFIELD], 4, gs_custom_cc_plaster)
+			if gs_custom_cc_turn_in & gs_custom_cc_plaster then
+				gs_custom_cc_array_left[idx][CUSTOMCC_BITFIELD]	= bitset(gs_custom_cc_array_left[idx][CUSTOMCC_BITFIELD], 0, 1)
+			endif
+			parameters gs_custom_cc_array_left = gs_custom_cc_array_left
+		endif
+	else
+		if GLOB_MODPAR_NAME = "iCustomCCEditJambSide" & iCustomCCEditJambSide = EDITED_JAMB_SIDE_BOTH then		! Edit Both Jambs
+			if gs_custom_cc_last_sel_side then
+				gs_custom_cc_array_left = gs_custom_cc_array_right
+				parameters gs_custom_cc_array_left = gs_custom_cc_array_right
+			else
+				gs_custom_cc_array_right = gs_custom_cc_array_left
+				parameters gs_custom_cc_array_right = gs_custom_cc_array_left
+			endif
+		endif
+
+		iBitfield = 0
+		if iCustomCCEditJambSide = EDITED_JAMB_SIDE_BOTH | iCustomCCEditJambSide = EDITED_JAMB_SIDE_LEFT then	! Left or Both
+			iBitfield		  = round_int(gs_custom_cc_array_left[idx][CUSTOMCC_BITFIELD])
+			gs_custom_cc_thickness		= gs_custom_cc_array_left[idx][CUSTOMCC_THICKNESS]
+			gs_custom_cc_overhang		= gs_custom_cc_array_left[idx][CUSTOMCC_OVERHANG]
+			gs_custom_cc_separator_pen	= gs_custom_cc_array_left[idx][CUSTOMCC_PEN]
+		endif
+		if iCustomCCEditJambSide = EDITED_JAMB_SIDE_RIGHT then	! Right
+			iBitfield		  = round_int(gs_custom_cc_array_right[idx][CUSTOMCC_BITFIELD])
+			gs_custom_cc_thickness		= gs_custom_cc_array_right[idx][CUSTOMCC_THICKNESS]
+			gs_custom_cc_overhang		= gs_custom_cc_array_right[idx][CUSTOMCC_OVERHANG]
+			gs_custom_cc_separator_pen	= gs_custom_cc_array_right[idx][CUSTOMCC_PEN]
+		endif
+		gs_custom_cc_turn_in		= bittest(iBitfield, 0)
+		if (bittest(iBitfield, 1)) then
+			iCustomCCThicknessType = THICKNESS_TYPE_CUSTOM
+		else
+			iCustomCCThicknessType = THICKNESS_TYPE_ORIGINAL
+		endif
+		if (bittest(iBitfield, 2)) then
+			iCustomCCOrientation = ORIENTATION_TURNED_IN
+		else
+			iCustomCCOrientation = ORIENTATION_ORIGINAL
+		endif
+		gs_custom_cc_separator		= bittest(iBitfield, 3)
+		gs_custom_cc_plaster		= bittest(iBitfield, 4)
+
+		parameters	gs_custom_cc_turn_in		= gs_custom_cc_turn_in,
+					gs_custom_cc_plaster		= gs_custom_cc_plaster,
+					iCustomCCThicknessType = iCustomCCThicknessType,
+					gs_custom_cc_thickness		= gs_custom_cc_thickness,
+					iCustomCCOrientation = iCustomCCOrientation,
+					gs_custom_cc_separator		= gs_custom_cc_separator,
+					gs_custom_cc_separator_pen	= gs_custom_cc_separator_pen,
+					gs_custom_cc_overhang		= gs_custom_cc_overhang
+	endif
+
+	parameters gs_custom_cc_last_sel_side = (iCustomCCEditJambSide = EDITED_JAMB_SIDE_RIGHT)	! Right
+
+	if not(gs_custom_cc_turn_in) then
+		lock	"gs_custom_cc_plaster",
+		"iCustomCCThicknessType",
+		"gs_custom_cc_thickness",
+		"iCustomCCOrientation",
+		"gs_custom_cc_separator",
+		"gs_custom_cc_separator_pen",
+		"gs_custom_cc_overhang"
+	endif
+	if iCustomCCThicknessType = THICKNESS_TYPE_ORIGINAL then	! Original
+		lock "gs_custom_cc_thickness"
+	endif
+	if not(gs_custom_cc_separator) then
+		lock "gs_custom_cc_separator_pen"
+	endif
+endif
+
+
+! ==============================================================================
+! Show / Hide Parameters
+! ==============================================================================
+
+bDefaultElem		= (GLOB_INTGUID = "" | GLOB_INTGUID = "{00000000-0000-0000-0000-000000000000}")
+bShowCavityClosure	= (bDefaultElem | WALL_SKINS_NUMBER > 0)
+bShowTurnPlaster	= (bDefaultElem | WALL_SKINS_NUMBER > 1)
+
+if not(bShowCavityClosure) then
+	if not(	bittest(gs_ClosureTypeEnable, CLOSURE_SOLID_WALL)		| \
+			bittest(gs_ClosureTypeEnable, CLOSURE_STUD_WALL)		| \
+			bittest(gs_ClosureTypeEnable, CLOSURE_STUD_WALL_SIDING)	| \
+			bittest(gs_ClosureTypeEnable, CLOSURE_BRICK_VENEER) ) then
+			lock	"gs_closure_type_int"
+			lock	"gs_closure_type"
+	endif
+	if bittest(gs_ClosureTypeEnable, CLOSURE_DUTCH_VARIABLE) then
+		lock "gs_cc_dutch_GapAtOutsideSkin"
+	endif
+	lock	"gs_cavity_side",
+		"iCavityClosureSide",
+		"gs_nTurn",
+		"gs_nTurnDir",
+		"iCavityClosureTurnDir",
+		"gs_bJoint",
+		"gs_showJoint",
+		"gs_thkJoint",
+		"gs_penJoint",
+		"gs_ltJoint",
+		"gs_fillJoint",
+		"gs_penJointFg",
+		"gs_penJointBg",
+		"gs_cc_dutch_matJointCustom",
+		"gs_cc_dutch_matJoint",
+		"gs_widthPlug",
+		"gs_penPlug",
+		"gs_ltPlug",
+		"gs_fillPlug",
+		"gs_penPlugFg",
+		"gs_penPlugBg",
+		"iCustomCCEditJambSide",
+		"iCustomCCEditWallSide",
+		"iCustomCCEditSkin",
+		"gs_custom_cc_turn_in",
+		"gs_custom_cc_plaster",
+		"iCustomCCThicknessType",
+		"gs_custom_cc_thickness",
+		"iCustomCCOrientation",
+		"gs_custom_cc_separator",
+		"gs_custom_cc_separator_pen",
+		"gs_custom_cc_overhang",
+		"gs_cc_dutch_ShowLeft",
+		"gs_cc_dutch_ShowRight",
+		"gs_cc_dutch_ShowTop",
+		"gs_cc_dutch_ShowBottom",
+		"gs_cc_dutch_ClosureToSkin",
+		"gs_cc_dutch_ClosureToSide_str",
+		"gs_cc_dutch_ClosureToSide",
+		"gs_cc_dutch_TurnToClosure",
+		"gs_cc_dutch_TurnToClosureOffs",
+		"gs_cc_dutch_widthJoint",
+		"gs_cc_dutch_thkJoint"
+endif
+
+if not(bShowTurnPlaster) & not(bShowCavityClosure) then
+	lock "gs_maxPlasterThk"
+endif
+
+! --- WIDO_REVEAL_SIDE and WIDO_ORIG_DIST globals don't working in the settings dialog
+
+

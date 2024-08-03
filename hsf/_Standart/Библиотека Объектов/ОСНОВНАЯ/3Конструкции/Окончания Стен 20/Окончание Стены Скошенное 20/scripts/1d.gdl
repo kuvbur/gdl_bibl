@@ -1,0 +1,195 @@
+
+! const values for parameter: gs_detlevel_3D_m
+DLEV3D_OFF      = 0
+DLEV3D_SIMPLE   = 1
+DLEV3D_DETAILED = 2
+DLEV3D_DRAFT    = 3
+
+! const values for parameter: trafo_array
+TRAFO_ADD_X = 1
+TRAFO_ADD_Y = 2
+TRAFO_ADD_Z = 3
+TRAFO_ROT_X = 4
+TRAFO_ROT_Y = 5
+TRAFO_ROT_Z = 6
+TRAFO_MUL_X = 7
+TRAFO_MUL_Y = 8
+TRAFO_MUL_Z = 9
+
+EPS = 0.001
+
+! --- wall geometry ---
+
+length = AC_CutWidth
+
+if round_int(ac_wall_slant_angle2) = 0 and round_int(ac_wall_slant_angle1) = 0 then
+	ac_wall_slant_angle1 = 90
+	ac_wall_slant_angle2 = 90
+endif
+
+isComposite = 0
+if 	(WALL_COMPS_NAME <> "" and WALL_SKINS_NUMBER > 1) | \
+	(GLOB_SCRIPT_TYPE = 2 & ((abs(ac_wall_slant_angle1 - 90) > eps) | (abs(ac_wall_slant_angle2 - 90) > eps))) then
+	isComposite = 1
+endif
+
+yWallStart = 0
+yWallEnd = WALL_THICKNESS
+
+iOnlyCutSkin = 0
+iLeftmost = 1
+iRightmost = WALL_SKINS_NUMBER
+if isComposite then
+	nSkins = WALL_SKINS_NUMBER
+	bBefore = 1
+	for i = 1 to WALL_SKINS_NUMBER
+		if WALL_SKINS_PARAMS[i][13] < 1 then
+			iOnlyCutSkin = i
+			bBefore = 0
+		else
+			nSkins = nSkins - 1
+		endif
+		if bBefore then
+			yWallStart = yWallStart + WALL_SKINS_PARAMS[i][2]
+			iLeftmost = iLeftmost + 1
+		endif
+	next i
+
+	if iOnlyCutSkin = 0 then end	! No cut skins found
+
+	if nSkins <= 1 then
+		isComposite = false
+		yWallEnd = yWallStart + WALL_SKINS_PARAMS[iOnlyCutSkin][2]
+		WALL_FILL = WALL_SKINS_PARAMS[iOnlyCutSkin][1]
+		iRightmost = iOnlyCutSkin
+	else
+		bBefore = 1
+		for i = 0 to WALL_SKINS_NUMBER-1
+			if WALL_SKINS_PARAMS[WALL_SKINS_NUMBER-i][13] < 1 then
+				bBefore = 0
+			endif
+			if bBefore then
+				yWallEnd = yWallEnd - WALL_SKINS_PARAMS[WALL_SKINS_NUMBER-i][2]
+				iRightmost = iRightmost - 1
+			endif
+		next i
+	endif
+endif
+
+onWallBeg = (abs(WIDO_POSITION) < EPS)
+
+wallIncl = WALL_INCL
+maxWallThickness = WALL_START_THICKNESS
+if maxWallThickness < WALL_END_THICKNESS then maxWallThickness = WALL_END_THICKNESS
+
+if abs(maxWallThickness - WALL_END_THICKNESS) < EPS then
+	if (abs(maxWallThickness - WALL_THICKNESS) < EPS & not(SYMB_MIRRORED)) | \
+		(abs(maxWallThickness - WALL_THICKNESS) > EPS & SYMB_MIRRORED) then
+		wallIncl = -WALL_INCL
+	endif
+else
+	if (abs(maxWallThickness - WALL_THICKNESS) < EPS & SYMB_MIRRORED) | \
+		(abs(maxWallThickness - WALL_THICKNESS) > EPS & not(SYMB_MIRRORED)) then
+		wallIncl = -WALL_INCL
+	endif
+endif
+
+isCurved = 0
+r0 = 0
+alpha = 0
+if abs(WIDO_ORIG_DIST) > EPS then
+	isCurved = 1
+	r0 = abs(WIDO_ORIG_DIST)
+	if WIDO_ORIG_DIST > 0 then
+		alpha = (length / (r0 - WALL_THICKNESS/2)) / PI * 180
+		r0 = r0 - WALL_THICKNESS
+	else
+		alpha = (length / (r0 + WALL_THICKNESS/2)) / PI * 180
+	endif
+endif
+
+
+! === Position of End Point of WallCap
+if abs(wallIncl) < EPS then
+	! in Straight or Curved Wall
+	endPoint = yWallStart
+	if bPointRefSide and SYMB_MIRRORED or not(bPointRefSide) and not(SYMB_MIRRORED) then
+		endPoint = yWallEnd
+	endif
+else
+	! in Trapeze Wall
+	if not(SYMB_MIRRORED) then
+		if bPointRefSide then
+			endPoint = yWallStart
+		else
+			endPoint = WALL_THICKNESS - gs_end_overhang * tan(wallIncl)
+		endif
+	else
+		if bPointRefSide then
+			endPoint = yWallEnd
+		else
+			endPoint = -gs_end_overhang * tan(wallIncl)
+		endif
+	endif
+endif
+
+
+! --- wall's attributes: fill, pen ---
+
+if gs_useWallAttribute then
+	! Wall skin=1 and use Walls Attributes
+	if WALL_SKINS_NUMBER <= 1 then
+		if WALL_COMPS_NAME = "" | WALL_SKINS_NUMBER = 0 then
+			WallLineType =	WALL_LINETYPE
+			WallLinePen =	WALL_SECT_PEN
+		else
+			WallLineType =	WALL_SKINS_PARAMS [iLeftmost][8]
+			WallLinePen =	WALL_SKINS_PARAMS [iLeftmost][7]
+			WallbottomLineType =	WALL_SKINS_PARAMS [iRightmost][10]
+			WallbottomLinePen =	WALL_SKINS_PARAMS [iRightmost][9]
+		endif
+
+		WallFillType =	WALL_FILL
+
+		if WALL_COMPS_NAME = "" then
+			wallFillPen = WALL_FILL_PEN
+			wallFillBackPen = WALL_FBGD_PEN
+		else
+			wallFillPen = WALL_SKINS_PARAMS[1][4]
+			wallFillBackPen = WALL_SKINS_PARAMS[1][5]
+		endif
+
+		WallFillOrientation = WALL_SKINS_PARAMS [1][12]
+
+		WallEndLinePen = WALL_SECT_PEN
+
+	else
+
+		WallLineType =	WALL_SKINS_PARAMS [iLeftmost][8]
+		WallLinePen =	WALL_SKINS_PARAMS [iLeftmost][7]
+		WallbottomLineType =	WALL_SKINS_PARAMS [iRightmost][10]
+		WallbottomLinePen =	WALL_SKINS_PARAMS [iRightmost][9]
+		WallFillType =	WALL_SKINS_PARAMS [iLeftmost][1]
+		WallFillPen	= WALL_SKINS_PARAMS [iLeftmost][4]
+		WallFillBackPen	=  WALL_SKINS_PARAMS [iLeftmost][5]
+		WallFillOrientation = WALL_SKINS_PARAMS [iLeftmost][12]
+
+		WallEndLinePen = WALL_SKINS_PARAMS [iLeftmost][7]
+	endif
+
+else
+
+	! Wall skin=1 and use Custom Attributes
+	WallLineType = gs_line_type
+	WallLinePen = gs_cont_pen
+	WallFillType = gs_fill_type
+	WallFillPen	= gs_fill_pen
+	WallFillBackPen	= gs_back_pen
+	WallFillOrientation = 0
+
+	WallbottomLineType = gs_line_type
+	WallbottomLinePen =	gs_cont_pen
+
+	WallEndLinePen = gs_endLinePen_2D
+endif
+

@@ -1,0 +1,219 @@
+
+if gs_detlevel_3D_m = DLEV3D_OFF then end
+
+! ==============================================================================
+
+if curvedWall then
+	if WIDO_REVEAL_SIDE then
+		mulz -1
+		addz -WIDO_SILL - WALL_THICKNESS - gs_recess_depth
+		WOD = -WIDO_ORIG_DIST + WALL_THICKNESS + gs_recess_depth
+	else
+		addz -WIDO_SILL
+		WOD = WIDO_ORIG_DIST
+	endif
+else
+	if WIDO_REVEAL_SIDE then
+		addz WIDO_SILL + gs_recess_depth
+		if wallIsLeft exor SYMB_MIRRORED then
+			roty WALL_INCL
+		else
+			roty -WALL_INCL
+		endif
+	else
+		addz -WIDO_SILL
+	endif
+endif
+
+
+! ==============================================================================
+
+gs_recess_depth = max(gs_recess_depth, -WALL_THICKNESS + 0.01)
+
+pen WALL_VIEW_PEN
+
+if gs_use_own_material then
+	material gs_recess_mat
+else
+	if WIDO_REVEAL_SIDE then
+		material WALL_MAT_A
+	else
+		material WALL_MAT_B
+	endif
+endif
+
+
+! ==============================================================================
+
+rotx -90
+
+if abs(gs_recess_depth) > EPS then
+	if gs_recess_depth > 0 then
+
+		wallniche 3, 1, 2,	! Fake wall cutting body far away from the wall body
+			0,0,1,	0.01,	! to disable cutting wallhole by the ARCHICAD.
+			 0,	  WALL_THICKNESS + 1.01,31,
+			-0.01,WALL_THICKNESS + 1.00,31,
+			 0.01,WALL_THICKNESS + 1.00,31
+
+! Cut with wall side -----------------------------------------------------------
+
+		if curvedWall & not(GLOB_PREVIEW_MODE = 1) then
+
+			if WIDO_REVEAL_SIDE exor SYMB_ROTANGLE < EPS then
+				radSill = sqr((A/2)^2 + WOD^2)				! - WIDO_SILL
+			else
+				radSill = sqr((A/2)^2 + WOD^2)				! + WIDO_SILL
+			endif
+
+			alfaEnd		= -signWallIsLeft * atn(A / WOD)
+			alfaStart	=  signWallIsLeft * atn(A / WOD)
+			arcRadius	= radSill
+			bMiddlePoints = 1
+			firstStatus	= 13
+			lastStatus	= 13
+			gosub 100
+
+			put 0,-2, 15
+
+			cutpolya nsp/3, 1,0, get(nsp)
+		endif
+
+! Draw body --------------------------------------------------------------------
+
+		sect_fill fillType, fillPenBg, fillPenFg, sectPen
+
+		put	-A/2,0, 15,
+			-A/2,gs_recess_depth, 15,
+			 A/2,gs_recess_depth, 15,
+			 A/2,0, 15
+		if not(wallIsLeft) & curvedWall & not(GLOB_PREVIEW_MODE = 1) then
+			put 0,-1, 15
+		endif
+		put	-A/2,0, 15
+
+		prism_ nsp/3, B, get(nsp)
+
+		if curvedWall & not(GLOB_PREVIEW_MODE = 1) then
+			cutend
+		endif
+
+	else
+
+		wallniche 5, 1, 2,
+			0,0,1,	B,
+			-A/2,0, 31,
+			-A/2, gs_recess_depth, 31,
+			 A/2, gs_recess_depth, 31,
+			 A/2,0, 31,
+			 0,	 1, 31
+	endif
+endif
+
+del 1
+
+
+end
+
+
+
+! ==============================================================================
+! Arch Segmentation
+! ------------------------------------------------------------------------------
+! Input parameters:
+!	alfaStart:		Start angle (angle)
+!	alfaEnd:		End angle (angle)
+!	arcRadius:		Arc radius (length)
+!	bMiddlePoints:	Generate middle points (0 / 1)
+!	firstStatus:	Status of the first segment (integer)
+!	lastStatus:		Status of the last segment (integer)
+! ==============================================================================
+
+100:
+	if not(wallIsLeft) then
+		alfaStart = 180 - alfaStart
+		alfaEnd = 180 - alfaEnd
+	endif
+	segmentAngle = 360 / WALL_RESOL
+
+
+	! --- Point at Start Angle ---
+	if WIDO_REVEAL_SIDE then
+		if SYMB_ROTANGLE < EPS then
+			difAngle = (AC_Hole_Position_Angle + alfaStart) mod segmentAngle
+		else
+			difAngle = -(AC_Hole_Position_Angle - 180 - alfaStart) mod segmentAngle
+		endif
+	else
+		if SYMB_ROTANGLE < EPS then
+			difAngle = -(AC_Hole_Position_Angle - alfaStart + 180) mod segmentAngle
+		else
+			difAngle = (AC_Hole_Position_Angle + alfaStart) mod segmentAngle
+		endif
+	endif
+
+	difAngle2 = difAngle
+	if abs(difAngle) > segmentAngle / 2 then difAngle = -segmentAngle / 2 + abs(difAngle mod (segmentAngle / 2))
+
+	segmentR = arcRadius / cos(difAngle)
+	put segmentR * sin(alfaStart), segmentR * cos(alfaStart) - WOD, firstStatus
+
+	if bMiddlePoints then
+		! --- Middle Points ---
+		segmentR = arcRadius / cos(segmentAngle / 2)
+
+		if alfaStart > alfaEnd then
+			alfaActual = alfaStart - difAngle2 + segmentAngle / 2
+
+			if alfaActual > alfaStart then alfaActual = alfaActual - segmentAngle
+			if alfaActual > alfaStart then alfaActual = alfaActual - segmentAngle
+
+			if alfaActual < alfaEnd then alfaActual = alfaActual + segmentAngle
+
+			if alfaActual < alfaStart & alfaActual > alfaEnd then
+				do
+					put segmentR * sin(alfaActual), segmentR * cos(alfaActual) - WOD, 13
+
+					alfaActual = alfaActual - segmentAngle
+
+				while alfaActual > alfaEnd
+			endif
+		else
+			alfaActual = alfaStart - difAngle2 + segmentAngle / 2
+
+			if alfaActual < alfaStart then alfaActual = alfaActual + segmentAngle
+			if alfaActual > alfaEnd then alfaActual = alfaActual - segmentAngle
+
+			if alfaActual > alfaStart & alfaActual < alfaEnd then
+				do
+					put segmentR * sin(alfaActual), segmentR * cos(alfaActual) - WOD, 13
+
+					alfaActual = alfaActual + segmentAngle
+				while alfaActual < alfaEnd
+			endif
+		endif
+	endif
+
+
+	! --- Point at End Angle ---
+	if WIDO_REVEAL_SIDE then
+		if SYMB_ROTANGLE < EPS then
+			difAngle = (AC_Hole_Position_Angle + alfaEnd) mod segmentAngle
+		else
+			difAngle = -(AC_Hole_Position_Angle + 180 - alfaEnd) mod segmentAngle
+		endif
+	else
+		if SYMB_ROTANGLE < EPS then
+			difAngle = -(AC_Hole_Position_Angle - alfaEnd + 180) mod segmentAngle
+		else
+			difAngle = (AC_Hole_Position_Angle + alfaEnd) mod segmentAngle
+		endif
+	endif
+
+	if abs(difAngle) > segmentAngle / 2 then difAngle = -segmentAngle / 2 + abs(difAngle mod (segmentAngle / 2))
+
+	segmentR = arcRadius / cos(difAngle)
+	put segmentR * sin(alfaEnd), segmentR * cos(alfaEnd) - WOD, lastStatus
+
+return
+

@@ -1,0 +1,360 @@
+issetab = 0
+!!-------------------------------- Читаем размеры ----------------------------
+dict con_data
+mep_bmax = 0
+if abs(MEP_NumConnectionData[1][21] - 1) < EPS then
+	con_data.c[1].h = MEP_NumConnectionData[1][12]
+	con_data.c[1].b = MEP_NumConnectionData[1][13]
+	con_data.c[1].mh = min(con_data.c[1].h, con_data.c[1].b)
+	con_data.c[1].mb = max(con_data.c[1].h, con_data.c[1].b)
+	strmm_num = con_data.c[1].h*1000 : gosub "strmm" : con_data.c[1].h_ = strmm_txt
+	strmm_num = con_data.c[1].b*1000 : gosub "strmm" : con_data.c[1].b_ = strmm_txt
+	strmm_num = con_data.c[1].mh*1000 : gosub "strmm" : con_data.c[1].mh_ = strmm_txt
+	strmm_num = con_data.c[1].mb*1000 : gosub "strmm" : con_data.c[1].mb_ = strmm_txt
+	con_data.c[1].type_sech_1 = 2
+else
+	con_data.c[1].mb = MEP_NumConnectionData[1][12]
+	con_data.c[1].mh = con_data.c[1].mb
+	con_data.c[1].h = con_data.c[1].mb
+	con_data.c[1].b = con_data.c[1].mb
+	con_data.c[1].type_sech_1 = 1
+	strmm_num = con_data.c[1].mb*1000 : gosub "strmm" : con_data.c[1].mb_ = "d"+strmm_txt
+endif
+con_data.max = con_data.c[1]
+con_data.min = con_data.c[1]
+is_perehod = 0
+for i = 2 to MEP_NumberConnections
+	if i<=vardim1(MEP_NumConnectionData) then
+		if abs(MEP_NumConnectionData[i][22]-1)<EPS then
+			if abs(MEP_NumConnectionData[i][21] - 1) < EPS then
+				con_data.c[i].type_sech_1 = 2
+				con_data.c[i].h = MEP_NumConnectionData[i][12]
+				con_data.c[i].b = MEP_NumConnectionData[i][13]
+				con_data.c[i].mh = min(con_data.c[i].h, con_data.c[i].b)
+				con_data.c[i].mb = max(con_data.c[i].h, con_data.c[i].b)
+				strmm_num = con_data.c[i].h*1000 : gosub "strmm" : con_data.c[i].h_ = strmm_txt
+				strmm_num = con_data.c[i].b*1000 : gosub "strmm" : con_data.c[i].b_ = strmm_txt
+				strmm_num = con_data.c[i].mh*1000 : gosub "strmm" : con_data.c[i].mh_ = strmm_txt
+				strmm_num = con_data.c[i].mb*1000 : gosub "strmm" : con_data.c[i].mb_ = strmm_txt
+			else
+				con_data.c[i].type_sech_1 = 1
+				con_data.c[i].mb = MEP_NumConnectionData[i][12]
+				con_data.c[i].mh = con_data.c[i].mb
+				con_data.c[i].h = con_data.c[i].mb
+				con_data.c[i].b = con_data.c[i].mb
+				strmm_num = con_data.c[i].mb*1000 : gosub "strmm" : con_data.c[i].mb_ = "d"+strmm_txt
+			endif
+			if i>1 then
+				if abs(con_data.c[i].h-con_data.c[1].h)>EPS or abs(con_data.c[i].b-con_data.c[1].b)>EPS then is_perehod = 1
+			endif
+			if con_data.c[i].mb>con_data.max.mb or (abs(con_data.c[i].mb-con_data.max.mb)<EPS and con_data.c[i].mh>con_data.max.mh) then con_data.max = con_data.c[i]
+			if con_data.c[i].mb<con_data.min.mb or (abs(con_data.c[i].mb-con_data.min.mb)<EPS and con_data.c[i].mh<con_data.min.mh) then con_data.min = con_data.c[i]
+		endif
+	endif
+next i
+is_zont = 0
+if (con_data.min.mb-0.02)<EPS and is_perehod = 1 then 
+	is_zont = 1
+	is_perehod = 0
+endif
+
+!!------------------------------ Материал -------------------------------------
+mep_get_ma_name = "" : mep_get_ma_ro = 0 : mep_get_ma_group = MEP_UNKNOW : mep_get_ma_pn = 0 : t_mep_m_gost = "" : mep_m_gost = ""
+call "mep_get_material" parameters all returned_parameters mep_get_ma_name, mep_get_ma_ro, mep_get_ma_group, mep_get_ma_pn
+suffix_material = ""
+if mep_get_ma_group>EPS then
+	if mep_get_ma_group = MEP_ST3 then
+		mep_m_gost = "Оцинкованная сталь"
+		t_mep_m_gost = " оц. стали "
+	endif
+	if mep_get_ma_group = MEP_09G2S then
+		mep_m_gost = "Оцинкованная сталь 09Г2С"
+		t_mep_m_gost = " оц. стали 09Г2С "
+	endif
+	if mep_get_ma_group = MEP_AISI then
+		mep_m_gost = "Нержавеющая сталь AISI430"
+		t_mep_m_gost = " нерж. стали AISI430 "
+	endif
+	if mep_get_ma_group=MEP_PVC_PIN or mep_get_ma_group=MEP_PPR_1 or mep_get_ma_group=MEP_PPR_2 or mep_get_ma_group=MEP_PPR_3 or mep_get_ma_group=MEP_PPR_4 or mep_get_ma_group=MEP_PPR_HV then
+		mep_m_gost = "Пластик"
+		t_mep_m_gost = " пластика "
+	endif
+	if strlen(t_mep_m_gost)=0 then
+		mep_m_gost = "!Оцинкованная сталь"
+		t_mep_m_gost = " оц. стали "
+	endif
+else
+	mep_m_gost = "!!Оцинкованная сталь"
+	t_mep_m_gost = " оц. стали "
+endif
+
+
+!!----------------------------- Толщина ------------------------------
+t_ConWallThickness = 1
+if con_data.max.mb<=0.25 then t_ConWallThickness = 0.5
+if con_data.max.mb>0.25 and con_data.max.mb<0.8 then t_ConWallThickness = 0.7
+if con_data.max.mb>=0.8 then t_ConWallThickness = 1
+if mep_m_gost = "Пластик" then t_ConWallThickness = 1
+
+if mep_get_ma_group = MEP_AISI then
+	t_ConWallThickness = 0.8
+	if con_data.max.mb>=0.8 then t_ConWallThickness = 1
+endif
+
+mep_th_elem = t_ConWallThickness/1000
+strmm_num = mep_th_elem*1000 : gosub "strmm" : mep_th_elem_ = strmm_txt
+
+!!---------------------------- Длина ------------------------------
+mep_l = MEP_StraightLength
+if mep_l<EPS then mep_l = MEP_BendRadius*(PI/180)*MEP_BendAngle
+if mep_l<EPS then mep_l = 100/1000
+mep_l = round_int(mep_l*100)/100
+
+!!---------------------- Периметры и площади ------------------------------
+flange_1 = 0 : if ConConnectorType_1 = "Фланцевое" then flange_1 = 1
+flange_2 = 0 : if ConConnectorType_2 = "Фланцевое" then flange_2 = 1
+mep_s_ins_perim = 0
+mep_s_el = 0
+if abs(MEP_NumConnectionData[1][21] - 1) < EPS then
+	mep_s_in = con_data.max.mb*con_data.max.mh
+	mep_s_perim = 2*(con_data.max.mb+con_data.max.mh)
+	mep_s_ins_perim = mep_s_perim + MEP_InsThickness*4
+!	if flange_1 = 1 then
+!		mep_s_el = mep_s_el + (MEP_NumConnectionData[1][12]+MEP_NumConnectionData[1][13])*2*40/1000
+!	endif
+!	if flange_2 = 1 and vardim1(MEP_NumConnectionData)>1 then
+!		mep_s_el = mep_s_el + (MEP_NumConnectionData[2][12]+MEP_NumConnectionData[2][13])*2*40/1000
+!	endif
+else
+	mep_s_in = 3.14159 * con_data.max.mb * con_data.max.mb / 4
+	mep_s_perim = 3.14159 * con_data.max.mb
+	mep_s_ins_perim = 3.14159 * (con_data.max.mb+MEP_InsThickness*2)
+!	if flange_1 = 1 then
+!		mep_s_el = mep_s_el + mep_s_perim*40/1000
+!	endif
+!	if flange_2 = 1 then
+!		mep_s_el = mep_s_el + mep_s_perim*40/1000
+!	endif
+endif
+if abs(MEP_NumConnectionData[1][21] - 1) < EPS then
+	mep_s_sech = mep_th_elem*(con_data.max.mb + con_data.max.mh + mep_th_elem)
+else
+	mep_s_sech = 0.7853975*(mep_th_elem*mep_th_elem+2*mep_th_elem*con_data.max.mb)
+endif
+mep_s_el = mep_s_el + mep_s_perim*mep_l
+mep_s_ins = mep_s_ins_perim*mep_l*MEP_InsShow
+
+mep_s_el = round_int(mep_s_el*100)/100
+mep_s_ins = round_int(mep_s_ins*100)/100
+!!----------------------------- Отметки, размеры ------------------------------
+mep_el_type_view = 0
+MEP_HORIZONTAL = 1
+call "mep_get_type_view" parameters MEP_Position = MEP_Position, MEP_StraightLength = MEP_StraightLength, RETURNED_PARAMETERS mep_el_type_view
+if (abs(mep_el_type_view) = MEP_HORIZONTAL) then
+	otm_elem = SYMB_POS_Z
+else
+	otm_elem = SYMB_POS_Z + MEP_StraightLength*(mep_el_type_view > 0)
+endif
+otm_elem_abs = otm_elem
+
+mep_m_gost = mep_m_gost + " толщиной " + mep_th_elem_ + " мм. "
+
+komment = "м²"
+FM_ObjectWeightUnit = "м"
+naen = ""
+mep_razm_abs = ""
+mep_razm = ""
+if abs(con_data.max.type_sech_1 - 1)<EPS then
+	mep_razm_abs = mep_razm_abs + con_data.max.mb_
+else
+	mep_razm_abs = mep_razm_abs + con_data.max.mh_ + "x" + con_data.max.mb_
+endif
+if abs(con_data.c[1].type_sech_1 - 1)<EPS then
+	mep_razm = mep_razm + con_data.c[1].mb_
+else
+	mep_razm = mep_razm + con_data.c[1].h_ + "x" + con_data.c[1].b_
+endif
+naen = "Фитинг из" + t_mep_m_gost + "толщиной " + mep_th_elem_ + " мм. " + mep_razm_abs
+
+kol_vo_spec = mep_s_el
+mep_m_ves = mep_s_sech * 7850
+ves = mep_m_ves * mep_l
+
+
+values "gs_list_location" "(Н)", "(П)"
+gs_list_location_ = ""
+if gs_list_location = "(Н)" then gs_list_location_ = "нормальный (Н)"
+if gs_list_location = "(П)" then gs_list_location_ = "плотный (П)"
+if mep_m_gost = "Пластик" then
+	gs_list_location_ = ""
+	gs_list_location = ""
+endif
+
+FMProductName = ""
+gs_list_manufacturer = ""
+gs_list_manufacturer = MEP_FITT
+
+FMProductName = "Монтаж фасонных элементов из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм. " + mep_razm_abs
+
+!!------------------------------ Определяем типы ------------------------------
+if is_perehod and (STRSTR(mep_macro_name, "Воздуховод Прямолинейный")>0 or STRSTR(mep_macro_name, "Переход")>0) then
+	mep_razm_abs = mep_razm_abs + " - "
+	if abs(con_data.min.type_sech_1 - 1)<EPS then
+		mep_razm_abs = mep_razm_abs + con_data.min.mb_
+	else
+		mep_razm_abs = mep_razm_abs + con_data.min.mh_ + "x" + con_data.min.mb_
+	endif
+	mep_razm = mep_razm + " - "
+	if abs(con_data.c[2].type_sech_1 - 1)<EPS then
+		mep_razm = mep_razm + con_data.c[2].mb_
+	else
+		mep_razm = mep_razm + con_data.c[2].h_ + "x" + con_data.c[2].b_
+	endif
+	naen = "Переход из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм. " + mep_razm_abs
+	gs_list_manufacturer = MEP_FITT
+	FMProductName = "Монтаж перехода из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм. " + mep_razm_abs
+	FM_ObjectWeightUnit = "шт"
+	komment = "м²"
+	issetab = 1
+endif
+
+if STRSTR(mep_macro_name, "Тройник")>0 then 
+	naen = "Тройник из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм. " + mep_razm_abs
+	gs_list_manufacturer = MEP_FITT
+	FMProductName = "Монтаж тройника из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм. " + mep_razm_abs
+	FM_ObjectWeightUnit = "шт"
+	komment = "м²"
+	issetab = 1
+endif
+
+if STRSTR(mep_macro_name, "Отвод")>0 then
+	type_sech = ""
+	if abs(con_data.max.type_sech_1 - 2)<EPS then
+		type_sech = " прямоугольный "
+	else
+		type_sech = " круглый "
+	endif
+	naen = "Отвод из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм." + type_sech + str("%.0", MEP_BendAngle) + "град. " + mep_razm
+	gs_list_manufacturer = MEP_FITT
+	FMProductName = "Монтаж отвода из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм." + type_sech + str("%.0", MEP_BendAngle) + "град. " + mep_razm
+	FM_ObjectWeightUnit = "шт"
+	komment = "м²"
+	issetab = 1
+endif
+
+if STRSTR(mep_macro_name, "Врезка")>0 then
+	type_sech = ""
+	if abs(con_data.max.type_sech_1 - 2)<EPS then
+		type_sech = " прямоугольная "
+	else
+		type_sech = " круглая "
+	endif
+	if gs_list_location = "(Н)" then gs_list_location_ = "нормальная (Н)"
+	if gs_list_location = "(П)" then gs_list_location_ = "плотная (П)"
+	naen = "Врезка из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм." + type_sech + mep_razm_abs
+	gs_list_manufacturer = MEP_FITT
+	FMProductName = "Монтаж врезки из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм." + type_sech + mep_razm_abs
+	FM_ObjectWeightUnit = "шт"
+	komment = "м²"
+	issetab = 1
+endif
+
+if not(is_perehod) and (STRSTR(mep_macro_name, "Воздуховод Прямолинейный")>0 or STRSTR(mep_macro_name, "Переход")>0) then
+	type_sech = ""
+	if abs(con_data.max.type_sech_1 - 2)<EPS then
+		type_sech = " прямоугольные "
+	else
+		type_sech = " круглые "
+	endif
+
+	if is_zont = 1 then 
+		naen = "Зонт из" + t_mep_m_gost + " толщиной " + mep_th_elem_ + " мм. " + mep_razm_abs
+		gs_list_manufacturer = MEP_RESH
+		FMProductName = "Монтаж зонтов из" + t_mep_m_gost + "толщиной " + mep_th_elem_ + " мм. "
+		FM_ObjectWeightUnit = "шт"
+		komment = "шт"
+	else
+		naen = "Воздуховод из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм." + type_sech + mep_razm_abs
+		gs_list_manufacturer = MEP_DUCT
+		FMProductName = "Монтаж воздуховодов из" + t_mep_m_gost + gs_list_location_ + " толщиной " + mep_th_elem_ + " мм." + type_sech + mep_razm_abs
+		FM_ObjectWeightUnit = "м"
+		komment = "м²"
+	endif
+	issetab = 1
+endif
+
+if STRSTR(mep_macro_name, "Решетка")>0 or STRSTR(mep_macro_name, "Жалюзи")>0 or STRSTR(mep_macro_name, "Диффузор")>0 then
+	type_sech = ""
+	FMProductName = ""
+	if abs(con_data.max.type_sech_1 - 2)<EPS then
+		type_sech = "Прямоугольная решётка РВр-1-" + mep_razm
+		FMProductName = "Монтаж прямоугольной решётки РВр-1-" + mep_razm
+		if STRSTR(mep_macro_name, "Жалюзи")>0 then
+			type_sech = type_sech + "наружная "
+			FMProductName = FMProductName + " наружной "
+		endif
+	else
+		type_sech = "Диффузор круглый " + mep_razm
+		FMProductName = "Монтаж диффузора круглого " + mep_razm
+		if STRSTR(mep_macro_name, "Жалюзи")>0 then
+			type_sech = type_sech + "наружный "
+			FMProductName = FMProductName + " наружного "
+		endif
+	endif
+	FMProductName = FMProductName
+	naen = type_sech
+	gs_list_manufacturer = MEP_RESH
+	komment = "шт"
+	FM_ObjectWeightUnit = "шт"
+endif
+
+if issetab then
+	A = mep_l
+	B = con_data.max.mb
+	ZZYZX  = con_data.max.mh
+	if con_data.max.mh<EPS then
+		ZZYZX = con_data.max.mb
+	else
+		ZZYZX = con_data.max.mh
+	endif
+	PARAMETERS A=A
+	PARAMETERS B=B
+	PARAMETERS ZZYZX=ZZYZX
+endif
+
+goto "m_end"
+
+"strmm":
+	strth = "%.0"
+	strmm_txt = ""
+	if vartype(strmm_num)=1 then
+		if strmm_num>EPS then 
+			if abs(strmm_num - int(strmm_num))>EPS then strth = "%.1"
+			strmm_txt = STR(strth, strmm_num)
+		endif
+	else
+		strmm_txt = strmm_num
+	endif
+return
+"m_end":
+PARAMETERS komment = komment
+PARAMETERS FM_ObjectWeightUnit = FM_ObjectWeightUnit
+PARAMETERS FM_ProductName = FMProductName, gs_list_manufacturer = gs_list_manufacturer
+PARAMETERS mep_th_elem = mep_th_elem
+PARAMETERS otm_elem=otm_elem
+PARAMETERS otm_elem_abs=otm_elem_abs
+PARAMETERS mep_razm_abs=mep_razm_abs
+PARAMETERS mep_razm=mep_razm
+PARAMETERS mep_s_in=mep_s_in
+PARAMETERS mep_s_pokr=mep_s_el
+PARAMETERS mep_s_ins=mep_s_ins
+PARAMETERS mep_s_el=mep_s_el
+PARAMETERS mep_l=mep_l
+PARAMETERS mep_vol=mep_s_in*mep_l
+PARAMETERS kol_vo_spec = kol_vo_spec
+PARAMETERS obozn = obozn
+PARAMETERS naen = naen
+PARAMETERS ves = ves
+PARAMETERS mep_m_gost = mep_m_gost
+PARAMETERS mep_m_ves = mep_m_ves
+PARAMETERS mep_con = con_data

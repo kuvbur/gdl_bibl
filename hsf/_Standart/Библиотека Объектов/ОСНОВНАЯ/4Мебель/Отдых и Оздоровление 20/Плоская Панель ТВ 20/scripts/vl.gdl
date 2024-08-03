@@ -1,0 +1,173 @@
+
+call "FM_types" parameters all
+
+!Hide all parameters from UI
+hideparameter all  "A", "B", "ZZYZX"
+
+if gs_cont_pen = 0 THEN PARAMETERS gs_cont_pen = 8
+
+values "gs_detlevel_3D" st_gs_detlevel_3D
+values "gs_detlevel_3D_m"  DETLEVEL_3D_SIMPLE, DETLEVEL_3D_DETAILED, DETLEVEL_3D_OFF
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+	gs_detlevel_3D_m = DETLEVEL_3D_DETAILED
+	if gs_detlevel_3D = st_gs_detlevel_3D[2] then gs_detlevel_3D_m = DETLEVEL_3D_SIMPLE
+	if gs_detlevel_3D = st_gs_detlevel_3D[3] then gs_detlevel_3D_m = DETLEVEL_3D_OFF
+	parameters gs_detlevel_3D_m = gs_detlevel_3D_m
+else
+	gs_detlevel_3D = st_gs_detlevel_3D[1]
+	if gs_detlevel_3D_m = DETLEVEL_3D_SIMPLE	then gs_detlevel_3D = st_gs_detlevel_3D[2]
+	if gs_detlevel_3D_m = DETLEVEL_3D_OFF		then gs_detlevel_3D = st_gs_detlevel_3D[3]
+	parameters gs_detlevel_3D = gs_detlevel_3D
+endif
+
+values "gs_detlevel_2D" st_gs_detlevel_2D
+values "gs_detlevel_2D_m"  DETLEVEL_2D_SIMPLE, DETLEVEL_2D_DETAILED
+
+if GLOB_MODPAR_NAME = "gs_detlevel_2D" then
+	gs_detlevel_2D_m = DETLEVEL_2D_DETAILED
+	if gs_detlevel_2D = st_gs_detlevel_2D[2] then gs_detlevel_2D_m = DETLEVEL_2D_SIMPLE
+	parameters gs_detlevel_2D_m = gs_detlevel_2D_m
+else
+	gs_detlevel_2D = st_gs_detlevel_2D[1]
+	if gs_detlevel_2D_m = DETLEVEL_2D_SIMPLE	then gs_detlevel_2D = st_gs_detlevel_2D[2]
+	parameters gs_detlevel_2D = gs_detlevel_2D
+endif
+
+values "gs_resol" RANGE [3,)
+
+values{2} "iScreenRatio"	SCREEN_43,		stScreenRatio[1],
+							SCREEN_169,		stScreenRatio[2],
+							SCREEN_239,		stScreenRatio[3],
+							SCREEN_CUST,	stScreenRatio[4]
+
+values{2} "iSupporterType"	SUPPORTER_RECTANGULAR,	stSupporterType[1],
+							SUPPORTER_OVAL,			stSupporterType[2],
+							SUPPORTER_FEET,			stSupporterType[3],
+							SUPPORTER_DESIGNER,		stSupporterType[4],
+							SUPPORTER_WALL,			stSupporterType[5],
+							SUPPORTER_CEILING,		stSupporterType[6],
+							SUPPORTER_MOTORIZED,	stSupporterType[7]
+
+if not (bSupporter) then 
+	lock "iSupporterType"
+	hideparameter "iSupporterType"
+endif
+
+values "screenSize" range (0,)
+values "screenHeight" range (0, )
+values "screenWidth" range (0, )
+values "A" range (2 * sideFrameWidth,)
+values "B" range (0, )
+values "ZZYZX" range (topFrameWidth + bottomFrameWidth + bottomSupporterHeight + topSupporterHeight, )
+values "sideFrameWidth" range [EPS, ]
+values "topFrameWidth" range [EPS, ]
+values "bottomFrameWidth" range [EPS, ]
+
+if bSupporter & iSupporterType <> SUPPORTER_MOTORIZED then
+	if iSupporterType = SUPPORTER_WALL then
+		values "supporterOffset" range [0.1, ]
+	else
+		values "supporterOffset" range [0.03, ]
+	endif
+else
+	lock "supporterOffset"
+endif
+
+if iScreenRatio <> SCREEN_CUST then
+	if iScreenRatio	= SCREEN_43		then screenRatioRate = 4/3
+	if iScreenRatio	= SCREEN_169	then screenRatioRate = 16/9
+	if iScreenRatio	= SCREEN_239	then screenRatioRate = 2.39
+
+	parameters screenRatioRate = screenRatioRate
+	lock "screenRatioRate"
+endif
+
+if not (bSupporter) then
+	lock "pd_mat"
+	hideparameter "pd_mat"
+endif
+
+if bPictureOnScreen then
+	if not (gs_picture_custom) then
+		lock "gs_picture_name"
+		hideparameter "gs_picture_name"
+	endif
+else
+	parameters gs_picture_custom = 0,
+				gs_picture_name = ""
+	lock "gs_picture_custom", "gs_picture_name"
+	hideparameter "gs_picture_custom", "gs_picture_name"
+endif
+
+if gs_detlevel_3D_m = DETLEVEL_3D_SIMPLE	then hideparameter "gs_resol"
+if gs_detlevel_3D_m = DETLEVEL_3D_OFF		then hideparameter "gs_resol", "gs_shadow"
+
+if iScreenRatio <> SCREEN_CUST then
+	lock "A", "ZZYZX", "screenWidth", "screenHeight"
+	A = screenSize * cos(atn(1/screenRatioRate)) + 2 * sideFrameWidth
+	zzyzx = screenSize * sin(atn(1/screenRatioRate)) + topFrameWidth + bottomFrameWidth + topSupporterHeight + bottomSupporterHeight
+	screenWidth = A - sideFrameWidth * 2
+	screenHeight = ZZYZX - bottomFrameWidth - topFrameWidth - topSupporterHeight - bottomSupporterHeight
+else
+	if GLOB_MODPAR_NAME = "A" then
+		screenWidth = A - sideFrameWidth * 2
+	endif
+
+	if GLOB_MODPAR_NAME = "zzyzx" then
+		screenHeight = ZZYZX - bottomFrameWidth - topFrameWidth - topSupporterHeight - bottomSupporterHeight
+	endif
+
+	if	GLOB_MODPAR_NAME = "screenWidth" | \
+		GLOB_MODPAR_NAME = "sideFrameWidth" then
+		A = screenWidth + sideFrameWidth * 2
+	endif
+
+	if	GLOB_MODPAR_NAME = "screenHeight" | \
+		GLOB_MODPAR_NAME = "supporterOffset" | \
+		GLOB_MODPAR_NAME = "bottomFrameWidth" | \
+		GLOB_MODPAR_NAME = "topFrameWidth" then
+		ZZYZX = screenHeight + bottomFrameWidth + topFrameWidth + topSupporterHeight + bottomSupporterHeight
+	endif
+
+	screenSize = sqr((A - 2 * sideFrameWidth)^2 + (ZZYZX - topFrameWidth - bottomFrameWidth - topSupporterHeight - bottomSupporterHeight)^2)
+	screenRatioRate = (A - 2 * sideFrameWidth) / (ZZYZX - topFrameWidth - bottomFrameWidth - topSupporterHeight - bottomSupporterHeight)
+	lock "screenSize", "screenRatioRate"
+endif
+
+parameters	screenSize = screenSize,
+			screenRatioRate = screenRatioRate,
+			A = A,
+			zzyzx = zzyzx,
+			screenWidth = screenWidth,
+			screenHeight = screenHeight
+
+! Setting frame width values
+if GLOB_MODPAR_NAME = "bUniformFrameWidths" & bUniformFrameWidths then
+	newFrameWidth = max(sideFrameWidth, max(topFrameWidth, bottomFrameWidth))
+	parameters	sideFrameWidth		= newFrameWidth,
+				topFrameWidth		= newFrameWidth,
+				bottomFrameWidth	= newFrameWidth
+else
+	if bUniformFrameWidths then
+		if GLOB_MODPAR_NAME = "sideFrameWidth" then
+			topFrameWidth = sideFrameWidth
+			bottomFrameWidth = sideFrameWidth
+		endif
+
+		if GLOB_MODPAR_NAME = "topFrameWidth" then
+			sideFrameWidth = topFrameWidth
+			bottomFrameWidth = topFrameWidth
+		endif
+
+		if GLOB_MODPAR_NAME = "bottomFrameWidth" then
+			sideFrameWidth = bottomFrameWidth
+			topFrameWidth = bottomFrameWidth
+		endif
+
+		parameters	sideFrameWidth		= sideFrameWidth,
+					topFrameWidth		= topFrameWidth,
+					bottomFrameWidth	= bottomFrameWidth
+	endif
+endif
+

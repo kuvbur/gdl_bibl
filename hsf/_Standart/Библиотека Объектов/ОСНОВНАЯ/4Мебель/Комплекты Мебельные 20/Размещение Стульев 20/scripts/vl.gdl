@@ -1,0 +1,187 @@
+
+! Contact person: <KR>
+
+! =============================================================================
+
+call "FM_types" parameters all
+
+!Hide all parameters from UI
+hideparameter all  "A", "B", "ZZYZX"
+
+values "strCalculationMethod" stCalculationMethods		! by No. of Chairs, by Area
+values "iCalculationMethod" CALCULATION_BYCHAIRNO, CALCULATION_BYAREA
+
+if GLOB_MODPAR_NAME = "strCalculationMethod" then
+	iCalculationMethod = 1
+	if strCalculationMethod = stCalculationMethods[2] then iCalculationMethod = 2
+	parameters iCalculationMethod = iCalculationMethod
+else
+	strCalculationMethod = stCalculationMethods[max(1, min(iCalculationMethod, vardim1(stCalculationMethods)))]
+	parameters strCalculationMethod = strCalculationMethod
+endif
+
+values{2} "iSeatArrangement" 	ARRANGE_STAGGEREDROWS, `Со Смещением`,
+								ARRANGE_EVENROWS, `Без Смещения`
+
+values "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+values "gs_detlevel_3D_m" 2,1,0
+
+values{2} 	"iChairType" 	CHAIRTYPE_RECTANGLE, _strChairType[1],
+							CHAIRTYPE_ROUND, _strChairType[2] 
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+	if gs_detlevel_3D = `Детальный` then gs_detlevel_3D_m = 2
+	if gs_detlevel_3D = `Простой` then gs_detlevel_3D_m = 1
+	if gs_detlevel_3D = `Откл.` then gs_detlevel_3D_m = 0
+	parameters gs_detlevel_3D_m = gs_detlevel_3D_m
+else
+	if gs_detlevel_3D_m = 2 then gs_detlevel_3D = `Детальный`
+	if gs_detlevel_3D_m = 1 then gs_detlevel_3D = `Простой`
+	if gs_detlevel_3D_m = 0 then gs_detlevel_3D = `Откл.`
+	parameters gs_detlevel_3D = gs_detlevel_3D
+endif
+
+values "gs_resol" range [3, )
+
+IF gs_detlevel_3D_m = 1 then
+	hideparameter "gs_resol"
+	lock "gs_resol"
+endif
+IF gs_detlevel_3D_m = 0 then
+	hideparameter "gs_resol", "gs_shadow"
+	lock "gs_resol", "gs_shadow"
+endif
+
+
+! === 2D PARAMETERS ============================================================
+call "2dDetailLevel" parameters gs_detlevel_2D	= gs_detlevel_2D,
+							gs_detlevel_2D_m	= gs_detlevel_2D_m,
+							enable2dDetLevels	= 2+4+8+16+32
+
+if gs_detlevel_2D_m <> 4 then 
+	hideparameter "gs_SymbolType", "gs_SymbolType_m"
+	lock "gs_SymbolType", "gs_SymbolType_m"
+endif
+
+VALUES "gs_SymbolType" 	`Окружность`,
+						`Круглый со Спинкой`,
+						`Прямоугольный`,
+						`Прямоугольный со Спинкой 1`,
+						`Прямоугольный со Спинкой 2`,
+						`Трапециевидный`,
+						`Трапециевидный со Спинкой`,
+						`Криволинейный`,
+						`Криволинейный со Спинкой`
+
+call "fa_ChairSymbol" parameters all stSymbolTypes = stSymbolTypes
+values "LeftMinspace" range [0, )
+values "RightMinspace" range [0, )
+values "RearMinspace" range [0, )
+values "FrontMinspace" range [distRow-gs_seat_depth, )
+
+
+IF GLOB_MODPAR_NAME = "gs_SymbolType" OR GLOB_MODPAR_NAME = "gs_SymbolType" THEN
+	PARAMETERS gs_seat_depth = 0.47
+	gs_seat_depth = 0.47
+ENDIF
+IF gs_detlevel_2D_m = 4 & (gs_SymbolType = `Окружность` | gs_SymbolType = `Круглый со Спинкой`) THEN
+	PARAMETERS gs_seat_depth = gs_seat_width
+	gs_seat_depth = gs_seat_width
+	HIDEPARAMETER "gs_seat_depth"
+ENDIF
+
+IF gs_cont_pen = 0 THEN PARAMETERS gs_cont_pen = 4
+IF gs_fill_pen = 0 THEN PARAMETERS gs_fill_pen = 7
+
+
+! === PARAMETER LIMITATIONS ====================================================
+
+IF iCalculationMethod = CALCULATION_BYAREA THEN
+	IF iSeatArrangement = ARRANGE_EVENROWS THEN
+		values "A" RANGE [gs_seat_width,) STEP gs_seat_width, (gs_seat_width + distChairH)
+		VALUES "B" RANGE [gs_seat_depth,) STEP gs_seat_depth, (distRow)
+	ELSE
+		VALUES "A" RANGE [gs_seat_width*2 + distChairH,) \
+					 STEP gs_seat_width*2 + distChairH, (gs_seat_width + distChairH)
+		VALUES "B" RANGE [gs_seat_depth + distRow,) STEP gs_seat_depth + distRow, (distRow)
+	ENDIF
+ENDIF
+
+IF iSeatArrangement = ARRANGE_EVENROWS THEN
+	VALUES "nRow"       RANGE [1,)
+	VALUES "nColumn"    RANGE [1,)
+ELSE
+	VALUES "nRow"       RANGE [2,)
+	VALUES "nColumn"    RANGE [2,)
+ENDIF
+
+VALUES "distRow"        RANGE [gs_seat_depth,)
+VALUES "distChairH"     RANGE [0,)
+
+VALUES "gs_seat_width"  RANGE [0.2,)
+VALUES "gs_seat_depth"  RANGE [0.2,)
+VALUES "gs_seat_height" RANGE [0,)
+VALUES "chairh"         RANGE [gs_seat_height,)
+VALUES "ZZYZX"          RANGE [gs_seat_height,)
+
+
+! === ZZYZX & chairh DEFINITIONS ===============================================
+
+IF GLOB_MODPAR_NAME = "ZZYZX" THEN
+	PARAMETERS chairh = ZZYZX
+ELSE
+	PARAMETERS ZZYZX = chairh
+ENDIF
+
+
+! === nColumn, nRow, A, B DEFINITIONS ==========================================
+
+IF iCalculationMethod = CALCULATION_BYAREA THEN
+
+	!!! *** Number of Columns
+	PARAMETERS nColumn = INT((a - gs_seat_width) / (gs_seat_width + distChairH)) + 1
+	nColumn = INT((a - gs_seat_width) / (gs_seat_width + distChairH)) + 1
+
+	!!! *** Number of Rows
+	PARAMETERS nRow = INT((b - gs_seat_depth) / distRow) + 1
+	nRow = INT((b - gs_seat_depth) / distRow) + 1
+
+	LOCK "nColumn", "nRow"
+
+ELSE
+
+	!!! *** Number of Columns
+	IF GLOB_MODPAR_NAME = "AA" THEN
+		PARAMETERS nColumn = INT((AA - gs_seat_width) / (gs_seat_width + distChairH)) + 1
+		nColumn = INT((AA - gs_seat_width) / (gs_seat_width + distChairH)) + 1
+	ELSE
+		nColumn = nColumn
+	ENDIF
+
+	!!! *** Number of Rows
+	IF GLOB_MODPAR_NAME = "BB" THEN
+		PARAMETERS nRow = INT((BB - gs_seat_depth) / distRow) + 1
+		nRow = INT((BB - gs_seat_depth) / distRow) + 1
+	ELSE
+		nRow = nRow
+	ENDIF
+
+	!!! *** A, B
+	PARAMETERS A = gs_seat_width * nColumn + distChairH * (nColumn-1)
+	PARAMETERS B = gs_seat_depth + distRow * (nRow - 1)
+
+	LOCK "A", "B"
+
+ENDIF
+
+
+! === nChair ===================================================================
+
+IF iSeatArrangement = ARRANGE_EVENROWS THEN
+	PARAMETERS nChair = nRow * nColumn
+ELSE
+	PARAMETERS nChair = nRow * nColumn - INT(nRow / 2)
+ENDIF
+
+LOCK "nChair"
+

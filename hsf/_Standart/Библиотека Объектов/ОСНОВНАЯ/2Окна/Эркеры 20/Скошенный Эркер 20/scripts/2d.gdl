@@ -1,0 +1,1596 @@
+
+! Contact person: <SzL, NJ>
+
+! =============================================================================
+
+gs_fillFr		= gs_bFills * gs_fillFr
+gs_fillSh		= gs_bFills * gs_fillSash
+gs_penSh_fg		= gs_bFills * gs_penSash_fg
+gs_penSh_bg		= gs_bFills * gs_penSash_bg
+gs_fillShCover	= gs_bFills * gs_fillShCover
+gs_wallhole_fill= gs_bFills * gs_wallhole_fill
+
+
+frame_toler = gs_tolerance_bay
+
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then		! Demolition
+	gs_symbLineType = gs_Demolition_linetype
+else
+	gs_symbLineType = 1
+endif
+
+
+! =============================================================================
+! GS Window Functions
+! =============================================================================
+
+call "GS Window Functions",
+	parameters all	iWindowShape			= iWindowShape,
+					gs_RevealTypeEnable		= gs_RevealTypeEnable,
+					gs_IsCurved				= gs_IsCurved,
+					bParalellInCurvedWalls	= bParalellInCurvedWalls,
+					bDisabeMirroring		= bDisabeMirroring,
+					gs_board_inside			= 0,
+					gs_sill_outside 		= 0,
+					bOneLineSymbolinMVO		= 1,
+					bWallContHiddenLineIn	= (gs_board_inside),
+	returned_parameters	ac_unit_width,
+						gs_frame_ovhg_left_out,
+						gs_frame_ovhg_right_out,
+						gs_frame_ovhg_left_in,
+						gs_frame_ovhg_right_in,
+						bMirrored,
+						addPrmX, addPrmY,
+						mulPrmX, mulPrmY,
+						iLoD2D,
+
+						gs_opLinePen,
+						gs_iSwingType,
+						gs_swingLineType,
+						bShowAddHotspots, bShowUnitHotspots,
+						bOneLineSymbolin2D
+
+A = ac_unit_width
+
+lod2D = DET2D_FS_OFF
+
+bShowRebateOnFixGlass	= 0
+bShowRebateOnFrame		= 1
+
+if iLoD2D = SYMBW_S_1LINE then				lod2D = DET2D_FS_SIMPLE_ONE 		! Simple - One Line --> INT 200
+if iLoD2D = SYMBW_S_CENTERLINE then			lod2D = DET2D_FS_SIMPLE_ONE 		! Simple - Centerline --> SWE 200
+if iLoD2D = SYMBW_S_2LINE_ACC then			lod2D = DET2D_FS_SIMPLE_TWO 		! Simple - Two Lines
+if iLoD2D = SYMBW_S_2LINE then				lod2D = DET2D_FS_SIMPLE_CHI			! Chinese Simple
+if iLoD2D = SYMBW_M_2LINE_GLASS then		lod2D = DET2D_FS_MIDDLE 			! Middle - without acc
+if iLoD2D = SYMBW_M_2LINE_NOGLASS then		lod2D = DET2D_FS_SIMPLE_TWO 		! Middle - with acc --> INT 100
+if iLoD2D = SYMBW_M_FRAMESASH then			lod2D = DET2D_FS_DETAILED			! NLD Middle
+if iLoD2D = SYMBW_D_SGLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> INT 50, DAN 20
+if iLoD2D = SYMBW_D_REBATEONGLASS then		lod2D = DET2D_FS_DETAILED 			! Detailed --> NLD Detailed
+if iLoD2D = SYMBW_D_SGLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> INT 50, DAN 20
+if iLoD2D = SYMBW_D_2GLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> NOR 50
+if iLoD2D = SYMBW_D_2LINE_HS then			lod2D = DET2D_FS_DETAILED_CHI		! Chinese Detailed
+
+if iLoD2D = SYMBW_M_FRAMESASH then												! NLD Middle
+	bShowRebateOnFrame		= 0
+	gs_rebate_width			= 0
+endif
+if iLoD2D = SYMBW_D_REBATEONGLASS	then										! Detailed --> NLD 50
+	bShowRebateOnFixGlass	= 1
+endif
+
+if lod2D = DET2D_FS_OFF then end
+
+
+! =============================================================================
+! Demolition / New construction
+! =============================================================================
+
+if iTypeDemolitionFill = RENOVATION_FILL_NEW & gs_bShowNewOnCC then end		! New
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then gs_swingLineType = gs_Demolition_linetype
+
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then
+	gs_wallhole_fill = gs_Demolition_fill
+	gs_wallhole_pen_fg = gs_Demolition_pen_fg
+	gs_wallhole_pen_bg = gs_Demolition_pen_bg
+endif
+
+if	iTypeDemolitionFill = RENOVATION_FILL_NEW |\
+	iTypeDemolitionFill = RENOVATION_FILL_NEW_FULL then 
+
+	gs_wallhole_fill = gs_New_fill
+	gs_wallhole_pen_fg = gs_New_pen_fg
+	gs_wallhole_pen_bg = gs_New_pen_bg
+endif
+
+
+wallIsLeft		= (SYMB_ROTANGLE > EPS) exor WIDO_REVEAL_SIDE
+signWallIsLeft	= wallIsleft - not(wallIsleft)
+bFactor = SYMB_MIRRORED exor WIDO_REVEAL_SIDE exor wallIsLeft
+incFactor = not(bFactor) - bFactor
+
+PEN gs_pen_2D
+
+!!!!Walllhole fill!!!
+LINE_TYPE 1
+
+IF lod2D > 0 THEN		! 1:100
+!! Straight wall !!
+	IF abs(WIDO_ORIG_DIST)<EPS THEN
+
+		drawindex 30
+
+		line_type 1
+
+		if WIDO_REVEAL_SIDE then
+			ADD2 0,-WIDO_SILL+WALL_THICKNESS-WIDO_FRAME_THICKNESS
+			MUL2 1, -1
+			ADD2 0, WALL_THICKNESS
+		else
+			ADD2 0,WIDO_SILL
+		endif
+
+		fill gs_wallhole_fill
+
+		put	-a/2, 0,0,
+			-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+			-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+			 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+			 a/2+(gs_frame_thk/2)/SIN(bang)+bafd, 0,0,
+			a/2, 0,0,
+			a/2, -WALL_THICKNESS - incFactor * A/2 * tan(WALL_INCL),0,
+			-a/2, -WALL_THICKNESS + incFactor * A/2 * tan(WALL_INCL),0
+
+		if GLOB_CONTEXT = 5 then
+			poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+				get(NSP)
+		else
+			wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+				0, 0, 0,
+				get(NSP)
+		endif
+
+		if WALL_SKINS_NUMBER > 0 then
+			if (abs(SYMB_ROTANGLE-180) < EPS EXOR SYMB_MIRRORED) OR abs(WALL_INCL) > eps then
+				PEN WALL_SKINS_PARAMS[1][7]
+				LINE_TYPE WALL_SKINS_PARAMS[1][8]
+			else
+				PEN WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+				LINE_TYPE WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+			endif
+		else
+			PEN WALL_SECT_PEN
+			LINE_TYPE WALL_LINETYPE
+		endif
+
+		WALLLINE2 -a/2, 0,-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0
+		WALLLINE2 a/2, 0,a/2+(gs_frame_thk/2)/SIN(bang)+bafd, 0
+
+		drawindex 40
+
+		PEN gs_pen_2D
+		LINE_TYPE 1
+
+		IF lod2D > DET2D_FS_SIMPLE_TWO & lod2D <> DET2D_FS_SIMPLE_CHI & lod2D <> DET2D_FS_DETAILED_CHI THEN
+			IF gs_board_inside THEN
+				fill gs_wallhole_fill
+
+				put	-a/2, -WALL_THICKNESS-gs_board_nosing,0,
+					a/2, -WALL_THICKNESS-gs_board_nosing,0,
+					a/2, -WALL_THICKNESS,0,
+					-a/2, -WALL_THICKNESS,0
+
+				if GLOB_CONTEXT = 5 then
+					poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+						get(NSP)
+				else
+					wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+						0, 0, 0,
+						get(NSP)
+				endif
+
+				LINE2 -a/2, -WALL_THICKNESS-gs_board_nosing,
+					   a/2, -WALL_THICKNESS-gs_board_nosing
+
+				hotspot2 -a/2, -WALL_THICKNESS-gs_board_nosing, 10002
+				hotspot2  a/2, -WALL_THICKNESS-gs_board_nosing, 10003
+
+				LINE2 -a/2, -WALL_THICKNESS, -a/2, -WALL_THICKNESS-gs_board_nosing
+				LINE2  a/2, -WALL_THICKNESS,  a/2, -WALL_THICKNESS-gs_board_nosing
+			ENDIF
+
+			IF gs_sill_outside THEN
+				fill gs_wallhole_fill
+
+				put	 a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0,1,
+					 ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing,1,
+					-ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing,1,
+					-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+
+					-a/2-(+gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+					-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+					 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+					 a/2+(+gs_frame_thk/2)/SIN(bang)+bafd, 0,0
+
+				if GLOB_CONTEXT = 5 then
+					poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+						get(NSP)
+				else
+					wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+						0, 0, 0,
+						get(NSP)
+				endif
+
+				if WALL_SKINS_NUMBER > 0 then
+					if (abs(SYMB_ROTANGLE-180) < EPS EXOR SYMB_MIRRORED) OR abs(WALL_INCL) > eps then
+						PEN WALL_SKINS_PARAMS[1][7]
+						LINE_TYPE WALL_SKINS_PARAMS[1][8]
+					else
+						PEN WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+						LINE_TYPE WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+					endif
+				else
+					PEN WALL_SECT_PEN
+					LINE_TYPE WALL_LINETYPE
+				endif
+
+				WALLLINE2 -a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0
+				WALLLINE2 a/2+(gs_frame_thk/2)/SIN(bang)+bafd, 0,a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0
+
+				PEN gs_pen_2D
+				LINE_TYPE 1
+
+
+				POLY2_b 8, 1,gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+					 a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0,1,
+					 ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing,1,
+					-ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing,1,
+					-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+
+					-a/2-(+gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+					-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+					 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+					 a/2+(+gs_frame_thk/2)/SIN(bang)+bafd, 0,0
+
+				hotspot2  a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0, 10005
+				hotspot2  ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing, 10001
+				hotspot2 -ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing, 10000
+				hotspot2 -a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0, 10004
+			ENDIF
+		ENDIF
+
+
+		IF WIDO_REVEAL_SIDE THEN
+			DEL 2
+		ENDIF
+
+
+		DEL 1
+
+	ENDIF
+
+
+!! Curved wall !!
+	IF abs(WIDO_ORIG_DIST)>EPS THEN
+
+		line_type 1
+
+		IF not(WIDO_REVEAL_SIDE) THEN ADD2 0,WIDO_SILL ELSE ADD2 0,-WIDO_SILL+WALL_THICKNESS-WIDO_FRAME_THICKNESS
+
+		if WIDO_REVEAL_SIDE then
+			ADD2 0,-WIDO_SILL+WALL_THICKNESS-WIDO_FRAME_THICKNESS
+			MUL2 1, -1
+			ADD2 0, WALL_THICKNESS
+		else
+			ADD2 0,WIDO_SILL
+		endif
+
+		szg=asn((a/2)/WIDO_ORIG_DIST)
+
+		IF not(WIDO_REVEAL_SIDE) AND abs(SYMB_ROTANGLE-180)<EPS OR WIDO_REVEAL_SIDE AND abs(SYMB_ROTANGLE)<EPS THEN
+			drawindex 30
+
+			fill gs_wallhole_fill
+
+			put	-a/2-(+gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+				-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+				 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+				 a/2+(+gs_frame_thk/2)/SIN(bang)+bafd, 0,0,
+				(r0/COS(calpha)+WIDO_SILL+fdpi)*SIN(calpha+cbetarl),0,0,
+				0,-signWallIsLeft * abs(WIDO_ORIG_DIST),900,
+				(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)*SIN(calpha+cbetarl),(-r0-WIDO_SILL-WIDO_FRAME_THICKNESS+r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)*(1-COS(calpha+cbetarr)),0,
+				-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)*SIN(calpha+cbetarr),(-r0-WIDO_SILL-WIDO_FRAME_THICKNESS+r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)*(1-COS(calpha+cbetarr)),3001,
+				-(r0/COS(calpha)+WIDO_SILL+fdpi)*SIN(calpha+cbetarr),0,0
+
+			if GLOB_CONTEXT = 5 then
+				poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+					get(NSP)
+			else
+				wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+					0, 0, 0,
+					get(NSP)
+			endif
+
+			drawindex 40
+
+			IF lod2D > DET2D_FS_SIMPLE_TWO & lod2D <> DET2D_FS_SIMPLE_CHI & lod2D <> DET2D_FS_DETAILED_CHI THEN
+				IF gs_board_inside THEN
+					tempDist1 = r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS
+					tempDist2 = -r0-WIDO_SILL-WIDO_FRAME_THICKNESS+r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS
+
+					put	0,													WIDO_ORIG_DIST,																					900,
+						(tempDist1-gs_board_nosing)*sin(calpha+cbetarr),	(tempDist2-gs_board_nosing)-(tempDist1-gs_board_nosing)*(1-COS(calpha+cbetarr)),	0,
+						-(tempDist1-gs_board_nosing)*sin(calpha+cbetarl),	(tempDist2-gs_board_nosing)-(tempDist1-gs_board_nosing)*(1-COS(calpha+cbetarr)),	3001,
+						-tempDist1*sin(calpha+cbetarl),						tempDist2-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)*(1-COS(calpha+cbetarr)),	0,
+						tempDist1*sin(calpha+cbetarr),						tempDist2-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)*(1-COS(calpha+cbetarr)),	3001
+
+					if GLOB_CONTEXT = 5 then
+						poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+							get(NSP)
+					else
+						wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+							0, 0, 0,
+							get(NSP)
+					endif
+
+					ARC2 0, -r0-WIDO_SILL-WIDO_FRAME_THICKNESS, r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS-gs_board_nosing, 90-calpha-cbetarr, 90+calpha+cbetarl
+
+					line2	-(tempDist1-gs_board_nosing)*sin(calpha+cbetarl),	(tempDist2-gs_board_nosing)-(tempDist1-gs_board_nosing)*(1-COS(calpha+cbetarr)),
+							-tempDist1*sin(calpha+cbetarl),						tempDist2-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)*(1-COS(calpha+cbetarr))
+
+					line2	(tempDist1-gs_board_nosing)*sin(calpha+cbetarr),	(tempDist2-gs_board_nosing)-(tempDist1-gs_board_nosing)*(1-COS(calpha+cbetarr)),
+							tempDist1*sin(calpha+cbetarr),						tempDist2-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS)*(1-COS(calpha+cbetarr))
+
+					hotspot2 -(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS-gs_board_nosing)*SIN(calpha+cbetarl),
+							 (-r0-WIDO_SILL-WIDO_FRAME_THICKNESS+r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS-gs_board_nosing)-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS-gs_board_nosing)*(1-COS(calpha+cbetarl)), 10002
+					hotspot2 (r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS-gs_board_nosing)*SIN(calpha+cbetarr),
+							 (-r0-WIDO_SILL-WIDO_FRAME_THICKNESS+r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS-gs_board_nosing)-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS-gs_board_nosing)*(1-COS(calpha+cbetarr)), 10003
+				ENDIF
+
+				IF gs_sill_outside THEN
+					fill gs_wallhole_fill
+
+					put	 a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0,1,
+						 ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing,1,
+						-ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing,1,
+						-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+
+						-a/2-(+gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+						-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+						 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+						 a/2+(+gs_frame_thk/2)/SIN(bang)+bafd, 0,0
+
+					if GLOB_CONTEXT = 5 then
+						poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+							get(NSP)
+					else
+						wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+							0, 0, 0,
+							get(NSP)
+					endif
+
+					POLY2_b 9, 1,gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+						 a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0,1,
+						 ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing,1,
+						-ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing,1,
+						-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+
+						-a/2-(+gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+						-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+						 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+						 a/2+(+gs_frame_thk/2)/SIN(bang)+bafd, 0,1,
+						 a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0,-1
+
+					hotspot2  a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0, 10005
+					hotspot2  ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing, 10001
+					hotspot2 -ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing, 10000
+					hotspot2 -a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0, 10004
+				ENDIF
+
+			ENDIF
+
+
+		ELSE
+
+			drawindex 30
+
+			fill gs_wallhole_fill
+
+			put	-a/2-(+gs_frame_thk/2)/SIN(bang)+bafd, 0,0,
+				-ami/2-(+gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+				 ami/2+(+gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+				 a/2+(+gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+				(r0/COS(calpha)-WIDO_SILL-fdpi)*SIN(calpha+cbetarl),0,0,
+				0,-signWallIsLeft * abs(WIDO_ORIG_DIST),900,
+				(r0/COS(calpha)-WIDO_SILL-fdpi+WALL_THICKNESS)*SIN(calpha+cbetarl),(r0+WIDO_SILL-r0/COS(calpha)-WIDO_SILL-fdpi-WALL_THICKNESS)-(-r0/COS(calpha)-WIDO_SILL-fdpi-WALL_THICKNESS)*(1-COS(calpha+cbetarr)),0,
+				-(r0/COS(calpha)-WIDO_SILL-fdpi+WALL_THICKNESS)*SIN(calpha+cbetarr),(r0+WIDO_SILL-r0/COS(calpha)-WIDO_SILL-fdpi-WALL_THICKNESS)-(-r0/COS(calpha)-WIDO_SILL-fdpi-WALL_THICKNESS)*(1-COS(calpha+cbetarr)),3001,
+				-(r0/COS(calpha)-WIDO_SILL-fdpi)*SIN(calpha+cbetarr),0,0
+
+			if GLOB_CONTEXT = 5 then
+				poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+					get(NSP)
+			else
+				wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+					0, 0, 0,
+					get(NSP)
+			endif
+
+			if WALL_SKINS_NUMBER > 0 then
+				if abs(SYMB_ROTANGLE-180) < EPS EXOR SYMB_MIRRORED then
+					PEN WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][9]
+					LINE_TYPE WALL_SKINS_PARAMS[WALL_SKINS_NUMBER][10]
+				else
+					PEN WALL_SKINS_PARAMS[1][7]
+					LINE_TYPE WALL_SKINS_PARAMS[1][8]
+				endif
+
+			else
+				PEN WALL_SECT_PEN
+				LINE_TYPE WALL_LINETYPE
+			endif
+
+
+			tmpalpha=ASN((2*gs_sill_nosing+2*gs_frame_thk+ac_unit_width)/2/r)
+			WALLARC2 0, r0-WIDO_SILL, r0/COS(calpha)-WIDO_SILL, 270-tmpalpha-cbetarl, 270-calpha-cbetarr
+			WALLARC2 0, r0-WIDO_SILL, r0/COS(calpha)-WIDO_SILL, 270+calpha+cbetarl, 270+tmpalpha+cbetarr
+
+			PEN gs_pen_2D
+			LINE_TYPE 1
+
+			drawindex 40
+
+			IF lod2D > DET2D_FS_SIMPLE_TWO & lod2D <> DET2D_FS_SIMPLE_CHI & lod2D <> DET2D_FS_DETAILED_CHI THEN
+				IF gs_board_inside THEN
+					tempDist1 = r0/COS(calpha)-WIDO_SILL-fdpi+WALL_THICKNESS
+
+					put	0,WIDO_ORIG_DIST,900,
+						tempDist1*SIN(calpha+cbetarr),(r0-r0/COS(calpha)-WALL_THICKNESS)+(r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS)*(1-COS(calpha+cbetarr)),0,
+						-tempDist1*SIN(calpha+cbetarr),(r0-r0/COS(calpha)-WALL_THICKNESS)+(r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS)*(1-COS(calpha+cbetarr)),3001,
+						-(tempDist1+gs_board_nosing)*SIN(calpha+cbetarr),(-r0-WIDO_FRAME_THICKNESS+r0/COS(calpha)+fdpi-WALL_THICKNESS+gs_board_nosing)-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS+gs_board_nosing)*(1-COS(calpha+cbetarr)),0,
+						(tempDist1+gs_board_nosing)*SIN(calpha+cbetarr),(-r0-WIDO_FRAME_THICKNESS+r0/COS(calpha)+fdpi-WALL_THICKNESS+gs_board_nosing)-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS+gs_board_nosing)*(1-COS(calpha+cbetarr)),3001
+
+					if GLOB_CONTEXT = 5 then
+						poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+							get(NSP)
+					else
+						wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+							0, 0, 0,
+							get(NSP)
+					endif
+
+					ARC2 0, r0-WIDO_SILL, r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS+gs_board_nosing, 270-calpha-cbetarl, 270+calpha+cbetarr
+
+					line2	-tempDist1*SIN(calpha+cbetarr),(r0-r0/COS(calpha)-WALL_THICKNESS)+(r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS)*(1-COS(calpha+cbetarr)),
+							-(tempDist1+gs_board_nosing)*SIN(calpha+cbetarr),(-r0-WIDO_FRAME_THICKNESS+r0/COS(calpha)+fdpi-WALL_THICKNESS+gs_board_nosing)-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS+gs_board_nosing)*(1-COS(calpha+cbetarr))
+
+					line2	tempDist1*SIN(calpha+cbetarr),(r0-r0/COS(calpha)-WALL_THICKNESS)+(r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS)*(1-COS(calpha+cbetarr)),
+							(tempDist1+gs_board_nosing)*SIN(calpha+cbetarr),(-r0-WIDO_FRAME_THICKNESS+r0/COS(calpha)+fdpi-WALL_THICKNESS+gs_board_nosing)-(r0/COS(calpha)+WIDO_SILL+fdpi-WALL_THICKNESS+gs_board_nosing)*(1-COS(calpha+cbetarr))
+
+					hotspot2 -(r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS+gs_board_nosing)*SIN(calpha+cbetarl),
+							 (r0-WIDO_SILL-r0/COS(calpha)+WIDO_SILL-WALL_THICKNESS-gs_board_nosing)+(r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS+gs_board_nosing)*(1-COS(calpha+cbetarl)), 10002
+					hotspot2 (r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS+gs_board_nosing)*SIN(calpha+cbetarr),
+							 (r0-WIDO_SILL-r0/COS(calpha)+WIDO_SILL-WALL_THICKNESS-gs_board_nosing)+(r0/COS(calpha)-WIDO_SILL+WALL_THICKNESS+gs_board_nosing)*(1-COS(calpha+cbetarr)), 10003
+				ENDIF
+
+				IF gs_sill_outside THEN
+					fill gs_wallhole_fill
+
+					put	 a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0,1,
+						 ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing,1,
+						-ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing,1,
+						-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+
+						-a/2-(+gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+						-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+						 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+						 a/2+(+gs_frame_thk/2)/SIN(bang)+bafd, 0,0
+
+					if GLOB_CONTEXT = 5 then
+						poly2_b NSP/3, 2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+							get(NSP)
+					else
+						wallhole2 NSP/3, 2, gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+							0, 0, 0,
+							get(NSP)
+					endif
+
+					POLY2_b 8, 1,gs_wallhole_pen_fg, gs_wallhole_pen_bg,
+						 a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0,1,
+						 ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing,1,
+						-ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing,1,
+						-a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+
+						-a/2-(+gs_frame_thk/2)/SIN(bang)-bafd, 0,0,
+						-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,0,
+						 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,0,
+						 a/2+(+gs_frame_thk/2)/SIN(bang)+bafd, 0,0
+
+					hotspot2  a/2+(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)+bafd, 0, 10005
+					hotspot2  ami/2+(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)+bafd, byd+gs_sill_nosing, 10001
+					hotspot2 -ami/2-(gs_frame_thk+gs_sill_nosing)*TAN(bang/2)-bafd, byd+gs_sill_nosing, 10000
+					hotspot2 -a/2-(gs_sill_nosing+gs_frame_thk/2)/SIN(bang)-bafd, 0, 10004
+				ENDIF
+			ENDIF
+		ENDIF
+
+		IF WIDO_REVEAL_SIDE THEN
+			DEL 2
+		ENDIF
+
+
+		DEL 1
+
+	ENDIF
+
+
+ENDIF
+
+
+
+!! UNDERCLOAK !!
+
+line_type gs_symbLineType
+
+IF lod2D > 29 & lod2D <> DET2D_FS_SIMPLE_CHI & lod2D <> DET2D_FS_DETAILED_CHI THEN		!!1:50
+!! Straight wall !!
+	IF abs(WALL_INCL)<EPS AND abs(WIDO_ORIG_DIST)<EPS THEN
+
+		IF not(WIDO_REVEAL_SIDE) THEN ADD2 0,WIDO_SILL ELSE ADD2 0,-WIDO_SILL+WALL_THICKNESS-WIDO_FRAME_THICKNESS
+
+		IF WIDO_REVEAL_SIDE THEN
+			MUL2 1, -1
+			ADD2 0, WALL_THICKNESS
+		ENDIF
+
+
+		IF not (gs_sill_outside) THEN
+			IF bUndercloak AND uclsill>0 THEN
+				POLY2 4, 1,
+					 a/2+(uclsill+gs_frame_thk/2)/SIN(bang)+bafd, 0,
+					 ami/2+(gs_frame_thk+uclsill)*TAN(bang/2)+bafd, byd+uclsill,
+					-ami/2-(gs_frame_thk+uclsill)*TAN(bang/2)-bafd, byd+uclsill,
+					-a/2-(uclsill+gs_frame_thk/2)/SIN(bang)-bafd, 0
+
+				unID = 2000
+				hotspot2 -a/2-(uclsill+gs_frame_thk/2)/SIN(bang)-bafd, 0, unID
+				hotspot2 -ami/2-(gs_frame_thk+uclsill)*TAN(bang/2)-bafd, byd+uclsill, unID+2
+				hotspot2  ami/2+(gs_frame_thk+uclsill)*TAN(bang/2)+bafd, byd+uclsill, unID+3
+				hotspot2  a/2+(uclsill+gs_frame_thk/2)/SIN(bang)+bafd, 0, unID+1
+			ENDIF
+		ENDIF
+
+
+		IF WIDO_REVEAL_SIDE THEN
+			DEL 2
+		ENDIF
+
+		DEL 1
+
+	ENDIF
+
+ENDIF
+!! END OF UNDERCLOAK !!
+
+
+m_unID = 1000    ! for hotspot editing of swinging sashes
+
+IF lod2D = DET2D_FS_SIMPLE_ONE | lod2D = DET2D_FS_SIMPLE_CHI | lod2D = DET2D_FS_DETAILED_CHI THEN
+	IF not(WIDO_REVEAL_SIDE) THEN ADD2 0,WIDO_SILL ELSE ADD2 0,-WIDO_SILL+WALL_THICKNESS-WIDO_FRAME_THICKNESS
+
+	IF WIDO_REVEAL_SIDE THEN
+		MUL2 1, -1
+		ADD2 0, WALL_THICKNESS
+	ENDIF
+
+	FOR I= 1 to nsa
+		add2 0, gs_frame_thk * WIDO_REVEAL_SIDE * bOneLineSymbolin2D
+			GOSUB 1000
+			GOSUB 2000
+		del 1
+
+		ADD2 hsa+gs_frame_width, 0
+	NEXT I
+	DEL nsa
+
+	if not(bOneLineSymbolin2D) then
+		IF ABS(bang-90)>EPS THEN
+			LINE2 -ami/2-bafd, byd-gs_frame_thk,
+				-a/2, -gs_frame_thk/2/COS(bang)
+		ELSE
+			LINE2 -ami/2-bafd, byd-gs_frame_thk,
+				-a/2, 0
+		ENDIF
+
+		LINE2 -ami/2-bafd, byd-gs_frame_thk,
+			  ami/2+bafd, byd-gs_frame_thk
+
+		IF ABS(bang-90)>EPS THEN
+			LINE2 ami/2+bafd, byd-gs_frame_thk,
+				a/2, -gs_frame_thk/2/COS(bang)
+		ELSE
+			LINE2 ami/2+bafd, byd-gs_frame_thk,
+				a/2, 0
+		ENDIF
+	endif
+
+	LINE2 -ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,
+		-a/2-(gs_frame_thk/2)/SIN(bang)-bafd,0
+	LINE2 -ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,
+		  ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd
+	LINE2 ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd,
+		a/2+(gs_frame_thk/2)/SIN(bang)+bafd,0
+
+ELSE
+
+	!! FRAME !!
+
+	IF lod2D > 11 and lod2D < 30 THEN	!!1:100
+
+		IF not(WIDO_REVEAL_SIDE) THEN ADD2 0,WIDO_SILL ELSE ADD2 0,-WIDO_SILL+WALL_THICKNESS-WIDO_FRAME_THICKNESS
+
+		IF WIDO_REVEAL_SIDE THEN
+			MUL2 1, -1
+			ADD2 0, WALL_THICKNESS
+		ENDIF
+
+		PEN gs_frame_pen_cont
+
+		IF bang>=60 THEN
+
+			Fill gs_fillFr
+			FOR i=1 to 2
+				Poly2_b 6, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+					-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+					-a/2,0,1,
+					-a/2, -gs_frame_thk+2*bafd,1,
+					-a/2+(gs_frame_thk/2/COS(bang)-gs_frame_thk)*TAN(90-bang), -gs_frame_thk+2*bafd,1,
+					-a/2-bafd+(gs_frame_width+frame_toler)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+frame_toler)*sin(bang)-gs_frame_thk/2*cos(bang),1,
+					-a/2-bafd+(gs_frame_width+frame_toler)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+frame_toler)*sin(bang)+gs_frame_thk/2*cos(bang),1
+				mul2 -1,1
+			NEXT i
+			del 2
+
+		ELSE
+
+			Fill gs_fillFr
+			FOR i=1 to 2
+				Poly2_b 5, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+					-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+					-a/2,0,1,
+					-a/2, -gs_frame_thk/2/COS(bang),1,
+					-a/2-bafd+(gs_frame_width+frame_toler)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+frame_toler)*sin(bang)-gs_frame_thk/2*cos(bang),1,
+					-a/2-bafd+(gs_frame_width+frame_toler)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+frame_toler)*sin(bang)+gs_frame_thk/2*cos(bang),1
+				mul2 -1,1
+			NEXT i
+			del 2
+
+		ENDIF
+
+		FOR i=1 to 2
+			PEN gs_frame_pen_cont
+
+			drawindex 30
+			Fill gs_fillShCover
+			poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+				-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang),byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang),0,
+				-ami/2-bafd-gs_frame_width*cos(bang),byd-gs_frame_thk-gs_frame_width*sin(bang),0,
+				-a/2-bafd+(gs_frame_width+frame_toler)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+frame_toler)*sin(bang)-gs_frame_thk/2*cos(bang),0,
+				-a/2-bafd+(gs_frame_width+frame_toler)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+frame_toler)*sin(bang)+gs_frame_thk/2*cos(bang),0
+
+			drawindex 40
+			Fill gs_fillFr
+			Poly2_b 4, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+				-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+				-ami/2-bafd, byd-gs_frame_thk,1,
+				-ami/2-bafd-gs_frame_width*cos(bang),byd-gs_frame_thk-gs_frame_width*sin(bang),1,
+				-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang),byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang),1
+			Poly2_b 4, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+				-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+				-ami/2-bafd, byd-gs_frame_thk,1,
+				-ami/2+gs_frame_width-gs_rebate_width+gs_sash_width-bafd, byd-gs_frame_thk,1,
+				-ami/2+gs_frame_width-gs_rebate_width+gs_sash_width-bafd, byd,1
+
+			PEN gs_pen_2D
+
+			LINE2 -ami/2-bafd-gs_frame_width*cos(bang),byd-gs_frame_thk-gs_frame_width*sin(bang),
+				-a/2-bafd+gs_frame_width*cos(bang)+gs_frame_thk/2*sin(bang),gs_frame_width*sin(bang)-gs_frame_thk/2*cos(bang)
+			LINE2 -ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang),byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang),
+				-a/2-(gs_frame_thk/2)/SIN(bang)-bafd,0
+
+			if lod2D = DET2D_FS_MIDDLE then		! Glass symbol
+				add2 -(gs_frame_thk/2)*sin(bang), (gs_frame_thk/2)*cos(bang)
+				LINE2 -ami/2-bafd-gs_frame_width*cos(bang),byd-gs_frame_thk-gs_frame_width*sin(bang),
+					-a/2-bafd+gs_frame_width*cos(bang)+gs_frame_thk/2*sin(bang),gs_frame_width*sin(bang)-gs_frame_thk/2*cos(bang)
+				del 1
+			endif
+
+			mul2 -1,1
+		NEXT i
+		del 2
+
+
+		FOR I=1 TO nsa
+
+			PEN gs_frame_pen_cont
+
+			if iLoD2D = SYMBW_M_2LINE_GLASS then add2 0, gs_frame_thk / 2 * WIDO_REVEAL_SIDE - gs_frame_thk / 2 * not(WIDO_REVEAL_SIDE)
+				GOSUB 1000
+
+				GOSUB 2000
+			if iLoD2D = SYMBW_M_2LINE_GLASS then del 1
+
+			drawindex 30
+			Fill gs_fillShCover
+			poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+				-ami/2+gs_frame_width-gs_rebate_width+gs_sash_width-bafd, byd, 0,
+				-ami/2+gs_frame_width-gs_rebate_width+gs_sash_width-bafd, byd-gs_frame_thk, 0,
+				-ami/2+gs_frame_width+hsa+gs_rebate_width-gs_sash_width-bafd, byd-gs_frame_thk, 0,
+				-ami/2+gs_frame_width+hsa+gs_rebate_width-gs_sash_width-bafd, byd, 0
+
+			drawindex 40
+			Fill gs_fillFr
+
+			IF abs(i-nsa)>EPS THEN
+				Poly2_b 4, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+					-ami/2+2*gs_frame_width-gs_rebate_width+gs_sash_width-bafd+hsa, byd,1,
+					-ami/2+2*gs_frame_width-gs_rebate_width+gs_sash_width-bafd+hsa, byd-gs_frame_thk,1,
+					-ami/2+gs_frame_width+gs_rebate_width-gs_sash_width-bafd+hsa, byd-gs_frame_thk,1,
+					-ami/2+gs_frame_width+gs_rebate_width-gs_sash_width-bafd+hsa, byd,1
+			ENDIF
+
+			PEN gs_pen_2D
+
+			LINE2 -ami/2+gs_frame_width-gs_rebate_width+gs_sash_width-bafd, byd, -ami/2+gs_frame_width+hsa+gs_rebate_width-gs_sash_width-bafd, byd
+			LINE2 -ami/2+gs_frame_width-gs_rebate_width+gs_sash_width-bafd, byd-gs_frame_thk, -ami/2+gs_frame_width+hsa+gs_rebate_width-gs_sash_width-bafd, byd-gs_frame_thk
+
+			if lod2D = DET2D_FS_MIDDLE and abs(gs_open_2D) < EPS then		! Glass symbol
+				LINE2 -ami/2+gs_frame_width-gs_rebate_width+gs_sash_width-bafd, byd-gs_frame_thk/2, -ami/2+gs_frame_width+hsa+gs_rebate_width-gs_sash_width-bafd, byd-gs_frame_thk/2
+			endif
+
+			ADD2 hsa+gs_frame_width, 0
+		NEXT I
+		DEL nsa
+
+
+	ENDIF
+
+
+	IF lod2D > 29 THEN	!!1:50
+
+		IF not(WIDO_REVEAL_SIDE) THEN ADD2 0,WIDO_SILL ELSE ADD2 0,-WIDO_SILL+WALL_THICKNESS-WIDO_FRAME_THICKNESS
+
+		IF WIDO_REVEAL_SIDE THEN
+			MUL2 1, -1
+			ADD2 0, WALL_THICKNESS
+		ENDIF
+
+		PEN gs_frame_pen_cont
+
+		Fill gs_fillFr
+		IF bang>=60 THEN
+			FOR i=1 to 2
+				if bShowRebateOnFixGlass then
+					if (FixGlassDir_m = 1 & WIDO_REVEAL_SIDE) or (FixGlassDir_m = 2 & not(WIDO_REVEAL_SIDE)) then
+						FramePosX = -a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)+gs_frame_thk/2*sin(bang)
+						FramePosY = (gs_frame_width+gs_tolerance_bay)*sin(bang)-gs_frame_thk/2*cos(bang)
+
+						Poly2_b 8, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+							-a/2,0,1,
+							-a/2, -gs_frame_thk+2*bafd,1,
+							-a/2+(gs_frame_thk/2/COS(bang)-gs_frame_thk)*TAN(90-bang), -gs_frame_thk+2*bafd,1,
+							FramePosX - gs_rebate_width*cos(bang),								FramePosY - gs_rebate_width*sin(bang),1,
+							FramePosX - gs_rebate_width*cos(bang)-gs_rebate_depth*sin(bang),	FramePosY - gs_rebate_width*sin(bang)+gs_rebate_depth*cos(bang),1,
+							FramePosX - gs_rebate_depth*sin(bang),								FramePosY + gs_rebate_depth*cos(bang),1,
+							-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)+gs_frame_thk/2*cos(bang),1
+					else
+						FramePosX = -a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)-gs_frame_thk/2*sin(bang)
+						FramePosY = (gs_frame_width+gs_tolerance_bay)*sin(bang)+gs_frame_thk/2*cos(bang)
+
+						Poly2_b 8, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+							-a/2,0,1,
+							-a/2, -gs_frame_thk+2*bafd,1,
+							-a/2+(gs_frame_thk/2/COS(bang)-gs_frame_thk)*TAN(90-bang), -gs_frame_thk+2*bafd,1,
+							-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)-gs_frame_thk/2*cos(bang),1,
+							FramePosX + gs_rebate_depth*sin(bang),							FramePosY - gs_rebate_depth*cos(bang),1,
+							FramePosX - gs_rebate_width*cos(bang)+gs_rebate_depth*sin(bang),	FramePosY - gs_rebate_width*sin(bang)-gs_rebate_depth*cos(bang),1,
+							FramePosX - gs_rebate_width*cos(bang),							FramePosY - gs_rebate_width*sin(bang),1
+					endif
+				else
+					Poly2_b 6, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+						-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+						-a/2,0,1,
+						-a/2, -gs_frame_thk+2*bafd,1,
+						-a/2+(gs_frame_thk/2/COS(bang)-gs_frame_thk)*TAN(90-bang), -gs_frame_thk+2*bafd,1,
+						-a/2-bafd+(gs_frame_width+frame_toler)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+frame_toler)*sin(bang)-gs_frame_thk/2*cos(bang),1,
+						-a/2-bafd+(gs_frame_width+frame_toler)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+frame_toler)*sin(bang)+gs_frame_thk/2*cos(bang),1
+				endif
+				mul2 -1,1
+			NEXT i
+			del 2
+		ELSE
+			FOR i=1 to 2
+				if bShowRebateOnFixGlass then
+					if (FixGlassDir_m = 1 & WIDO_REVEAL_SIDE) or (FixGlassDir_m = 2 & not(WIDO_REVEAL_SIDE)) then
+						FramePosX = -a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)+gs_frame_thk/2*sin(bang)
+						FramePosY = (gs_frame_width+gs_tolerance_bay)*sin(bang)-gs_frame_thk/2*cos(bang)
+
+						Poly2_b 7, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+							-a/2,0,1,
+							-a/2, -gs_frame_thk/2/COS(bang),1,
+							FramePosX - gs_rebate_width*cos(bang),								FramePosY - gs_rebate_width*sin(bang),1,
+							FramePosX - gs_rebate_width*cos(bang)-gs_rebate_depth*sin(bang),	FramePosY - gs_rebate_width*sin(bang)+gs_rebate_depth*cos(bang),1,
+							FramePosX - gs_rebate_depth*sin(bang),								FramePosY + gs_rebate_depth*cos(bang),1,
+							-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)+gs_frame_thk/2*cos(bang),1
+					else
+						FramePosX = -a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)-gs_frame_thk/2*sin(bang)
+						FramePosY = (gs_frame_width+gs_tolerance_bay)*sin(bang)+gs_frame_thk/2*cos(bang)
+
+						Poly2_b 7, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+							-a/2,0,1,
+							-a/2, -gs_frame_thk/2/COS(bang),1,
+							-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)-gs_frame_thk/2*cos(bang),1,
+							FramePosX + gs_rebate_depth*sin(bang),							FramePosY - gs_rebate_depth*cos(bang),1,
+							FramePosX - gs_rebate_width*cos(bang)+gs_rebate_depth*sin(bang),FramePosY - gs_rebate_width*sin(bang)-gs_rebate_depth*cos(bang),1,
+							FramePosX - gs_rebate_width*cos(bang),							FramePosY - gs_rebate_width*sin(bang),1
+					endif
+				else
+					Poly2_b 5, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+						-a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0,1,
+						-a/2,0,1,
+						-a/2, -gs_frame_thk/2/COS(bang),1,
+						-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)-gs_frame_thk/2*cos(bang),1,
+						-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)+gs_frame_thk/2*cos(bang),1
+				endif
+				mul2 -1,1
+			NEXT i
+			del 2
+		ENDIF
+
+		FOR i=1 to 2
+			Fill gs_fillShCover
+			if bShowRebateOnFixGlass then
+				if (FixGlassDir_m = 1 & WIDO_REVEAL_SIDE) or (FixGlassDir_m = 2 & not(WIDO_REVEAL_SIDE)) then
+					FramePosX1 = -ami/2-bafd-gs_frame_width*cos(bang)
+					FramePosX2 = -a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)+gs_frame_thk/2*sin(bang)
+					FramePosY1 = byd-gs_frame_thk-gs_frame_width*sin(bang)
+					FramePosY2 = (gs_frame_width+gs_tolerance_bay)*sin(bang)-gs_frame_thk/2*cos(bang)
+
+					poly2_b 8, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+						-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang),byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang),1,
+						FramePosX1 - gs_rebate_depth*sin(bang),									FramePosY1 + gs_rebate_depth*cos(bang),	1,
+						FramePosX1 + gs_rebate_width*cos(bang)-gs_rebate_depth*sin(bang),		FramePosY1 + gs_rebate_width*sin(bang)+gs_rebate_depth*cos(bang),	1,
+						FramePosX1 + gs_rebate_width*cos(bang),									FramePosY1 + gs_rebate_width*sin(bang),	1,
+						FramePosX2 - gs_rebate_width*cos(bang),		FramePosY2 - gs_rebate_width*sin(bang),	1,
+						FramePosX2 - gs_rebate_width*cos(bang)-gs_rebate_depth*sin(bang),		FramePosY2 - gs_rebate_width*sin(bang)+gs_rebate_depth*cos(bang),	1,
+						FramePosX2 - gs_rebate_depth*sin(bang),		FramePosY2 + gs_rebate_depth*cos(bang),	1,
+						-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)+gs_frame_thk/2*cos(bang),1
+				else
+					FramePosX1 = -ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang)
+					FramePosX2 = -a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)-gs_frame_thk/2*sin(bang)
+					FramePosY1 = byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang)
+					FramePosY2 = (gs_frame_width+gs_tolerance_bay)*sin(bang)+gs_frame_thk/2*cos(bang)
+
+					poly2_b 8, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+						FramePosX1 + gs_rebate_width*cos(bang),								FramePosY1 + gs_rebate_width*sin(bang) ,1,
+						FramePosX1 + gs_rebate_width*cos(bang)+gs_rebate_depth*sin(bang),		FramePosY1 + gs_rebate_width*sin(bang)-gs_rebate_depth*cos(bang),1,
+						FramePosX1 + gs_rebate_depth*sin(bang),								FramePosY1 - gs_rebate_depth*cos(bang),1,
+						-ami/2-bafd-gs_frame_width*cos(bang),byd-gs_frame_thk-gs_frame_width*sin(bang),1,
+						-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)-gs_frame_thk/2*cos(bang),1,
+						FramePosX2 + gs_rebate_depth*sin(bang),								FramePosY2- gs_rebate_depth*cos(bang),	1,
+						FramePosX2 - gs_rebate_width*cos(bang)+gs_rebate_depth*sin(bang),		FramePosY2 - gs_rebate_width*sin(bang)-gs_rebate_depth*cos(bang),	1,
+						FramePosX2 - gs_rebate_width*cos(bang),								FramePosY2 - gs_rebate_width*sin(bang),	1
+				endif
+			else
+				poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+					-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang),byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang),1,
+					-ami/2-bafd-gs_frame_width*cos(bang),byd-gs_frame_thk-gs_frame_width*sin(bang),1,
+					-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)+gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)-gs_frame_thk/2*cos(bang),1,
+					-a/2-bafd+(gs_frame_width+gs_tolerance_bay)*cos(bang)-gs_frame_thk/2*sin(bang),(gs_frame_width+gs_tolerance_bay)*sin(bang)+gs_frame_thk/2*cos(bang),1
+			endif
+
+			Fill gs_fillFr
+			if bShowRebateOnFixGlass then
+				if (FixGlassDir_m = 1 & WIDO_REVEAL_SIDE) | (FixGlassDir_m = 2 & not(WIDO_REVEAL_SIDE)) then
+					FramePosX = -ami/2-bafd-gs_frame_width*cos(bang)
+					FramePosY = byd-gs_frame_thk-gs_frame_width*sin(bang)
+
+					Poly2_b 6, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+						-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+						-ami/2-bafd, byd-gs_frame_thk,1,
+						FramePosX + gs_rebate_width*cos(bang),								FramePosY + gs_rebate_width*sin(bang),	1,
+						FramePosX + gs_rebate_width*cos(bang)-gs_rebate_depth*sin(bang),	FramePosY + gs_rebate_width*sin(bang) + gs_rebate_depth*cos(bang),	1,
+						FramePosX - gs_rebate_depth*sin(bang),								FramePosY + gs_rebate_depth*cos(bang),	1,
+						-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang),	byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang),	1
+				else
+					FramePosX = -ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang)
+					FramePosY = byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang)
+
+					Poly2_b 6, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+						-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+						-ami/2-bafd, byd-gs_frame_thk,1,
+						-ami/2-bafd-gs_frame_width*cos(bang),byd-gs_frame_thk-gs_frame_width*sin(bang),1,
+						FramePosX + gs_rebate_depth*sin(bang),							FramePosY - gs_rebate_depth*cos(bang),	1,
+						FramePosX + gs_rebate_width*cos(bang)+gs_rebate_depth*sin(bang),	FramePosY + gs_rebate_width*sin(bang)-gs_rebate_depth*cos(bang),	1,
+						FramePosX + gs_rebate_width*cos(bang),							FramePosY + gs_rebate_width*sin(bang),	1
+				endif
+			else
+				Poly2_b 4, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+					-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+					-ami/2-bafd, byd-gs_frame_thk,1,
+					-ami/2-bafd-gs_frame_width*cos(bang),byd-gs_frame_thk-gs_frame_width*sin(bang),1,
+					-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*cos(bang),byd-(gs_frame_width+((gs_frame_thk)*TAN(bang/2)))*sin(bang),1
+			endif
+
+			if not(bShowRebateOnFixGlass) and (gs_optype_m_01 = SASH_FIXED) then
+				Fill gs_fillFr
+				Poly2_b 4, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+					-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+					-ami/2-bafd, byd-gs_frame_thk,1,
+					-ami/2+gs_frame_width-bafd, byd-gs_frame_thk,1,
+					-ami/2+gs_frame_width-bafd, byd,1
+			else
+				IF WIDO_REVEAL_SIDE THEN
+					Fill gs_fillFr
+					if FixGlassDir_m = 1 | gs_optype_m_01 <> SASH_FIXED then
+						Poly2_b 6, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+							-ami/2-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+							-ami/2+gs_frame_width-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+							-ami/2+gs_frame_width-bafd, byd,1
+					else
+						Poly2_b 6, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+							-ami/2-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-bafd, byd-gs_rebate_depth,1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd-gs_rebate_depth,1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd,1
+					endif
+				ELSE
+					if FixGlassDir_m = 1 | gs_optype_m_01 <> SASH_FIXED then
+						Poly2_b 6, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+							-ami/2-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-bafd, byd-gs_rebate_depth,1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd-gs_rebate_depth,1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd,1
+					else
+						Poly2_b 6, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd,1,
+							-ami/2-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+							-ami/2+gs_frame_width-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+							-ami/2+gs_frame_width-bafd, byd,1
+					endif
+				ENDIF
+			endif
+			mul2 -1,1
+		NEXT i
+		del 2
+
+		hotspot2 -a/2-(gs_frame_thk/2)/SIN(bang)-bafd, 0, 100
+		hotspot2 -a/2, -gs_frame_thk/2/COS(bang), 102
+		hotspot2 -ami/2-(gs_frame_thk)*TAN(bang/2)-bafd, byd, 104
+		hotspot2 -ami/2-bafd, byd-gs_frame_thk, 106
+		hotspot2  a/2+(gs_frame_thk/2)/SIN(bang)+bafd, 0, 101
+		hotspot2  a/2, -gs_frame_thk/2/COS(bang), 103
+		hotspot2  ami/2+(gs_frame_thk)*TAN(bang/2)+bafd, byd, 105
+		hotspot2  ami/2+bafd, byd-gs_frame_thk, 107
+
+		IF WIDO_REVEAL_SIDE THEN
+
+			FOR I=1 TO nsa
+				Fill gs_fillShCover
+
+				GOSUB 1000
+
+				GOSUB 2000
+
+				if bShowRebateOnFixGlass then
+					if gs_optype_m_01 = SASH_FIXED then
+						if FixGlassDir_m = 1 then
+							poly2_b 8, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+								-ami/2+gs_frame_width-bafd-gs_rebate_width, byd-gs_frame_thk,1,
+								-ami/2+gs_frame_width-bafd-gs_rebate_width, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width-bafd, byd,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd-gs_frame_thk,1
+						else
+							poly2_b 8, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+								-ami/2+gs_frame_width-bafd-gs_rebate_width, byd,1,
+								-ami/2+gs_frame_width-bafd-gs_rebate_width, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width-bafd, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width-bafd, byd-gs_frame_thk,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd,1
+						endif
+					else
+						poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+							-ami/2+gs_frame_width-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+							-ami/2+gs_frame_width-bafd, byd,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk+gs_rebate_depth,1
+					endif
+				else
+					if gs_optype_m_01 = SASH_FIXED then
+						poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+							-ami/2+gs_frame_width-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width-bafd, byd,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk,1
+					else
+						poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+							-ami/2+gs_frame_width-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+							-ami/2+gs_frame_width-bafd, byd,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk+gs_rebate_depth,1
+
+						if	gs_rebate_depth - gs_sash_thk > EPS then
+							poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+								-ami/2+gs_frame_width-gs_rebate_width,		byd-gs_frame_thk, 1,
+								-ami/2+gs_frame_width-gs_rebate_width,		byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk, 0,
+								-ami/2+gs_frame_width+hsa+gs_rebate_width,	byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk, 1,
+								-ami/2+gs_frame_width+hsa+gs_rebate_width,	byd-gs_frame_thk, 1
+						endif
+					endif
+				endif
+
+				IF abs(i-nsa)>EPS THEN
+					Fill gs_fillFr
+					if not(bShowRebateOnFixGlass) and gs_optype_m_01 = SASH_FIXED then
+						Poly2_b 4, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+							-ami/2+gs_frame_width+hsa-bafd, byd,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk,1,
+							-ami/2+2*gs_frame_width+hsa-bafd, byd-gs_frame_thk,1,
+							-ami/2+2*gs_frame_width+hsa-bafd, byd,1
+					else
+						if FixGlassDir_m = 1 | gs_optype_m_01 <> SASH_FIXED then
+							Poly2_b 8, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+								-ami/2+gs_frame_width+hsa-bafd, byd,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width+gs_rebate_width+hsa-bafd,  	byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width+gs_rebate_width+hsa-bafd,  	byd-gs_frame_thk,1,
+								-ami/2+2*gs_frame_width-gs_rebate_width+hsa-bafd,	byd-gs_frame_thk,1,
+								-ami/2+2*gs_frame_width-gs_rebate_width+hsa-bafd,	byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+2*gs_frame_width+hsa-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+2*gs_frame_width+hsa-bafd, byd,1
+						else
+							Poly2_b 8, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+								-ami/2+gs_frame_width-bafd+hsa, byd-gs_frame_thk,1,
+								-ami/2+gs_frame_width-bafd+hsa, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width+gs_rebate_width-bafd+hsa, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width+gs_rebate_width-bafd+hsa, byd,1,
+								-ami/2+2*gs_frame_width-gs_rebate_width+hsa-bafd, byd,1,
+								-ami/2+2*gs_frame_width-gs_rebate_width+hsa-bafd, byd-gs_rebate_depth,1,
+								-ami/2+2*gs_frame_width+hsa-bafd, byd-gs_rebate_depth,1,
+								-ami/2+2*gs_frame_width+hsa-bafd, byd-gs_frame_thk,1
+						endif
+					endif
+				ENDIF
+
+
+				PEN gs_pen_2D
+
+				LINE2 -ami/2+gs_frame_width-bafd+hsa, byd, -ami/2-bafd+gs_frame_width, byd
+
+				PEN gs_frame_pen_cont
+
+				ADD2 hsa+gs_frame_width, 0
+			NEXT I
+			DEL nsa
+
+			!!!Sashes!!!
+			if gs_optype_m_01 <> SASH_FIXED then
+				FOR I=1 TO 2
+					Fill gs_fillSash
+					poly2_b 4, 1+2+4+32, gs_penSash_fg, gs_penSash_bg,
+						-ami/2-bafd+gs_frame_width-gs_rebate_width, byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk, 1,
+						-ami/2-bafd+gs_frame_width-gs_rebate_width, byd-gs_frame_thk+gs_rebate_depth, 1,
+						-ami/2-bafd+gs_frame_width-gs_rebate_width+gs_sash_width, byd-gs_frame_thk+gs_rebate_depth, 1,
+						-ami/2-bafd+gs_frame_width-gs_rebate_width+gs_sash_width, byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk, 1
+
+					MUL2 -1, 1
+				NEXT I
+				DEL 2
+
+				FOR I=1 TO nsa
+					ADD2 hsa+gs_frame_width, 0
+					Fill gs_fillShCover
+					poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+						-ami/2-bafd-gs_sash_width+gs_rebate_width, 	byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk,1,
+						-ami/2-bafd-gs_sash_width+gs_rebate_width, 	byd-gs_frame_thk+gs_rebate_depth,1,
+						-ami/2-bafd+gs_sash_width-gs_rebate_width-hsa, 		byd-gs_frame_thk+gs_rebate_depth,1,
+						-ami/2-bafd+gs_sash_width-gs_rebate_width-hsa, 		byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk,1
+
+					IF i<>nsa THEN
+						Fill gs_fillSash
+						poly2_b 4, 1+2+4+32, gs_penSash_fg, gs_penSash_bg,
+							-ami/2+gs_rebate_width-bafd, byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk, 1,
+							-ami/2+gs_rebate_width-bafd, byd-gs_frame_thk+gs_rebate_depth, 1,
+							-ami/2+gs_rebate_width-bafd-gs_sash_width, byd-gs_frame_thk+gs_rebate_depth, 1,
+							-ami/2+gs_rebate_width-bafd-gs_sash_width, byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk, 1
+						poly2_b 4, 1+2+4+32, gs_penSash_fg, gs_penSash_bg,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk, 1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd, byd-gs_frame_thk+gs_rebate_depth, 1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd+gs_sash_width, byd-gs_frame_thk+gs_rebate_depth, 1,
+							-ami/2+gs_frame_width-gs_rebate_width-bafd+gs_sash_width, byd-gs_frame_thk+gs_rebate_depth-gs_sash_thk, 1
+					ENDIF
+				NEXT I
+				DEL nsa
+			endif
+		else
+			FOR I=1 TO nsa
+
+				GOSUB 1000
+
+				GOSUB 2000
+
+				Fill gs_fillShCover
+				if gs_optype_m_01 = SASH_FIXED then
+					if bShowRebateOnFixGlass then
+						if FixGlassDir_m = 1 then
+							poly2_b 8, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+								-ami/2+gs_frame_width-bafd-gs_rebate_width, byd,1,
+								-ami/2+gs_frame_width-bafd-gs_rebate_width, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width-bafd, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width-bafd, byd-gs_frame_thk,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd-gs_rebate_depth,1,
+								-ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd,1
+						else
+							poly2_b 8, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+								-ami/2+gs_frame_width-bafd-gs_rebate_width, byd-gs_frame_thk,1,
+								-ami/2+gs_frame_width-bafd-gs_rebate_width, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width-bafd, byd,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd,1,
+								-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd-gs_frame_thk+gs_rebate_depth,1,
+								-ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd-gs_frame_thk,1
+						endif
+					else
+						poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+							-ami/2+gs_frame_width-bafd, byd,1,
+							-ami/2+gs_frame_width-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk,1,
+							-ami/2+gs_frame_width+hsa-bafd, byd,1
+					endif
+				else
+					poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+						-ami/2+gs_frame_width-bafd, byd-gs_rebate_depth,1,
+						-ami/2+gs_frame_width-bafd, byd-gs_frame_thk,1,
+						-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk,1,
+						-ami/2+gs_frame_width+hsa-bafd, byd-gs_rebate_depth,1
+
+					if	gs_rebate_depth - gs_sash_thk > EPS then
+						poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+							-ami/2+gs_frame_width-gs_rebate_width,		byd, 1,
+							-ami/2+gs_frame_width-gs_rebate_width,		byd-gs_rebate_depth+gs_sash_thk, 0,
+							-ami/2+gs_frame_width+hsa+gs_rebate_width,	byd-gs_rebate_depth+gs_sash_thk, 1,
+							-ami/2+gs_frame_width+hsa+gs_rebate_width,	byd, 1
+					endif
+				endif
+				ADD2 hsa+gs_frame_width, 0
+			NEXT I
+			DEL nsa
+
+			FOR HI=1 TO 2
+				FOR I=1 TO nsa
+					IF abs(i-nsa)>EPS THEN
+						if not(bShowRebateOnFixGlass) and gs_optype_m_01 = SASH_FIXED then
+							Poly2_b 4, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+								-ami/2+gs_frame_width-bafd+hsa, byd-gs_frame_thk,1,
+								-ami/2+gs_frame_width-bafd+hsa, byd,1,
+								-ami/2+2*gs_frame_width+hsa-bafd, byd,1,
+								-ami/2+2*gs_frame_width+hsa-bafd, byd-gs_frame_thk,1
+						else
+							if FixGlassDir_m = 1 | gs_optype_m_01 <> SASH_FIXED then
+								Poly2_b 8, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+									-ami/2+gs_frame_width-bafd+hsa, byd-gs_frame_thk,1,
+									-ami/2+gs_frame_width-bafd+hsa, byd-gs_rebate_depth,1,
+									-ami/2+gs_frame_width+gs_rebate_width-bafd+hsa, byd-gs_rebate_depth,1,
+									-ami/2+gs_frame_width+gs_rebate_width-bafd+hsa, byd,1,
+									-ami/2+2*gs_frame_width-gs_rebate_width+hsa-bafd, byd,1,
+									-ami/2+2*gs_frame_width-gs_rebate_width+hsa-bafd, byd-gs_rebate_depth,1,
+									-ami/2+2*gs_frame_width+hsa-bafd, byd-gs_rebate_depth,1,
+									-ami/2+2*gs_frame_width+hsa-bafd, byd-gs_frame_thk,1
+							else
+								Poly2_b 8, 1+2+4+32,gs_penFr_fg,gs_penFr_bg,
+									-ami/2+gs_frame_width+hsa-bafd, byd,1,
+									-ami/2+gs_frame_width+hsa-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+									-ami/2+gs_frame_width+gs_rebate_width+hsa-bafd,  	byd-gs_frame_thk+gs_rebate_depth,1,
+									-ami/2+gs_frame_width+gs_rebate_width+hsa-bafd,  	byd-gs_frame_thk,1,
+									-ami/2+2*gs_frame_width-gs_rebate_width+hsa-bafd,	byd-gs_frame_thk,1,
+									-ami/2+2*gs_frame_width-gs_rebate_width+hsa-bafd,	byd-gs_frame_thk+gs_rebate_depth,1,
+									-ami/2+2*gs_frame_width+hsa-bafd, byd-gs_frame_thk+gs_rebate_depth,1,
+									-ami/2+2*gs_frame_width+hsa-bafd, byd,1
+							endif
+						endif
+
+						PEN gs_pen_2D
+						LINE2 -ami/2+gs_frame_width-bafd+hsa, byd-gs_frame_thk,-ami/2-bafd+gs_frame_width, byd-gs_frame_thk
+						PEN gs_frame_pen_cont
+
+					ENDIF
+					ADD2 hsa+gs_frame_width, 0
+				NEXT I
+				DEL nsa
+				MUL2 -1, 1
+			NEXT HI
+			DEL 2
+
+			!!!Sashes!!!
+			if gs_optype_m_01 <> SASH_FIXED then
+				FOR I=1 TO nsa
+					ADD2 hsa+gs_frame_width, 0
+
+					if iGrill = MULLION_SOLID_PANEL then
+						Fill gs_fillSash
+						poly2_b 4, 1+2+4+32, gs_penSash_fg, gs_penSash_bg,
+							-ami/2-hsa-gs_rebate_width-bafd,	byd-gs_rebate_depth+gs_sash_thk,	1,
+							-ami/2-hsa-gs_rebate_width-bafd,	byd-gs_rebate_depth,				1,
+							-ami/2-bafd+gs_rebate_width,		byd-gs_rebate_depth,				1,
+							-ami/2-bafd+gs_rebate_width,		byd-gs_rebate_depth+gs_sash_thk,	1
+					else
+						Fill gs_fillShCover
+						add2 -bafd, 0
+						poly2_b 4, 1+2+4+64,gs_penShCov_fg,gs_penShCov_bg,
+							-ami/2-gs_rebate_width+gs_sash_width-hsa,	byd-gs_rebate_depth+gs_sash_thk,1,
+							-ami/2-gs_rebate_width+gs_sash_width-hsa,	byd-gs_rebate_depth,			1,
+							-ami/2+gs_rebate_width-gs_sash_width, 		byd-gs_rebate_depth,			1,
+							-ami/2+gs_rebate_width-gs_sash_width, 		byd-gs_rebate_depth+gs_sash_thk,1
+						del 1
+
+						Fill gs_fillSash
+						poly2_b 4, 1+2+4+32, gs_penSash_fg, gs_penSash_bg,
+							-ami/2-hsa-gs_rebate_width-bafd,				byd-gs_rebate_depth+gs_sash_thk,	1,
+							-ami/2-hsa-gs_rebate_width-bafd,				byd-gs_rebate_depth,				1,
+							-ami/2-hsa-gs_rebate_width-bafd+gs_sash_width,	byd-gs_rebate_depth,				1,
+							-ami/2-hsa-gs_rebate_width-bafd+gs_sash_width,	byd-gs_rebate_depth+gs_sash_thk,	1
+
+						poly2_b 4, 1+2+4+32, gs_penSash_fg, gs_penSash_bg,
+							-ami/2-bafd+gs_rebate_width,				byd-gs_rebate_depth+gs_sash_thk,	1,
+							-ami/2-bafd+gs_rebate_width,				byd-gs_rebate_depth,				1,
+							-ami/2-bafd+gs_rebate_width-gs_sash_width,	byd-gs_rebate_depth,				1,
+							-ami/2-bafd+gs_rebate_width-gs_sash_width,	byd-gs_rebate_depth+gs_sash_thk,	1
+					endif
+				NEXT I
+				DEL nsa
+			else
+				if iGrill = MULLION_SOLID_PANEL then
+					FOR I=1 TO nsa
+						ADD2 hsa+gs_frame_width, 0
+
+						Fill gs_fillSash
+						poly2_b 4, 1+2+4+32, gs_penSash_fg, gs_penSash_bg,
+							-ami/2-hsa-bafd,	byd-gs_sash_thk,	1,
+							-ami/2-hsa-bafd,	byd,				1,
+							-ami/2-bafd,		byd,				1,
+							-ami/2-bafd,		byd-gs_sash_thk,	1
+						NEXT I
+					DEL nsa
+
+				endif
+
+			endif
+		ENDIF
+	ENDIF
+
+
+	IF lod2D > 29 THEN		!!1:50
+		IF WIDO_REVEAL_SIDE THEN ino=2*gs_rebate_depth-gs_frame_thk-gs_sash_thk
+		IF not(WIDO_REVEAL_SIDE) THEN ino=0
+	ENDIF
+
+	PEN gs_pen_2D
+
+	IF lod2D > 29 then ! M 1:50
+		if iGrill <> MULLION_SOLID_PANEL then
+			FOR I=1 TO 2
+				ADD2 -a/2-bafd, 0
+				ROT2 bang
+				LINE2  gs_frame_width,  -gs_frame_thk/2,
+					   (byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, -gs_frame_thk/2
+				LINE2  gs_frame_width,  gs_frame_thk/2,
+					   (byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, gs_frame_thk/2
+
+
+				if bShowRebateOnFixGlass then
+					if (FixGlassDir_m = 1 & WIDO_REVEAL_SIDE) or (FixGlassDir_m = 2 & not(WIDO_REVEAL_SIDE)) then
+						LINE2  (gs_frame_width+gs_tolerance_bay)-gs_rebate_width,  -gs_frame_thk/2+gs_rebate_depth,
+							   (byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width+gs_rebate_width, -gs_frame_thk/2+gs_rebate_depth
+					else
+						LINE2  (gs_frame_width+gs_tolerance_bay)-gs_rebate_width,  gs_frame_thk/2-gs_rebate_depth,
+							   (byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width+gs_rebate_width, gs_frame_thk/2-gs_rebate_depth
+					endif
+				else
+					LINE2  (gs_frame_width+gs_tolerance_bay),  0,
+						   (byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width, 0
+				endif
+				DEL 2
+				MUL2 -1, 1
+			NEXT I
+			DEL 2
+
+			FOR I=1 TO nsa
+				if gs_optype_m_01 = SASH_FIXED then
+					ADD2 -gs_rebate_width, ino-gs_rebate_depth
+					if  WIDO_REVEAL_SIDE then
+						if bShowRebateOnFixGlass then
+							if FixGlassDir_m = 1 then
+								LINE2 -ami/2+gs_frame_width-bafd, byd+gs_sash_thk,
+									-ami/2+gs_frame_width+hsa-bafd+2*gs_rebate_width, byd+gs_sash_thk
+							else
+								LINE2 -ami/2+gs_frame_width-bafd, byd+gs_sash_thk+gs_frame_thk-2*gs_rebate_depth,
+									-ami/2+gs_frame_width+hsa-bafd+2*gs_rebate_width, byd+gs_sash_thk+gs_frame_thk-2*gs_rebate_depth
+							endif
+						else
+							LINE2 -ami/2+gs_frame_width-bafd+gs_rebate_width, byd+gs_sash_thk,
+								  -ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd+gs_sash_thk
+						endif
+					else
+						if bShowRebateOnFixGlass then
+							if FixGlassDir_m = 1 then
+								LINE2 -ami/2+gs_frame_width-bafd, byd,
+									-ami/2+gs_frame_width+hsa-bafd+2*gs_rebate_width, byd
+							else
+								LINE2 -ami/2+gs_frame_width-bafd, byd-gs_frame_thk+2*gs_rebate_depth,
+									-ami/2+gs_frame_width+hsa-bafd+2*gs_rebate_width, byd-gs_frame_thk+2*gs_rebate_depth
+							endif
+						else
+							LINE2 -ami/2+gs_frame_width-bafd+gs_rebate_width, byd,
+								  -ami/2+gs_frame_width+hsa-bafd+gs_rebate_width, byd
+						endif
+					endif
+					DEL 1
+				else
+					ADD2 -gs_rebate_width, ino-gs_rebate_depth			!!!gs_frame_thk/2
+					LINE2 -ami/2+gs_frame_width+gs_sash_width-bafd, byd+gs_sash_thk,
+						  -ami/2+gs_frame_width+hsa-bafd+2*gs_rebate_width-gs_sash_width, byd+gs_sash_thk
+					LINE2 -ami/2+gs_frame_width+gs_sash_width-bafd, byd+gs_sash_thk/2,
+						  -ami/2+gs_frame_width+hsa-bafd+2*gs_rebate_width-gs_sash_width, byd+gs_sash_thk/2
+					LINE2 -ami/2+gs_frame_width+gs_sash_width-bafd, byd,
+						  -ami/2+gs_frame_width+hsa-bafd+2*gs_rebate_width-gs_sash_width, byd
+					DEL 1
+				endif
+				ADD2 hsa+gs_frame_width, 0
+			NEXT I
+			DEL nsa
+		else
+			Fill gs_fillSash
+			for i=1 TO 2
+				ADD2 -a/2-bafd, 0
+				ROT2 bang
+				poly2_b 4, 1+2+4+32, gs_penSash_fg, gs_penSash_bg,
+					gs_frame_width,																-gs_frame_thk/2,	1,
+					gs_frame_width,																gs_frame_thk/2,		1,
+					(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,	gs_frame_thk/2,		1,
+					(byd-gs_frame_thk/2)/SIN(bang)-gs_frame_thk/2*TAN(bang/2)-gs_frame_width,	-gs_frame_thk/2,	1
+				DEL 2
+				MUL2 -1, 1
+			next i
+			del 2
+		endif
+
+		PEN gs_frame_pen_cont
+
+		!!! Tolerance separator line
+		FOR I=1 TO 2
+			ADD2 -a/2-bafd, 0
+			ROT2 bang
+			LINE2  gs_tolerance, -gs_frame_thk/2,
+				   gs_tolerance, gs_frame_thk/2
+
+			DEL 2
+			MUL2 -1, 1
+		NEXT I
+		DEL 2
+	ENDIF
+
+
+	IF WIDO_REVEAL_SIDE THEN
+		DEL 2
+	ENDIF
+
+ENDIF
+
+
+END
+
+
+1000:		!!! Hotspot editing of swinging sashes
+
+	! =============================================================================
+	! Hotspot Editing
+	! =============================================================================
+
+	IF lod2D > 29 & lod2D <> DET2D_FS_SIMPLE_CHI & lod2D <> DET2D_FS_DETAILED_CHI THEN			! 1:50
+		sash_half = (hsa+2*gs_rebate_width)/2
+		sash_thk_oh = (not(WIDO_REVEAL_SIDE))*gs_frame_thk+gs_rebate_depth - gs_sash_thk
+		sash_shift = 0
+	ELSE
+		sash_half = (hsa+2*gs_rebate_width-2*gs_sash_width)/2
+		sash_thk_oh = (not(WIDO_REVEAL_SIDE))*gs_frame_thk
+		sash_shift = 1
+	ENDIF
+
+
+	IF gs_optype_m_01 = SASH_SIDE_HUNG OR gs_optype_m_01 = SASH_TILT_TURN THEN
+		IF FRA(I/2)=0 THEN front_sash_op=0		!! Even Number of No. of Sashes Front
+		IF FRA(I/2)<>0 THEN front_sash_op=1		!! Odd Number of No. of Sashes Fron
+	ENDIF
+	IF gs_optype_m_01 = SASH_SIDE_HUNG_M OR gs_optype_m_01 = SASH_TILT_TURN_M THEN
+		IF FRA(I/2)=0 THEN front_sash_op=1		!! Even Number of No. of Sashes Front
+		IF FRA(I/2)<>0 THEN front_sash_op=0		!! Odd Number of No. of Sashes Fron
+	ENDIF
+
+
+	ADD2 -ami/2-bafd+sash_half+gs_frame_width-gs_rebate_width+sash_shift*gs_sash_width, byd
+
+
+	IF gs_optype_m_01 = SASH_SIDE_HUNG OR gs_optype_m_01 = SASH_SIDE_HUNG_M OR\
+		gs_optype_m_01 = SASH_TILT_TURN OR gs_optype_m_01 = SASH_TILT_TURN_M THEN
+
+		rev_A = 0
+
+		IF not(front_sash_op) THEN
+			mul2 -1,1
+			rev_A = 512
+		ENDIF
+
+		IF not(WIDO_REVEAL_SIDE) THEN
+			MUL2 1,-1
+		ENDIF
+
+		add2 0, -gs_frame_thk+sash_thk_oh
+
+		hotspot2 -sash_half, 0, m_unID,	     gs_open_2D, 6 + rev_A	! Center
+		hotspot2  sash_half, 0, m_unID + 1, gs_open_2D, 4+128		! Base
+		hotspot2 -sash_half+(2*sash_half)*cos(gs_open_2D), \
+					-(2*sash_half)*sin(gs_open_2D), \
+					m_unID + 2, gs_open_2D,5						! Moving
+		m_unID = m_unID + 10
+		del 1
+
+		IF not(WIDO_REVEAL_SIDE) THEN DEL 1
+
+		IF not(front_sash_op) THEN del 1
+
+	ENDIF
+
+	if LibraryLangCode = "NED" & \
+		(gs_optype_m_01 = SASH_BOTTOM_HUNG | gs_optype_m_01 = SASH_TOP_HUNG) then
+
+			add2 0, -gs_frame_thk + sash_thk_oh
+
+			hotspot2 0, 0, unID, gs_openLength_2D, 1+128 : unID = unID +1
+			hotspot2 0, gs_openLength_2D, unID, gs_openLength_2D, 2 : unID = unID +1
+			hotspot2 0, -1,	unID, gs_openLength_2D, 3 : unID = unID +1
+
+			del 1
+	endif
+	DEL 1
+
+RETURN
+
+
+2000:						! --- swing line, arc
+
+	ADD2 -ami/2-bafd+sash_half+gs_frame_width-gs_rebate_width+sash_shift*gs_sash_width, byd
+
+	if ABS(gs_open_2D)>EPS and ABS(gs_open_2D-360)>EPS | \
+		(LibraryLangCode = "NED" & gs_openLength_2D > EPS) then
+
+		pen gs_opLinePen
+
+		IF not(WIDO_REVEAL_SIDE) THEN MUL2 1,-1
+
+		if LibraryLangCode = "NED" & \
+		  (gs_optype_m_01 = SASH_TILT_TURN | gs_optype_m_01 = SASH_TILT_TURN_M |\
+		   gs_optype_m_01 = SASH_BOTTOM_HUNG | gs_optype_m_01 = SASH_TOP_HUNG) then
+
+				gs_tiltTurn_open_2D = gs_open_2D
+
+			rightPos	= sash_half
+			leftPos		= -sash_half
+
+			if	gs_optype_m_01 = SASH_TILT_TURN |\
+				gs_optype_m_01 = SASH_TILT_TURN_M then
+
+				IF front_sash_op THEN mul2 -1,1
+
+				line2	rightPos, -gs_frame_thk+sash_thk_oh,
+							rightPos-(abs(leftPos-rightPos))*cos(gs_tiltTurn_open_2D),
+							-(abs(leftPos-rightPos))*sin(gs_tiltTurn_open_2D)-gs_frame_thk + sash_thk_oh
+				
+				line_type gs_swingLineType
+
+				_sashWidthHalf = ((abs(leftPos-rightPos))*cos(gs_tiltTurn_open_2D))/2
+				line2	leftPos, -gs_frame_thk+sash_thk_oh,
+							rightPos - _sashWidthHalf,
+							-(_sashWidthHalf)*tan(gs_tiltTurn_open_2D)-gs_frame_thk + sash_thk_oh
+
+				line_type gs_symbLineType
+
+				IF front_sash_op THEN del 1
+			endif
+
+			if	gs_optype_m_01 = SASH_BOTTOM_HUNG |\
+				gs_optype_m_01 = SASH_TOP_HUNG then
+
+				_sashWidthHalf	= abs(leftPos-rightPos)/2
+				_openingDist	= gs_openLength_2D
+
+				line_type gs_swingLineType
+
+				line2	leftPos, -gs_frame_thk+sash_thk_oh,
+						leftPos + _sashWidthHalf,
+						-_openingDist - gs_frame_thk + sash_thk_oh
+				line2	rightPos, -gs_frame_thk+sash_thk_oh,
+						rightPos - _sashWidthHalf,
+						-_openingDist - gs_frame_thk + sash_thk_oh
+
+				line_type gs_openingDistLineType
+
+				line2	rightPos, -gs_frame_thk+sash_thk_oh,
+						rightPos, -_openingDist - gs_frame_thk + sash_thk_oh
+
+				line2	leftPos, -gs_frame_thk+sash_thk_oh,
+						leftPos, -_openingDist - gs_frame_thk + sash_thk_oh
+
+				line2	leftPos, -_openingDist - gs_frame_thk + sash_thk_oh,
+						rightPos, -_openingDist - gs_frame_thk + sash_thk_oh
+
+				line_type gs_symbLineType
+
+			endif
+
+		else
+			IF	gs_optype_m_01 = SASH_SIDE_HUNG OR gs_optype_m_01 = SASH_SIDE_HUNG_M OR\
+				gs_optype_m_01 = SASH_TILT_TURN OR gs_optype_m_01 = SASH_TILT_TURN_M THEN
+	
+				IF front_sash_op THEN mul2 -1,1
+	
+				line2	sash_half, -gs_frame_thk+sash_thk_oh,
+						sash_half-(2*sash_half)*cos(gs_open_2D), \
+						-(2*sash_half)*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh
+	
+				line_type gs_swingLineType
+	
+				IF gs_iSwingType = 1 THEN		! Curved
+					arc2	sash_half, -gs_frame_thk+sash_thk_oh, 2*sash_half, 180, 180+gs_open_2D
+				ELSE							! Straight
+					line2	-sash_half, -gs_frame_thk+sash_thk_oh,
+							sash_half-(2*sash_half)*cos(gs_open_2D), \
+							-(2*sash_half)*sin(gs_open_2D)-gs_frame_thk + sash_thk_oh
+				ENDIF
+	
+				line_type gs_symbLineType
+	
+				IF front_sash_op THEN del 1
+			ENDIF
+		endif
+
+		IF not(WIDO_REVEAL_SIDE) THEN DEL 1
+
+		PEN gs_pen_2D
+
+	ENDIF
+
+	DEL 1
+
+RETURN
+

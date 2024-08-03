@@ -1,0 +1,509 @@
+
+! Contact person: <TZs>
+
+! =============================================================================
+! The macro draws a rectangular (or ring-sector-part) wall block in 2D
+! considering the possible distortions caused by trapeze or curved walls.
+! -----------------------------------------------------------------------------
+! Input Parameters:
+!	startX:				diagonal corner 1
+!	startY:				(at bottom)	must be lower than yEnd
+!	endX:				diagonal corner 2
+!	endY:				(at top)	must be greater than yStart
+!	trapType:			type of rectangular block	(integer)
+!							(0 = rectangle, 1 = trapeze, 2 = parallelogram)
+!	innerRadius:		inner radius of curved wall (length)
+!	outerRadius:		outer radius of curved wall (if 0, it will be computed)
+!	incAngle:			signed inclination angle of trapeze vall (angle)
+!	fillPen:			fill pattern foreground pen
+!	fillBGPen:			fill pattern background pen
+!	fillType:			fill generator command: poly / wallhole / wallblock
+!	bLocalFill:			use local hatching (0 / 1)
+!	bCoverFill:			place cover fill (not cut) (0 / 1)
+!	shContour:			draw the contour lines of the rectangle (0 / 1)
+!	startLinepen:		start line (x = xStart) pen
+!	startLineLineType:	start line (x = xStart) linetype
+!	startLineCont:		start line (x = xStart) is contour (0 / 1)
+!	endLinePen:			end line (x = xEnd) pen
+!	endLineLineType:	end line (x = xEnd) linetype
+!	endLineCont:		end line (x = xEnd) is contour (0 / 1)
+!	topLinePen:			top line (y = yEnd) pen
+!	topLineLineType:	top line (y = yEnd) linetype
+!	topLineCont:		top line (y = yEnd) is contour (0 / 1)
+!	bottomLinePen:		bottom line (y = yStart) pen
+!	bottomLineLineType:	bottom line (y = yStart) linetype
+!	bottomLineCont:		bottom line (y = yStart) is contour (0 / 1)
+!
+! Remark:
+!	The generated shapes are:
+!		rectangle (used in straight and trapeze walls)
+!		trapeze (in trapeze walls)
+!		parallelogram (in trapeze walls)
+!		ring-sector (in curved walls)
+
+if fillPattern >= 0 then
+	set fill fillPattern
+else
+	fillPattern = 1
+endif
+
+if bFitToSkinFill then
+	if bChangeFitToSkinFillOrient then
+		skinThick = abs(startY-endY)
+
+		FillOrientXx = 1
+		FillOrientXy = 0
+		FillOrientYx = 0
+		FillOrientYy = skinThick
+	else
+		skinThick = abs(startX-endX)
+
+		FillOrientXx = 0
+		FillOrientXy = 1
+		FillOrientYx = skinThick
+		FillOrientYy = 0
+	endif
+endif
+
+if innerRadius < EPS then
+
+!*** straight ***!
+
+	if abs(incAngle) < EPS or trapType = 0 then
+		!--- rectangle ---
+		if abs(startX - endX) > EPS and (fillPattern > 0 or fillBGPen <> 0 or shContour)  then
+			if bFitToSkinFill then
+				put 4, shContour + 2 + 4, 1 + bCoverFill, 8 + 32,
+						fillPen, fillBGPen,
+						startX, startY,
+						FillOrientXx, FillOrientXy, FillOrientYx, FillOrientYy,
+						0,
+						startX, startY, 1,
+						startX, endY, 1,
+						endX, endY, 1,
+						endX, startY, 1
+
+				if fillType = 0 then
+					poly2_b{5} get (NSP)
+				else
+					if fillType = 1 then
+						wallhole2{2} get (NSP)
+					else
+						wallblock2{2} get (NSP)
+					endif
+				endif
+			else
+				put 4, shContour + 2 + 4 + (8 + 16) * bLocalFill + 32 + 32 * bCoverFill, fillPen, fillBGPen,
+						0, 0, 0,
+						startX, startY, 1,
+						startX, endY, 1,
+						endX, endY, 1,
+						endX, startY, 1
+
+				if fillType = 0 then
+					poly2_b{2} get (NSP)
+				else
+					if fillType = 1 then
+						wallhole2 get (NSP)
+					else
+						wallblock2 get (NSP)
+					endif
+				endif
+			endif
+		endif
+
+		if startLinePen > 0 then
+			pen startLinePen
+			line_type startLineLineType
+			line_property (startLineCont + 1)
+			line2 startX, endY, startX, startY
+		endif
+
+		if endLinePen > 0 then
+			pen endLinePen
+			line_type endLineLineType
+			line_property (endLineCont + 1)
+			line2 endX, startY, endX, endY
+		endif
+
+		if topLinePen > 0 then
+			pen topLinePen
+			line_type topLineLineType
+			line_property (topLineCont + 1)
+			line2 startX, startY, endX, startY
+		endif
+
+		if bottomLinePen > 0 then
+			pen bottomLinePen
+			line_type bottomLineLineType
+			line_property (bottomLineCont + 1)
+			line2 startX, endY, endX, endY
+		endif
+	else
+		diff0 = startX * tan(incAngle)
+		diff1 = endX * tan(incAngle)
+		if trapType = 1 then
+			!--- trapeze ---
+			if SYMB_MIRRORED then
+				if abs(startX - endX) > EPS and (fillPattern > 0 or fillBGPen <> 0 or shContour)  then
+					if bFitToSkinFill then
+						put 4, shContour + 2 + 4, 1 + bCoverFill, 8 + 32,
+								fillPen, fillBGPen,
+								startX, startY + diff0,
+								FillOrientXx, FillOrientXy, FillOrientYx, FillOrientYy,
+								0,
+								startX, startY + diff0, 1,
+								startX, endY, 1,
+								endX, endY, 1,
+								endX, startY + diff1, 1
+
+						if fillType = 0 then
+							poly2_b{5} get (NSP)
+						else
+							if fillType = 1 then
+								wallhole2{2} get (NSP)
+							else
+								wallblock2{2} get (NSP)
+							endif
+						endif
+					else
+						put 4, shContour + 2 + 4 + (8 + 16) * bLocalFill + 32 + 32 * bCoverFill, fillPen, fillBGPen,
+								0, 0, 0,
+								startX, startY + diff0, 1,
+								startX, endY, 1,
+								endX, endY, 1,
+								endX, startY + diff1, 1
+
+						if fillType = 0 then
+							poly2_b{2} get (NSP)
+						else
+							if fillType = 1 then
+								wallhole2 get (NSP)
+							else
+								wallblock2 get (NSP)
+							endif
+						endif
+					endif
+				endif
+
+				if startLinePen > 0 then
+					pen startLinePen
+					line_type startLineLineType
+					line_property (startLineCont + 1)
+					line2 startX, endY, startX, startY + diff0
+				endif
+
+				if endLinePen > 0 then
+					pen endLinePen
+					line_type endLineLineType
+					line_property (endLineCont + 1)
+					line2 endX, startY + diff1, endX, endY
+				endif
+
+				if topLinePen > 0 then
+					pen topLinePen
+					line_type topLineLineType
+					line_property (topLineCont + 1)
+					line2 startX, startY + diff0, endX, startY + diff1
+				endif
+
+				if bottomLinePen > 0 then
+					pen bottomLinePen
+					line_type bottomLineLineType
+					line_property (bottomLineCont + 1)
+					line2 startX, endY, endX, endY
+				endif
+			else
+				if abs(startX - endX) > EPS and (fillPattern > 0 or fillBGPen <> 0 or shContour)  then
+					if bFitToSkinFill then
+						put 4, shContour + 2 + 4, 1 + bCoverFill, 8 + 32,
+								fillPen, fillBGPen,
+								startX, startY,
+								FillOrientXx, FillOrientXy, FillOrientYx, FillOrientYy,
+								0,
+								startX, startY, 1,
+								startX, endY + diff0, 1,
+								endX, endY + diff1, 1,
+								endX, startY, 1
+
+						if fillType = 0 then
+							poly2_b{5} get (NSP)
+						else
+							if fillType = 1 then
+								wallhole2{2} get (NSP)
+							else
+								wallblock2{2} get (NSP)
+							endif
+						endif
+					else
+						put 4, shContour + 2 + 4 + (8 + 16) * bLocalFill + 32 + 32 * bCoverFill, fillPen, fillBGPen,
+								0, 0, 0,
+								startX, startY, 1,
+								startX, endY + diff0, 1,
+								endX, endY + diff1, 1,
+								endX, startY, 1
+
+						if fillType = 0 then
+							poly2_b{2} get (NSP)
+						else
+							if fillType = 1 then
+								wallhole2 get (NSP)
+							else
+								wallblock2 get (NSP)
+							endif
+						endif
+					endif
+				endif
+
+				if startLinePen > 0 then
+					pen startLinePen
+					line_type startLineLineType
+					line_property (startLineCont + 1)
+					line2 startX, endY + diff0, startX, startY
+				endif
+
+				if endLinePen > 0 then
+					pen endLinePen
+					line_type endLineLineType
+					line_property (endLineCont + 1)
+					line2 endX, startY, endX, endY + diff1
+				endif
+
+				if topLinePen > 0 then
+					pen topLinePen
+					line_type topLineLineType
+					line_property (topLineCont + 1)
+					line2 startX, startY, endX, startY
+				endif
+
+				if bottomLinePen > 0 then
+					pen bottomLinePen
+					line_type bottomLineLineType
+					line_property (bottomLineCont + 1)
+					line2 startX, endY + diff0, endX, endY + diff1
+				endif
+			endif
+		else
+			!--- parallelogram ---
+			if abs(startX - endX) > EPS and (fillPattern > 0 or fillBGPen <> 0 or shContour) then
+				if bFitToSkinFill then
+					put 4, shContour + 2 + 4, 1 + bCoverFill, 8 + 32,
+							fillPen, fillBGPen,
+							startX, startY + diff0,
+							FillOrientXx, FillOrientXy, FillOrientYx, FillOrientYy,
+							0,
+							startX, startY + diff0, 1,
+							startX, endY + diff0, 1,
+							endX, endY + diff1, 1,
+							endX, startY + diff1, 1
+
+					if fillType = 0 then
+						poly2_b{5} get (NSP)
+					else
+						if fillType = 1 then
+							wallhole2{2} get (NSP)
+						else
+							wallblock2{2} get (NSP)
+						endif
+					endif
+				else
+					put 4, shContour + 2 + 4 + (8 + 16) * bLocalFill + 32 + 32 * bCoverFill, fillPen, fillBGPen,
+							0, 0, 0,
+							startX, startY + diff0, 1,
+							startX, endY + diff0, 1,
+							endX, endY + diff1, 1,
+							endX, startY + diff1, 1
+
+					if fillType = 0 then
+						poly2_b{2} get (NSP)
+					else
+						if fillType = 1 then
+							wallhole2 get (NSP)
+						else
+							wallblock2 get (NSP)
+						endif
+					endif
+				endif
+			endif
+
+			if startLinePen > 0 then
+				pen startLinePen
+				line_type startLineLineType
+				line_property (startLineCont + 1)
+				line2 startX, endY + diff0, startX, startY + diff0
+			endif
+
+			if endLinePen > 0 then
+				pen endLinePen
+				line_type endLineLineType
+				line_property (endLineCont + 1)
+				line2 endX, startY + diff1, endX, endY + diff1
+			endif
+
+			if topLinePen > 0 then
+				pen topLinePen
+				line_type topLineLineType
+				line_property (topLineCont + 1)
+				line2 startX, startY + diff0, endX, startY + diff1
+			endif
+
+			if bottomLinePen > 0 then
+				pen bottomLinePen
+				line_type bottomLineLineType
+				line_property (bottomLineCont + 1)
+				line2 startX, endY + diff0, endX, endY + diff1
+			endif
+		endif
+	endif
+
+else
+
+!*** curved ***!
+
+	if mirrorArcs then
+		add2 0, outerRadius
+		rot2 +startAngle
+		add2 0, -outerRadius
+	else
+		add2 0, -innerRadius
+		rot2 -startAngle
+		add2 0, innerRadius
+	endif
+	if abs(startX - endX) > EPS and (fillPattern > 0 or fillBGPen <> 0 or shContour)  then
+		if mirrorArcs then
+			if bFitToSkinFill then
+				put 6, shContour + 2 + 4, 1 + bCoverFill, 4*bCircularDistortion + 8 + 32,
+						fillPen, fillBGPen,
+						0, startY,
+						FillOrientXx, FillOrientXy, FillOrientYx, FillOrientYy,
+						-outerRadius+startY,
+						0, startY, 1,
+						0, outerRadius, 900,
+						outerRadius+startY, (endAngle-startAngle), 4001,
+						endY-startY, 90+(endAngle-startAngle), 201,
+						0, outerRadius, 900,
+						outerRadius+endX, -(endAngle-startAngle), 4001
+
+				if fillType = 0 then
+					poly2_b{5} get (NSP)
+				else
+					if fillType = 1 then
+						wallhole2{2} get (NSP)
+					else
+						wallblock2{2} get (NSP)
+					endif
+				endif
+			else
+				put 6, shContour + 2 + 4 + (8 + 16) * bLocalFill + 32 + 32 * bCoverFill, fillPen, fillBGPen,
+						0, 0, 90 + WALL_DIRECTION - startAngle,
+						0, startY, 1,
+						0, outerRadius, 900,
+						outerRadius+startY, (endAngle-startAngle), 4001,
+						endY-startY, 90+(endAngle-startAngle), 201,
+						0, outerRadius, 900,
+						outerRadius+endX, -(endAngle-startAngle), 4001
+
+				if fillType = 0 then
+					poly2_b{2} get (NSP)
+				else
+					if fillType = 1 then
+						wallhole2 get (NSP)
+					else
+						wallblock2 get (NSP)
+					endif
+				endif
+			endif
+		else
+			if bFitToSkinFill then
+				put 6, shContour + 2 + 4, 1 + bCoverFill, 4*bCircularDistortion + 8 + 32,
+						fillPen, fillBGPen,
+						0, startY,
+						FillOrientXx, FillOrientXy, FillOrientYx, FillOrientYy,
+						innerRadius+startY,
+						0, startY, 1,
+						0, -innerRadius, 900,
+						innerRadius+startY, -(endAngle-startAngle), 4001,
+						endY-startY, 90-(endAngle-startAngle), 201,
+						0, -(innerRadius), 900,
+						innerRadius+endX, endAngle-startAngle, 4001
+
+				if fillType = 0 then
+					poly2_b{5} get (NSP)
+				else
+					if fillType = 1 then
+						wallhole2{2} get (NSP)
+					else
+						wallblock2{2} get (NSP)
+					endif
+				endif
+			else
+				put 6, shContour + 2 + 4 + (8 + 16) * bLocalFill + 32 + 32 * bCoverFill, fillPen, fillBGPen,
+						0, 0, 90 + WALL_DIRECTION + startAngle,
+						0, startY, 1,
+						0, -innerRadius, 900,
+						innerRadius+startY, -(endAngle-startAngle), 4001,
+						endY-startY, 90-(endAngle-startAngle), 201,
+						0, -(innerRadius), 900,
+						innerRadius+endX, endAngle-startAngle, 4001
+
+				if fillType = 0 then
+					poly2_b{2} get (NSP)
+				else
+					if fillType = 1 then
+						wallhole2 get (NSP)
+					else
+						wallblock2 get (NSP)
+					endif
+				endif
+			endif
+		endif
+	endif
+
+	if startLinePen > 0 then
+		pen startLinePen
+		line_type startLineLineType
+		line_property (startLineCont + 1)
+		line2 0, endY, 0, startY
+	endif
+
+	del 3
+	if endLinePen > 0 then
+		if mirrorArcs < EPS then
+			add2 0, -innerRadius
+			rot2 -endAngle
+			add2 0, innerRadius
+		else
+			add2 0, outerRadius
+			rot2 +endAngle
+			add2 0, -outerRadius
+		endif
+		pen endLinePen
+		line_type endLineLineType
+		line_property (endLineCont + 1)
+		line2 0, startY, 0, endY
+		del 3
+	endif
+
+	if topLinePen > 0 then
+		pen topLinePen
+		line_type topLineLineType
+		line_property (topLineCont + 1)
+		if mirrorArcs then
+			arc2 0, outerRadius, outerRadius - startY, 270+startAngle, 270+endAngle
+		else
+			arc2 0, -innerRadius, innerRadius + startY, 90-endAngle, 90-startAngle
+		endif
+	endif
+
+	if bottomLinePen > 0 then
+		pen bottomLinePen
+		line_type bottomLineLineType
+		line_property (bottomLineCont + 1)
+		if mirrorArcs then
+			arc2 0, outerRadius, outerRadius - endY, 270+startAngle, 270+endAngle
+		else
+			arc2 0, -innerRadius, innerRadius + endY, 90-endAngle, 90-startAngle
+		endif
+	endif
+
+endif

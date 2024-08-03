@@ -1,0 +1,262 @@
+!--------------------------------------Основной--------------------------------
+EPS = 0.00001
+if (GLOB_SCRIPT_TYPE = 2 or GLOB_SCRIPT_TYPE = 3) and (GLOB_PREVIEW_MODE <> 0 or GLOB_FEEDBACK_MODE <> 0) then
+	gs_detlevel_2D_m = 1
+	gs_detlevel_3D_m = 1
+	show_axis = 0
+	show_axis_and = 1
+	show_conventions = 0
+	show_size = 0
+	show_el = 1
+	show_isol = 0
+else
+	call "Показ_систем" PARAMETERS All isMep=1, isEqp=0 RETURNED_PARAMETERS show_el, syst_name
+	success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_axis", show_axis)
+	success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_axis_and", show_axis_and)
+	success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_isol", show_isol)
+	success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_conventions", show_conventions)
+	success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_size", show_size)
+	success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_2D_m",gs_detlevel_2D_m)
+	success = LIBRARYGLOBAL ("Libraryflobals-mep", "gs_detlevel_3D_m", gs_detlevel_3D_m)
+endif
+is_sech = 0 : if (show_el-1)>EPS then is_sech = 1
+IF gs_detlevel_3D_m = 2 THEN res = 24
+IF gs_detlevel_3D_m = 1 THEN res = 12
+IF gs_detlevel_3D_m = 0 THEN res = 8
+!--------------------------------------Основной--------------------------------
+! MEP_m_Duct_Bend
+! Zsolt Feke/2007
+
+EPS = 0.00001
+bendAngle = ABS(MEP_BendAngle)
+alpha_Res = 90/(INT(res/3))
+bendRes = INT(bendAngle/alpha_Res)+1*(((bendAngle/alpha_Res)-INT(bendAngle/alpha_Res))>=0.5)
+IF bendRes < 2 THEN bendRes = 2
+IF gs_detlevel_3D_m = 1 THEN
+	IF bendAngle > 46 THEN
+		bendRes = 2
+	ELSE
+		bendRes = 1
+	ENDIF
+ENDIF
+
+ductInnerWidthA			= MEP_NumConnectionData[1][12]
+ductHalfWidthA			= MEP_NumConnectionData[1][12]/2+MEP_NumConnectionData[1][14]
+ductHalfHeightA			= MEP_NumConnectionData[1][13]/2+MEP_NumConnectionData[1][14]
+connectorLengthA		= MEP_NumConnectionData[1][14]
+connectorHalfWidthA		= ductHalfWidthA+MEP_NumConnectionData[1][15]
+connectorHalfHeightA	= ductHalfHeightA+MEP_NumConnectionData[1][15]
+connectedA				= MEP_NumConnectionData[1][18]
+shapeTypeA 				= MEP_NumConnectionData[1][21]
+
+ductHalfWidthB			= MEP_NumConnectionData[2][12]/2+MEP_NumConnectionData[1][14]
+ductHalfHeightB			= MEP_NumConnectionData[2][13]/2+MEP_NumConnectionData[1][14]
+connectorLengthB		= connectorLengthA
+connectorHalfWidthB		= ductHalfWidthB+MEP_NumConnectionData[2][15]
+connectorHalfHeightB	= ductHalfHeightB+MEP_NumConnectionData[2][15]
+connectedB				= MEP_NumConnectionData[2][18]
+shapeTypeB 				= MEP_NumConnectionData[2][21]
+
+flangeA = 1
+IF MEP_NumConnectionData[1][15] < EPS OR ABS(gs_AddConnections[1][1] - 1) < EPS THEN flangeA = 0
+
+flangeB = 1
+IF MEP_NumConnectionData[2][15] < EPS OR ABS(gs_AddConnections[2][1] - 1) < EPS THEN flangeB = 0
+
+
+IF MEP_BendStyleID = 1 THEN
+	flangeThick = MAX(MEP_NumConnectionData[1][15]*flangeA, MEP_NumConnectionData[2][15]*flangeB)
+	ductHalfWidth = MAX(ductHalfWidthA, ductHalfWidthB)
+	minBendRadius = ductHalfWidth + 0.001
+	if abs(minBendRadius_n)<EPS then
+		VALUES "MEP_BendRadius" RANGE[minBendRadius, ]
+		IF MEP_BendRadius < minBendRadius THEN
+			MEP_BendRadius = minBendRadius
+			PARAMETERS MEP_BendRadius = MEP_BendRadius
+		ENDIF
+	else
+		IF minBendRadius > minBendRadius_n THEN minBendRadius_n = minBendRadius
+		PARAMETERS MEP_BendRadius = minBendRadius_n
+	endif
+
+	ConThroatLength = (MEP_BendRadius-MEP_NumConnectionData[1][12]/2)*TAN(bendAngle/2)-0.5
+	ConThroatLength_1 = ConThroatLength
+	PARAMETERS ConThroatLength_1 = ConThroatLength_1
+	ConThroatLength_2 = ConThroatLength
+	PARAMETERS ConThroatLength_2 = ConThroatLength_2
+ENDIF
+
+
+ductStraightLengthA = 0
+ductStraightLengthB = 0
+IF MEP_BendStyleID = 2 THEN
+	VALUES "ConThroatLength_1" RANGE[MEP_NumConnectionData[2][15]*flangeB+MEP_NumConnectionData[1][14]*2, ]
+	VALUES "ConThroatLength_2" RANGE[MEP_NumConnectionData[1][15]*flangeA+MEP_NumConnectionData[1][14]*2, ]
+
+	IF SGN(ConThroatLength_1-ConThroatLength_2) = -1 THEN ductStraightLengthB = ABS(ConThroatLength_1-ConThroatLength_2)
+	IF SGN(ConThroatLength_1-ConThroatLength_2) = 1 THEN ductStraightLengthA = ABS(ConThroatLength_1-ConThroatLength_2)
+	ConThroatLength = MIN(ConThroatLength_1, ConThroatLength_2)
+	MEP_BendRadius = ConThroatLength/TAN(bendAngle/2)+MEP_NumConnectionData[1][12]/2
+	PARAMETERS MEP_BendRadius = MEP_BendRadius
+	LOCK "MEP_BendRadius"
+ENDIF
+
+
+heelLength = (MEP_BendRadius+ductHalfWidthA)*TAN(bendAngle/2)
+IF MEP_HeelSegments > 2 THEN
+	heelRadius = heelLength/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(MEP_HeelSegments-2))))
+	heelSegmentLength = 2*heelRadius*SIN(bendAngle/(2*(MEP_HeelSegments-2)))
+ELSE
+	heelSegmentLength = heelLength
+ENDIF
+
+throatLength = (MEP_BendRadius-ductHalfWidthA)*TAN(bendAngle/2)
+IF MEP_ThroatSegments > 2 THEN
+	throatRadius = throatLength/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(MEP_ThroatSegments-2))))
+	throatSegmentLength = 2*throatRadius*SIN(bendAngle/(2*(MEP_ThroatSegments-2)))
+ELSE
+	throatSegmentLength = throatLength
+ENDIF
+
+heelLength_wIns = (MEP_BendRadius+ductHalfWidthA+MEP_InsThickness)*TAN(bendAngle/2)
+heelRadius_wIns = 0
+IF MEP_HeelSegments > 2 THEN
+	heelRadius_wIns = heelLength_wIns/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(MEP_HeelSegments-2))))
+	heelSegmentLength_wIns = 2*heelRadius_wIns*SIN(bendAngle/(2*(MEP_HeelSegments-2)))
+ELSE
+	heelSegmentLength_wIns = heelLength_wIns
+ENDIF
+
+throatLength_wIns = (MEP_BendRadius-ductHalfWidthA-MEP_InsThickness)*TAN(bendAngle/2)
+throatRadius_wIns = 0
+IF MEP_ThroatSegments > 2 THEN
+	throatRadius_wIns = throatLength_wIns/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(MEP_ThroatSegments-2))))
+	throatSegmentLength_wIns = 2*throatRadius_wIns*SIN(bendAngle/(2*(MEP_ThroatSegments-2)))
+ELSE
+	throatSegmentLength_wIns = throatLength_wIns
+ENDIF
+
+
+						! ---------------- !
+						! --- Z vector --- !
+						! ---------------- !
+
+dZx = -MEP_Position[3][2]*MEP_Position[2][3]+MEP_Position[3][3]*MEP_Position[2][2]
+dZy = -MEP_Position[3][3]*MEP_Position[2][1]+MEP_Position[3][1]*MEP_Position[2][3]
+dZz = -MEP_Position[3][1]*MEP_Position[2][2]+MEP_Position[3][2]*MEP_Position[2][1]
+
+
+						! ------------------------ !
+						! --- 3 points of duct --- !
+						! ------------------------ !
+
+! --- x,y,z coordinates of 1st point ---
+
+PointAX = -add_l
+PointAY = 0
+PointAZ = 0
+
+! --- x,y,z coordinates of middle point ---
+
+PointMX = ductStraightLengthA+MEP_BendRadius*(TAN(bendAngle/2))
+PointMY = 0
+PointMZ = 0
+
+! --- x,y,z coordinates of 2nd point ---
+
+PointBX = ductStraightLengthA+MEP_BendRadius*SIN(bendAngle)+(ductStraightLengthB+add_l)*COS(bendAngle)
+PointBY = MEP_BendRadius-MEP_BendRadius*COS(bendAngle)+(ductStraightLengthB+add_l)*SIN(bendAngle)
+PointBZ = 0
+
+vectorX = COS(bendAngle)
+vectorY = SIN(bendAngle)
+vectorZ = 0
+
+
+						! ------------------- !
+						! --- coordinates --- !
+						! ------------------- !
+
+! --- Building of Transformational Matrix
+
+DIM MatrixT[3][3]
+
+MatrixT[1][1] = MEP_Position[2][1]
+MatrixT[1][2] = MEP_Position[2][2]
+MatrixT[1][3] = MEP_Position[2][3]
+
+MatrixT[2][1] = MEP_Position[3][1]
+MatrixT[2][2] = MEP_Position[3][2]
+MatrixT[2][3] = MEP_Position[3][3]
+
+MatrixT[3][1] = dZx
+MatrixT[3][2] = dZy
+MatrixT[3][3] = dZz
+
+
+! --- Input Coordinates
+
+
+
+PUT PointAX, PointAY, PointAZ
+PUT PointMX, PointMY, PointMZ
+PUT PointBX, PointBY, PointBZ
+
+IF MEP_ThroatSegments = 1 AND MEP_HeelSegments = 1 OR MEP_HeelSegments = 1 THEN
+
+	IF ductStraightLengthA THEN
+		PUT PointAX+ductStraightLengthA/2, PointAY, PointAZ
+		PUT PointAX+ductStraightLengthA, PointAY, PointAZ
+	ENDIF
+
+	pnum = 10+2*(ductStraightLengthA > 0)+2*(ductStraightLengthB > 0)
+	alpha = 0: alpha_i = bendAngle/(pnum-1)
+	FOR i = 1 TO pnum
+		PUT ductStraightLengthA+MEP_BendRadius*SIN(alpha), MEP_BendRadius-MEP_BendRadius*COS(alpha), 0
+		alpha = alpha + alpha_i
+	NEXT i
+
+	IF ductStraightLengthB THEN
+		PUT ductStraightLengthA+MEP_BendRadius*SIN(bendAngle)+((ductStraightLengthB)/2)*COS(bendAngle), MEP_BendRadius-MEP_BendRadius*COS(bendAngle)+((ductStraightLengthB)/2)*SIN(bendAngle), 0
+	ENDIF
+
+ENDIF
+
+IF MEP_HeelSegments > 2 THEN
+	segments = MEP_HeelSegments
+	Len = MEP_BendRadius*TAN(bendAngle/2)
+	rr = Len/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(segments-2))))
+	segmentLen = 2*rr*SIN(bendAngle/(2*(segments-2)))
+	PUT ductStraightLengthA+segmentLen, 0, 0
+	alpha = 0
+	FOR i = 1 TO segments-2
+		alpha = alpha + bendAngle/(MEP_HeelSegments-2)
+		PUT ductStraightLengthA+segmentLen+rr*SIN(alpha), rr-rr*COS(alpha), 0
+	NEXT i
+	pnum = segments-1
+ENDIF
+
+PUT vectorX, vectorY, vectorZ
+
+Coordinates = NSP/3
+
+DIM inCoords[30][3]
+
+FOR cnum = 1 TO Coordinates
+	inCoords[cnum][1] = GET(1)
+	inCoords[cnum][2] = GET(1)
+	inCoords[cnum][3] = GET(1)
+NEXT cnum
+
+
+! --- the Matrix Operation, what makes the Output-Coordinates
+
+DIM outCoords[30][3]
+
+FOR cnum = 1 TO Coordinates
+	outCoords[cnum][1] = inCoords[cnum][1]*MatrixT[1][1]+inCoords[cnum][2]*MatrixT[2][1]+inCoords[cnum][3]*MatrixT[3][1]
+	outCoords[cnum][2] = inCoords[cnum][1]*MatrixT[1][2]+inCoords[cnum][2]*MatrixT[2][2]+inCoords[cnum][3]*MatrixT[3][2]
+	outCoords[cnum][3] = inCoords[cnum][1]*MatrixT[1][3]+inCoords[cnum][2]*MatrixT[2][3]+inCoords[cnum][3]*MatrixT[3][3]
+NEXT cnum
+
+file_dependence "MEP_m_Duct_Bend"

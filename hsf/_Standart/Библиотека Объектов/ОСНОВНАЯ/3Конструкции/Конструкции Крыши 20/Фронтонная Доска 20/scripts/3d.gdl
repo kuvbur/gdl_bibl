@@ -1,0 +1,183 @@
+
+if gs_detlevel_3D_m = DETLEV3D_OFF then end
+
+EPS		= 0.0001
+unID	= 100
+hBoards = (nBoard * boardW - (nBoard - 1) * overlap) / cosrAng
+
+rotx 90
+
+material gs_mat
+if gs_shadow then shadow on else shadow off
+
+! --- Israft -------------------------------------------------------------------
+
+if bIsraft then
+	addz -isrW + boardTh + isrOH
+
+	prism 4, isrW,
+		A,                                      0 + zzyzx,
+		- isrOH * cosrAng,                     	-A * tanrAng - isrOH * sinrAng + zzyzx,
+		- isrTh * sinrAng - isrOH * cosrAng,	-A * tanrAng + isrTh * cosrAng - isrOH * sinrAng + zzyzx,
+		A,                                      isrTh / cosrAng + zzyzx
+
+	rotz rAng
+	addy isrTh
+	addx -isrOH
+	addz isrW
+	gosub "alignmat"
+	del 5
+
+endif
+
+
+! --- Boards -------------------------------------------------------------------
+
+if type = CUT_HOR then
+	cutplane 0, zzyzx -((nBoard - 1) * boardW - (nBoard - 2) * overlap) / cosrAng - A * tanrAng  - cutV
+endif
+
+for i = 1 to nBoard
+	add 0, -(boardW - overlap) / cosrAng * (i - 1), -boardTh * (i - 1)
+
+		add A + cutback * cosrAng * (i-1), zzyzx + ((boardW - overlap) / cosrAng + cutback * sinrAng) * (i-1), 0
+
+		if type = CUT_ANGLE then
+			if abs(90-cutAng) > EPS then
+				cutplane -A - A * tanrAng * tan (90-cutAng),
+						-(A + A * tanrAng * tan (90-cutAng)) / tan(90-cutAng)
+			else
+				cutplane -A, 0
+			endif
+		endif
+		del 1
+	
+		prism 4, boardTh,
+			A,  0 + zzyzx,
+			A, -boardW / cosrAng + zzyzx,
+			0, -boardW / cosrAng - A * tanrAng + zzyzx,
+			0, -A * tanrAng + zzyzx
+
+	del 1
+
+	rotz rAng
+	rotx -90
+	addx -isrOH
+	addz -(i * boardW - (i - 1) * overlap)
+	addy (i - 2) * boardTh
+	gosub "alignmat"
+	del 5
+
+	add 0, -(boardW - overlap) / cosrAng * (i - 1), -boardTh * (i - 1)
+
+		if type = CUT_ANGLE then
+			cutend
+		endif
+	
+	del 1
+
+next i
+
+if type = CUT_HOR then
+	cutend
+endif
+
+! --- Hotspots -----------------------------------------------------------------
+
+if bIsraft then
+
+	addz -isrW + boardTh + isrOH
+
+	hotspot -isrTh * sinrAng - isrOH * cosrAng,		-A * tanrAng + isrTh * cosrAng - isrOH * sinrAng + zzyzx,	isrW,	unID:	unID=unID+1
+	hotspot -isrTh * sinrAng - isrOH * cosrAng,		-A * tanrAng + isrTh * cosrAng - isrOH * sinrAng + zzyzx,	0,    	unID: 	unID=unID+1
+
+	!disable buggy vertical strecth with EPS
+	hotspot A + EPS,								isrTh / cosrAng + zzyzx,									isrW, 	unID: 	unID=unID+1
+	hotspot A + EPS,								isrTh / cosrAng + zzyzx,									0,    	unID: 	unID=unID+1
+
+	del 1
+
+endif
+
+unID = 10
+
+!hotspot A, zzyzx,			0,								unID: unID=unID+1
+!hotspot A, zzyzx,			boardTh,						unID: unID=unID+1
+!hotspot A, zzyzx - hBoards,	-(nBoard - 1) * boardTh,	unID: unID=unID+1
+!hotspot A, zzyzx - hBoards,	-(nBoard - 2) * boardTh,	unID: unID=unID+1
+
+add 0, -hBoards, -(nBoard - 1) * boardTh
+
+if type = CUT_VERT then
+	bottomlevel = -hBoards
+	xx = 0
+endif
+
+if type = CUT_ANGLE then
+	yy = hBoards * tan(90 - cutAng) / (tan(90 - cutAng) + tan(90 - rAng))
+	cy = hBoards - yy
+	cby = (nBoard - 1) * cutback * sinrAng
+	cx = yy * tan(90 - rAng)
+	cbx = (nBoard - 1) * cutback * cos (rAng)
+	bottomlevel = -cy + cby
+	xx = cx + cbx
+endif
+
+if type = CUT_HOR then
+	xx = 0
+	bottomlevel = -( ((nBoard - 1) * boardW - (nBoard - 2) * overlap) / cosrAng + cutV)
+endif
+
+!szög
+hotspot 0,		0,	boardTh, unID, rAng,	 6		: unID=unID+1
+hotspot 0,		0,	boardTh * 2, unID, rAng, 7		: unID=unID+1
+hotspot 1,		0,	boardTh, unID, rAng,	 4+128	: unID=unID+1
+hotspot A/2 + xx/2, zzyzx * (1 + xx / A) / 2, boardTh, unID, rAng,	 5		: unID=unID+1
+
+!A
+rotz rAng
+for i = 1 to 2
+	hotspot 0,		0, 0, unID, length,	 	1+128, A : unID=unID+1
+	hotspot length, 0, 0, unID, length,		2,     A : unID=unID+1
+	hotspot -1,		0, 0, unID, length,		3,     A : unID=unID+1
+	addz boardTh
+next i
+del 2
+
+del 2
+
+for i = 1 to 2
+	!disable buggy vertical strecth with EPS
+	hotspot  0, -EPS/2, 0,				unID, length,	1+256,	A : unID = unID + 1
+	hotspot -A, -zzyzx - EPS * 0.75, 0,	unID, length,	3,		A : unID = unID + 1
+	hotspot  A,  zzyzx - EPS / 4, 0,	unID, length,	2,		A : unID = unID + 1
+	addz boardTh
+next i
+del 2
+
+hotspot  xx, bottomlevel, -(nBoard - 1) * boardTh, unID : unID=unID+1
+hotspot  xx, bottomlevel, -(nBoard - 2) * boardTh, unID : unID=unID+1
+
+del 1
+
+!====================================================================================================================
+	end
+!====================================================================================================================
+
+
+!-----------------------------------------------------------------------------------
+"alignmat":
+!
+! align with local coordinates
+!-----------------------------------------------------------------------------------
+
+base
+vert 0, 0, 0	!origo
+vert 1, 0, 0	!x
+vert 0, 1, 0	!y
+vert 0, 0, 1	!z
+
+coor 2 + 256, -1, -2, -3, -4	!move texture origin too
+body -1
+
+return

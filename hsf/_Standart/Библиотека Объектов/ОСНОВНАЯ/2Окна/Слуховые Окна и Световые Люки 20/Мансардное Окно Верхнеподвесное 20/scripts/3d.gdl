@@ -1,0 +1,721 @@
+
+
+! =============================================================================
+! GS Skylight Functions
+! =============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= bEnableLining,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+	returned_parameters	iLoD3D,
+						lod3D_Casing,
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen
+
+
+pen gs_cont_pen
+
+rotx ac_roofang
+
+
+! ==============================================================================
+! Hotspots
+! ==============================================================================
+
+![#COMPATIBILITY] - START
+idxVerticalHotspots		= 1
+idxHorizontalHotspots	= 7
+idxHorizontalHotspotsNew= 100
+idxSkylight				= 13
+
+if gs_a_half < EPS then gs_a_half = A / 2
+![#COMPATIBILITY] - END
+
+idx = idxVerticalHotspots
+
+hotspot -A/2, 0,0,idx,B,1+256:	idx=idx+1	! (1)
+hotspot -A/2,-1,0,idx,B,3:		idx=idx+1	! (2)
+hotspot -A/2, B,0,idx,B,2:		idx=idx+1	! (3)
+
+hotspot A/2, 0,0,idx,B,1+256:	idx=idx+1	! (4)
+hotspot A/2,-1,0,idx,B,3:		idx=idx+1	! (5)
+hotspot A/2, B,0,idx,B,2:		idx=idx+1	! (6)
+
+idx = idxHorizontalHotspotsNew
+
+hotspot 0,			0,0,idx,						gs_a_half,1+128,A:	idx=idx+1	! (100)
+hotspot 1,			0,0,idx,						gs_a_half,3,	A:	idx=idx+1	! (101)
+hotspot -gs_a_half,	0,0,idxHorizontalHotspots,		gs_a_half,2,	A:	idx=idx+1	! (7)
+
+hotspot  0,			0,0,idx,						gs_a_half,1+128,A:	idx=idx+1	! (100)
+hotspot -1,			0,0,idx,						gs_a_half,3,	A:	idx=idx+1	! (101)
+hotspot  gs_a_half,	0,0,idxHorizontalHotspots + 1,	gs_a_half,2,	A:	idx=idx+1	! (8)
+
+hotspot 0,			B,0,idx,						gs_a_half,1+128,A:	idx=idx+1	! (100)
+hotspot 1,			B,0,idx,						gs_a_half,3,	A:	idx=idx+1	! (101)
+hotspot -gs_a_half,	B,0,idxHorizontalHotspots + 2,	gs_a_half,2,	A:	idx=idx+1	! (9)
+
+hotspot  0,			B,0,idx,						gs_a_half,1+128,A:	idx=idx+1	! (100)
+hotspot -1,			B,0,idx,						gs_a_half,3,	A:	idx=idx+1	! (101)
+hotspot  gs_a_half,	B,0,idxHorizontalHotspots + 3,	gs_a_half,2,	A:	idx=idx+1	! (10)
+
+idx = idxSkylight
+
+
+! ==============================================================================
+! Wallhole
+! ==============================================================================
+
+call "SkylightRect_RoofCutting_macro" parameters A = A, B = B,
+	AC_edge_upper_type			= AC_edge_upper_type,
+	AC_edge_upper_angle			= AC_edge_upper_angle,
+	AC_edge_lower_type			= AC_edge_lower_type,
+	AC_edge_lower_angle			= AC_edge_lower_angle,
+	AC_Custom_3D_Hole			= AC_Custom_3D_Hole,
+	gs_hole_edge_upper_depth	= gs_hole_edge_upper_depth,
+	gs_hole_edge_lower_depth	= gs_hole_edge_lower_depth,
+	gs_hole_outside_depth		= gs_hole_outside_depth,
+	ac_upper_mat				= ac_upper_mat,
+	gs_lower_bott_mat			= ac_lower_mat,
+	gs_lower_top_mat			= ac_lower_mat,
+	ac_roofang					= ac_roofang,
+	bUpperCut					= 1,
+	ShowUpContLines				= 1
+
+
+! ==============================================================================
+
+rotx 90		! Initial Transformation
+
+
+! Frame
+if iLoD3D <> SYMBS_3D_S_1 then gosub "Frame"
+
+!Frame Cover & Sash
+if iLoD3D = SYMBS_3D_D_1 | iLoD3D = SYMBS_3D_D_2 then
+	gosub "Frame Cover"
+	gosub "Sash"
+endif
+
+del 1	! Initial Transformation
+
+
+singPlane_w = A
+singPlane_h = B
+
+if iLoD3D = SYMBS_3D_S_1 then
+	frameThickness = 0.002
+	gosub "SinglePlane"
+endif
+
+if iLoD3D = SYMBS_3D_S_2 then
+	addz 0.1
+	gosub "windowPoligons"
+	del 1
+endif
+
+if iLoD3D = SYMBS_3D_M_1 then
+	singPlane_w = A-0.08+0.03
+	singPlane_h = B-0.08+0.03
+
+	addy 0.025
+	frameThickness = 0.102
+	gosub "SinglePlane"
+
+	addz 0.1
+	bOplines3d = 0
+	gosub "SinglePlane"
+	del 2
+endif
+
+
+end
+
+
+
+! ==============================================================================
+"Frame":
+
+material gs_frame_mat
+
+if iLoD3D = SYMBS_3D_D_1 | iLoD3D = SYMBS_3D_D_2 then
+
+	for i=1 to 2
+		add -A/2,0,-B
+
+		rotz 90
+		cutplane -225
+		del 1
+
+		addz -0.015
+
+		body -1
+		sprism_ gs_frame_mat, gs_frame_mat, gs_frame_mat,
+			6, 0,0, 0,1, B+0.015, -45,
+			 0.025,	0,		15,
+			-0.015,	0,		15,
+			-0.015,	0.1,	15,
+			 0.01,	0.1,	15,
+			 0.01,	0.08,	15,
+			 0.025,	0.08,	15
+
+		base
+		vert 0,	0, 0
+		vert 0,	0, 1
+		vert 1,	0, 0
+		vert 0,	1, 0
+		coor 5, -1, -2, -3, -4
+		body 1
+
+		cutend
+
+		del 2
+		mulx -1
+	next i
+	del 2
+
+	add A/2, 0, -B/2
+	roty 90
+
+	for i=1 to 2
+		add -B/2,0,-A
+
+		rotz 90
+		cutplane -225
+		del 1
+
+		addz -0.015
+
+		body -1
+		sprism_ gs_frame_mat, gs_frame_mat, gs_frame_mat,
+			6, 0,0, 0,1, A+0.015, -45,
+			 0.025,	0,		15,
+			-0.015,	0,		15,
+			-0.015,	0.1,	15,
+			 0.01,	0.1,	15,
+			 0.01,	0.08,	15,
+			 0.025,	0.08,	15
+
+		base
+		vert 0,	0, 0
+		vert 0,	0, 1
+		vert 1,	0, 0
+		vert 0,	1, 0
+		coor 5, -1, -2, -3, -4
+		body 1
+
+		cutend
+
+		del 2
+		mulx -1
+	next i
+	del 4
+
+	roty 90
+	addz -A/2+0.025
+
+	body -1
+	prism 5,A-0.05,
+		0.025,	0,
+		0.08,	0,
+		0.086,	0.04,
+		0.086,	0.075,
+		0.025,	0.075
+
+	base
+	vert 0,	0, 0
+	vert 0,	0, 1
+	vert 1,	0, 0
+	vert 0,	1, 0
+	coor 5, -1, -2, -3, -4
+	body 1
+
+	lin_ 0.025, 0, 0, 0.025, 0, A-0.05
+
+	del 2
+
+endif
+
+if iLoD3D = SYMBS_3D_M_1 then
+	rotx -90
+
+	prism_ 10, 0.1,
+		-A/2-0.015, -0.015, 15,
+		 A/2+0.015, -0.015, 15,
+		 A/2+0.015, B+0.015, 15,
+		-A/2-0.015, B+0.015, 15,
+		-A/2-0.015, -0.015, -1,
+
+		-A/2-0.015 + 0.04, -0.015 + 0.1, 15,
+		 A/2+0.015 - 0.04, -0.015 + 0.1, 15,
+		 A/2+0.015 - 0.04, B+0.015 - 0.04, 15,
+		-A/2-0.015 + 0.04, B+0.015 - 0.04, 15,
+		-A/2-0.015 + 0.04, -0.015 + 0.1, -1
+
+	del 1
+endif
+
+
+if iLoD3D = SYMBS_3D_S_2 then
+	rotx -90
+	extrude 4, 0,0,0.1, 4+16+32,
+		-A/2, 0, 0,
+		 A/2, 0, 0,
+		 A/2, B, 0,
+		-A/2, B, 0
+	del 1
+endif
+
+
+
+return
+
+
+! ==============================================================================
+"Frame Cover":
+
+material gs_cover_mat
+
+for i=1 to 2
+	add -A/2,0,-B
+
+	addz B
+	rotz 90
+	cutplane 45
+	del 2
+
+	addz -0.015
+
+	body -1
+	extrude 4, 0,0,B+1,16+32,
+		-0.025,	0.04,		0,
+		-0.025,	0.099,		0,
+		-0.001557370757185, 0.102,	0,
+		-0.001557370284127, 0.112,	0
+
+	base
+	vert 0,	0, 0
+	vert 0,	0, 1
+	vert 1,	0, 0
+	vert 0,	1, 0
+	coor 5, -1, -2, -3, -4
+	body 1
+
+	cutend
+
+	del 2
+	mulx -1
+next i
+del 2
+
+
+add -A/2,0,0
+roty 90
+
+rotz 90
+cutplane -225
+del 1
+	addz A
+	rotz 90
+	cutplane 45
+	del 2
+
+addz -0.025
+
+body -1
+extrude 4, 0,0,A+1,16+32,
+	-0.025,	0.04,		0,
+	-0.025,	0.099,		0,
+	-0.001557370757185, 0.102,	0,
+	-0.001557370284127, 0.112,	0
+
+base
+vert 0,	0, 0
+vert 0,	0, 1
+vert 1,	0, 0
+vert 0,	1, 0
+coor 5, -1, -2, -3, -4
+body 1
+
+cutend
+cutend
+
+del 3
+
+
+return
+
+
+
+! ==============================================================================
+"Sash":
+
+
+add 0, 0.1, -B+0.015	! Sash Angle
+
+if (GLOB_VIEW_TYPE <> 4) & (GLOB_VIEW_TYPE <> 5) & (GLOB_PREVIEW_MODE <> 2) then
+
+	hotspot 0,	0,B,	idx,gs_opening_angle,4+128:	idx=idx+1	! base
+	hotspot 0,	0,0,	idx,gs_opening_angle,6:	idx=idx+1	! center
+	hotspot -1,	0,0,	idx,gs_opening_angle,7:	idx=idx+1	! reference
+	hotspot 0,B*sin(gs_opening_angle),B*cos(gs_opening_angle),	idx,gs_opening_angle,5:	idx=idx+1	! moving
+
+else
+	idx = idx + 4
+endif
+
+rotx -gs_opening_angle
+add 0, -0.1, B-0.015
+
+
+! Sash =========================================================================
+
+material gs_frame_mat
+
+for i=1 to 2
+	add -A/2,0,-B
+
+	addz B-0.015
+	mulz -1
+
+	body -1
+	sprism_ gs_frame_mat, gs_frame_mat, gs_frame_mat,
+		6, 0,0, 0,1, B-0.015, -45,
+		0.015,	0.08,	15,
+		0.015,	0.122,	15,
+		0.035,	0.122,	15,
+		0.035,	0.117,	15,
+		0.051,	0.117,	15,
+		0.045,	0.08,	15
+
+	base
+	vert 0,	0, 0
+	vert 0,	0, 1
+	vert 1,	0, 0
+	vert 0,	1, 0
+	coor 5, -1, -2, -3, -4
+	body 1
+
+	del 3
+	mulx -1
+next i
+del 2
+
+
+
+roty -90
+add -B,0,-A/2
+
+rotz 90
+cutplane -225
+del 1
+
+addz -0.015
+
+body -1
+sprism_ gs_frame_mat, gs_frame_mat, gs_frame_mat,
+	6, 0,0, 0,1, A+0.015, -45,
+	0.015,	0.08,	15,
+	0.015,	0.122,	15,
+	0.035,	0.122,	15,
+	0.035,	0.117,	15,
+	0.051,	0.117,	15,
+	0.045,	0.08,	15
+
+base
+vert 0,	0, 0
+vert 0,	0, 1
+vert 1,	0, 0
+vert 0,	1, 0
+coor 5, -1, -2, -3, -4
+body 1
+
+cutend
+
+del 3
+
+
+
+addx -A/2
+roty 90
+
+add 0,0.08,0.045
+rotz 0
+cutplane 180+atn(0.006/0.037)
+del 2
+
+addz 0.045
+
+body -1
+sprism_ gs_frame_mat, gs_frame_mat, gs_frame_mat,
+	4, 0,0.08, 1,0.08, A-0.09, atn(0.006/0.037),
+	0.015,	0.08,	15,
+	0.081,	0.08,	15,
+	0.087,	0.117,	15,
+	0.015,	0.117,	15
+
+base
+vert 0,	0, 0
+vert 0,	0, 1
+vert 1,	0, 0
+vert 0,	1, 0
+coor 5, -1, -2, -3, -4
+body 1
+
+cutend
+
+del 3
+
+
+
+! ==============================================================================
+! Sash Cover
+
+material gs_cover_mat
+
+for i=1 to 2
+	add -A/2,0,-B
+
+	addz B
+	rotz 90
+	cutplane 45
+	del 2
+
+	addz -0.015
+
+	body -1
+	extrude 5, 0,0,B+1,16+32,
+		-0.012, 0.1057337439069,	0,
+		-0.012, 0.1182489841024,	0,
+		 0.0204333685866, 0.141,	0,
+		 0.0485565205782, 0.141,	0,
+		 0.04626573525761, 0.135,	0
+
+	base
+	vert 0,	0, 0
+	vert 1,	0, 0
+	vert 0,	0, 1
+	vert 0,	1, 0
+	coor 5, -1, -2, -3, -4
+	body 1
+
+	cutend
+
+	del 2
+	mulx -1
+next i
+del 2
+
+
+
+add -A/2,0,0
+roty 90
+
+rotz 90
+cutplane -225
+del 1
+
+addz A
+rotz 90
+cutplane 45
+del 2
+
+addz -0.025
+
+body -1
+extrude 5, 0,0,B+1,16+32,
+	-0.012, 0.1057337439069,	0,
+	-0.012, 0.1182489841024,	0,
+	 0.0204333685866, 0.141,	0,
+	 0.0485565205782, 0.141,	0,
+	 0.04626573525761, 0.135,	0
+
+base
+vert 0,	0, 0
+vert 1,	0, 0
+vert 0,	0, 1
+vert 0,	1, 0
+coor 5, -1, -2, -3, -4
+body 1
+
+cutend
+cutend
+
+del 3
+
+
+roty -90
+add -B,0,-A/2-0.0
+
+rotz 90
+cutplane -225
+del 1
+
+addx A
+rotz 90
+cutplane 45
+del 2
+
+addz-0.03
+body -1
+extrude 5,0,0,A+0.06, 16+32,
+	 0.047,	0.153,	0,
+	 0.047,	0.16,	0,
+	 0,		0.16,	0,
+	-0.027,	0.133,	0,
+	-0.027,	0.103,	0
+
+base
+vert 0,	0, 0
+vert 0,	0, 1
+vert 1,	0, 0
+vert 0,	1, 0
+coor 5, -1, -2, -3, -4
+body 1
+
+cutend
+cutend
+
+del 3
+
+
+for i=1 to 2
+	add -A/2, 0, -B
+
+	rotz 90
+	cutplane -225
+	del 1
+
+	addz-0.03
+	body -1
+	extrude 5,0,0,0.077, 16+32,
+		 0.047,	0.153,	0,
+		 0.047,	0.16,	0,
+		 0,		0.16,	0,
+		-0.027,	0.133,	0,
+		-0.027,	0.103,	0
+	del 2
+
+	cutend
+	mulx -1
+next i
+del 2
+
+
+! ==============================================================================
+! Glass
+
+material gs_glass_mat
+model surface
+
+rotx -90
+addz 0.117
+
+body -1
+
+prism 4, 0.018,
+	-A/2+0.037, 0.037,
+	-A/2+0.037, B-0.037,
+	 A/2-0.037, B-0.037,
+	 A/2-0.037, 0.037
+del 2
+
+model solid
+
+
+! ==============================================================================
+! 3D Opening Lines
+
+if bOplines3d then
+	rotx -90
+	add -A/2+0.04, 0.04, 0.117
+	call "OpeningLines" parameters a = a - 0.08,
+				b					= b - 0.08,
+				frameThickness		= 0.018,
+				iOpeningType		= 8,		! SASH_TOP_HUNG
+				opLineType3dIn		= opLineType3dOut,
+				opLineType3dOut		= opLineType3dIn,
+				gs_opLinePen		= gs_opLinePen,
+				gs_opline_style_m	= gs_opline_style_m,
+				bSkyLight			= 1
+	del 2
+endif
+
+
+del 3	! Sash Angle
+
+
+return
+
+
+! ==============================================================================
+"SinglePlane":
+
+	material gs_glass_mat
+
+	addx -singPlane_w/2
+	rect singPlane_w, singPlane_h
+	del 1
+
+	if bOplines3d then
+		add -singPlane_w/2, 0, -0.001
+
+		call "OpeningLines" parameters a = singPlane_w,
+					b					= singPlane_h,
+					frameThickness		= frameThickness,
+					iOpeningType		= 8,		! SASH_TOP_HUNG
+					opLineType3dIn		= opLineType3dOut,
+					opLineType3dOut		= opLineType3dIn,
+					gs_opLinePen		= gs_opLinePen,
+					gs_opline_style_m	= gs_opline_style_m,
+					bSkyLight			= 1
+		del 1
+	endif
+return
+
+
+! ==============================================================================
+"windowPoligons":
+
+	material gs_frame_mat
+	addx -singPlane_w/2
+
+	poly_ 10,
+		0,	0,	15,
+		0,	singPlane_h,	15,
+		 singPlane_w,	singPlane_h,	15,
+		 singPlane_w,	0,	15,
+		0,	0,	-1,
+
+		0.04,	0.04,	15,
+		0.04,	singPlane_h-0.04,	15,
+		 singPlane_w-0.04,	singPlane_h-0.04,	15,
+		 singPlane_w-0.04,	0.04,	15,
+		0.04,	0.04,	-1
+
+
+	material gs_glass_mat
+
+
+		rect singPlane_w, singPlane_h
+	del 1
+
+	if bOplines3d then
+		add -singPlane_w/2+0.04, 0.04, -0.001
+
+		call "OpeningLines" parameters a = singPlane_w-0.08,
+					b					= singPlane_h-0.08,
+					frameThickness		= 0.002,
+					iOpeningType		= 8,		! SASH_TOP_HUNG
+					opLineType3dIn		= opLineType3dOut,
+					opLineType3dOut		= opLineType3dIn,
+					gs_opLinePen		= gs_opLinePen,
+					gs_opline_style_m	= gs_opline_style_m,
+					bSkyLight			= 1
+		del 1
+	endif
+
+
+
+return
+

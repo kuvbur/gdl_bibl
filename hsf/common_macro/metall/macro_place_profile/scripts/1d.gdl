@@ -1,0 +1,166 @@
+EPS = 0.0001
+flag = 0
+
+tip_konstr = " "
+subpos = " "
+pos = " "
+upr = 0
+type_spec = "Металл"
+
+!Смещение оси
+dx = 0
+dy = 0
+el_type_view = 0
+
+dict _dataprof
+dict _all
+dict _tmp
+dict _emp
+dict line_dict
+dict line_dict_next
+
+if not(haskey(profile_data.set)) then
+	text2 0,0,"not(haskey(profile_data.set))"
+	goto "m_end"
+endif
+
+!Читаем сортамент, если его не передали
+gosub "read_sort"
+
+!При необходимости - получаем геометрические данные
+gosub "read_profile"
+
+!Если задана точка привязки - получим смещение сечения
+if haskey(profile_data.set.cpoint) then
+	if profile_data.set.cpoint>=0 and profile_data.set.cpoint<=9 then
+		if haskey(profile_data.read.cpoint[profile_data.set.cpoint+1].x) then dx = profile_data.read.cpoint[profile_data.set.cpoint+1].x
+		if haskey(profile_data.read.cpoint[profile_data.set.cpoint+1].y) then dy = profile_data.read.cpoint[profile_data.set.cpoint+1].y
+	endif
+endif
+
+if not(haskey(profile_data.set.path)) then
+	if haskey(profile_data.set.coord) then
+		gosub "coord2path"
+	else
+		text2 0,0,"not(haskey(profile_data.set.path))"
+		goto "m_end"
+	endif
+endif
+
+if not(haskey(profile_data.set.start)) then profile_data.set.start[1].x = 0
+
+dlin_prof = 0 : _length = 0
+!Определим положение профиля в пространстве - вертикальные, горизонтальный или под наклоном
+min_x = 0 : min_y = 0 : min_z = 0
+max_x = 0 : max_y = 0 : max_z = 0
+for i=1 to vardim1(profile_data.set.path)
+	if not(haskey(profile_data.set.path[i].x)) then profile_data.set.path[i].x = 0
+	if not(haskey(profile_data.set.path[i].y)) then profile_data.set.path[i].y = 0
+	if not(haskey(profile_data.set.path[i].z)) then profile_data.set.path[i].z = 0
+	if not(haskey(profile_data.set.path[i].a)) then profile_data.set.path[i].a = 0
+	if i>1 and i<vardim1(profile_data.set.path) then
+		min_x = min(min_x, profile_data.set.path[i].x)
+		max_x = max(max_x, profile_data.set.path[i].x)
+		min_y = min(min_y, profile_data.set.path[i].y)
+		max_y = max(max_y, profile_data.set.path[i].y)
+		min_z = min(min_z, profile_data.set.path[i].z)
+		max_z = max(max_z, profile_data.set.path[i].z)
+		_length = sqr((profile_data.set.path[i].x-profile_data.set.path[i-1].x)*(profile_data.set.path[i].x-profile_data.set.path[i-1].x) + (profile_data.set.path[i].y-profile_data.set.path[i-1].y)*(profile_data.set.path[i].y-profile_data.set.path[i-1].y))
+		dlin_prof = dlin_prof + _length
+	endif
+next i
+ax = 1 : if min_x = max_x then ax = 0
+ay = 1 : if min_y = max_y then ay = 0
+az = 1 : if min_z = max_z then az = 0
+if ax = 0 and ay = 0 and az = 1 and el_type_view = 3 then el_type_view = 2
+if (ax = 0 or ay = 0) and az = 0 and el_type_view = 3 then el_type_view = 1
+
+
+profile_data.read.dlin_prof = dlin_prof
+
+goto "m_end"
+
+"coord2path":
+	bb = profile_data.read.bb
+	j = 0 : flag_add = 0
+	for i=1 to vardim1(profile_data.set.coord)-1
+		line_dict_next.start = profile_data.set.coord[i]
+		line_dict_next.end = profile_data.set.coord[i+1]
+		call "macro_spheric_coord" PARAMETERS line_dict = line_dict_next, bDict = 1, type = 2, RETURNED_PARAMETERS line_dict_next
+		!Выступ начала
+		if i=2 then 
+			call "macro_dotbydr" PARAMETERS line_dict = line_dict, bDict = 1, dr = -0.01, from_dot = 2, RETURNED_PARAMETERS line_dict
+			j = j + 1
+			profile_data.set.path[j] = line_dict.part
+		endif
+		if i>1 then
+			j = j + 1
+			profile_data.set.path[j] = profile_data.set.coord[i-1]
+			!Добавление первой промежуточной точки (в начале отрезка), если предыдущий отрезок был под наклоном
+			if flag_add then
+				kdr = 1 : if abs(line_dict.etta)>EPS then kdr = sin(line_dict.etta) 
+				call "macro_dotbydr" PARAMETERS line_dict = line_dict, bDict = 1, dr = bb/kdr, from_dot = 2, RETURNED_PARAMETERS line_dict
+				j = j + 1
+				profile_data.set.path[j] = line_dict.part
+!				profile_data.set.path[j].z = line_dict.end.z
+				flag_add = 0
+			endif
+			!Добавление второй промежуточной точки для текущего отрезка
+			if abs(line_dict.etta mod 90)>EPS or abs(line_dict_next.etta mod 90)>EPS then
+				kdr = 1 : if abs(line_dict.etta)>EPS then kdr = sin(line_dict.etta)
+				call "macro_dotbydr" PARAMETERS line_dict = line_dict, bDict = 1, dr = bb/kdr, from_dot = 1, RETURNED_PARAMETERS line_dict
+				j = j + 1
+				profile_data.set.path[j] = line_dict.part
+!				profile_data.set.path[j].z = line_dict.end.z
+				if abs(line_dict_next.etta mod 90)>EPS then
+					j = j + 1
+					profile_data.set.path[j] = line_dict.end
+				endif
+				flag_add = 1
+			endif
+		endif
+		line_dict = line_dict_next
+		if i=vardim1(profile_data.set.coord)-1 then
+			if flag_add then
+				kdr = 1 : if abs(line_dict.etta)>EPS then kdr = sin(line_dict.etta)
+				call "macro_dotbydr" PARAMETERS line_dict = line_dict, bDict = 1, dr = bb/kdr, from_dot = 2, RETURNED_PARAMETERS line_dict
+				j = j + 1
+				profile_data.set.path[j] = line_dict.part
+!				profile_data.set.path[j].z = line_dict.start.z
+				flag_add = 0
+			endif
+			j = j + 1
+			profile_data.set.path[j] = profile_data.set.coord[i+1]
+			!Выступ конца
+			call "macro_dotbydr" PARAMETERS line_dict = line_dict, bDict = 1, dr = -0.01, from_dot = 1, RETURNED_PARAMETERS line_dict
+			j = j + 1
+			profile_data.set.path[j] = line_dict.part
+		endif
+	next i
+return
+
+"read_sort":
+	if not(haskey(sort_data.isread)) then call "macro_get_sort" PARAMETERS RETURNED_PARAMETERS sort_data
+	if haskey(sort_data.isread) then 
+		if sort_data.isread = 0 then
+			text2 0,0, "Сортамент прочитан с ошибкой"
+			goto "m_end"
+		endif
+	else
+		text2 0,0, "Сортамент не прочитан"
+		goto "m_end"
+	endif
+return
+
+"read_profile":
+	if not(haskey(profile_data.read)) then 
+		profile_data.error = ""
+		call "macro_get_profile" PARAMETERS prof_data = profile_data, sort_data = sort_data, RETURNED_PARAMETERS profile_data
+		if profile_data.error <> "ok" then
+			text2 0,0,profile_data.error
+			goto "m_end"
+		endif
+	endif
+return
+
+"m_end":

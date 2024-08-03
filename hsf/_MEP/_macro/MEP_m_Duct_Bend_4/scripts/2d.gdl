@@ -1,0 +1,474 @@
+!-----------2d---------------------
+if show_el < EPS then end
+IF gs_detlevel_2D_m < EPS THEN END
+if hide_conventions and show_conventions THEN END
+if GLOB_PREVIEW_MODE = 0 and GLOB_FEEDBACK_MODE = 0 then CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, gs_fill_type, gs_fill_pen, gs_back_pen, MEP_cline_type, MEP_cline_pen, show_el
+
+_pTM = GLOB_SCALE / 1000
+lmmza = 1
+PEN gs_cont_pen
+IF gs_fill_pen THEN SET FILL gs_fill_type
+
+
+!!!================= Настройки видимости по диапазону ======================
+!!!По умолчанию - вид не в сечении, элемент видим
+is_sech = 0
+is_show = 1
+!!!Абсолютные значения границ видимости
+rx1 = MEP_Position[1][1]
+ry1 = MEP_Position[1][2]
+rz1 = MEP_Position[1][3]
+rx2 = rx1+MEP_Position[2][1]*MEP_StraightLength
+ry2 = ry1+MEP_Position[2][2]*MEP_StraightLength
+rz2 = rz1+MEP_Position[2][3]*MEP_StraightLength
+dx = rx2-rx1
+dy = ry2-ry1
+dz = rz2-rz1
+flag = 0
+SYMB_POS_Z_temp = SYMB_POS_Z
+IF SGN(dz) = 0 then
+	_MEP_StraightLength = 0
+	flag = 1
+endif
+IF SGN(dx) = 0 AND SGN(dy) = 0 and flag = 0 THEN
+	_MEP_StraightLength = MEP_StraightLength
+	IF rz1 > rz2 THEN
+		SYMB_POS_Z_temp = SYMB_POS_Z
+		SYMB_POS_Z = SYMB_POS_Z-_MEP_StraightLength
+	ENDIF
+	flag = 1
+endif
+if flag = 0 then
+	_MEP_StraightLength = MEP_StraightLength
+	Length=SQR(dx^2+dy^2)
+	ar = ABS(dz)/_MEP_StraightLength
+	br = Length/_MEP_StraightLength
+	cr = ABS(dz)/Length
+	IF rz1 > rz2 THEN
+		SYMB_POS_Z_temp = SYMB_POS_Z
+		SYMB_POS_Z = SYMB_POS_Z-_MEP_StraightLength
+	ENDIF
+	dz_temp = ABS(dz)
+	dz = ABS(dz)-cutbackA*ar-cutbackB*ar
+	SYMB_POS_Z_temp = SYMB_POS_Z
+	SYMB_POS_Z = SYMB_POS_Z+cutbackA*ar
+	flag = 1
+endif
+down_level = GLOB_CUTPLANES_INFO[3]+GLOB_ELEVATION + GLOB_CSTORY_ELEV
+up_level = GLOB_CUTPLANES_INFO[2]+GLOB_ELEVATION + GLOB_CSTORY_ELEV
+!!Ниже границы видимости
+IF down_level - SYMB_POS_Z > EPS then
+	if (down_level - (SYMB_POS_Z+_MEP_StraightLength)) > EPS THEN !!Закончился до границы
+		stype = "1"
+		is_show = 0
+	else	
+		stype = "2"
+		is_sech = 1
+	endif
+endif
+!!Выше границы видимости
+IF up_level - SYMB_POS_Z < EPS then
+	if up_level - (SYMB_POS_Z+_MEP_StraightLength) < EPS THEN !!Закончился до границы
+		is_show = 0
+		stype = "3"
+	else
+		stype = "4"
+		is_sech = 1
+	endif
+endif
+if is_sech then is_show = 1
+SYMB_POS_Z = SYMB_POS_Z_temp
+!!!================= Настройки видимости по диапазону ======================
+if AC_AutoOnStoryVisibility and is_show=0 THEN end
+
+HptsUnIDBeginForConnEnds = 30000
+
+hceID_1 = HptsUnIDBeginForConnEnds+100
+hceID_2 = HptsUnIDBeginForConnEnds+200
+
+HOTSPOT2 MEP_Position[1][1]+outCoords[1][1], MEP_Position[1][2]+outCoords[1][2], hceID_1
+HOTSPOT2 MEP_Position[1][1]+outCoords[2][1], MEP_Position[1][2]+outCoords[2][2], HptsUnIDBeginForConnEnds
+HOTSPOT2 MEP_Position[1][1]+outCoords[3][1], MEP_Position[1][2]+outCoords[3][2], hceID_2
+
+IF (show_axis_and or show_axis) AND MEP_BendAngle > 0.001 THEN		! -----> center line <----- !
+	PEN MEP_cline_pen
+	SET LINE_TYPE MEP_cline_type
+	ADD2 MEP_Position[1][1], MEP_Position[1][2]
+	IF MEP_ThroatSegments = 1 AND MEP_HeelSegments = 1 OR MEP_HeelSegments = 1 THEN
+		dX = MEP_Position[2][1]
+		dY = MEP_Position[2][2]
+		length = SQR((dX)^2+(dY)^2)
+		IF length THEN
+			arc_val = dX/length
+			IF arc_val > 1-EPS THEN arc_val = 1
+			IF arc_val < -1+EPS THEN arc_val = -1
+			alpha = ACS(arc_val)
+		ELSE
+			dX = outCoords[coordinates][1]
+			dY = outCoords[coordinates][2]
+
+			length = SQR((dX)^2+(dY)^2)
+
+			arc_val = dX/length
+			IF arc_val > 1-EPS THEN arc_val = 1
+			IF arc_val < -1+EPS THEN arc_val = -1
+			alpha = ACS(arc_val)
+		ENDIF
+
+		IF SGN(dY) = -1 THEN alpha = 360-alpha
+
+		alphaS = alpha
+		
+		rot2 alpha
+		add2 -add_l,0
+!		line2 0,lmmza*_pTM,0,-lmmza*_pTM
+		del 2
+
+		dX = outCoords[coordinates][1]
+		dY = outCoords[coordinates][2]
+
+		length = SQR((dX)^2+(dY)^2)
+		IF length THEN
+			arc_val = dX/length
+			IF arc_val > 1-EPS THEN arc_val = 1
+			IF arc_val < -1+EPS THEN arc_val = -1
+			alpha = ACS(arc_val)
+		ELSE
+			dX = MEP_Position[2][1]
+			dY = MEP_Position[2][2]
+
+			length = SQR((dX)^2+(dY)^2)
+
+			arc_val = dX/length
+			IF arc_val > 1-EPS THEN arc_val = 1
+			IF arc_val < -1+EPS THEN arc_val = -1
+			alpha = ACS(arc_val)
+		ENDIF
+
+		IF SGN(dY) = -1 THEN alpha = 360-alpha
+
+		alphaE = alpha
+		alpha_i = (alphaE-alphaS)/(pnum-1)
+		alpha = alphaS
+
+		add2 outCoords[3+pnum][1], outCoords[3+pnum][2]
+		rot2 alphaE
+		add2 add_l,0
+!		line2 0,lmmza*_pTM,0,-lmmza*_pTM
+		del 3
+
+		if add_l then PUT outCoords[1][1], outCoords[1][2], alpha
+
+		FOR i = 1 TO pnum
+			PUT outCoords[3+i][1], outCoords[3+i][2], alpha
+			IF i < pnum THEN alpha = alpha + alpha_i
+		NEXT i
+
+		if add_l then PUT outCoords[3][1], outCoords[3][2], alpha
+
+		SPLINE2 NSP/3, 2,
+				GET(NSP)
+	ENDIF
+
+	IF MEP_HeelSegments = 2 THEN
+		LINE2 outCoords[1][1], outCoords[1][2], outCoords[2][1], outCoords[2][2]
+		LINE2 outCoords[2][1], outCoords[2][2], outCoords[3][1], outCoords[3][2]
+	ENDIF
+
+	IF MEP_HeelSegments > 2 THEN
+
+		PUT outCoords[1][1], outCoords[1][2], 1
+		FOR i = 1 TO pnum
+			PUT outCoords[3+i][1], outCoords[3+i][2], 1
+			IF i < pnum THEN alpha = alpha + alpha_i
+		NEXT i
+		PUT outCoords[3][1], outCoords[3][2], 1
+
+		POLY2_ NSP/3, 1,
+				GET(NSP)
+
+	ENDIF
+	DEL 1
+	PEN gs_cont_pen
+	SET LINE_TYPE SYMB_LINETYPE
+ENDIF
+
+IF ABS(MEP_Position[2][3]) < EPS AND ABS(MEP_Position[3][3]) < EPS AND ABS(ductHalfWidthA-ductHalfWidthB) < EPS THEN
+
+	 aa = MEP_Position[2][1]
+	 bb = MEP_Position[2][2]
+
+	 arCosVal = aa/1
+	IF ABS(arCosVal) > 1 AND SGN(arCosVal) = -1 THEN arCosVal = -1
+	IF ABS(arCosVal) > 1 AND SGN(arCosVal) = 1 THEN arCosVal = 1
+	alpha = ACS(arCosVal)
+	IF SGN(bb) = -1 THEN alpha = 360-alpha
+
+	GOSUB 100 						! --- analizing of arc-direction
+
+	ADD2 MEP_Position[1][1], MEP_Position[1][2]
+	ROT2 alpha
+	MUL2 1, SGN(outCoords[1][2])
+
+	connectorLength = connectorLengthA
+	halfWidth = ductHalfWidthA
+	halfWidthX = halfWidth*SIN(bendAngle)
+	halfWidthY = halfWidth*COS(bendAngle)
+
+									! -----> duct bend <----- !
+
+	IF ABS(shapeTypeA - 1) < EPS THEN GOSUB 10
+	IF ABS(shapeTypeA - 2) < EPS AND MEP_HeelSegments < 3 AND MEP_ThroatSegments < 3 AND MEP_ThroatSegments = MEP_HeelSegments THEN GOSUB 10
+	IF ABS(shapeTypeA - 3) < EPS AND MEP_HeelSegments < 3 AND MEP_ThroatSegments < 3 AND MEP_ThroatSegments = MEP_HeelSegments THEN GOSUB 10
+	IF ABS(shapeTypeA - 2) < EPS AND MEP_HeelSegments > 2 AND MEP_ThroatSegments > 2 AND MEP_ThroatSegments = MEP_HeelSegments THEN GOSUB 20
+	IF ABS(shapeTypeA - 3) < EPS AND MEP_HeelSegments > 2 AND MEP_ThroatSegments > 2 AND MEP_ThroatSegments = MEP_HeelSegments THEN GOSUB 20
+
+	IF pp and not(show_axis) THEN
+		ADD2 ductStraightLengthA, 0
+		POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+			GET (NSP)
+		DEL 1
+	ENDIF
+
+	IF flangeA and not(show_axis) and gs_detlevel_2D_m = 2  THEN
+		add2 -add_l,0
+		halfWidthC = connectorHalfWidthA
+		GOSUB 30
+		del 1
+	ENDIF
+
+	IF flangeB and not(show_axis) and gs_detlevel_2D_m = 2  THEN
+		ADD2 PointBX, PointBY
+		ROT2 180+bendAngle
+		halfWidthC = connectorHalfWidthB
+		GOSUB 30
+		DEL 2
+	ENDIF
+
+	IF MEP_InsShow and show_isol and not(show_axis) THEN			! -----> insulation <----- !
+
+		halfWidth = ductHalfWidthA+MEP_InsThickness
+		halfWidthX = halfWidth*SIN(bendAngle)
+		halfWidthY = halfWidth*COS(bendAngle)
+
+		heelRadius = heelRadius_wIns
+		heelSegmentLength = heelSegmentLength_wIns
+
+		throatRadius = throatRadius_wIns
+		throatSegmentLength = throatSegmentLength_wIns
+
+		IF ABS(shapeTypeA - 1) < EPS THEN GOSUB 10
+		IF ABS(shapeTypeA - 2) < EPS AND MEP_HeelSegments < 3 AND MEP_ThroatSegments < 3 AND MEP_ThroatSegments = MEP_HeelSegments THEN GOSUB 10
+		IF ABS(shapeTypeA - 3) < EPS AND MEP_HeelSegments < 3 AND MEP_ThroatSegments < 3 AND MEP_ThroatSegments = MEP_HeelSegments THEN GOSUB 10
+		IF ABS(shapeTypeA - 2) < EPS AND MEP_HeelSegments > 2 AND MEP_ThroatSegments > 2 AND MEP_ThroatSegments = MEP_HeelSegments THEN GOSUB 20
+		IF ABS(shapeTypeA - 3) < EPS AND MEP_HeelSegments > 2 AND MEP_ThroatSegments > 2 AND MEP_ThroatSegments = MEP_HeelSegments THEN GOSUB 20
+
+		IF pp THEN
+			ADD2 ductStraightLengthA, 0
+			POLY2_ NSP/3, 1,
+
+				GET (NSP)
+			DEL 1
+		ENDIF
+	ENDIF
+
+	IF MEP_Vanes THEN			! -----> Vanes <----- !
+		IF MEP_HeelSegments < 2 AND MEP_ThroatSegments < 2 THEN
+			MUL2 1, -1
+			dist = ductInnerWidthA/(MEP_VanesNum+1)
+			FOR i = 1 TO MEP_VanesNum
+				ARC2 ductStraightLengthA, -MEP_BendRadius, MEP_BendRadius-ductInnerWidthA/2+dist*i, 90-MEP_BendAngle, 90
+			NEXT i
+			DEL 1
+		ENDIF
+		IF MEP_HeelSegments = 2 AND MEP_ThroatSegments = 2 THEN
+			xx = 0
+			num = MEP_VanesNum+1
+			dist = (ductInnerWidthA/COS(MEP_BendAngle/2))/num
+			ADD2 ductStraightLengthA+(MEP_BendRadius-ductHalfWidthA)*TAN(MEP_BendAngle/2), ductHalfWidthA
+			ROT2 -90+MEP_BendAngle/2
+			FOR jj = 1 TO num-1
+				xx = xx+dist
+				ADD2 xx - ductInnerWidthA/8, 0
+				ROT2 -90+MEP_BendAngle/2
+				ARC2 0, 0, ductInnerWidthA/8, 90-MEP_BendAngle, 90
+				DEL 2
+			NEXT jj
+			DEL 2
+		ENDIF
+	ENDIF
+
+	DEL 3
+ELSE
+	SET FILL gs_fill_type
+	PEN gs_cont_pen
+	IF gs_fill_pen THEN PEN gs_fill_pen
+	if not(show_axis) then PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0, PARAMETERS duct_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0, gs_detlevel_3D_m = gs_detlevel_2D_m
+	PEN gs_cont_pen
+	if not(show_axis) then PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0, PARAMETERS duct_show = 1, MEP_InsShow = 0, MEP_cline_show_3D = 0, gs_detlevel_3D_m = gs_detlevel_2D_m
+	IF MEP_InsShow and show_isol and not(show_axis) THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS duct_show = 0, MEP_InsShow = 1, MEP_cline_show_3D = 0, gs_detlevel_3D_m = gs_detlevel_2D_m
+	IF ((MEP_cline_show and show_axis_and) or show_axis) THEN PROJECT2{3} 3, 270, 2, 8, gs_back_pen, 0, 0, 0, PARAMETERS duct_show = 0, MEP_InsShow = 0, MEP_cline_show_3D = 1, gs_detlevel_3D_m = gs_detlevel_2D_m
+ENDIF
+
+
+END
+
+10:
+	if add_l then PUT -add_l, -halfWidth, 1
+	PUT 0, -halfWidth, 1
+	IF MEP_HeelSegments > 1 THEN
+		PUT heelSegmentLength, -halfWidth, 1
+		alpha = 0
+		FOR i = 1 TO (MEP_HeelSegments-2)
+			 alpha = alpha + bendAngle/(MEP_HeelSegments-2)
+			PUT heelSegmentLength+heelRadius*SIN(alpha), -halfWidth+heelRadius-heelRadius*COS(alpha), 1
+		NEXT i
+		PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle), 1
+	ELSE
+		PUT 0, MEP_BendRadius, 901
+		PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle), 3001
+	ENDIF
+	if ductStraightLengthB > EPS then
+		PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle)+ductStraightLengthB*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle)+ductStraightLengthB*SIN(bendAngle), 1
+		PUT (MEP_BendRadius-halfWidth)*SIN(bendAngle)+ductStraightLengthB*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle)+ductStraightLengthB*SIN(bendAngle), 1
+	endif
+
+	if add_l>EPS and ductStraightLengthB < EPS then 
+		PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle)+add_l*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle)+add_l*SIN(bendAngle), 1
+		PUT (MEP_BendRadius-halfWidth)*SIN(bendAngle)+add_l*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle)+add_l*SIN(bendAngle), 1
+	endif
+
+	coordX = (MEP_BendRadius-halfWidth)*SIN(bendAngle)
+	coordY = MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle)
+	PUT coordX, coordY, 1
+	IF MEP_ThroatSegments > 1 THEN
+		alpha = bendAngle
+		PUT throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), 1
+		FOR i = 1 TO (MEP_ThroatSegments-2)
+			 alpha = alpha - bendAngle/(MEP_ThroatSegments-2)
+			PUT throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), 1
+		NEXT i
+		PUT 0, halfWidth, 1
+	ELSE
+		IF ABS(coordX) > EPS OR ABS(coordY-halfWidth) > EPS THEN
+			PUT 0, MEP_BendRadius, 901
+			PUT 0, halfWidth, 3001
+		ENDIF
+	ENDIF
+	if ductStraightLengthA > EPS and add_l<EPS then
+		PUT -ductStraightLengthA, halfWidth, 1
+		PUT -ductStraightLengthA, -halfWidth, 1
+	endif
+
+	if add_l>EPS and ductStraightLengthA < EPS then 
+		PUT -add_l, halfWidth, 1
+		PUT -add_l, -halfWidth, 1
+	endif
+
+	if add_l_EPS and ductStraightLengthA > EPS then 
+		PUT -ductStraightLengthA, halfWidth, 1
+		PUT -add_l, halfWidth, 1
+		PUT -add_l, -halfWidth, 1
+		PUT -ductStraightLengthA, -halfWidth, 1
+	endif
+
+	PUT 0, -halfWidth, -1
+	pp = 1
+
+	IF ABS(shapeTypeA - 2) < EPS OR ABS(shapeTypeA - 3) < EPS THEN
+		IF MEP_HeelSegments = 2 AND MEP_ThroatSegments = 2 THEN
+			LINE2 ductStraightLengthA+throatSegmentLength+throatRadius*SIN(bendAngle), halfWidth+throatRadius-throatRadius*COS(bendAngle), ductStraightLengthA+heelSegmentLength+heelRadius*SIN(bendAngle), -halfWidth+heelRadius-heelRadius*COS(bendAngle)
+		ENDIF
+		IF MEP_HeelSegments > 2 AND MEP_ThroatSegments > 2 THEN
+			alpha = 0
+			FOR i = 1 TO (MEP_HeelSegments-1)
+				LINE2 throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), heelSegmentLength+heelRadius*SIN(alpha), -halfWidth+heelRadius-heelRadius*COS(alpha)
+				alpha = alpha + bendAngle/(MEP_HeelSegments-2)
+			NEXT i
+		ENDIF
+	ENDIF
+RETURN
+
+20:
+	segments = MAX(MEP_ThroatSegments, MEP_HeelSegments)
+	Len = MEP_BendRadius*TAN(bendAngle/2)
+	rr = Len/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(segments-2))))
+	segmentLen = 2*rr*SIN(bendAngle/(2*(segments-2)))
+
+	beta = bendAngle/(segments-2)
+	halfeBeta = beta/2
+
+	PUT -ductStraightLengthA, -halfWidth, 1
+	PUT segmentLen+halfWidth*TAN(beta/4), -halfWidth, 1
+
+	alpha = 0: delta = 0
+	FOR i = 1 TO segments-2
+		alpha = alpha + bendAngle/(segments-2)
+		delta = delta + (beta-(beta/4)*(i = segments-2))
+		halfWidthRed = halfWidth/COS(beta/2-(beta/4)*(i = segments-2))
+		PUT segmentLen+rr*SIN(alpha)+halfWidthRed*SIN(delta), rr-rr*COS(alpha)-halfWidthRed*COS(delta), 1
+	NEXT i
+	PUT segmentLen+rr*SIN(alpha)+(segmentLen+ductStraightLengthB)*COS(bendAngle)+halfWidth*SIN(bendAngle), rr-rr*COS(alpha)+(segmentLen+ductStraightLengthB)*SIN(bendAngle)-halfWidth*COS(bendAngle), 1
+	PUT segmentLen+rr*SIN(alpha)+(segmentLen+ductStraightLengthB)*COS(bendAngle)-halfWidth*SIN(bendAngle), rr-rr*COS(alpha)+(segmentLen+ductStraightLengthB)*SIN(bendAngle)+halfWidth*COS(bendAngle), 1
+
+	FOR i = 1 TO segments-2
+		PUT segmentLen+rr*SIN(alpha)-halfWidthRed*SIN(delta), rr-rr*COS(alpha)+halfWidthRed*COS(delta), 1
+		alpha = alpha - bendAngle/(segments-2)
+		delta = delta - (beta-(beta/4)*(i = 1))
+		halfWidthRed = halfWidth/COS(beta/2)
+	NEXT i
+
+	PUT segmentLen-halfWidth*TAN(beta/4), halfWidth, 1
+	PUT -ductStraightLengthA, halfWidth, 1
+	PUT -ductStraightLengthA, -halfWidth, -1
+	pp = 1
+
+	IF MEP_HeelSegments > 2 AND MEP_ThroatSegments > 2 THEN
+		LINE2 ductStraightLengthA+segmentLen+halfWidth*TAN(beta/4), -halfWidth, ductStraightLengthA+segmentLen-halfWidth*TAN(beta/4), halfWidth
+		alpha = 0: delta = 0
+		FOR i = 1 TO (MEP_HeelSegments-2)
+			alpha = alpha + bendAngle/(MEP_ThroatSegments-2)
+			delta = delta + (beta-(beta/4)*(i = segments-2))
+			halfWidthRed = halfWidth/COS(beta/2-(beta/4)*(i = segments-2))
+			LINE2 ductStraightLengthA+segmentLen+rr*SIN(alpha)+halfWidthRed*SIN(delta), rr-rr*COS(alpha)-halfWidthRed*COS(delta), ductStraightLengthA+segmentLen+rr*SIN(alpha)-halfWidthRed*SIN(delta), rr-rr*COS(alpha)+halfWidthRed*COS(delta)
+		NEXT i
+	ENDIF
+RETURN
+
+30:
+		PUT 0, -halfWidthC, 1
+		PUT connectorLength, -halfWidthC, 1
+		PUT connectorLength, halfWidthC, 1
+		PUT 0, halfWidthC, 1
+
+	POLY2_B NSP/3, 1+2+4+64, gs_fill_pen, gs_back_pen,
+
+		GET (NSP)
+RETURN
+
+100:
+		DIM MatrixT[2][2]
+
+		MatrixT[1][1] = MEP_Position[2][1]
+		MatrixT[1][2] = -MEP_Position[2][2]
+
+		MatrixT[2][1] = -COS(alpha+90)
+		MatrixT[2][2] = SIN(alpha+90)
+
+		! --- Input Coordinates
+
+		Coordinates = 1
+
+		DIM inCoords[10][2]
+
+			inCoords[1][1] = MEP_Position[3][1]
+			inCoords[1][2] = MEP_Position[3][2]
+
+		! --- the Matrix Operation, what makes the Output-Coordinates
+
+		DIM outCoords[10][2]
+		cnum = 1
+		outCoords[cnum][1] = inCoords[cnum][1]*MatrixT[1][1]+inCoords[cnum][2]*MatrixT[2][1]
+		outCoords[cnum][2] = inCoords[cnum][1]*MatrixT[1][2]+inCoords[cnum][2]*MatrixT[2][2]
+RETURN

@@ -1,0 +1,160 @@
+!-----------3d---------------------
+if show_el < EPS then end
+IF gs_detlevel_3D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+
+! Press Regular Flanged Valve
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+IF GLOB_CONTEXT = 2 THEN res = 24
+
+MainBoxMaterial = sMat
+MATERIAL MainBoxMaterial
+PEN gs_cont_pen
+RESOL res
+
+
+						! ---------------------- !
+						! --- object rotator --- !
+						! ---------------------- !
+
+IF rot_conn THEN
+	dist_x = A/2
+	dist_z = ZZYZX-valveL
+
+	CALL "MEP_m_object_rotator" PARAMETERS 	rot_conn = rot_conn,
+											MEP_Position = MEP_Position,
+											dist_x = dist_x,
+											dist_y = dist_z,
+											dist_z = dist_z,
+											angleDiffFromDefaultStatus = 90,
+											Rotation = Rotation,
+											symbRotangle = SYMB_ROTANGLE,
+											gs_Connections = gs_Connections,
+											MEP_NumberConnections = MEP_NumberConnections,
+											MEP_NumConnectionData = MEP_NumConnectionData,
+											defaultMatrix = defaultMatrix
+ENDIF
+
+
+				! --- TRANSFORMATION --- !
+
+XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+		MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+		MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+
+			! --- HOTSPOTS --- !
+
+unID = 1
+HOTSPOT 0, 0, 0, unID: unID=unID+1
+
+HOTSPOT 0, 0, ZZYZX-valveL, unID: unID=unID+1
+HOTSPOT 0, 0, -valveL, unID: unID=unID+1
+
+
+				! --- MAIN BOX --- !
+
+IF gs_detlevel_3D_m = 0 THEN	! Wireframe
+!!	totalH = actL+pipeR
+!!	actRS = MIN(0.05, pipeR/4)
+!!	actL = 2*actR
+!!
+!!	LIN_ 0,-A/2,0, 0,A/2,0
+!!	LIN_ 0,0,0, 0,0,totalH
+!!
+!!	LIN_ 0, 0.4*A,-0.8*pipeR, 0, 0.4*A,0.8*pipeR
+!!	LIN_ 0,-0.4*A,-0.8*pipeR, 0,-0.4*A,0.8*pipeR
+!!	LIN_ 0, 0.4*A,-0.8*pipeR, 0,-0.4*A,0.8*pipeR
+!!	LIN_ 0,-0.4*A,-0.8*pipeR, 0, 0.4*A,0.8*pipeR
+!!
+!!	fa = 0
+!!	IF gs_AddConnections[1][1] < 2 THEN fa = 1
+!!	IF gs_AddConnections[1][1] = 3 AND ABS(MEP_NumConnectionData[1][20]-2) < EPS THEN fa = 1
+!!	IF gs_AddConnections[1][1] = 4 AND ABS(MEP_NumConnectionData[1][20]-2) < EPS THEN fa = 1
+!!
+!!	fb = 0
+!!	IF gs_AddConnections[2][1] < 2 THEN fb = 1
+!!	IF gs_AddConnections[2][1] = 3 AND ABS(MEP_NumConnectionData[2][20]-2) < EPS THEN fb = 1
+!!	IF gs_AddConnections[2][1] = 4 AND ABS(MEP_NumConnectionData[2][20]-2) < EPS THEN fb = 1
+!!
+!!	IF fa OR fb THEN
+!!		MODEL WIRE
+!!		ROTx 90
+!!		ADDz A/2
+!!		IF fa THEN CIRCLE ConConnectorWidth_1/2
+!!		DEL 1
+!!		ADDz -A/2
+!!		CIRCLE ConConnectorWidth_2/2
+!!		DEL 2
+!!		MODEL SOLID
+!!	ENDIF
+ELSE
+
+	DIM StraightPosition[][]
+
+	StraightPosition[1][1] = -A/2
+	StraightPosition[1][2] = 0
+	StraightPosition[1][3] = 0
+
+	StraightPosition[2][1] = 1
+	StraightPosition[2][2] = 0
+	StraightPosition[2][3] = 0
+
+	StraightPosition[3][1] = 0
+	StraightPosition[3][2] = 1
+	StraightPosition[3][3] = 0
+
+	CALL "MEP_m_Pipe_4" PARAMETERS 	MEP_Position = StraightPosition,
+									MEP_NumberConnections = MEP_NumberConnections,
+									MEP_NumConnectionData = MEP_NumConnectionData,
+									MEP_StrConnectionData = MEP_StrConnectionData,
+									MEP_StraightLength = A,
+									gs_AddConnections = gs_AddConnections,
+									pipe_show = 1,
+									gs_PipeMat = MainBoxMaterial,
+									MEP_InsShow = 0,
+									MEP_cline_show_3D = 0,
+									gs_detlevel_3D_m = gs_detlevel_3D_m,
+									gs_cont_pen = gs_cont_pen
+
+
+	ROTy 90
+	ARMC ConWidth_1/2, actR, valveL*0.9, 0,0, 90
+	DEL 1
+
+	ADDz -valveL
+	PRISM_ 2, valveL*0.1,
+		0,0, 979,
+		1.2*actR, 360,4079
+	DEL 1
+
+	ROTy -90
+	ARMC ConWidth_1/2, actR, ConWidth_1/2+0.10*actL, 0,0, 90
+	ADDx ConWidth_1/2
+	REVOLVE 10,360,1+2+4+8+16+32,
+		0.10*actL, actR, 2,
+		0.10*actL, actWidth/2, 2,
+		0.20*actL, actWidth/2, 2,
+		0.20*actL, 0.875*(actWidth/2), 2,
+		0.30*actL, 0.5*(actWidth/2), 2,
+		0.70*actL, 0.5*(actWidth/2), 2,
+		0.70*actL, 0.22*(actWidth/2), 2,
+		0.78*actL, 0.22*(actWidth/2), 2,
+		0.78*actL, 0.156*(actWidth/2), 2,
+		actL, 0.156*(actWidth/2), 2
+	DEL 2
+ENDIF
+DEL 1
+
+END

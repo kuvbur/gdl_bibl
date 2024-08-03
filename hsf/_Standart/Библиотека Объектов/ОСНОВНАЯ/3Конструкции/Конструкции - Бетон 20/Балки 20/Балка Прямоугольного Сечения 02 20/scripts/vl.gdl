@@ -1,0 +1,125 @@
+
+hideparameter all "A", "B", "Zzyzx" 
+
+if GLOB_UI_BUTTON_ID = 1 then
+	gs_ui_current_page = 2
+	parameters gs_ui_current_page = gs_ui_current_page
+endif
+
+if GLOB_UI_BUTTON_ID = 2 then
+	gs_ui_current_page = 3
+	parameters gs_ui_current_page = gs_ui_current_page
+endif
+
+if GLOB_UI_BUTTON_ID = 3 then
+	parameters gs_shap_m = 1
+endif
+
+if GLOB_UI_BUTTON_ID = 4 then
+	parameters gs_shap_m = 2
+endif
+
+call "FM_types" parameters all
+
+
+values{2} "gs_detlevel_3D_m" 	DLEV3D_DETAILED, `Детальный`,
+								DLEV3D_OFF, `Откл.`
+
+VALUES "a" RANGE [ExtRight+ExtLeft+0.01, )
+VALUES "B" RANGE (0, )
+VALUES "ZZYZX" RANGE (HgtTop, )
+VALUES "HgtTop" RANGE (0, ZZYZX)
+VALUES "ExtRight" RANGE (0,A-ExtLeft-0.01 ]
+VALUES "ExTLeft" RANGE (0,A-ExtRight-0.01 ]
+VALUES "angy" RANGE (-90, 90)
+VALUES "pos_2Dx" RANGE (zzyzx, a)
+VALUES "B2" RANGE (0, )
+values "cdia" range [0, min(zzyzx-pos, a-hnum*rectw)]
+values "recth" range [0, zzyzx-pos]
+values "rectw" range [0, a-hnum*rectw]
+values "pos" range [0, zzyzx]
+
+values "shap" stHoleShape
+values "gs_shap_m" HOLE_RECTANGULAR, HOLE_CIRCULAR
+
+IF GLOB_MODPAR_NAME = "shap" then
+	gs_shap_m = HOLE_RECTANGULAR
+	if shap = stHoleShape[2] then gs_shap_m = HOLE_CIRCULAR
+	parameters gs_shap_m = gs_shap_m
+else
+	shap = stHoleShape[1]
+	if gs_shap_m = 2 then shap = stHoleShape[2]
+	parameters shap = shap
+endif
+
+values{2} "iHoleContour2D" 	HOLECONTOUR2D_OFF, `Только Ось`,
+							HOLECONTOUR2D_ON, `Ось с Контуром`
+
+values "gs_resol" range [3, )
+
+if not(Shape) and gs_shap_m <> HOLE_CIRCULAR then
+	hideparameter "gs_resol"
+endif
+
+if not(Shape) then
+	hideparameter	"shap",
+					"gs_shap_m",
+					"hnum",
+					"pos",
+					"cdia",
+					"rectw",
+					"recth",
+					"iHoleContour2D"
+	lock	"shap",
+			"gs_shap_m",
+			"hnum",
+			"pos",
+			"cdia",
+			"rectw",
+			"recth",
+			"iHoleContour2D"
+endif
+
+IF GLOB_MODPAR_NAME ="B" THEN PARAMETERS B2=B/2
+IF GLOB_MODPAR_NAME ="B2" THEN PARAMETERS B=B2*2
+
+IF gs_cont_pen=0 then parameters gs_cont_pen=10
+IF gs_fill_pen=0 then parameters gs_fill_pen=19
+
+if not(axis) then
+	parameters only_axis=0
+	lock "only_axis", "axis_line_type", "axis_pen"
+endif
+if not(showsect) then
+	lock "cross_fill"
+endif
+if axis and only_axis then
+	lock	"gs_fill_type",
+			"gs_fill_pen",
+			"gs_back_pen",
+			"showsect",
+			"cross_fill",
+			"gs_cont_pen"
+endif
+
+es_length=a
+es_surface = b*zzyzx
+holes_volume = 0
+if Shape then
+	if gs_shap_m = HOLE_CIRCULAR then
+		holes_volume = hnum*(cdia/2)^2*PI*b
+	else
+		holes_volume = hnum*rectw*recth*b
+	endif
+endif
+es_volume = a*b*zzyzx - holes_volume - (ExtRight+ExtLeft)*b*(zzyzx-HgtTop)
+PARAMETERS es_length=es_length,
+		   es_surface = es_surface,
+		   es_volume = es_volume
+
+call "Precast_quantity_calc" parameters A = A,
+	bMetricDimension = bMetricDimension,
+	es_density		= es_density,
+	es_density_us	= es_density_us,
+	es_volume		= es_volume,
+	es_surface		= es_surface

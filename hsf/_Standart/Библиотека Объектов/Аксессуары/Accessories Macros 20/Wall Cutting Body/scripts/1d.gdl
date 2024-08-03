@@ -1,0 +1,160 @@
+
+epszilon=0.0001
+eps=0.00001
+
+! --------------------------------
+! Scan the arrays for the last row
+! --------------------------------
+
+bot_num=vardim1(ac_bot_poly)
+top_num=vardim1(ac_top_poly)
+sg_num=vardim1(ac_angles)
+if vardim2(ac_side_poly)<=2 then
+	sp_num=0
+else
+	sp_num=vardim1(ac_side_poly)
+endif
+if vardim2(ac_wd_poly)<=2 then
+	wd_num=0
+else
+	wd_num=vardim1(ac_wd_poly)
+endif
+
+if gs_gdl_debug then
+	print "- GDL Debug --- Cutting Body --- GDL Debug -"
+	print "ref_thickness=",ref_thickness
+	print "gs_mat=",gs_mat
+	print "cut_set=",cut_set
+	print "ac_accessory_debug=",ac_accessory_debug
+	print "gs_gdl_debug=",gs_gdl_debug
+	print "ac_wall_height=",ac_wall_height
+	print "ac_wall_radius=",ac_wall_radius
+	print "ac_wall_length=",ac_wall_length
+	print "ac_wall_resol=",ac_wall_resol
+	print "ac_refside=",ac_refside
+	print "ac_curved_wall=",ac_curved_wall
+	print "ac_cont_pen=",ac_cont_pen
+	print "ac_angles"
+	for i=1 to vardim1(ac_angles)
+		print ac_angles[i]
+	next i
+	print "ac_side_poly"
+	for i=1 to vardim1(ac_side_poly)
+		print ac_side_poly[i]
+	next i
+	print "ac_top_poly"
+	for i=1 to top_num
+		print ac_top_poly[i]
+	next i
+
+	print "ac_bot_poly"
+	for i=1 to bot_num
+		print ac_bot_poly[i]
+	next i
+
+	print "ac_wd_poly"
+	for i=1 to wd_num
+		print ac_wd_poly[i]
+	next i
+endif
+
+! -----------------------------------------
+! Calculate the oversize for the revolution
+! -----------------------------------------
+
+! Center point            (u,v)=(0,ac_wall_radius)
+! Radius                  r=ac_wall_radius-ref_thickness
+! Equation of the circle  (sec_x_beg-u)^2+(sec_y_beg-v)^2=r^2
+! Slope of the line       kappa=ac_angles[1][1]
+! Equation of the line    sec_y_beg=tan(kappa)*sec_x_beg
+! Equation with two unkn. (1+(tan(kappa))^2)*sec_x_beg^2-2*ac_wall_radius*tan(kappa)*sec_x_beg+2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+oper_thk=ref_thickness
+cutting_thk=ref_thickness+2*oper_thk
+if abs(ac_wall_radius)<EPS then	!! Staight Wall
+	if ac_angles[1][1]>90 then
+		over_beg=ref_thickness/tan(180-ac_angles[1][1])+oper_thk/2
+	else
+		over_beg=oper_thk/2
+	endif
+	if ac_angles[vardim1(ac_angles)][2]<90 then
+		over_end=ref_thickness/tan(ac_angles[vardim1(ac_angles)][2])+oper_thk/2
+	else
+		over_end=oper_thk/2
+	endif
+
+	over_cut_end=over_end+oper_thk/2
+	over_cut_beg=over_beg+oper_thk/2
+else						!! Curved Wall
+	if ac_angles[1][1]<=90 then
+		kappa=ac_angles[1][1]
+
+		a_beg=(1+(tan(kappa))^2)
+		b_beg=-2*ac_wall_radius*tan(kappa)
+		c_beg=2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+		if b_beg^2-4*a_beg*c_beg>=0 then
+			sec_x_beg=(-b_beg-sqr(b_beg^2-4*a_beg*c_beg))/(2*a_beg)
+			sec_y_beg=sec_x_beg*tan(kappa)
+		else
+			sec_x_beg=ac_wall_radius*cos(kappa)*sin(kappa)
+			sec_y_beg=ac_wall_radius-ac_wall_radius*cos(kappa)*cos(kappa)
+		endif
+
+		overang_1=0
+	else
+		kappa=180-ac_angles[1][1]
+
+		a_beg=(1+(tan(kappa))^2)
+		b_beg=-2*ac_wall_radius*tan(kappa)
+		c_beg=2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+		if b_beg^2-4*a_beg*c_beg>=0 then
+			sec_x_beg=-(-b_beg-sqr(b_beg^2-4*a_beg*c_beg))/(2*a_beg)
+			sec_y_beg=-sec_x_beg*tan(kappa)
+			overang_1=asn(-sec_x_beg/(ac_wall_radius-ref_thickness))  ! Iaccuray
+		else
+			sec_x_beg=-ac_wall_radius*cos(kappa)*sin(kappa)
+			sec_y_beg=ac_wall_radius-ac_wall_radius*cos(kappa)*cos(kappa)
+			overang_1=kappa
+		endif
+	endif
+
+	if ac_angles[sg_num][2]>=90 then
+		lambda=180-ac_angles[sg_num][2]
+
+		a_end=(1+(tan(lambda))^2)
+		b_end=-2*ac_wall_radius*tan(lambda)
+		c_end=2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+		if b_end^2-4*a_end*c_end>=0 then
+			sec_x_end=-(-b_end-sqr(b_end^2-4*a_end*c_end))/(2*a_end)
+			sec_y_end=-sec_x_end*tan(lambda)
+		else
+			sec_x_end=-ac_wall_radius*cos(lambda)*sin(lambda)
+			sec_y_end=ac_wall_radius-ac_wall_radius*cos(lambda)*cos(lambda)
+		endif
+
+		overang_2=0
+	else
+		lambda=ac_angles[sg_num][2]
+
+		a_end=(1+(tan(lambda))^2)
+		b_end=-2*ac_wall_radius*tan(lambda)
+		c_end=2*ac_wall_radius*ref_thickness-ref_thickness^2
+
+		if b_end^2-4*a_end*c_end>=0 then
+			sec_x_end=(-b_end-sqr(b_end^2-4*a_end*c_end))/(2*a_end)
+			sec_y_end=sec_x_end*tan(lambda)
+			overang_2=asn(sec_x_end/(ac_wall_radius-ref_thickness))
+		else
+			sec_x_end=ac_wall_radius*cos(lambda)*sin(lambda)
+			sec_y_end=ac_wall_radius-ac_wall_radius*cos(lambda)*cos(lambda)
+			overang_2=lambda
+		endif
+	endif
+
+	over_cut_beg=sin(overang_1)*ac_wall_radius+oper_thk/2
+	over_cut_end=sin(overang_2)*ac_wall_radius+oper_thk/2
+endif
+

@@ -1,0 +1,627 @@
+
+if gs_detlevel_3d_m = DETLEVEL_3D_OFF then end
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+!gs_2D_projection_type:
+!	0 - Normal 3D
+!	1 - View Edges
+!	2 - View Polygons
+!	3 - Overhead Edges
+!	4 - Cut Lines
+!	5 - Cut Polygons
+!	6 - Bottom Range Cut Lines
+!	7 - Top Range Cut Lines
+
+nProjectionCut = 0
+if gs_2D_projection then
+	if AC_symb_show_projection_to = PROJECTION_FLOOR_PLAN_RANGE | (AC_symb_show_projection_to = PROJECTION_DISPLAY_LIMIT & gs_bottom_range_height < gs_cutplane_height) then
+		addz gs_bottom_range_height
+		cutplane{2} 180, 2
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+	if gs_2D_projection_type <> 6 then
+		addz gs_cutplane_height
+		cutplane{2} 180 * (gs_2D_projection_type = 3), 1
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+	if AC_symb_show_projection_to <> 3 then
+		addz gs_top_range_height
+		cutplane{2} 0, 2
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+endif
+
+EPS_3D = 0.0001
+
+iResol = 32
+resol iResol
+pen gs_pen_3d
+unID = 1
+
+!================================================================================
+! Hotspots
+!================================================================================
+
+hotspot  0, B/2, 0, unID, A, 	1+256 	: unID=unID+1
+hotspot -1, B/2, 0, unID, A, 	3 		: unID=unID+1
+hotspot  A, B/2, 0, unID, A, 	2 		: unID=unID+1
+
+
+hotspot 0,  0, 0, unID, B, 1+256 	: unID=unID+1
+hotspot 0, -1, 0, unID, B, 3 		: unID=unID+1
+hotspot 0,  B, 0, unID, B, 2 		: unID=unID+1
+
+hotspot A,  0, 0, unID, B, 1+256 	: unID=unID+1
+hotspot A, -1, 0, unID, B, 3 		: unID=unID+1
+hotspot A,  B, 0, unID, B, 2 		: unID=unID+1
+
+hotspot 0,  0, ZZYZX, unID, B, 1+256 	: unID=unID+1
+hotspot 0, -1, ZZYZX, unID, B, 3 		: unID=unID+1
+hotspot 0,  B, ZZYZX, unID, B, 2 		: unID=unID+1
+
+hotspot A,  0, ZZYZX, unID, B, 1+256 	: unID=unID+1
+hotspot A, -1, ZZYZX, unID, B, 3 		: unID=unID+1
+hotspot A,  B, ZZYZX, unID, B, 2 		: unID=unID+1
+
+
+hotspot  0, 	B/2,  0, 		unID, ZZYZX, 	1+256, 	strJoistType	: unID=unID+1
+hotspot  0, 	B/2, -1, 		unID, ZZYZX, 	3,		strJoistType	: unID=unID+1
+hotspot  0, 	B/2,  ZZYZX, 	unID, ZZYZX, 	2,		strJoistType	: unID=unID+1
+
+hotspot  A, 	B/2,  0, 		unID, ZZYZX, 	1+256, 	strJoistType	: unID=unID+1
+hotspot  A, 	B/2, -1, 		unID, ZZYZX, 	3, 		strJoistType	: unID=unID+1
+hotspot  A, 	B/2,  ZZYZX, 	unID, ZZYZX, 	2, 		strJoistType	: unID=unID+1
+
+hotspot  A/2, 	B/2,  0, 		unID, ZZYZX, 	1+256, 	strJoistType	: unID=unID+1
+hotspot  A/2, 	B/2, -1, 		unID, ZZYZX, 	3, 		strJoistType	: unID=unID+1
+hotspot  A/2, 	B/2,  ZZYZX, 	unID, ZZYZX, 	2, 		strJoistType	: unID=unID+1
+
+
+
+!================================================================================
+! Chords
+!================================================================================
+
+material matChord
+
+for i=1 to 2
+	block A, chordWidth, chordHeight
+
+	addz joistHeight-chordHeight
+next i
+del 2
+
+
+!================================================================================
+! Calculations for Metal Profile
+!================================================================================
+
+! --- Profile changes in case of low joist (under height 300mm)
+
+if ZZYZX < 0.300 then
+	bSmallHeight = 1
+else
+	bSmallHeight = 0
+endif
+
+! --- 1. run: Outer edges calculation
+! --- 2. run: Inner edges because of metal thickness (inner edges for inner cut)
+
+! --- Center of fillet circles --------------------------------------------------
+
+xc1 = 0
+yc1 = rf1
+
+xc2 = w_metal - (w_connection+chamfer_connection) - rf2
+yc2 = d_chord + h_chamfer*bSmallHeight
+
+
+! --- Difference (rf1 - rf2) circle in xc1,yc1 ----------------------------------
+
+rd  = rf1 - rf2
+xcd = xc1
+ycd = yc1
+
+
+! --- Circle on xc1,yc1 - xc2,yc2 connecting line -------------------------------
+
+dxc12 = xc2 - xc1
+dyc12 = yc2 - yc1
+
+rc  = SQR(dxc12^2 + dyc12^2) / 2
+xcc = xc1 + dxc12/2
+ycc = yc1 + dyc12/2
+
+
+! --- Intersection point of "difference-circle" and "circle on connecting line" -
+
+! --- Input parameters
+r0 = rd
+x0 = xcd
+y0 = ycd
+
+r1 = rc
+x1 = xcc
+y1 = ycc
+
+! --- Calculation
+dd = r1
+aa = (r0^2-r1^2+dd^2) / (2*dd)
+hh = SQR(r0^2-aa^2)
+
+x2 = x0 + aa*(x1-x0)/dd
+y2 = y0 + aa*(y1-y0)/dd
+
+x3 = x2 + hh*(y1-y0)/dd
+y3 = y2 - hh*(x1-x0)/dd
+
+! --- Results
+xis_dc = x3
+yis_dc = y3
+
+
+! --- Intersection of Circle 1 and the xc1,yc1 - xis_dc,yis_dc line -------------
+
+! --- Input parameters
+x1 = xc1 - xc1
+y1 = yc1 - yc1
+x2 = xis_dc - xc1
+y2 = yis_dc - yc1
+rr = rf1
+
+! --- Calculation
+dx = x2 - x1
+dy = y2 - y1
+dr = SQR(dx^2+dy^2)
+dd = x1*y2 - x2*y1
+
+x3 = ( dd*dy + dx*SQR(rr^2*dr^2-dd^2)) / dr^2
+y3 = (-dd*dx + dy*SQR(rr^2*dr^2-dd^2)) / dr^2
+
+! --- Results
+xis1 = x3 + xc1
+yis1 = y3 + yc1
+
+
+! --- Intersection of Circle 2 and the xc2,yc2 - xis_dc,yis_dc-paralel line -----
+
+! --- Input parameters
+x1 = xc2 - xc2
+y1 = yc2 - yc2
+x2 = xc2+dx - xc2
+y2 = yc2+dy - yc2
+rr = rf2
+
+! --- Calculation
+dx = x2 - x1
+dy = y2 - y1
+dr = SQR(dx^2+dy^2)
+dd = x1*y2 - x2*y1
+
+x3 = ( dd*dy + dx*SQR(rr^2*dr^2-dd^2)) / dr^2
+y3 = (-dd*dx + dy*SQR(rr^2*dr^2-dd^2)) / dr^2
+
+! --- Results
+xis2 = x3 + xc2
+yis2 = y3 + yc2
+
+
+! --- Other side ----------------------------------------------------------------
+
+xc3  = w_metal - xc1
+yc3  = d_chord - yc1
+xis3 = w_metal - xis1
+yis3 = d_chord - yis1
+
+xc4  = w_metal - xc2
+yc4  = d_chord - yc2
+xis4 = w_metal - xis2
+yis4 = d_chord - yis2
+
+
+! --- Fillet Angles -------------------------------------------------------------
+
+ax1 = xis1 - xc1
+ay1 = yc1 - yis1
+angle1 = ABS(ATN(ax1/ay1))
+
+ax2 = xis2 - xc2
+ay2 = yc2 - yis2
+angle2 = ABS(ATN(ay2/ax2))
+
+
+
+
+!================================================================================
+! Metal Profile Array
+!================================================================================
+
+
+! --- End Trimming ---
+
+if iEndTrimming = SOLID_WEB then
+	addz chordHeight
+
+	for i=1 to 2
+		material matChord
+		block end_trim_length, chordWidth, joistHeight-chordHeight*2
+
+		plate_w = 0.090
+		plate_h = 0.090
+		addx end_trim_length - plate_w/2 - (chordHeight-0.035)/2
+		gosub "STEEL_PLATES"
+		del 1
+
+		addx A
+		mulx -1
+	next i
+	del 4
+
+	del 1
+
+	addx end_trim_length
+endif
+
+
+if iEndTrimming = FRAMED then
+	for i=1 to n_columns_left
+		gosub "PILLAR"
+		addx d_columns
+	next i
+	del n_columns_left
+
+	addx (n_columns_left-1)*d_columns + chordHeight + n_units*unit_width + n_pillars*chordHeight
+	for i=1 to n_columns_right
+		gosub "PILLAR"
+		addx d_columns
+	next i
+	del n_columns_right
+	del 1
+
+	addx (n_columns_left-1)*d_columns + chordHeight
+endif
+
+
+
+! --- Metal Frames ---
+
+if n_pillars = 0 then
+	for i=1 to n_units
+		n_units_s = n_units
+		gosub "METAL_V_UNIT"
+		addx unit_width
+	next i
+	del n_units
+endif
+
+if n_pillars = 1 then
+	delnum = 0
+	n_units1 = ROUND_INT(n_units/2)
+	n_units2 = n_units-n_units1
+
+	for i=1 to n_units1
+		n_units_s = n_units1
+		gosub "METAL_V_UNIT"
+		addx unit_width	: delnum = delnum + 1
+	next i
+
+	gosub "PILLAR"
+	addx chordHeight	: delnum = delnum + 1
+
+	for i=1 to n_units2
+		n_units_s = n_units2
+		gosub "METAL_V_UNIT"
+		addx unit_width	: delnum = delnum + 1
+	next i
+
+	del delnum
+endif
+
+if n_pillars = 2 then
+	delnum = 0
+	n_units1 = ROUND_INT(n_units/3)
+	n_units2 = ROUND_INT((n_units-n_units1)/2)
+	n_units3 = n_units-n_units1-n_units2
+
+	if ABS(n_units1-n_units2) < EPS then
+		n_units2 = n_units3
+		n_units3 = n_units1
+	endif
+
+	if ABS(n_units2-n_units3) < EPS then
+		n_units2 = n_units1
+		n_units1 = n_units3
+	endif
+
+	for i=1 to n_units1
+		n_units_s = n_units1
+		gosub "METAL_V_UNIT"
+		addx unit_width	: delnum = delnum + 1
+	next i
+
+	gosub "PILLAR"
+	addx chordHeight	: delnum = delnum + 1
+
+	for i=1 to n_units2
+		n_units_s = n_units2
+		gosub "METAL_V_UNIT"
+		addx unit_width	: delnum = delnum + 1
+	next i
+
+	gosub "PILLAR"
+	addx chordHeight	: delnum = delnum + 1
+
+	for i=1 to n_units3
+		n_units_s = n_units3
+		gosub "METAL_V_UNIT"
+		addx unit_width	: delnum = delnum + 1
+	next i
+
+	del delnum
+endif
+
+
+if iEndTrimming = SOLID_WEB then del 1
+if iEndTrimming = FRAMED    then del 1
+
+for i = 1 to nProjectionCut
+	cutend
+next i
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ==============================================================================
+
+
+!================================================================================
+"METAL_V_UNIT":
+!================================================================================
+
+	addy chordWidth/2
+
+	if iWebBracing = NORMAL then
+		for s=1 to 2
+			for ss=1 to 2
+				gosub "METAL_PROFILE"
+
+				muly -1
+			next ss
+			del 2
+
+			addx unit_width
+			mulx -1
+		next s
+		del 4
+	endif
+
+	if iWebBracing = STAGGERED then
+		for s=1 to 2
+			if s=1 or (s=2 and i=n_units_s) then		! --- Both Sides At Left End
+				gosub "METAL_PROFILE"
+			endif
+
+			if s=2 or (s=1 and i=1) then			! --- Both Sides On Right End
+				muly -1
+				gosub "METAL_PROFILE"
+				del 1
+			endif
+
+			addx unit_width
+			mulx -1
+		next s
+		del 4
+	endif
+
+	if iWebBracing = DOUBLE_DENSITY then
+		for s=1 to 2
+			for ss=1 to 2
+				gosub "METAL_PROFILE"
+
+				addx 0.100
+				gosub "METAL_PROFILE"
+				del 1
+
+				muly -1
+			next ss
+			del 2
+
+			addx unit_width
+			mulx -1
+		next s
+		del 4
+	endif
+
+	del 1
+
+return
+
+
+
+!================================================================================
+"METAL_PROFILE":
+!================================================================================
+
+	material matMetalParts
+
+	addx w_metal
+	mulx -1
+	addy -chordWidth/2
+	addz chordHeight
+	rotx 90
+	addz EPS_3D
+
+	poly_ 20,
+
+			w_connection+chamfer_connection,	 		-h_chamfer*bSmallHeight,	1,
+			w_connection+chamfer_connection,			-h_chamfer,					1,
+			w_connection,								-h_connection,				1,
+			0,											-h_connection,				1,
+
+			0,											0,							1,
+			xc1,										yc1,						900,
+			xis1,										yis1,						3001,
+			xis2,										yis2,						1,
+			xc2,										yc2,						900,
+			w_metal-(w_connection+chamfer_connection),	d_chord,					3001,
+
+			w_metal-(w_connection+chamfer_connection),	d_chord+h_chamfer, 			1,
+			w_metal-w_connection,						d_chord+h_connection, 		1,
+			w_metal,									d_chord+h_connection, 		1,
+
+			w_metal,									d_chord,					1,
+			xc3,										yc3,						900,
+			xis3,										yis3,						3001,
+			xis4,										yis4,						1,
+			xc4,										yc4,						900,
+			w_connection+chamfer_connection,			-h_chamfer*bSmallHeight,	3000,
+
+			w_connection+chamfer_connection,	 		-h_chamfer*bSmallHeight,	1
+
+
+	if gs_detlevel_3d_m = DETLEVEL_3D_DETAILED then
+
+		! --- Fillet Segments ---
+
+		segments1  = ROUND_INT(angle1/360 * iResol)
+		if segments1 < 1 then segments1 = 1
+		seg_angle1 = angle1 / segments1
+
+		segments2  = ROUND_INT(angle2/360 * iResol)
+		if segments2 < 1 then segments2 = 1
+		seg_angle2 = angle2 / segments2
+
+
+		! --- Points ---
+
+		put	0,  0, 1
+
+		for sss=1 to segments1 step 1
+			put	xc1+rf1*SIN(seg_angle1*sss), yc1-rf1*COS(seg_angle1*sss), 1
+		next sss
+
+		put	xis1, yis1,	1
+		put	xis2, yis2,	1
+
+		for sss=segments2 to 1 step -1
+			put	xc2+rf2*SIN(90-seg_angle2*sss), yc2-rf2*COS(90-seg_angle2*sss), 1
+		next sss
+
+		put	w_metal-(w_connection+chamfer_connection), 		d_chord, 		1
+		put	w_metal-(w_connection+chamfer_connection), 		d_chord+0.1,	1	! cutted
+		put	w_metal-(w_connection+chamfer_connection)+0.1, 	d_chord+0.1, 	1	! cutted
+		put	w_metal+0.1,								   	d_chord+0.1, 	1	! cutted
+		put	w_metal+0.1,								   	d_chord, 		1	! cutted
+		put	w_metal,								   		d_chord, 		1
+
+		for sss=1 to segments1 step 1
+			put	xc3-rf1*SIN(seg_angle1*sss), yc3+rf1*COS(seg_angle1*sss), 1
+		next sss
+
+		put	xis3, yis3, 1
+		put	xis4, yis4, 1
+
+		for sss=segments2 to 1 step -1
+			put	xc4-rf2*SIN(90-seg_angle2*sss), yc4+rf2*COS(90-seg_angle2*sss), 1
+		next sss
+
+		put	 w_connection+chamfer_connection,  	 0, 	1
+		put  w_connection+chamfer_connection, 	-0.1, 	1		! cutted
+		put -0.1, 								-0.1, 	1		! cutted
+		put -0.1, 								 0, 	1		! cutted
+		put	 0,								  	 0, 	1
+
+
+		! --- Draw Geometry ---
+
+		rotx 90
+		cutplane
+		del 1
+
+		addy d_chord
+		rotx -90
+		cutplane
+		del 2
+
+		roty -90
+		cutplane
+		del 1
+
+		addx w_metal
+		roty 90
+		cutplane
+		del 2
+
+
+		extrude NSP/3, 0, 0, -w_profile, 4+16,
+				get(NSP)
+
+		cutend
+		cutend
+		cutend
+		cutend
+
+	endif
+
+	del 6
+
+return
+
+
+
+!================================================================================
+"PILLAR":
+!================================================================================
+
+	material matChord
+
+	addz chordHeight
+	block chordHeight,chordWidth,joistHeight-chordHeight*2
+	del 1
+
+
+	addz chordHeight
+	addx chordHeight/2
+
+	plate_w = 0.035
+	plate_h = 0.090
+	gosub "STEEL_PLATES"
+
+	del 2
+
+return
+
+
+
+!================================================================================
+"STEEL_PLATES":
+!================================================================================
+
+	for s=1 to 2
+		for ss=1 to 2
+			addy -EPS_3D
+			material matMetalParts
+			plane 4,
+					-plate_w/2, 0, -plate_h/2,
+					-plate_w/2, 0,  plate_h/2,
+					 plate_w/2, 0,  plate_h/2,
+					 plate_w/2, 0, -plate_h/2
+
+			del 1
+
+			addz joistHeight-chordHeight*2
+		next ss
+		del 2
+
+		addy chordWidth
+		muly -1
+	next s
+	del 4
+
+return
+

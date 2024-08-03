@@ -1,0 +1,165 @@
+if bShowMEP then
+	if show_el < EPS then end
+	IF gs_detlevel_3D_m < EPS THEN END
+	CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+	useSysMat = 1
+endif
+
+IF gs_detlevel_3D_m = 0 THEN END
+IF gs_detlevel_3D_m = 1 THEN 
+	SHADOW OFF
+else
+	SHADOW ON
+endif
+resol res
+
+
+if bShowMEP then
+
+	if useSysMat then
+		gs_bowl_mat		= sMat
+		matSeatCover	= sMat
+		gs_tank_mat		= sMat
+		matCisternPipe	= sMat
+		matFlushButton	= sMat
+		matSensor		= sMat
+		gs_pipe_mat		= sMat
+		gs_con_mat		= sMat
+	endif
+
+
+	if iWCType = WC_NORMAL then
+		if iToiletMounting = FLOOR_MOUNTED and (iFloorMountedBowlType = FLOORMOUNTED_TYPE_1 or iFloorMountedBowlType = FLOORMOUNTED_TYPE_2) then
+			if iFlushType = NONEFLUSH then
+				ConEdit_1 = 1
+			else
+				ConEdit_1 = 14
+			endif
+			if DirEffluent_ID = EFFLUENT_BACK then
+				ConEdit_2 = 1
+			else
+				ConEdit_2 = 13
+			endif
+		else
+			ConEdit_1 = 14
+			if DirEffluent_ID = EFFLUENT_BACK then
+				ConEdit_2 = 14
+			else
+				ConEdit_2 = 13
+			endif
+		endif
+	endif
+	if iWCType = WC_CORNER then
+		if iFlushType = NONEFLUSH then
+			ConEdit_1 = 1
+		else
+			ConEdit_1 = 14
+		endif
+		if DirEffluent_ID = EFFLUENT_BACK then
+			ConEdit_2 = 1
+		else
+			ConEdit_2 = 13
+		endif
+	endif
+	if iWCType = WC_SQUATTING then
+		ConEdit_1 = 1
+		ConEdit_2 = 1
+	endif
+
+
+	call "MEP_m_ConnectionsACL_4" parameters 	SetProgram 				= SetProgram,
+												ui_current_con 			= ui_current_con,
+												MEP_NumberConnections 	= MEP_NumberConnections,
+												MEP_NumConnectionData 	= gs_Connections,
+												gs_AddConnections 		= gs_AddConnections,
+												cShow3D 				= 1,
+												gs_ConMat 				= gs_con_mat,
+												MEP_InsShow 			= 0,
+												MEP_cline_show_3D 		= 0,
+												gs_cont_pen 			= gs_cont_pen,
+												ConPosX_1 				= ConPosX_1,
+												ConPosY_1 				= ConPosY_1 - (ConWidth_2/2+0.030)*(iWCType = WC_CORNER and iFlushType = NONEFLUSH),
+												ConPosZ_1 				= ConPosZ_1,
+												ConLength_1 			= ConLength_1,
+												ConEdit_1 				= ConEdit_1,
+												ConPosX_2 				= ConPosX_2,
+												ConPosY_2 				= ConPosY_2 - (ConWidth_2/2+0.030)*(iWCType = WC_CORNER and DirEffluent_ID = EFFLUENT_BACK and iFlushType <> IN_WALL_CARRIER),
+												ConPosZ_2 				= ConPosZ_2,
+												ConLength_2 			= ConLength_2,
+												ConEdit_2 				= ConEdit_2
+
+	if not(show3D) then end
+endif
+
+
+!================================================================================
+! WC
+!================================================================================
+addy -distanceFromWall * bBowlMove
+
+! --- Bowl ----------------------------------------------------------------------
+
+call "ToiletBowlTypesMacro" parameters all	A 						= bowlWidth,
+											B 						= bowlDepth,
+											ZZYZX 					= bowlHeight,
+											builtInCistern 			= builtInCistern,
+											builtInCisternHeight 	= builtInCisternHeight
+
+del 1
+
+! --- Flush Method --------------------------------------------------------------
+addy -distanceFromWall * bFlushMove
+
+if iWCType = WC_NORMAL or iWCType = WC_CORNER then
+
+	if iFlushType = CISTERN then
+		if not(builtInCistern) then
+			call "ToiletCisternTypesMacro" parameters all 	iFlushType	= CISTERN,
+															A 			= cisternWidth,
+															B 			= cisternDepth,
+															ZZYZX 		= cisternHeight
+		endif
+	endif
+
+	if iFlushType = ELEVATED_CISTERN then
+		call "ToiletCisternTypesMacro" parameters all 	iFlushType 	= ELEVATED_CISTERN,
+														A 			= cisternWidth,
+														B 			= cisternDepth,
+														ZZYZX 		= cisternHeight
+	endif
+
+	if iFlushType = IN_WALL_CARRIER then
+		call "ToiletInWallCarrierTypesMacro" parameters all 	A		= carrierWidth,
+																B 		= carrierDepth,
+																ZZYZX 	= carrierHeight
+	endif
+
+	if iFlushType = FLUSHOMETER then
+		yTapPos = 0.065
+		hTopPlus = 0.013
+		if iFlushometerType = FLUSHOMETER_AUTOMATIC then hTopPlus = 0.134
+		if iFlushometerType = FLUSHOMETER_MANUAL 	then hTopPlus = 0.064
+
+		unID = 5000
+		hotspot 0, -yTapPos,  hTopPlus, 					 	unID, waterConnectionHeight, 1 + 128 	: unID = unID + 1
+		hotspot 0, -yTapPos, -1, 					 			unID, waterConnectionHeight, 3			: unID = unID + 1
+		hotspot 0, -yTapPos,  waterConnectionHeight+hTopPlus, 	unID, waterConnectionHeight, 2 			: unID = unID + 1
+
+		addz gs_seat_height
+
+		call "flushometer_m" parameters		gs_detlevel_3D_m	= gs_detlevel_3D_m,
+											iFlushometerType	= iFlushometerType,
+											gs_resol			= gs_resol,
+											gs_shadow			= gs_shadow,
+											yTapPos				= yTapPos,
+											zTapPos				= waterConnectionHeight-gs_seat_height,
+											matFlushometer		= gs_pipe_mat,
+											matSensor			= matSensor,
+											gs_cont_pen			= gs_cont_pen
+		del 1
+	endif
+
+endif
+
+del 1
+

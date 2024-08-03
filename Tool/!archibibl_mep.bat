@@ -27,6 +27,8 @@ cd "%lcf_dir%"
 "%converter%" createcontainer "%lcf_1%" -compress 9 "%gdl_1_dir%">"%tool_dir%\_ArchiBibl_log.txt"
 "%converter%" createcontainer "%lcf_3%" -compress 9 "%gdl_3_dir%">"%tool_dir%\_MEP_log.txt"
 
+python "%tool_dir%\hsf2text.py"
+
 TIMEOUT /T 1
 
 cd ..

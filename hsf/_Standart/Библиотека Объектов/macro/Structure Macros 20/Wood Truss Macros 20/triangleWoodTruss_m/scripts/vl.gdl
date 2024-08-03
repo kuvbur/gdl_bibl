@@ -1,0 +1,171 @@
+
+hideparameter all "A", "B", "ZZYZX"
+
+call "FM_types" parameters all
+
+values{2} "gs_detlevel_3D_m" DETLEVEL3D_DETAILED, st3dDetLevelValues[1],
+							DETLEVEL3D_SIMPLE, st3dDetLevelValues[2],
+							DETLEVEL3D_OFF, st3dDetLevelValues[3]
+
+values{2} "iDimensionSetMode" 	DIM_WIDTH_HEIGHT, `Ширина + Высота`,
+								DIM_WIDTH_ANGLE, `Ширина + Угол`,
+								DIM_WIDTH_PROPORTION, `Ширина + Пропорция`
+
+values{2} "iEndType"	END_PERPENDICULAR, `Перпендикулярно`,
+						END_VERTICAL, `Вертикальный`,
+						END_HORIZONTAL, `Горизонтальный`,
+						END_RECTANGULAR, `Прямоугольный Срез`,
+						END_CUSTOM_CUT, `Специальное Сечение`
+
+
+lock "A", "ZZYZX"
+parameters	A 		= A,
+			ZZYZX	= ZZYZX
+
+_angLowerLimit = 10
+_angUpperLimit = 90
+
+if iDimensionSetMode = DIM_WIDTH_HEIGHT then
+	lock "ang", "rp"
+	parameters	ang = ang,
+				rp	= rp
+
+	values "trussHeight" range[max(tieBeamHeight*2 + rafterHeight/cos(ang), (A/2)*tan(_angLowerLimit)), )
+endif
+if iDimensionSetMode = DIM_WIDTH_ANGLE then
+	lock "trussHeight", "rp"
+	parameters	trussHeight	= trussHeight,
+				rp			= rp
+
+	values "ang" range[_angLowerLimit, _angUpperLimit)
+endif
+if iDimensionSetMode = DIM_WIDTH_PROPORTION then
+	lock "trussHeight", "ang"
+	parameters	trussHeight	= trussHeight,
+				ang			= ang
+
+	values "rp" range[tan(_angLowerLimit) * 12', tan(_angUpperLimit) * 12')
+endif
+
+parameters ac_bottomlevel = -dZZYZX,
+		   ac_toplevel	  = trussHeight
+
+values "rafterHeight" range (0,)
+values "tieBeamHeight" range (0,)
+values "webBeamHeight" range (0,)
+
+
+if	iTrussType = TRUSS_PITCHED_HOWE |\
+	iTrussType = TRUSS_PITCHED_PRATT then
+
+	values "wn" range [2, 20] step 4, 2
+endif
+
+if iTrussType = TRUSS_PITCHED_FINK then
+	values "wn" 3, 5
+endif
+
+if (bOverhang) then
+	values "eaveOverhang" range[xx, ]
+else
+	lock "eaveOverhang"
+endif
+
+lock "eaveHeight"
+parameters eaveHeight = dZZYZX
+
+if not((iEndType = END_CUSTOM_CUT) | (iEndType = END_RECTANGULAR)) then
+	lock "cutPartLength"
+else
+	values "cutPartLength" range[0, ]
+endif
+
+if not(iEndType = END_CUSTOM_CUT) then
+	lock "topFlangeAngle", "bottomFlangeAngle"
+endif
+
+if not(stp) then
+	lock "mat2"
+endif
+
+if not(gs_axis) then
+	lock "gs_axis_line", "gs_axis_line_pen"
+endif
+
+if gs_cont_pen= 0 then parameters gs_cont_pen=2
+IF gs_fill_pen=0 then parameters gs_fill_pen=91
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+values{2} "ac_symb_display_option" 	DISPLAY_PROJECTED,		stDisplayOptions[1],
+									DISPLAY_OVERHEAD_PROJ,	stDisplayOptions[2],
+									DISPLAY_SYMBOLIC,		stDisplayOptions[3],
+									DISPLAY_OUTLINES,		stDisplayOptions[4],
+									DISPLAY_OVERHEAD_ALL,	stDisplayOptions[5]
+									
+values{2} "ac_symb_show_projection_to"	PROJECTION_FLOOR_PLAN_RANGE,	stProjectionTypes[1],
+										PROJECTION_DISPLAY_LIMIT,		stProjectionTypes[2],
+										PROJECTION_ENTIRE_ELEMENT,		stProjectionTypes[3]
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"gs_use_3D_view_attributes"
+	lock			"gs_use_3D_view_attributes"
+endif
+
+if gs_use_3D_view_attributes then
+	hideparameter	"gs_cont_pen"
+	lock			"gs_cont_pen"
+endif
+
+if not(ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_OVERHEAD_PROJ) then
+	hideparameter	"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OUTLINES | ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"ac_symb_show_projection_to"
+	lock			"ac_symb_show_projection_to"
+
+	hideparameter	"gs_cut_linetype",
+					"gs_cut_pen",
+					"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+
+	lock			"gs_cut_linetype",
+					"gs_cut_pen",
+					"gs_cut_fill_type",
+					"gs_cut_fill_pen",
+					"gs_cut_back_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_PROJECTED | ac_symb_display_option = DISPLAY_SYMBOLIC | ac_symb_display_option = DISPLAY_OUTLINES then
+	hideparameter	"gs_overhead_linetype", "gs_overhead_pen"
+	lock			"gs_overhead_linetype", "gs_overhead_pen"
+endif
+
+if ac_symb_display_option = DISPLAY_OVERHEAD_ALL then
+	hideparameter	"gs_fill_type", "gs_fill_pen", "gs_back_pen", "gs_cont_pen", "gs_cont_line"
+	lock			"gs_fill_type", "gs_fill_pen", "gs_back_pen", "gs_cont_pen", "gs_cont_line"
+endif
+
+if ac_symb_display_option # DISPLAY_SYMBOLIC then
+	hideparameter "std"
+	lock "std"
+endif
+
+if ac_symb_display_option = DISPLAY_OUTLINES then
+	hideparameter "gs_axis"
+	lock "gs_axis"
+endif
+
+! ==============================================================================
+! 3D Display Options
+! ==============================================================================
+
+if gs_detlevel_3D_m = DETLEVEL3D_OFF then
+	lock "gs_pen_3d", "gs_shadow"
+endif

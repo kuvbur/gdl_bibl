@@ -1,0 +1,170 @@
+!-----------3d---------------------
+if show_el < EPS then end
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+if show_el < EPS then end
+IF gs_detlevel_3D_m < EPS THEN END
+! Horizontal Storage Tank
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+IF useSysMat THEN MainBoxMaterial = sMat
+MATERIAL MainBoxMaterial
+PEN gs_cont_pen
+RESOL res
+
+
+				! --- HOTSPOTS --- !
+
+unID = 1
+HOTSPOT -dTWidth/2, 0, legHeight+dTDepth/2, unID: unID=unID+1
+HOTSPOT dTWidth/2, 0, legHeight+dTDepth/2, unID: unID=unID+1
+
+endRed2 = endRed
+IF gs_detlevel_3D = `Простой` THEN endRed2 = 0
+
+HOTSPOT -dTWidth/2+endRed2, -dTDepth/2, legHeight+dTDepth/2, unID: unID=unID+1
+HOTSPOT -dTWidth/2+endRed2, dTDepth/2, legHeight+dTDepth/2, unID: unID=unID+1
+HOTSPOT dTWidth/2-endRed2, -dTDepth/2, legHeight+dTDepth/2, unID: unID=unID+1
+HOTSPOT dTWidth/2-endRed2, dTDepth/2, legHeight+dTDepth/2, unID: unID=unID+1
+
+HOTSPOT -dTWidth/2+endRed2, 0, legHeight, unID: unID=unID+1
+HOTSPOT dTWidth/2-endRed2, 0, legHeight, unID: unID=unID+1
+HOTSPOT -dTWidth/2+endRed2, 0, legHeight+dTDepth, unID: unID=unID+1
+HOTSPOT dTWidth/2-endRed2, 0, legHeight+dTDepth, unID: unID=unID+1
+
+
+				! --- TANK --- !
+
+IF gs_detlevel_3D_m = 2 THEN
+	GROUP "Tank"
+		ADD -dTWidth/2, 0, legHeight+dTDepth/2
+		CALL "MEP_m_Tank" PARAMETERS	tankLen = dTWidth, tankDia = dTDepth, endRed = endRed,
+										ringOn = 0, typ = 2, tankPos = 0, tankMat = MainBoxMaterial,
+										gs_cont_pen = gs_cont_pen, res = res
+		DEL 1
+	ENDGROUP
+
+	GROUP "Pipe"
+	IF Constatus_5 THEN
+		ADD 0, ConPosY_5, legHeight+dTDepth/2
+		ROTy -90
+			EXTRUDE 2, 0, 0, ABS(ConPosX_5), 1+2+16,
+				0, 0, 901,
+				ConWidth_5/2, 360, 4001
+		DEL 2
+	ENDIF
+
+	IF Constatus_6 THEN
+		ADD 0, ConPosY_6, legHeight+dTDepth/2
+		ROTy 90
+			EXTRUDE 2, 0, 0, ABS(ConPosX_6), 1+2+16,
+				0, 0, 901,
+				ConWidth_6/2, 360, 4001
+		DEL 2
+	ENDIF
+	ENDGROUP
+
+	Tank_with_Pipe = ADDGROUP ("Tank", "Pipe")
+
+	PLACEGROUP Tank_with_Pipe
+
+	KILLGROUP "Tank"
+	KILLGROUP "Pipe"
+	KILLGROUP Tank_with_Pipe
+ELSE
+	ADD -dTWidth/2, 0, legHeight+dTDepth/2
+	ROTy 90
+		CYLIND dTWidth, dTDepth/2
+	DEL 2
+ENDIF
+
+ROTy 90
+CUTPOLYA 2, 2, 0,
+	-legHeight-dTDepth/2, 0, 913,
+	dTDepth/2, 360, 4013
+DEL 1
+
+IF Constatus_1 THEN
+	ADD ConPosX_1, 0, legHeight+dTDepth/2
+	EXTRUDE 2, 0, 0, dTDepth/2, 16,
+		0, 0, 901,
+		ConWidth_1/2, 360, 4001
+	DEL 1
+ENDIF
+
+IF Constatus_2 THEN
+	ADD ConPosX_2, 0, legHeight+dTDepth/2
+	EXTRUDE 2, 0, 0, dTDepth/2, 16,
+		0, 0, 901,
+		ConWidth_2/2, 360, 4001
+	DEL 1
+ENDIF
+
+IF Constatus_3 THEN
+	ADD ConPosX_3, 0, legHeight
+	EXTRUDE 2, 0, 0, dTDepth/2, 32,
+		0, 0, 901,
+		ConWidth_3/2, 360, 4001
+	DEL 1
+ENDIF
+
+IF Constatus_4 THEN
+	ADD ConPosX_4, 0, legHeight
+	EXTRUDE 2, 0, 0, dTDepth/2, 32,
+		0, 0, 901,
+		ConWidth_4/2, 360, 4001
+	DEL 1
+ENDIF
+CUTEND
+
+
+				! --- SUPPORT --- !
+
+ADDx -dTWidth/2+endRed+supDist
+ROTz 90
+CALL "MEP_m_Tank_support_4" PARAMETERS	supLen = supLen, supHeight = legHeight+dTDepth/4, supThick = 0.02,
+										footWidth = dTDepth+0.05*dd, footThick = 0.025,
+										tankDia = dTDepth, tankDeepening = dTDepth/4,
+										gs_detlevel_3D_m = gs_detlevel_3D_m, supMat = MainBoxMaterial,
+										gs_cont_pen = gs_cont_pen, res = res, hptsID = 200
+DEL 2
+
+ADDx dTWidth/2-endRed-supDist
+ROTz -90
+CALL "MEP_m_Tank_support_4" PARAMETERS	supLen = supLen, supHeight = legHeight+dTDepth/4, supThick = 0.02,
+										footWidth = dTDepth+0.05*dd, footThick = 0.025,
+										tankDia = dTDepth, tankDeepening = dTDepth/4,
+										gs_detlevel_3D_m = gs_detlevel_3D_m, supMat = MainBoxMaterial,
+										gs_cont_pen = gs_cont_pen, res = res, hptsID = 300
+DEL 2
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+	ui_current_con = ui_current_con,
+	MEP_NumberConnections = MEP_NumberConnections,
+	MEP_NumConnectionData = gs_Connections,
+	gs_AddConnections = gs_AddConnections,
+	cShow3D = 1,
+	gs_ConMat = MainBoxMaterial,
+	MEP_InsShow = 0,
+	MEP_cline_show_3D = 0,
+	gs_cont_pen = gs_cont_pen,
+	ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 12, ConEdgeVisible_1 = 0,
+	ConPosX_2=ConPosX_2, ConPosY_2=ConPosY_2, ConPosZ_2=ConPosZ_2, ConLength_2=ConLength_2, ConEdit_2 = 12, ConEdgeVisible_2 = 0,
+	ConPosX_3=ConPosX_3, ConPosY_3=ConPosY_3, ConPosZ_3=ConPosZ_3, ConLength_3=ConLength_3, ConEdit_3 = 12, ConEdgeVisible_3 = 0,
+	ConPosX_4=ConPosX_4, ConPosY_4=ConPosY_4, ConPosZ_4=ConPosZ_4, ConLength_4=ConLength_4, ConEdit_4 = 12, ConEdgeVisible_4 = 0,
+	ConPosX_5=ConPosX_5, ConPosY_5=ConPosY_5, ConPosZ_5=ConPosZ_5, ConLength_5=ConLength_5, ConEdit_5 = 1, ConEdgeVisible_5 = 0,
+	ConPosX_6=ConPosX_6, ConPosY_6=ConPosY_6, ConPosZ_6=ConPosZ_6, ConLength_6=ConLength_6, ConEdit_6 = 1, ConEdgeVisible_6 = 0
+END

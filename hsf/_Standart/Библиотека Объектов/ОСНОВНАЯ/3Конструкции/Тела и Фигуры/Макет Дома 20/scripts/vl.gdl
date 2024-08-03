@@ -1,0 +1,241 @@
+
+call "FM_types" parameters all
+
+zzyzx = gutterHeight + roofHeight
+parameters zzyzx = zzyzx
+lock "zzyzx"
+
+values "gs_detlevel_3D"  `Детальный`,`Откл.`
+values "gs_detlevel_3D_m"  2, 0
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+	if gs_detlevel_3D = `Детальный`	then gs_detlevel_3D_m = 2
+	if gs_detlevel_3D = `Откл.`		then gs_detlevel_3D_m = 0
+	parameters gs_detlevel_3D_m = gs_detlevel_3D_m
+else
+	if gs_detlevel_3D_m = 2		then gs_detlevel_3D = `Детальный`
+	if gs_detlevel_3D_m = 0		then gs_detlevel_3D = `Откл.`
+	parameters gs_detlevel_3D = gs_detlevel_3D
+endif
+
+values "roofType" `Плоская Крыша`, `Скатная Крыша`, `Навес`, `Мансарда`
+values "iRoofType" 0, 1, 2, 3
+
+if GLOB_MODPAR_NAME = "roofType" then
+	if roofType = `Плоская Крыша`		then iRoofType = 0
+	if roofType = `Скатная Крыша`	then iRoofType = 1
+	if roofType = `Навес`			then iRoofType = 2
+	if roofType = `Мансарда`			then iRoofType = 3
+	parameters iRoofType = iRoofType
+else
+	if iRoofType = 0 then roofType = `Плоская Крыша`
+	if iRoofType = 1 then roofType = `Скатная Крыша`
+	if iRoofType = 2 then roofType = `Навес`
+	if iRoofType = 3 then roofType = `Мансарда`
+	parameters roofType = roofType
+endif
+
+if iRoofType = 0 then
+	bHipLeft = 0
+	bHipRight = 0
+	parameters bHipLeft = 0
+	parameters bHipRight = 0
+	lock "bHipLeft", "bHipRight"
+	hideparameter "bHipLeft", "bHipRight"
+endif
+
+if iRoofType = 3 or iRoofType = 0 then
+	bOverhangLeft = 0
+	bOverhangRight = 0
+	parameters bOverhangLeft = 0
+	parameters bOverhangRight = 0
+	lock "bOverhangLeft", "bOverhangRight"
+	hideparameter "bOverhangLeft", "bOverhangRight"
+endif
+
+if iRoofType <> 2 then
+	bMirrored = 0
+	parameters bMirrored = 0
+	lock "bMirrored"
+	hideparameter "bMirrored"
+endif
+
+if iRoofType <> 3 then
+	hideparameter "mansardTopAngle", "mansardLowerHeight"
+	lock "mansardTopAngle", "mansardLowerHeight"
+endif
+
+values "roofAngle" range (0,90)
+values "mansardTopAngle" range [0, roofAngle)
+
+if GLOB_MODPAR_NAME = "bHipLeft" and bHipLeft then
+	bOverhangLeft = 0
+	parameters bOverhangLeft = 0
+endif
+
+if GLOB_MODPAR_NAME = "bHipRight" and bHipRight then
+	bOverhangRight = 0
+	parameters bOverhangRight = 0
+endif
+
+if GLOB_MODPAR_NAME = "bOverhangLeft" and bOverhangLeft then
+	bHipLeft = 0
+	parameters bHipLeft = 0
+endif
+
+if GLOB_MODPAR_NAME = "bOverhangRight" and bOverhangRight then
+	bHipRight = 0
+	parameters bHipRight = 0
+endif
+
+
+if not (bFillRoof) then
+	hideparameter "gs_fill_type", "fillCustom2", "gs_fill_pen", "penCustom2", "gs_back_pen", "penCustom2back"
+endif
+
+
+! --- Reference length ---------------------------------------------------------
+
+if abs (endAngleRight - 90) < eps and abs (endAngleLeft - 90) < eps then
+	b = refLength
+else
+	b = refLength + a * (tan (90 - endAngleLeft)) * (endAngleLeft < 90) + a * (tan (90 - endAngleRight)) * (endAngleRight < 90)
+endif
+parameters b = b
+lock "B"
+
+
+! --- Limiting dimensions --------------------------------------
+
+if endAngleLeft < 90 then
+	values "endAngleRight" range (0, 180-atn(a / (refLength + (a / tan (endAngleLeft)))))
+else
+	if (180-endAngleLeft) > atn(a/refLength) then
+		values "endAngleRight" range (0, 180-atn(a / (refLength - (a / tan (180-endAngleLeft)))))
+	else
+		values "endAngleRight" range (0, atn(a / ((a / tan (180-endAngleLeft)) - refLength)))
+	endif
+endif
+
+values "endAngleLeft" range (0, 180)
+
+minLengthLeft  = 0
+minLengthRight = 0
+
+if iRoofType = 1 or iRoofType = 3 then
+	if bHipLeft then
+		if bHipRight then
+			minLengthLeft  = a/2 / tan ((180 - endAngleLeft) / 2)
+			minLengthRight = a/2 / tan ((180 - endAngleRight) / 2)
+		else
+			if bOverhangRight then
+				minLengthLeft  = a/2 / tan ((180 - endAngleLeft) / 2)
+				minLengthRight = - (a/2 / tan (endAngleRight / 2))
+			else
+				minLengthLeft  = a/2 / tan ((180 - endAngleLeft) / 2)
+				minLengthRight = -a/2 * (tan (90 - endAngleRight))
+			endif
+		endif
+	else
+		if bHipRight then
+			if bOverhangLeft then
+				minLengthLeft  = - (a/2 / tan (endAngleLeft / 2))
+				minLengthRight = a/2 / tan ((180 - endAngleRight) / 2)
+			else
+				minLengthLeft  = -a/2 * (tan (90 - endAngleLeft))
+				minLengthRight = a/2 / tan ((180 - endAngleRight) / 2)
+			endif
+		endif
+	endif
+endif
+
+if iRoofType = 2 then
+	if bMirrored then
+		if bHipLeft then
+			if bHipRight then
+				minLengthLeft  = (a / tan (endAngleLeft / 2)) - (a / tan (endAngleLeft))
+				minLengthRight = (a / tan (endAngleRight / 2)) - (a / tan (endAngleRight))
+			else
+				if bOverhangRight then
+					minLengthLeft  = (a / tan (endAngleLeft / 2)) - (a / tan (endAngleLeft))
+					minLengthRight = + (a / tan (180 - endAngleRight)) - (a / tan ((180 - endAngleRight) / 2))
+				else
+					minLengthLeft  = (a / tan (endAngleLeft / 2)) - (a / tan (endAngleLeft))
+					minLengthRight = 0
+				endif
+			endif
+		else
+			if bHipRight then
+				if bOverhangLeft then
+					minLengthLeft  = + (a / tan (180 - endAngleLeft)) - (a / tan ((180 - endAngleLeft) / 2))
+					minLengthRight = (a / tan (endAngleRight / 2)) - (a / tan (endAngleRight))
+				else
+					minLengthLeft  = 0
+					minLengthRight =(a / tan (endAngleRight / 2)) - (a / tan (endAngleRight))
+				endif
+			endif
+		endif
+	else
+		if bHipLeft then
+			if bHipRight then
+				minLengthLeft  = a / tan ((180 - endAngleLeft) / 2)
+				minLengthRight = a / tan ((180 - endAngleRight) / 2)
+			else
+				if bOverhangRight then
+					minLengthLeft  = a / tan ((180 - endAngleLeft) / 2)
+					minLengthRight = - (a / tan (endAngleRight / 2))
+				else
+					minLengthLeft  = a / tan ((180 - endAngleLeft) / 2)
+					minLengthRight = -a * (tan (90 - endAngleRight))
+				endif
+			endif
+		else
+			if bHipRight then
+				if bOverhangLeft then
+					minLengthLeft  = - (a / tan (endAngleLeft / 2))
+					minLengthRight = a / tan ((180 - endAngleRight) / 2)
+				else
+					minLengthLeft  = -a * (tan (90 - endAngleLeft))
+					minLengthRight = a / tan ((180 - endAngleRight) / 2)
+				endif
+			endif
+		endif
+	endif
+endif
+
+if (minLengthLeft + minLengthRight) < 0 then
+	minLengthLeft  = 0
+	minLengthRight = 0
+endif
+
+values "refLength" range [(minLengthLeft + minLengthRight), )
+values "halfB" range [((minLengthLeft + minLengthRight)/2), )
+
+values "footingHeight" range [0,)
+values "gutterHeight" range [footingHeight,)
+
+
+! --- Minimal Space ------------------------------------------------------------
+
+values "MSFront" range [0,)
+values "MSLeftSide" range [0,)
+values "MSRightSide" range [0,)
+values "MSRear" range [0,)
+
+! --- Hidden parameters for hotspots -------------------------------------------
+
+if GLOB_MODPAR_NAME = "A" then
+	halfA = a/2
+	parameters halfA = halfA
+else
+	a = 2*halfA
+	parameters a = a
+endif
+
+if GLOB_MODPAR_NAME = "refLength" then
+	halfB = refLength/2
+	parameters halfB = halfB
+else
+	refLength = 2*halfB
+	parameters refLength = refLength
+endif

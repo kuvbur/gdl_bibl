@@ -1,0 +1,232 @@
+if not(haskey(profile_data.set.path)) then end
+if not(haskey(profile_data.set.start)) then end
+if vardim1(profile_data.set.start)<EPS then end
+if haskey(profile_data.set.el_type_view_3d) then el_type_view = profile_data.set.el_type_view_3d
+gosub "set_show_3d"
+if not(show) or det_lvl_3d=0 then end
+gosub "get_mat"
+gosub "set_mat"
+show_empty = 1
+IF GLOB_CONTEXT=2 THEN det_lvl_3d = 1
+if show_only_axsis then det_lvl_3d = 1
+if GLOB_PREVIEW_MODE=1 or GLOB_PREVIEW_MODE=2 or GLOB_FEEDBACK_MODE=1 then
+	gs_resol = 3
+	det_lvl_3d = 1
+else
+	if GLOB_SEO_TOOL_MODE = 1 then
+		gs_resol = 9
+		show_empty = 0
+	else
+		if gs_resol<10 then gs_resol=12
+	endif
+endif
+
+!Группа с построенным по пути профилем
+group "profile"
+	if haskey(profile_data.read._3d[det_lvl_3d].unput) then
+		if NSP>0 then tt = max(get(nsp))
+		tstart = NSP
+		for i=1 to vardim1(profile_data.read._3d[det_lvl_3d].unput)
+			if not(haskey(profile_data.read._3d[det_lvl_3d].unput[i].s)) then profile_data.read._3d[det_lvl_3d].unput[i].s = 15
+			iStatus = profile_data.read._3d[det_lvl_3d].unput[i].s
+			if (iStatus > 0) then iStatus = iStatus - iStatus % 100
+			_d = 1 : if iStatus = 4000 or iStatus = 2000 then _d = 0
+			if profile_data.read._3d[det_lvl_3d].unput[i].s>0 or show_empty then
+				put profile_data.read._3d[det_lvl_3d].unput[i].x+dx*_d, profile_data.read._3d[det_lvl_3d].unput[i].y+dy*_d, profile_data.read._3d[det_lvl_3d].unput[i].s
+			endif
+		next i
+		tend = NSP
+		n_form = (tend - tstart)/3
+		gosub "set_path"
+		mask = 1+2+16+32
+		TUBE n_form, n_path, mask, get(n_form*3+n_path*4)
+		if NSP>0 then tt = max(get(nsp))
+	endif
+endgroup
+
+
+!Копируем группу скольно надо раз
+for i=1 to vardim1(profile_data.set.start)
+	!Смещение
+	if haskey(profile_data.set.start[i].x) then
+		addx profile_data.set.start[i].x
+		n_trans = n_trans + 1
+	endif
+	if haskey(profile_data.set.start[i].y) then
+		addy profile_data.set.start[i].y
+		n_trans = n_trans + 1
+	endif
+	if haskey(profile_data.set.start[i].z) then
+		addz profile_data.set.start[i].z
+		n_trans = n_trans + 1
+	endif
+	!Поворот
+	if haskey(profile_data.set.start[i].rx) then
+		rotx profile_data.set.start[i].rx
+		n_trans = n_trans + 1
+	endif
+	if haskey(profile_data.set.start[i].ry) then
+		roty profile_data.set.start[i].ry
+		n_trans = n_trans + 1
+	endif
+	if haskey(profile_data.set.start[i].rz) then
+		rotz profile_data.set.start[i].rz
+		n_trans = n_trans + 1
+	endif
+	!Отражение
+	if haskey(profile_data.set.start[i].mx) then
+		if abs(profile_data.set.start[i].mx)>EPS and profile_data.set.start[i].mx<EPS then
+			mulx -1
+			n_trans = n_trans + 1
+		endif
+	endif
+	if haskey(profile_data.set.start[i].my) then
+		if abs(profile_data.set.start[i].my)>EPS and profile_data.set.start[i].my<EPS then
+			muly -1
+			n_trans = n_trans + 1
+		endif
+	endif
+	if haskey(profile_data.set.start[i].mz) then
+		if abs(profile_data.set.start[i].mz)>EPS and profile_data.set.start[i].mz<EPS then
+			mulz -1
+			n_trans = n_trans + 1
+		endif
+	endif
+	placegroup "profile"
+	if n_trans>0 then del n_trans
+next i
+end
+
+"set_path":
+	n_path = 0
+	tstart = NSP
+	for i=1 to vardim1(profile_data.set.path)
+		put profile_data.set.path[i].x, profile_data.set.path[i].y, profile_data.set.path[i].z, profile_data.set.path[i].a
+		hotspot profile_data.set.path[i].x, profile_data.set.path[i].y, profile_data.set.path[i].z
+	next i
+	tend = NSP
+	n_path = (tend - tstart)/4
+return
+
+"set_mat":
+	material col_mat
+	pen gs_cont_pen
+	fill gs_fill_type_sec
+	line_type gs_line_type
+	SECT_ATTRS gs_fill_type_sec, gs_back_pen, gs_fill_pen, gs_sec_pen, gs_line_type
+return
+
+"set_show_3d":
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_connect", show_connect)
+	show = 0
+	if show_connect and upr then show = 1
+	if not(upr) then show = 1
+	if show then 
+		call "Показ_по_типам" PARAMETERS tip_konstr=tip_konstr RETURNED_PARAMETERS show_type
+		show = show_type
+	endif
+	if show then 
+		call "Показ_по_группам" PARAMETERS ALL el_views=el_views RETURNED_PARAMETERS show_el
+		show = show_el
+	endif
+	if show then 
+		call "Показ_по_сборкам" PARAMETERS ALL subpos=subpos, pos=pos RETURNED_PARAMETERS show_subpos, show_marker
+		show = show_subpos
+	endif
+	if show then
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "show_izd", show_izd)
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "show_metall", show_metall)
+		if type_spec = "Металл" and not(show_metall) then show = 0
+		if type_spec = "Изделие" and not(show_izd) then show = 0
+	endif
+	if show then
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "ignore_id", ignore_id)
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "show_ingore", show_ingore)
+		show_spec = 0 : IF STRSTR (GLOB_ID, ignore_id, 1) > 0 or type_spec="Не специфицировать" THEN show_spec = 1
+		if not(show_ingore) and show_spec then show = 0
+	endif
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_axsis", show_axsis)
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_only_axsis", show_only_axsis)
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "gs_detlevel_3D", gs_detlevel_3D)
+	IF gs_detlevel_3D=`Простой` then
+		det_lvl_2d = 1
+		det_lvl_3d = 1
+	endif
+	IF gs_detlevel_3D=`Детальный` THEN
+		det_lvl_2d = 2
+		det_lvl_3d = 2
+	endif
+	IF gs_detlevel_3D=`Откл` THEN
+		det_lvl_2d = 2
+		det_lvl_3d = 0
+	endif
+	if show then
+		show_if_vert=1 : show_if_gor=1 : show_if_ang=1
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "show_if_vert", show_if_vert)
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "show_if_gor", show_if_gor)
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "show_if_ang", show_if_ang)
+		if el_type_view=1 and not(show_if_gor) and show then show = 0
+		if el_type_view=2 and not(show_if_vert) and show then show = 0
+		if el_type_view=3 and not(show_if_ang) and show then show = 0
+	endif
+	show_list = 0 : success = LIBRARYGLOBAL ("Libraryflobals-km", "show_list", show_list)
+	if strlen(syst_name)>1 then
+		success = LIBRARYGLOBAL ("Libraryflobals-mep", "show_op", show_op)
+		call "Показ_систем" PARAMETERS All isMep=0, isEqp=1 RETURNED_PARAMETERS show_el
+		if show = 1 and show_el < EPS then show = 0
+		if show = 1 and show_op < EPS then show = 0
+		if show = 1 then CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pe, sMat, gs_InsMat
+	endif
+return
+
+"get_mat":
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "mat_by_type_code", mat_by_type_code)
+	is_mat_set = 0
+	if (show_spec or type_spec = "Не специфицировать") and not(is_mat_set) and mat_by_type_code<>1 then
+		ignore_mat = 0
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "ignore_mat", ignore_mat)
+		col_mat = ignore_mat
+		is_mat_set = 1
+	endif
+	if mat_by_type_code<>1 and not(is_mat_set) then
+		if mat_by_type_code=2 then 
+			name_mat_arr = "cov_mat_arr"
+			inx_mat = cov_mat
+		endif
+		if mat_by_type_code=3 then
+			name_mat_arr = "fire_keep_mat_arr"
+			inx_mat = fire_keep_mat
+		endif
+		if mat_by_type_code=4 then
+			name_mat_arr = "konstr_mat_arr"
+			inx_mat = type_mat
+		endif
+		if mat_by_type_code=5 then
+			name_mat_arr = "fire_mat_arr"
+			inx_mat = fire_mat
+		endif
+		if mat_by_type_code=6 then
+			name_mat_arr = "stal_mat_arr"
+			inx_mat = stal_mat
+		endif
+		if mat_by_type_code=7 then
+			name_mat_arr = "type_spec_mat_arr"
+			inx_mat = type_spec_mat
+		endif
+		if mat_by_type_code=8 then
+			name_mat_arr = "connect_mat_arr"
+			inx_mat = upr_mat
+		endif
+		if inx_mat=99 or inx_mat<1 then 
+			col_mat = 0
+		else
+			dim cov_mat_arr[]
+			success = LIBRARYGLOBAL ("Libraryflobals-km", name_mat_arr, cov_mat_arr)
+			col_mat = cov_mat_arr[inx_mat]
+		endif
+		is_mat_set = 1
+	endif
+	if strlen(syst_name)>1 then col_mat = sMat
+	col_mat = 1
+	shadow on
+return

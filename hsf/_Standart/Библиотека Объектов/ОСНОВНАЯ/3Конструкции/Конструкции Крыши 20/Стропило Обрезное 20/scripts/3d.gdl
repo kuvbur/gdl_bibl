@@ -1,0 +1,313 @@
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+!gs_2D_projection_type:
+!	0 - Normal 3D
+!	1 - View Edges
+!	2 - View Polygons
+!	3 - Overhead Edges
+!	4 - Cut Lines
+!	5 - Cut Polygons
+!	6 - Bottom Range Cut Lines
+!	7 - Top Range Cut Lines
+
+if gs_2D_projection then
+	if AC_symb_show_projection_to = 1 | (AC_symb_show_projection_to = 2 & gs_bottom_range_height < gs_cutplane_height) then
+		addz gs_bottom_range_height
+		cutplane{2} 180, 2
+		del 1
+	endif
+	if gs_2D_projection_type <> 6 then
+		addz gs_cutplane_height
+		cutplane{2} 180 * (gs_2D_projection_type = 3), 1
+		del 1
+	endif
+	if AC_symb_show_projection_to <> 3 then
+		addz gs_top_range_height
+		cutplane{2} 0, 2
+		del 1
+	endif
+endif
+
+! ==============================================================================
+
+if not(gs_2D_projection) & gs_detlevel_3D_m = 0 then goto 100	! END
+
+if	not(gs_shadow)	then shadow off
+if		gs_shadow	then shadow on
+
+pen gs_cont_pen
+material mat1
+
+! ==============================================================================
+
+if ssch1_m = CUTTING_PLANE_VERT then
+	if schneid1-neig<=90 then
+		um1=0
+	else
+		um1=abs(h/tan(schneid1-neig))
+	endif
+
+	rotz 90
+
+	cutplane -schneid1
+else
+	if ABS(schneid1-90)<EPS then		! --- schneid1=90
+		um1=0
+	else
+		um1=abs(b/2/tan(schneid1)/cos(neig))
+	endif
+
+	rotz schneid1
+	cutplane -90
+
+	if ssch1_m = CUTTING_PLANE_CENTRAL then
+		rotz 2*(90-schneid1)
+		cutplane -90
+		del 1
+		um1=0
+	endif
+endif
+
+del 1
+
+! ==============================================================================
+
+addx a
+addz tan(neig)*a
+
+if ssch2_m = CUTTING_PLANE_VERT then
+	if schneid2-neig>=90 then
+		um2=0
+	else
+		um2=abs(h/tan(schneid2-neig))
+	endif
+
+	rotz 90
+	rotx 180
+	cutplane -schneid2
+	del 1
+else
+	if ABS(schneid1)<EPS then		!!neig=0
+		m2=0
+	else
+		m2=abs(h/tan(90-neig))
+	endif
+	if ABS(schneid2-90)<EPS then		!!!schneid2=90
+		n2=0
+	else
+		n2=abs(b/2/tan(schneid2)/cos(neig))
+	endif
+
+	um2=m2+n2
+
+	rotz schneid2
+	cutplane 90
+
+	if ssch2_m = CUTTING_PLANE_CENTRAL then
+		rotz 2*(90-schneid2)
+		cutplane 90
+		del 1
+		um2=m2
+	endif
+endif
+
+del 3
+
+
+laenge=a/cos(neig)
+gesamt=laenge+um1+um2
+
+roty 90-neig
+
+addz -um1
+addx -h/2
+rotz -90
+
+base
+
+prism 4,gesamt,
+	b/2,-h/2,
+	b/2,h/2,
+	-b/2,h/2,
+	-b/2,-h/2
+
+vert 0, 0, 0
+vert 0, 0, 1
+vert 0, 1, 0
+vert 1, 0, 0
+coor 2, -1, -2, -3, -4
+body 1
+
+
+if ssch1_m = CUTTING_PLANE_CENTRAL then
+	cutend
+endif
+
+if ssch2_m = CUTTING_PLANE_CENTRAL then
+	cutend
+endif
+
+cutend
+cutend
+del top
+
+! ==============================================================================
+! 3D HOTSPOTs / Editable
+! ==============================================================================
+unID=1
+
+! --- Length of Span ---
+
+ROTy -neig
+HOTSPOT 0, 0, 0, unID, gs_struc_length, 1+256, A : unID=unID+1
+HOTSPOT -1, 0, 0, unID, gs_struc_length, 3, A : unID=unID+1
+HOTSPOT gs_struc_length, 0, 0, unID, gs_struc_length, 2, A : unID=unID+1
+DEL 1
+
+! --- Roof Pitch ---
+
+!L1=(A)/2
+!
+!ROTy 90
+!HOTSPOT 0,0,0,unID,temp_neig,6,neig : unID=unID+1
+!HOTSPOT L1,0,0,unID,temp_neig,4+128,neig : unID=unID+1
+!HOTSPOT 0,-1,0,unID,temp_neig,7,neig : unID=unID+1
+!HOTSPOT L1*COS(temp_neig),0,L1*SIN(temp_neig),unID,temp_neig,5,neig : unID=unID+1
+!DEL 1
+
+HOTSPOT 0,-B/2,0,unID,neig,6 : unID=unID+1
+HOTSPOT 1,-B/2,0,unID,neig,4+128 : unID=unID+1
+HOTSPOT 0,-1,-B/2,unID,neig,7 : unID=unID+1
+HOTSPOT gs_struc_length/2*cos(neig),-B/2,gs_struc_length/2*sin(neig),unID,neig,5 : unID=unID+1
+
+
+! --- Profile Height ---
+
+ADD a/2, 0, A/2*TAN(neig)
+HOTSPOT 0, 0, 0, unID,  H, 1+128 : unID=unID+1
+HOTSPOT -H*sin(neig), 0, H*cos(neig), unID, H, 2 : unID=unID+1
+HOTSPOT H*sin(neig), 0, -H*cos(neig), unID,  H, 3 : unID=unID+1
+DEL 1
+
+! --- Cut Plane = Vertical -----------------------------------------------------
+
+! --- 1. Cutting Angle ---
+
+IF ssch1_m = CUTTING_PLANE_VERT THEN
+
+	LCut1=H/SIN(schneid1-neig)
+
+	HOTSPOT 0, 0, 0, unID, schneid1, 6: unID=unID+1
+	HOTSPOT LCut1, 0, 0, unID, schneid1, 4+128: unID=unID+1
+	HOTSPOT LCut1*COS(schneid1), 0, LCut1*SIN(schneid1), unID, schneid1, 5: unID=unID+1
+
+ENDIF
+
+! --- 2. Cutting Angle ---
+
+IF ssch2_m = CUTTING_PLANE_VERT THEN
+
+	LCut2=H/SIN(schneid2-neig)
+	ADD A, 0, A*tan(neig)
+	HOTSPOT 0, 0, 0, unID, schneid2, 6: unID=unID+1
+	HOTSPOT LCut2, 0, 0, unID, schneid2, 4+128: unID=unID+1
+	HOTSPOT LCut2*COS(schneid2), 0, LCut2*SIN(schneid2), unID, schneid2, 5: unID=unID+1
+	DEL 1
+ENDIF
+
+
+! ==============================================================================
+! 3D HOTSPOTs / Not Editable
+! ==============================================================================
+
+! --- Cut Plane = Vertical -----------------------------------------------------
+
+IF ssch1_m = CUTTING_PLANE_VERT then
+	HOT_um1=(h/tan(schneid1-neig))
+	roty -neig
+	HOTSPOT 0,b/2,0,Unid	:Unid=Unid+1
+	HOTSPOT 0,-b/2,0,Unid	:Unid=Unid+1
+
+	HOTSPOT HOT_um1,b/2,H,Unid	:Unid=Unid+1
+	HOTSPOT HOT_um1,-b/2,H,Unid	:Unid=Unid+1
+	del 1
+ENDIF
+
+IF ssch2_m = CUTTING_PLANE_VERT then
+	HOT_um2=(h/tan(schneid2-neig))
+	roty -neig
+	HOTSPOT A/cos(neig),b/2,0,Unid	:Unid=Unid+1
+	HOTSPOT A/cos(neig),-b/2,0,Unid	:Unid=Unid+1
+
+	HOTSPOT A/cos(neig)+HOT_um2,b/2,H,Unid	:Unid=Unid+1
+	HOTSPOT A/cos(neig)+HOT_um2,-b/2,H,Unid	:Unid=Unid+1
+	del 1
+ENDIF
+
+! --- Cut Plane = Horizontal/Central Bevel --------------------------------------
+
+Hz=(h/sin(90-neig))
+IF ssch1_m = CUTTING_PLANE_HOR or ssch1_m = CUTTING_PLANE_CENTRAL THEN HOT_m1x=(B/2/tan(schneid1)) else HOT_m1x=0
+IF ssch2_m = CUTTING_PLANE_HOR or ssch2_m = CUTTING_PLANE_CENTRAL THEN HOT_m2x=(B/2/tan(schneid2)) else HOT_m2x=0
+
+HOT_m1z=HOT_m1x*tan(neig)
+HOT_m2z=HOT_m2x*tan(neig)
+
+PEAK11=1
+PEAK12=1
+PEAK21=1
+PEAK22=1
+
+! Peaks=ON
+IF ssch1_m = CUTTING_PLANE_CENTRAL and (schneid1<90) then
+	PEAK11=1
+	PEAK12=-1
+ENDIF
+
+IF ssch1_m = CUTTING_PLANE_CENTRAL and schneid1>90 then
+	PEAK11=-1
+	PEAK12=1
+ENDIF
+
+IF ssch2_m = CUTTING_PLANE_CENTRAL and schneid2<90 then
+	PEAK21=-1
+	PEAK22=1
+ENDIF
+
+IF ssch2_m = CUTTING_PLANE_CENTRAL and schneid2>90 then
+	PEAK21=1
+	PEAK22=-1
+ENDIF
+
+IF ssch1_m = CUTTING_PLANE_HOR  then
+	HOTSPOT 0,0,H/COS(neig),Unid	:Unid=Unid+1
+	HOTSPOT HOT_m1x*PEAK11,b/2,HOT_m1z*PEAK11,Unid	:Unid=Unid+1
+	HOTSPOT -HOT_m1x*PEAK12,-b/2,-HOT_m1z*PEAK12,Unid	:Unid=Unid+1
+
+	HOTSPOT HOT_m1x*PEAK11,b/2,Hz+HOT_m1z*PEAK11,Unid	:Unid=Unid+1
+	HOTSPOT -HOT_m1x*PEAK12,-b/2,Hz-HOT_m1z*PEAK12,Unid	:Unid=Unid+1
+ENDIF
+
+IF ssch2_m = CUTTING_PLANE_HOR then
+	HOTSPOT A,0,H/COS(neig)+A*TAN(neig),Unid	:Unid=Unid+1
+	HOTSPOT A+HOT_m2x*PEAK21,b/2,A*tan(neig)+HOT_m2z*PEAK21,Unid	:Unid=Unid+1
+	HOTSPOT A-HOT_m2x*PEAK22,-b/2,A*tan(neig)-HOT_m2z*PEAK22,Unid	:Unid=Unid+1
+
+	HOTSPOT A+HOT_m2x*PEAK21,b/2,A*tan(neig)+Hz+HOT_m2z*PEAK21,Unid	:Unid=Unid+1
+	HOTSPOT A-HOT_m2x*PEAK22,-b/2,A*tan(neig)+Hz-HOT_m2z*PEAK22,Unid	:Unid=Unid+1
+ENDIF
+
+
+100:
+! ==============================================================================
+
+if gs_2D_projection then
+	if AC_symb_show_projection_to = 1 | (AC_symb_show_projection_to = 2 & gs_bottom_range_height < gs_cutplane_height) then cutend
+	if gs_2D_projection_type <> 6 then cutend
+	if AC_symb_show_projection_to <> 3 then cutend
+endif
+
+END

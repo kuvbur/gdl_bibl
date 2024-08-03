@@ -1,0 +1,699 @@
+
+! Contact person: <BD, BO, NJ>
+
+! =============================================================================
+
+lod3D = 0										! Don't draw anything
+if (GLOB_VIEW_TYPE = 9 & GLOB_PREVIEW_MODE = 0) then	! in case of Surface IS Calculation
+	lod3D = 2	! Detailed
+else
+	if iDWDet3D = DETLEVEL_DW3D_SIMPLE then lod3D = 1	! Simple
+	if iDWDet3D = DETLEVEL_DW3D_DETAILED then lod3D = 2	! Detailed
+	if iDWDet3D = DETLEVEL_DW3D_CHI_SIMPLE | iDWDet3D = DETLEVEL_DW3D_CHI_DETAILED then
+		if (GLOB_CONTEXT = 4 | GLOB_CONTEXT = 24 | GLOB_CONTEXT = 6) then
+			lod3D = 5								! Chinese
+		else
+			lod3D = 2
+		endif
+	endif
+endif
+
+gs_fillFr		= gs_bFills * gs_fillFr
+gs_penFr_fg		= gs_bFills * gs_penFr_fg
+gs_penFr_bg		= gs_bFills * gs_penFr_bg
+
+gs_fillSash		= gs_bFills * gs_fillSash
+gs_penSash_fg	= gs_bFills * gs_penSash_fg
+gs_penSash_bg	= gs_bFills * gs_penSash_bg
+
+if not(gs_shadow) then shadow off
+
+
+! =============================================================================
+! GS Window Functions
+! =============================================================================
+
+call "GS Window Functions",
+	parameters all	iWindowShape			= iWindowShape,
+					openingArchHeight		= openingArchHeight,
+					nArchResolution			= gs_res,
+					gs_IsCurved				= gs_IsCurved,
+					bParalellInCurvedWalls	= bParalellInCurvedWalls,
+					lod3D					= lod3D,
+					bDisabeMirroring		= bDisabeMirroring,
+					gs_frame_width			= gs_frame2_width,
+					gs_frame_width_left		= gs_frame2_width,
+	returned_parameters	ac_unit_width,
+						ac_unit_height,
+						gs_frame_ovhg_left_out,
+						gs_frame_ovhg_right_out,
+						gs_frame_ovhg_top_out,
+						gs_frame_ovhg_bottom_out,
+						gs_frame_ovhg_left_in,
+						gs_frame_ovhg_right_in,
+						gs_frame_ovhg_top_in,
+						gs_frame_ovhg_bottom_in,
+						bMirrored,
+						xform11, xform12, xform13, xform14,
+						xform21, xform22, xform23, xform24,
+						xform31, xform32, xform33, xform34,
+
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen,
+						bShowAddHotspots, bShowAddHotspotsForIS, bShowUnitHotspots
+
+
+! =============================================================================
+! Block for operator mode
+! =============================================================================
+
+if GLOB_CONTEXT > 40 & GLOB_CONTEXT < 50 then
+	prism_ 4, WIDO_FRAME_THICKNESS,
+		-ac_unit_width/2, 0, 15,
+		 ac_unit_width/2, 0, 15,
+		 ac_unit_width/2, ac_unit_height, 15,
+		-ac_unit_width/2, ac_unit_height, 15
+
+	end
+endif
+
+
+if lod3D = 0 then end
+
+xform	xform11, xform12, xform13, xform14,
+		xform21, xform22, xform23, xform24,
+		xform31, xform32, xform33, xform34
+
+muly -1
+addy WIDO_FRAME_THICKNESS
+
+temp = gs_frame_ovhg_left_out
+gs_frame_ovhg_left_out = gs_frame_ovhg_left_in
+gs_frame_ovhg_left_in = temp
+
+temp = gs_frame_ovhg_right_out
+gs_frame_ovhg_right_out = gs_frame_ovhg_right_in
+gs_frame_ovhg_right_in = temp
+
+temp = gs_frame_ovhg_top_in
+gs_frame_ovhg_top_in = gs_frame_ovhg_top_out
+gs_frame_ovhg_top_out = temp
+
+temp = gs_frame_ovhg_bottom_in
+gs_frame_ovhg_bottom_in = gs_frame_ovhg_bottom_out
+gs_frame_ovhg_bottom_out = temp
+
+if lod3D = 5 then	! Chinese
+	fr_sect_fill_type	= gs_fillShCover
+	fr_sect_fill_fg		= gs_penShCov_fg
+	fr_sect_fill_bg		= gs_penShCov_bg
+else
+	fr_sect_fill_type	= gs_fillFr
+	fr_sect_fill_fg		= gs_penFr_fg
+	fr_sect_fill_bg		= gs_penFr_bg
+endif
+
+
+A = ac_unit_width
+B = ac_unit_height
+
+leftOvhg	= max(gs_frame_ovhg_left_out, gs_frame_ovhg_left_in)
+rightOvhg	= leftOvhg
+topOvhg		= leftOvhg
+bottomOvhg	= max(gs_frame_ovhg_bottom_out, gs_frame_ovhg_bottom_in)
+
+gs_shoulderHeight = gs_shoulderHeight - bottomOvhg
+
+! =============================================================================
+! Draw window frame and sash
+! =============================================================================
+
+rotx 90
+resol gs_res
+
+! =============================================================================
+! Draw Frame
+! =============================================================================
+
+if gs_frame_pen_cont < 0.5 then gs_frame_pen_cont = SYMB_SECT_PEN
+if gs_fillFr < 0.5 then gs_fillFr = SYMB_FILL
+if gs_penFr_bg < 0.5 then gs_penFr_bg = SYMB_FBGD_PEN
+if gs_penFr_fg < 0.5 then gs_penFr_fg = SYMB_FILL_PEN
+
+pen gs_frame_pen_cont
+material gs_frame_mat
+sect_fill gs_fillFr, gs_penFr_bg, gs_penFr_fg, gs_frame_pen_cont
+
+pen gs_frame_pen	! 3D Contour Pen
+halfA = A / 2
+
+cutLeft = 0
+cutRight = 0
+cutBottom = 0
+cutTop = 0
+if abs(gs_frame_ovhg_left_out - gs_frame_ovhg_left_in) > EPS then
+	addx -halfA - gs_frame_ovhg_left_out
+	rotz 90
+	cutplane -90 + atn((gs_frame_ovhg_left_out - gs_frame_ovhg_left_in) / gs_frame_thk)
+
+	del 2
+	cutLeft = 1
+endif
+
+if abs(gs_frame_ovhg_right_out - gs_frame_ovhg_right_in) > EPS then
+	addx halfA + gs_frame_ovhg_right_out
+	rotz 90
+	cutplane 90 - atn((gs_frame_ovhg_right_out - gs_frame_ovhg_right_in) / gs_frame_thk)
+	del 2
+	cutRight = 1
+endif
+
+if abs(gs_frame_ovhg_top_out - gs_frame_ovhg_top_in) > EPS then
+	addy B + gs_frame_ovhg_top_out
+	rotz 90
+	roty -90 - atn((gs_frame_ovhg_top_out - gs_frame_ovhg_top_in) / gs_frame_thk)
+	cutplane 180
+	del 3
+	cutTop = 1
+endif
+
+if abs(gs_frame_ovhg_bottom_out - gs_frame_ovhg_bottom_in) > EPS then
+	addy -gs_frame_ovhg_bottom_out
+	rotz 90
+	roty 90 + atn((gs_frame_ovhg_bottom_out - gs_frame_ovhg_bottom_in) / gs_frame_thk)
+	cutplane 180
+	del 3
+	cutBottom = 1
+endif
+
+! =============================================================================
+! End of Frame Cutting
+
+pen gs_frame_pen
+
+! hotspot editing for the divisions
+
+unID=1
+if gs_UTrans then
+	hotspot 0,	0,			0,	unID,gs_UTrans_h,1 : unID=unID+1
+	hotspot 0,	gs_UTrans_h,0,	unID,gs_UTrans_h,2 : unID=unID+1
+	hotspot 0,	-B,			0,	unID,gs_UTrans_h,3 : unID=unID+1
+endif
+
+hotspot ac_wallhole_width/2,	0,					0,	unID,gs_shoulderHeight,1 : unID=unID+1
+hotspot ac_wallhole_width/2,	gs_shoulderHeight,	0,	unID,gs_shoulderHeight,2 : unID=unID+1
+hotspot ac_wallhole_width/2,	-B,					0,	unID,gs_shoulderHeight,3 : unID=unID+1
+
+hotspot -ac_wallhole_width/2,	0,					0,	unID,gs_shoulderHeight,1 : unID=unID+1
+hotspot -ac_wallhole_width/2,	gs_shoulderHeight,	0,	unID,gs_shoulderHeight,2 : unID=unID+1
+hotspot -ac_wallhole_width/2,	-B,					0,	unID,gs_shoulderHeight,3 : unID=unID+1
+
+numCutend = 0
+
+! Frame Modell ---------------------------------------------------
+
+additionSimplex = 0
+additionSimpley = 0
+if lod3D = 1 then
+	additionSimplex = gs_sash_thk - gs_rebate_depth
+	additionSimpley = gs_sash_width - gs_rebate_width
+endif
+
+for iSide = 1 to 2
+	if iSide = 1 then
+		inSide = 0
+		outSide = 1
+	else
+		inSide = 1
+		outSide = 0
+	endif
+
+	if outSide then
+		heightz			= gs_frame2_thk
+		framex			= gs_frame2_width + additionSimpley
+		bottom_framex	= gs_frame2_width_lower + additionSimpley
+		framey			= gs_frame2_thk
+		varMat			= gs_frame_mat
+	else
+		heightz			= gs_frame_thk - gs_frame2_thk
+		framex			= gs_frame_width + additionSimpley
+		bottom_framex	= gs_frame_width_lower + additionSimpley
+		framey			= gs_frame_thk
+		varMat			= gs_frame_mat2
+	endif
+
+	! Rebate cutting from the frame ---------------------------------------------------[
+	if lod3D = 2 then
+		mulz -1
+		addz -heightz
+
+		! Always has Transom but no Transom Sash
+		cutform 4, 1, 1+2,
+			0, 0, 1, gs_rebate_depth,
+			-halfA + framex - gs_rebate_width, 	bottom_framex - gs_rebate_width,		15+16,
+			 halfA - framex + gs_rebate_width,	bottom_framex - gs_rebate_width,		15+16,
+			 halfA - framex + gs_rebate_width,	gs_UTrans_h - gs_UTrans_w/2 + (gs_rebate_width * inSide) + gs_rebate_width, 15+16,
+			-halfA + framex - gs_rebate_width, 	gs_UTrans_h - gs_UTrans_w/2 + (gs_rebate_width * inSide) + gs_rebate_width, 15+16
+
+		numCutend = numCutend  + 1
+
+		del 2
+	endif
+	! Rebate cutting from the frame ---------------------------------------------------]
+
+	if gs_SashText_typ_num = MITERED_JOINT then	! Mitered Joint
+		leftx	= framex
+		rightx	= -framex
+		topy	= topOvhg
+		bottomy = -bottomOvhg
+	else											! Butt Joint
+		leftx	= -leftOvhg
+		rightx	= rightOvhg
+		topy	= -framex
+		bottomy = bottom_framex
+	endif
+
+	! Bottom
+	base
+	cprism_ gs_frame_mat2,gs_frame_mat,varMat,
+		4,heightz,
+		-halfA - leftOvhg, 	-bottomOvhg,		15,
+		-halfA + leftx, 	bottom_framex,		15,
+		halfA + rightx,		bottom_framex,		15,
+		halfA + rightOvhg,	-bottomOvhg,		15 - 5*gs_stack_bottom
+
+	gosub "Texture Directions Horizontal"
+
+
+	! Left
+	base
+	cprism_ gs_frame_mat2,gs_frame_mat,varMat,
+		4,heightz,
+		-halfA - leftOvhg, 	bottomy,					15,
+		-halfA - leftOvhg, 	gs_shoulderHeight,			15,
+		-halfA + framex,	gs_shoulderHeight - framex*TAN(alpha),	15,
+		-halfA + framex,	bottom_framex,							15
+
+	gosub "Texture Directions Vertical"
+
+	! Top
+	base
+	cprism_ gs_frame_mat2,gs_frame_mat,varMat,
+		8,heightz,
+		halfA + rightOvhg,	gs_shoulderHeight,						79,
+		0,					B + topOvhg - R1,						900,
+		0,					B + topOvhg,							3079,
+		-halfA - leftOvhg,	gs_shoulderHeight,						3079,
+		-halfA + framex,	gs_shoulderHeight- framex*TAN(alpha),	79,
+		0,					B + topOvhg - R1,						900,
+		0,					B + topOvhg - framex,					3079,
+		halfA - framex,		gs_shoulderHeight - framex*TAN(alpha),	3015
+
+	gosub "Texture Directions Horizontal"
+
+	! Right
+	base
+	cprism_ gs_frame_mat2,gs_frame_mat,varMat,
+		4,heightz,
+		halfA + rightOvhg,	bottomy,								15,
+		halfA + rightOvhg, 	gs_shoulderHeight,						15,
+		halfA - framex, 	gs_shoulderHeight - framex*TAN(alpha),	15,
+		halfA - framex, 	bottom_framex,							15
+
+	gosub "Texture Directions Vertical"
+
+	! Transom - Horizontal Division
+	! Always has Transom but no Transom Sash
+	if inSide & (lod3D = 2) then
+		addz heightz - gs_frame2_thk
+	endif
+
+	! Transom - Horizontal Division
+	if gs_UTrans then
+		if lod3D = 2 then
+			divx = gs_frame2_thk
+		else
+			divx = heightz
+		endif
+		divSy = -gs_UTrans_w/2 - additionSimpley + (gs_rebate_width * inSide)
+		divEy = +gs_UTrans_w/2 + additionSimpley - (gs_rebate_width * inSide)
+		base
+		cprism_ gs_frame_mat2,varMat,varMat,
+			4, divx,
+			-halfA + framex,	gs_UTrans_h + divSy,	15,
+			-halfA + framex,	gs_UTrans_h + divEy,	15,
+			halfA - framex,		gs_UTrans_h + divEy,	15,
+			halfA - framex,		gs_UTrans_h + divSy,	15
+
+		gosub "Texture Directions Horizontal"
+	endif
+
+	! Vertical Division for Simple 3D
+	if lod3D = 1 then
+		if gs_UTrans then
+			divSy = bottom_framex
+			divEy = gs_UTrans_h - gs_UTrans_w/2 - additionSimpley + (gs_rebate_width * inSide)
+		endif
+
+		base
+		cprism_ gs_frame_mat2,varMat,varMat,
+			4,heightz,
+			-gs_sash_width,		divSy,	15,
+			-gs_sash_width,		divEy,	15,
+			gs_sash_width,		divEy,	15,
+			gs_sash_width,		divSy,	15
+
+		gosub "Texture Directions Vertical"
+	endif
+	if inSide & (lod3D = 2) then del 1
+
+	! --- Inner, Simple ----------------------------------------------
+	addz gs_frame2_thk
+
+next iSide
+del iSide-1
+
+
+if lod3D = 2 then
+	for k = 1 to numCutend
+		cutend	! rebate in the frame
+	next k
+endif
+
+if cutLeft then cutend
+if cutRight then cutend
+if cutTop then cutend
+if cutBottom then cutend
+
+
+! =============================================================================
+! Draw Casement
+! =============================================================================
+
+if lod3D = 5 then	! Chinese
+	sh_sect_fill_type	= gs_fillShCover
+	sh_sect_fill_fg		= gs_penShCov_fg
+	sh_sect_fill_bg		= gs_penShCov_bg
+else
+	sh_sect_fill_type	= gs_fillSash
+	sh_sect_fill_fg		= gs_penSash_fg
+	sh_sect_fill_bg		= gs_penSash_bg
+endif
+
+
+! =============================================================================
+! Main Sashes
+! =============================================================================
+
+! Middle Middle Sash ----------------------------------------------------------
+
+sh_unID		= 2000
+sashWidth	= sashWidthArray[2][2]
+sashHeight	= sashHeightArray[2][2]
+CasementID	= CasementIDArray[2][2]
+
+add sashPosXArray[2][2], sashPosYArray[2][2], gs_frame_thk
+frame_thk = gs_frame_thk - gs_frame2_thk
+gosub "CallCasement"
+del 1
+
+sh_unID		= 2100
+sashWidth	= sashWidthArray2[2][2]
+sashHeight	= sashHeightArray2[2][2]
+CasementID	= CasementIDArray[2][2]
+
+add sashPosXArray2[2][2], sashPosYArray2[2][2], gs_frame2_thk
+frame_thk = gs_frame2_thk
+gosub "CallCasement"
+del 1
+
+! Middle Right Sash -----------------------------------------------------------
+
+sh_unID		= 3600
+sashWidth	= sashWidthArray[2][3]
+sashHeight	= sashHeightArray[2][3]
+CasementID	= CasementIDArray[2][3]
+
+add sashPosXArray[2][3], sashPosYArray[2][3], gs_frame_thk
+frame_thk = gs_frame_thk - gs_frame2_thk
+gosub "CallCasement"
+del 1
+
+sh_unID		= 3700
+sashWidth	= sashWidthArray2[2][3]
+sashHeight	= sashHeightArray2[2][3]
+CasementID	= CasementIDArray[2][3]
+
+add sashPosXArray2[2][3], sashPosYArray2[2][3], gs_frame2_thk
+frame_thk = gs_frame2_thk
+gosub "CallCasement"
+del 1
+
+
+! =============================================================================
+! Transom Sash - Always has
+! =============================================================================
+
+mulx -1
+
+hasCustomPanel = (iMullionStyle_02 = MULLION_CUSTOM) & (gs_cust_panel_02 <> "") & (lod3D = 2)
+
+for iSide = 1 to 2
+
+	if iSide = 1 then
+		heightz = gs_frame2_thk
+		framex = gs_frame2_width + additionSimpley
+		framey = gs_frame2_thk
+	else
+		heightz = gs_frame_thk - gs_frame2_thk
+		framex = gs_frame_width + additionSimpley
+		framey = gs_frame_thk
+	endif
+
+	sashx = A - 2 * framex
+	sashy = B - (framex + gs_UTrans_h + gs_UTrans_w/2)
+
+	cutform 8, 1, 1+2+8+16,
+			0, 0, 1, 1,
+			sashx,	 	B + topOvhg+1,							95,
+			sashx,		gs_shoulderHeight- framex*TAN(alpha),	95,
+			sashx/2,	gs_shoulderHeight- framex*TAN(alpha),	95,
+			0,			B + topOvhg - R1,						900,
+			0,			B + topOvhg,							3095,
+			-sashx/2,	gs_shoulderHeight- framex*TAN(alpha),	3095,
+			-sashx,		gs_shoulderHeight- framex*TAN(alpha),	3095,
+			-sashx,		B + topOvhg+1,							95
+
+	addz framey
+	if lod3D = 2 then
+		if hasCustomPanel then ! Custom Panel
+			addz -gs_sash_thk
+		else
+			addz -gs_rebate_depth - gs_glass_thk/2
+		endif
+	else
+		addz -heightz/2 - gs_glass_thk/2
+	endif
+
+	! Panes Number Horizontally
+	if lod3D = 2 & iMullionStyle_02 = MULLION_HVGRID then
+		pen gs_sash_pen
+
+		if iMullionPosition = MULLION_OUTSIDE		then addz -gth
+		if iMullionPosition = MULLION_INSIDE		then addz gs_glass_thk
+		if iMullionPosition = MULLION_THROUGHOUT	then addz -(gth - gs_glass_thk)/2
+
+		gridx = sashx/vgn_02
+
+		for iGrid = 1 to vgn_02-1
+			addx iGrid * gridx - sashx/2
+
+			base
+			cprism_ gs_grill_mat2,gs_grill_mat,gs_grill_mat2,
+				4,gth,
+				-gw/2,	gs_UTrans_h + gs_UTrans_w/2 + additionSimpley - gs_rebate_width * (iSide = 2),	15,
+				-gw/2,	B - framex,	15,
+				 gw/2,	B - framex,	15,
+				 gw/2,	gs_UTrans_h + gs_UTrans_w/2 + additionSimpley - gs_rebate_width * (iSide = 2),	15
+
+			gosub "Texture Directions Vertical"
+			del 1
+		next iGrid
+
+		del 1
+	endif
+
+	! Custom Panel
+	if hasCustomPanel then
+		pen gs_glass_pen
+		sect_fill gs_fillSash, gs_penSash_bg, gs_penSash_fg, gs_frame_pen_cont
+
+		add framex-a/2, gs_UTrans_h + gs_UTrans_w/2 - gs_rebate_width * (iSide = 2),0
+
+		call "Window_Panel_Collection" parameters a = sashx,
+										b 			= sashy,
+										zzyzx 		= gs_sash_thk,
+										gs_ptype	= gs_cust_panel_02
+		del 1
+	else
+		if iMullionStyle_02 = MULLION_SOLID_PANEL then
+			pen gs_sash_pen
+			cprism_ gs_panel_mat2,gs_panel_mat,gs_panel_mat,
+				4,gs_glass_thk,
+				 sashx/2, 	gs_UTrans_h + gs_UTrans_w/2 + additionSimpley - gs_rebate_width * (iSide = 2),	15,
+				 sashx/2,	B + topOvhg,							15,
+				-sashx/2,	B + topOvhg,							15,
+				-sashx/2,	gs_UTrans_h + gs_UTrans_w/2 + additionSimpley - gs_rebate_width * (iSide = 2),	15
+		else
+			pen gs_glass_pen
+			cprism_ gs_glass_mat,gs_glass_mat,gs_glass_mat,
+				4,gs_glass_thk,
+				 sashx/2, 	gs_UTrans_h + gs_UTrans_w/2 + additionSimpley - gs_rebate_width * (iSide = 2),	5,
+				 sashx/2,	B + topOvhg,							5,
+				-sashx/2,	B + topOvhg,							5,
+				-sashx/2,	gs_UTrans_h + gs_UTrans_w/2 + additionSimpley - gs_rebate_width * (iSide = 2),	5
+		endif
+	endif
+	del 2
+
+	cutend
+
+next iSide
+del 1
+
+
+! =============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! =============================================================================
+
+"CallCasement":
+! =============================================================================
+! Casement Macro
+! -----------------------------------------------------------------------------
+! sashWidth:	Width of Sash
+! sashHeight:	Height of Sash
+! CasementID:	Sash ID
+! sh_unID:		Hotspot ID
+! =============================================================================
+
+
+	call "Casement_rectangular" parameters A = sashWidth, B = sashHeight,
+			CasementID 						= CasementID,
+			lod3D							= lod3D,
+			gs_rebate_width					= gs_rebate_width,
+			gs_rebate_depth					= gs_rebate_depth,
+			gs_sash_thk						= gs_sash_thk,
+			gs_sash_width					= gs_sash_width,
+			gs_frame_thk					= frame_thk,
+			iMullionStyle_01				= iMullionStyle_01,
+			iMullionStyle_02				= iMullionStyle_02,
+			iMullionStyle_05				= iMullionStyle_05,
+			iMullionPosition				= iMullionPosition,
+!			gs_horiz_div_height_01			= gs_horiz_div_height_01,
+!			gs_horiz_div_height_02			= gs_horiz_div_height_02,
+!			gs_horiz_div_height_05			= gs_horiz_div_height_05,
+			gw								= gw,
+			gth								= gth,
+			gs_glass_thk					= gs_glass_thk,
+			vgn_01							= vgn_01,
+			hgn_01							= hgn_01,
+			vgn_02							= vgn_02,
+			hgn_02							= hgn_02,
+			vgn_05							= vgn_05,
+			hgn_05							= hgn_05,
+!			vgn2_01							= vgn2_01,
+!			hgn2_01							= hgn2_01,
+!			vgn2_02							= vgn2_02,
+!			hgn2_02							= hgn2_02,
+!			vgn2_05							= vgn2_05,
+!			hgn2_05							= hgn2_05,
+!			vergrid_01						= vergrid_01,
+!			horgrid_01						= horgrid_01,
+!			vergrid_02						= vergrid_02,
+!			horgrid_02						= horgrid_02,
+!			vergrid_05						= vergrid_05,
+!			horgrid_05						= horgrid_05,
+!			vergrid2_01						= vergrid2_01,
+!			horgrid2_01						= horgrid2_01,
+!			vergrid2_02						= vergrid2_02,
+!			horgrid2_02						= horgrid2_02,
+!			vergrid2_05						= vergrid2_05,
+!			horgrid2_05						= horgrid2_05,
+			gs_glass_pen					= gs_glass_pen,
+			gs_glass_pen_cont				= gs_frame_pen_cont,
+			gs_ventProfile_fill				= gs_ventProfile_fill,
+			gs_ventProfile_pen_fg			= gs_ventProfile_pen_fg,
+			gs_ventProfile_pen_bg			= gs_ventProfile_pen_bg,
+			ghe								= 1,
+			isVentilationProfileInSash_01	= isVentilationProfileInSash_01,
+			isVentilationProfileInSash_02	= 0,
+			isVentilationProfileInSash_03	= 0,
+			isVentilationProfileInSash_04	= 0,
+			isVentilationProfileInSash_05	= isVentilationProfileInSash_05,
+			isVentilationProfileInSash_06	= 0,
+			isVentilationProfileInSash_07	= 0,
+			isVentilationProfileInSash_08	= 0,
+			isVentilationProfileInSash_09	= 0,
+			isVentilationProfileInSash_10	= 0,
+			isVentilationProfileInSash_11	= 0,
+			VentilationProfileHeight 		= VentilationProfileHeight,
+			openingAngle_01					= openingAngle_01,
+!			openingAngle2_01				= openingAngle2_01,
+			openingAngle_02					= openingAngle_02,
+!			openingAngle2_02				= openingAngle2_02,
+			openingAngle_05					= openingAngle_05,
+!			openingAngle2_05				= openingAngle2_05,
+			gs_optype_m_01					= gs_optype_m_01,
+			gs_optype_m_02					= gs_optype_m_02,
+			gs_optype_m_05					= gs_optype_m_05,
+			gs_full_edit					= gs_full_edit,
+			gs_frame_pen					= gs_frame_pen,
+			gs_sash_pen						= gs_sash_pen,
+			gs_sash_mat						= gs_sash_mat,
+			gs_sash_mat2					= gs_sash_mat2,
+			gs_grill_mat					= gs_grill_mat,
+			gs_grill_mat2					= gs_grill_mat2,
+			gs_glass_mat					= gs_glass_mat,
+			gs_panel_mat					= gs_panel_mat,
+			gs_panel_mat2					= gs_panel_mat2,
+			gs_ventProfile_mat				= gs_ventProfile_mat,
+			gs_sash_pen_cont				= gs_frame_pen_cont,
+			gs_fillSash						= sh_sect_fill_type,
+			gs_penSash_bg					= sh_sect_fill_bg,
+			gs_penSash_fg					= sh_sect_fill_fg,
+			gs_frame_pen_cont				= gs_frame_pen_cont,
+			bOpeningDirectionInside			= WIDO_REVEAL_SIDE,
+			gs_SashText_typ_num				= gs_SashText_typ_num,
+			gs_cust_panel_01				= gs_cust_panel_01,
+			gs_cust_panel_02				= gs_cust_panel_02,
+			gs_cust_panel_05				= gs_cust_panel_05,
+			gs_bMirr_cust_panel_01			= gs_bMirr_cust_panel_01,
+			gs_bMirr_cust_panel_02			= gs_bMirr_cust_panel_02,
+			gs_bMirr_cust_panel_05			= gs_bMirr_cust_panel_05,
+			sh_unID							= sh_unID,
+			bOplines3d						= bOplines3d,
+			opLineType3dIn					= opLineType3dIn,
+			opLineType3dOut					= opLineType3dOut,
+			gs_opline_style_m				= gs_opline_style_m,
+			gs_opLinePen					= gs_opLinePen
+return
+
+"Texture Directions Vertical":
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2+256, -1, -2, -3, -4
+	body 1
+
+return
+
+"Texture Directions Horizontal":
+	vert 0, 0, 0
+	vert 1, 0, 0
+	vert 0, 1, 0
+	vert 0, 0, 1
+	coor 2+256, -1, -2, -3, -4
+	body 1
+
+return
+

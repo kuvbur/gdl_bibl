@@ -1,0 +1,137 @@
+dim vertArray[][]
+dim contourArray[]
+dim resPolyIDArray[] : resPolyIDArray[1] = ""
+dim contArr[] : dim resVertices[]
+ch = INITADDONSCOPE ("PolyOperations", "", "")
+PREPAREFUNCTION ch, "CreateContainer", "from_cont", ""
+PREPAREFUNCTION ch, "CreateContainer", "to_cont", ""
+PREPAREFUNCTION ch, "SetSourceContainer",		"from_cont", ""
+PREPAREFUNCTION ch, "SetDestinationContainer",	"to_cont", ""
+
+l = 0
+max_l = 0
+vl_x = 0
+vl_y = 0
+ssumx = 0
+ssumy = 0
+for i=1 to k_otr_pl
+	x = otr_pl[i][1]
+	y = otr_pl[i][2]
+	if i<k_otr_pl then
+		ssumx = ssumx + (otr_pl[i][1] + otr_pl[i+1][1])*(otr_pl[i][1]*otr_pl[i+1][2]-otr_pl[i+1][1]*otr_pl[i][2])
+		ssumy = ssumy + (otr_pl[i][2] + otr_pl[i+1][2])*(otr_pl[i][1]*otr_pl[i+1][2]-otr_pl[i+1][1]*otr_pl[i][2])
+	endif
+	l = sqr(x*x + y*y)
+	if l >= max_l then
+		vl_x = x
+		vl_y = y
+		max_l = l
+	endif
+next i
+
+for i=1 to k_otr_pl
+	x = otr_pl[i][1]
+	y = otr_pl[i][2]
+	hotspot2 x,y
+	l = sqr((x-vl_x)*(x-vl_x) + (y-vl_y)*(y-vl_y))
+	if l>= max_l then
+		nl_x = x
+		nl_y = y
+		max_l = l
+	endif
+next i
+
+!---------------Площадь плиты без отверстий
+for i=1 to k_otr_pl
+	for j = 1 to 4
+		otr_pl[i][j] = int(otr_pl[i][j]*1000)/1000
+	next j
+next i
+
+for i = 1 to k_otv
+	if i = 1 then n_perv = 1
+	if i>1 then n_perv=k_otr_otv[k_otv-1]+1
+	for j=1 to k_otr_otv[i]
+		for k = 1 to 4
+			otr_otv[n_perv+j][k] = int(otr_otv[n_perv+j][k]*1000)/1000
+		next k
+	next j
+next i
+
+s_plit_obsh = 0
+for i=1 to k_otr_pl-1
+	if abs(otr_pl[i][1] - otr_pl[i+1][1])>EPS or abs(otr_pl[i][2] - otr_pl[i+1][2])>EPS then
+		s_t = 0.5*((otr_pl[i+1][1]-otr_pl[i][1])*(otr_pl[i][2]-otr_pl[1][2])-(otr_pl[i][1]-otr_pl[1][1])*(otr_pl[i+1][2]-otr_pl[i][2]))
+		s_plit_obsh = s_plit_obsh+s_t
+	endif
+next i
+s_plit_sgn = s_plit_obsh
+s_plit_obsh = abs(s_plit_obsh)
+
+perim = 0
+for i=1 to k_otr_pl
+	l = SQR(((otr_pl[i][3]-otr_pl[i][1])**2)+((otr_pl[i][4]-otr_pl[i][2])**2))
+	perim = perim + l
+next i
+!---------------Площадь отверстий
+area_obsh = 0
+if k_otv>=1 then
+	for i = 1 to k_otv
+		if i = 1 then n_perv = 1
+		if i>1 then n_perv=k_otr_otv[k_otv-1]+1
+		for j=1 to k_otr_otv[i] - 2
+			if abs(otr_otv[n_perv+j][1]-otr_otv[n_perv+j+1][1])>EPS or abs(otr_otv[n_perv+j][2]-otr_otv[n_perv+j+1][2])>EPS then
+				s_t = 0.5*((otr_otv[n_perv+j+1][1]-otr_otv[n_perv+j][1])*(otr_otv[n_perv+j][2]-otr_otv[n_perv][2])-(otr_otv[n_perv+j][1]-otr_otv[n_perv][1])*(otr_otv[n_perv+j+1][2]-otr_otv[n_perv+j][2]))
+				area_obsh = round_int((area_obsh + abs(s_t)) * 1000) / 1000
+			endif
+		next j
+	next i
+endif
+
+whole_poly = "poly2"
+nVertices = 0
+nContours = 0
+for i = 1 to k_otr_pl
+	nVertices = nVertices + 1
+	vertArray[nVertices][1] = otr_pl[i][1]
+	vertArray[nVertices][2] = otr_pl[i][2]
+	vertArray[nVertices][3] = 0
+next i
+nVertices = nVertices + 1
+vertArray[nVertices][1] = otr_pl[k_otr_pl][3]
+vertArray[nVertices][2] = otr_pl[k_otr_pl][4]
+vertArray[nVertices][3] = 0
+nContours = nContours + 1
+contourArray[nContours] = nVertices
+if k_otv>0 then
+	for j = 1 to k_otv
+		if j = 1 then n_perv = 1
+		if j>1 then n_perv = k_otr_otv[k_otv - 1] + 1
+		for i = 1 to k_otr_otv[j] - 1
+			nVertices = nVertices + 1
+			vertArray[nVertices][1] = otr_otv[n_perv + i][1]
+			vertArray[nVertices][2] = otr_otv[n_perv + i][2]
+			vertArray[nVertices][3] = 0
+		next i
+		nVertices = nVertices + 1
+		vertArray[nVertices][1] = otr_otv[n_perv + k_otr_otv[j] - 1][3]
+		vertArray[nVertices][2] = otr_otv[n_perv + k_otr_otv[j] - 1][4]
+		vertArray[nVertices][3] = 0
+		nVertices = nVertices + 1
+		vertArray[nVertices][1] = otr_otv[n_perv + 1][1]
+		vertArray[nVertices][2] = otr_otv[n_perv + 1][2]
+		vertArray[nVertices][3] = 0
+		nContours = nContours + 1
+		contourArray[nContours] = nVertices
+	next j
+endif
+PREPAREFUNCTION ch, "Store", whole_poly, nVertices, nContours, vertArray, contourArray
+nPgon = CALLFUNCTION (ch, "Regularize", whole_poly, resPolyIDArray)
+rezult = CALLFUNCTION (ch, "CentreOfGravity", whole_poly, ch_x, ch_y)
+CLOSEADDONSCOPE (ch)
+if rezult<EPS then
+	ch_x = ssumx / (6 * s_plit_sgn)
+	ch_y = ssumy / (6 * s_plit_sgn)
+endif
+
+end ch_x, ch_y, perim, s_plit_obsh, area_obsh

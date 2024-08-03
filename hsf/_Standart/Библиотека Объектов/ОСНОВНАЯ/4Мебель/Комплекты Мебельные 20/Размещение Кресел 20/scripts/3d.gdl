@@ -1,0 +1,381 @@
+
+IF gs_detlevel_3D_m = DLEV3D_OFF THEN END
+
+IF gs_shadow=0 THEN SHADOW OFF
+IF gs_shadow=1 THEN SHADOW ON
+
+! --- 3D Feedback to editing -----------------------------------------------------------------
+IF GLOB_CONTEXT>20 and GLOB_CONTEXT<40 THEN
+	gs_detlevel_3D_m = 1	! Simple
+	gs_arm = 0
+ENDIF
+
+backrestAngle = atn(gs_seat_depth*0.2/gs_arm_height)
+dr = gs_seat_depth*0.2-tan(backrestAngle)*gs_seat_height
+
+! --- Start Position of seats -----------------------------------------------------------------
+! if (Calculation Method=by No. of Seats then A=0 and B=0)
+
+ADD StartA, StartB, 0
+rotz -90
+PEN gs_cont_pen
+
+! ==============================================================================
+! 3D HOTSPOTs
+! ==============================================================================
+
+unID=1
+
+if iLayoutType <> LAYOUT_CURVED then
+	IF iSeatArrangement = ARRANGE_STAGGEREDROWS THEN
+		tempWidth=-gs_seat_width/2
+		tempWidth2=gs_seat_width*(M)-gs_seat_width/2
+		tempWidth3=gs_seat_width*(M)
+	ELSE
+		tempWidth=0
+		tempWidth2=gs_seat_width*(M)
+		tempWidth3=gs_seat_width*(M)
+	ENDIF
+
+	IF n > 1 and iRowElevationType = ROWELEVTYPE_STEPHEIGHT THEN
+		! --- Dist. between Rows -----------------------------------------------------------------
+		HOTSPOT 0,tempWidth,gs_hi,unID,di,1+128 : unID=unID+1
+		HOTSPOT -di,tempWidth,gs_hi,unID,di,2 : unID=unID+1
+		HOTSPOT 1,tempWidth,gs_hi,unID,di,3 : unID=unID+1
+
+		HOTSPOT 0,tempWidth2,gs_hi,unID,di,1+128 : unID=unID+1
+		HOTSPOT -di,tempWidth2,gs_hi,unID,di,2 : unID=unID+1
+		HOTSPOT 1,tempWidth2,gs_hi,unID,di,3 : unID=unID+1
+	ELSE
+		unID=unID+6
+	ENDIF
+
+
+	! --- Seat Depth -----------------------------------------------------------------
+	HOTSPOT 0,0,0,unID,gs_seat_depth,1+256 : unID=unID+1
+	HOTSPOT gs_seat_depth,0,0,unID,gs_seat_depth,2 : unID=unID+1
+	HOTSPOT -1,0,0,unID,gs_seat_depth,3 : unID=unID+1
+
+	! --- Seat Depth -----------------------------------------------------------------
+	IF iSeatArrangement = ARRANGE_STAGGEREDROWS THEN
+		HOTSPOT 0,gs_seat_width*(m-1),0,unID,gs_seat_depth,1+256 : unID=unID+1
+		HOTSPOT gs_seat_depth,gs_seat_width*(m-1),0,unID,gs_seat_depth,2 : unID=unID+1
+		HOTSPOT -1,gs_seat_width*(m-1),0,unID,gs_seat_depth,3 : unID=unID+1
+	else
+		HOTSPOT 0,gs_seat_width*m,0,unID,gs_seat_depth,1+256 : unID=unID+1
+		HOTSPOT gs_seat_depth,gs_seat_width*m,0,unID,gs_seat_depth,2 : unID=unID+1
+		HOTSPOT -1,gs_seat_width*m,0,unID,gs_seat_depth,3 : unID=unID+1
+	endif
+
+	! --- Seat Width -----------------------------------------------------------------
+	HOTSPOT 0,0,0,unID,gs_seat_width,1+128 : unID=unID+1
+	HOTSPOT 0,gs_seat_width,0,unID,gs_seat_width,2 : unID=unID+1
+	HOTSPOT 0,-1,0,unID,gs_seat_depth,3 : unID=unID+1
+
+endif
+
+! ==============================================================================
+! Model
+! ==============================================================================
+
+if iLayoutType = LAYOUT_CURVED then
+	if iPositioning = POSITIONING_SIDE then
+		del 2
+		add A, -radrow, 0
+
+		for i= 1 to n
+			if iSeatArrangement = ARRANGE_STAGGEREDROWS then
+				if i%2 = 0  then
+					m=m+1
+				else
+					m=m-1
+				endif
+			endif
+
+			for j=1 to m
+				if iSeatArrangement = ARRANGE_STAGGEREDROWS and i%2 = 1 then
+					rotz beta/2
+				else
+					rotz 0
+				endif
+				add -gs_seat_width/2, radrow+gs_seat_depth, 0
+				bLastChair = (j=1)
+				rotz -90
+				if iCalcMethod = CALCMETHOD_AREA then
+					if (1-COS((j-1)*beta))*radrow < i*di-gs_seat_depth then
+						gosub "one chair"
+					endif
+				else
+					gosub "one chair"
+				endif
+				del 3
+				if not(bRadial) then
+					beta = 2 * atn ((gs_seat_width/2)/radrow)
+				endif
+				rotz beta
+			next j
+			del j-1
+			radrow = radrow + di
+			addz gs_dis
+		next i
+		del n+1
+	else				! Start from Center Line
+		del 2
+		add A/2, -radrow, 0
+
+		for i= 1 to n
+			if iSeatArrangement = ARRANGE_STAGGEREDROWS then
+				if i%2 = 0  then
+					m=m+1
+				else
+					m=m-1
+				endif
+			endif
+			if m%2 = 1 then
+				j = 1
+				bLastChair = 0
+				add -gs_seat_width/2, radrow+gs_seat_depth, 0
+				rotz -90
+				if iCalcMethod = CALCMETHOD_AREA then
+					if (1-COS((j-1)*beta))*radrow < i*di-gs_seat_depth then
+						gosub "one chair"
+					endif
+				else
+					gosub "one chair"
+				endif
+				del 2
+			endif
+			for k=1 to 2
+				for j=1 to int(m/2)
+					if iSeatArrangement = ARRANGE_STAGGEREDROWS and i%2 = 1 then
+						rotz beta/2
+						if m%2 = 1 then
+							add -gs_seat_width, radrow+gs_seat_depth, 0
+					else
+							add -gs_seat_width/2, radrow+gs_seat_depth, 0
+					endif
+					else
+						if m%2 = 1 then
+							rotz beta
+							add -gs_seat_width/2+(k=1 and j=1 and i<>1)*0.025, radrow+gs_seat_depth, 0
+						else
+							rotz beta/2
+							add -gs_seat_width/2, radrow+gs_seat_depth, 0
+						endif
+					endif
+					bLastChair = ((k=1 and j=1 and m%2=0) or ((k=2 and j=1 and m%2=1)))
+					rotz -90
+					if iCalcMethod = CALCMETHOD_AREA then
+						if (1-COS((j-1)*beta))*radrow < i*di-gs_seat_depth then
+							gosub "one chair"
+						endif
+					else
+						gosub "one chair"
+					endif
+					del 3
+					if not(bRadial) then
+						beta = 2 * atn ((gs_seat_width/2)/radrow)
+					endif
+					rotz beta
+				next j
+				del j-1
+				mul -1, 1, 1
+			next k
+			del 2
+			radrow = radrow + di
+			addz gs_dis
+		next i
+		del n+1
+	endif
+else				! Straight layout
+	FOR i= 1 to n
+		IF iSeatArrangement = ARRANGE_STAGGEREDROWS THEN
+			IF i%2 = 0 THEN
+				addy -(gs_seat_width+ArmWidth)/2
+				m=m+1
+			ELSE
+				addy 0
+				m=m-1
+			ENDIF
+		ELSE
+			addy 0
+			m=m
+		ENDIF
+
+		HOTSPOT 0, 0,0, unID :	unID=unID+1
+		HOTSPOT 0,gs_seat_width*m,0,  unID :	unID=unID+1
+
+		! --- Base -----------------------------------------------------------------
+		IF BaseWidth > 0 AND iLegType = LEGTYPE_1 THEN
+
+			MATERIAL gs_frame_mat
+			addy ArmWidth/2
+			PRISM_ 5,BaseWidth,
+				0,0,15,
+				gs_seat_depth,0,15,
+				gs_seat_depth,gs_seat_width*m-ArmWidth,15,
+				0,gs_seat_width*m-ArmWidth,15,
+				0,0,15
+			DEL 1
+
+			HOTSPOT 0,0,0, unID : unID=unID+1
+			HOTSPOT 0,gs_seat_width*m,0, unID : unID=unID+1
+
+			HOTSPOT gs_seat_depth,0,0, unID : unID=unID+1
+			HOTSPOT gs_seat_depth,gs_seat_width*m,0, unID : unID=unID+1
+
+		ENDIF
+
+		! --- Chairs ---------------------------------------------------------------
+
+		for j= 1 to m
+			bLastChair = (j=m)
+			gosub "one chair"
+			addy gs_seat_width
+		next j
+		del m+1
+
+		add -di,0,gs_dis
+	next i
+endif
+END
+
+
+! ===================================================================
+! Subroutines
+! ===================================================================
+
+"arm":
+
+	MATERIAL gs_frame_mat
+	IF iLegType = LEGTYPE_1 THEN
+		if bEndingArm then
+			PRISM_ 5,ArmWidth,
+				0,0,15,
+				-gs_seat_depth*0.2,gs_arm_height,15,
+				gs_seat_depth*0.9,gs_arm_height,15,
+				gs_seat_depth*0.6,0,15,
+				0,0,15
+		else
+			PRISM_ 5,ArmWidth,
+				0,zzyzx*0.04,15,
+				-gs_seat_depth*0.2,gs_arm_height,15,
+				gs_seat_depth*0.9,gs_arm_height,15,
+				gs_seat_depth*0.6,BaseWidth,15,
+				0,BaseWidth,15
+		endif
+	ENDIF
+
+
+	IF iLegType = LEGTYPE_2 THEN
+		Addy gs_arm_height/2
+		MATERIAL gs_frame_mat
+		PRISM_ 5,ArmWidth,
+			-gs_seat_depth*0.1,0,15,
+			-gs_seat_depth*0.2,gs_arm_height/2,15,
+			gs_seat_depth*0.9,gs_arm_height/2,15,
+			gs_seat_depth*0.6,0,15,
+			0,0,15
+		DEL 1
+
+		ADDx -gs_seat_depth*0.1+gs_seat_depth*0.3
+		MATERIAL ArmLegMat
+		PRISM_ 7,ArmWidth,
+			-gs_seat_depth*0.3,0,15,
+			gs_seat_depth*0.3,0,15,
+			gs_seat_depth*0.3,ArmWidth/2,15,
+			gs_seat_depth*0.15,ArmWidth,15,
+			-gs_seat_depth*0.15,ArmWidth,15,
+			-gs_seat_depth*0.3,ArmWidth/2,15,
+			-gs_seat_depth*0.3,0,-1
+		DEL 1
+
+		Addy (ArmWidth)
+		Addz ArmWidth-0.005
+		ADDx -gs_seat_depth*0.1-ArmWidth/2+gs_seat_depth*0.3
+		rotX -90
+		BLOCK ArmWidth-0.01,ArmWidth-0.01,gs_arm_height/2-(ArmWidth)
+		DEL 4
+
+	ENDIF
+
+	RETURN
+
+
+"seat cushion":
+
+	CALL "fa_cushion" parameters gs_detlevel_3D_m=gs_detlevel_3D_m,
+		cush_a=hhh, cush_b=gs_seat_width-ArmWidth, cush_h=CushThk,
+		r2=RadCushEdge, r1=RadCushCorner,
+		gs_resol=CushEdgeResol,
+		FilletResol=CushFilletResol,
+		cush_mat=gs_seat_mat
+
+	RETURN
+
+
+"Arm Cushion":
+
+	CALL "fa_cushion" parameters gs_detlevel_3D_m=gs_detlevel_3D_m,
+		cush_a=ArmWidth+0.04, cush_b=gs_seat_depth+0.02, cush_h=0.04,
+		r1=0.01, r2=0.01,
+		gs_resol=CushEdgeResol,
+		FilletResol=CushFilletResol,
+		cush_mat=ArmCushMat
+
+	RETURN
+
+
+"one chair":
+
+	ADDz gs_seat_height-bSeatHeightIncludesCushion*CushThk
+	ADDx dr
+
+	ROTy -90-backrestAngle
+	ADDz CushThk
+	mulz -1
+
+	! backrest
+	MATERIAL gs_seat_mat
+	hhh = zzyzx-gs_seat_height
+	CushHgt=(ZZYZX-gs_seat_height)/SIN(90-backrestAngle)
+	addy ArmWidth/2
+	gosub "seat cushion"
+	del 1
+
+	DEL 2
+
+	ROTy 90+backrestAngle
+	hhh=gs_seat_depth
+
+	addy ArmWidth/2
+	GOSUB "seat cushion"
+	del 1
+
+	DEL 4
+
+	rotx 90
+	add 0.1*gs_seat_depth,0,-ArmWidth/2
+	gosub "arm"
+	DEL 2
+
+	IF bLastChair THEN
+		! Last Arm
+		ADD (ArmWidth+0.04)/2, gs_seat_width+ArmWidth/2, 0
+		rotx 90
+		gosub "arm"
+		del 2
+	ENDIF
+
+	IF gs_arm THEN
+		add 0,(ArmWidth+0.04)/2,gs_arm_height
+		rotz -90
+		GOSUB "Arm Cushion"
+		IF bLastChair THEN
+			addx -gs_seat_width
+			gosub "Arm Cushion"
+			del 1
+		ENDIF
+		DEL 2
+	ENDIF
+return

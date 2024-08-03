@@ -1,0 +1,193 @@
+
+
+! =============================================================================
+! GS Skylight Functions
+! =============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= bEnableLining,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+	returned_parameters	iLoD2D,
+		gs_opLinePen, gs_openedSashPen, gs_iSwingType, gs_swingLineType, gs_opline_style_m
+
+if iLoD2D = SYMBS_OFF | iLoD2D = SYMBS_S_1 then end
+
+
+! Horizontal and low Roof
+if abs(ac_roofang) < EPS | ac_roofang > 90+EPS then
+	rect2 -A/2, 0, A/2, B*COS(ac_roofang)
+
+	end
+endif
+
+
+! ==============================================================================
+! Symbolic 2D
+! ==============================================================================
+
+pen gs_cont_pen
+fill gs_fill_type
+
+add2 -a/2,0
+
+xBreite        = A !PARAM X Dimension
+yTiefe         = B !PARAM Y Dimension
+
+
+
+dSprossenHalb = dSprossen / 2
+
+
+
+xLkVorderwand = dWandGaube
+xRkVorderwand = xBreite - dWandGaube
+zTraufe = zOkFenster + zHoeheSturzAnsicht
+
+yVkFenster = dLeibung
+yHkFenster = yVkFenster + dProfil
+yScheibe = (yVkFenster + yHkFenster) / 2
+
+
+
+tanDach = tan(ac_roofang)   !### Wir wollen mit dem Tangens rechnen.
+
+if wSchleppdach < 0 then
+  !### Es ist keine Schleppdachneigung angegeben.
+  !### Benutze die Neigung aus der Tiefe:
+
+  tanSchleppdach = (yTiefe * tanDach - zTraufe) / (dUeberstandSchleppdach + yTiefe)
+  cosSchleppdach = 1 / sqr(1 + tanSchleppdach * tanSchleppdach)
+  sinSchleppdach = tanSchleppdach * cosSchleppdach
+else
+  !### Es ist eine Schleppdachneigung angegeben.
+  !### Benutze diese Neigung, und berechne die Tiefe daraus:
+
+  cosSchleppdach = cos(wSchleppdach)
+  sinSchleppdach = sin(wSchleppdach)
+  tanSchleppdach = sinSchleppdach / cosSchleppdach
+  yTiefe = (zTraufe + dUeberstandSchleppdach * tanSchleppdach) / (tanDach - tanSchleppdach)
+endif
+
+
+
+!### Vorderwand:
+
+!### Viereckiges Prisma mit Null oder mehr viereckigen Lochern,
+!### die auch bis an die Unterkante der Wand reichen konnen.
+
+rect2 0, 0,   xBreite, dWandGaube
+
+hotspot2 xBreite/2, 0
+hotspot2 0, 0
+hotspot2 xBreite, 0
+hotspot2 xBreite, dWandGaube
+hotspot2 0, dWandGaube
+
+hotspot2 0, yTiefe
+hotspot2 xBreite, yTiefe
+hotspot2 xBreite / 2, yTiefe / 2
+
+
+
+if nFenster >= 1 then
+
+  !### Die Fenster:
+
+  xLkFenster1 = (xBreite - nFenster * xFensterbreite - (nFenster - 1) * xAbstandFenster) / 2
+  xLkFenster = xLkFenster1
+
+  for iFenster = 1 to nFenster
+	xRkFenster = xLkFenster + xFensterbreite
+
+	gosub 2222 !### Fenster.
+
+	xLkFenster = xRkFenster + xAbstandFenster
+  next iFenster
+
+endif
+
+
+
+!### Umriss:
+
+if gs_back_pen<>0 then
+	mask=1+2+4+64
+else
+	mask=1+4
+endif
+
+line_type iLineType
+
+poly2_b 5, mask, gs_fill_pen, gs_back_pen,
+  0, 0, 1,
+  0, yTiefe, 1,
+  xBreite, yTiefe, 1,
+  xBreite, 0, 1,
+  0, 0, -1
+
+!### Ende:
+
+end
+
+
+
+
+!##############################
+2222: !### Unterroutine Fenster
+!##############################
+
+
+
+xRkRahmenLinks = xLkFenster + dRahmen
+xLkRahmenRechts = xRkFenster - dRahmen
+
+line2 xLkFenster, 0,   xLkFenster, dWandGaube
+line2 xRkFenster, 0,   xRkFenster, dWandGaube
+
+hotspot2 xLkFenster, 0
+hotspot2 xLkFenster, dWandGaube
+hotspot2 xRkFenster, 0
+hotspot2 xRkFenster, dWandGaube
+
+if dRahmen > 0 then
+	if iLoD2D = SYMBS_S_2 then
+		line2 xLkFenster, yVkFenster,   xRkFenster, yVkFenster
+	endif
+
+	if iLoD2D >= SYMBS_M_1 then
+		line2 xLkFenster, yVkFenster,   xRkFenster, yVkFenster
+		line2 xLkFenster, yHkFenster,   xRkFenster, yHkFenster
+
+		if iLoD2D >= SYMBS_M_1 then
+			line2 xRkRahmenLinks, yVkFenster,   xRkRahmenLinks, yHkFenster
+			line2 xLkRahmenRechts, yVkFenster,   xLkRahmenRechts, yHkFenster
+		endif
+
+		if bSprosseVert then
+			xLkSprosse = xLkFenster + (xFensterbreite - dSprossen) / 2
+			xRkSprosse = xLkSprosse + dSprossen
+
+			if iLoD2D = SYMBS_D_1 | iLoD2D = SYMBS_D_2 then
+				line2 xRkRahmenLinks, yScheibe,   xLkSprosse, yScheibe
+				line2 xRkSprosse, yScheibe,   xLkRahmenRechts, yScheibe
+			endif
+
+			if iLoD2D >= SYMBS_M_1 then
+				line2 xLkSprosse, yVkFenster,   xLkSprosse, yHkFenster
+				line2 xRkSprosse, yVkFenster,   xRkSprosse, yHkFenster
+			endif
+		else
+			if iLoD2D = SYMBS_D_1 | iLoD2D = SYMBS_D_2 then
+				line2 xLkRahmenRechts, yVkFenster,   xLkRahmenRechts, yHkFenster
+				line2 xRkRahmenLinks, yScheibe,   xLkRahmenRechts, yScheibe
+			endif
+		endif
+	endif
+
+	hotspot2 (xLkFenster + xRkFenster) / 2, yScheibe
+
+endif
+
+
+return

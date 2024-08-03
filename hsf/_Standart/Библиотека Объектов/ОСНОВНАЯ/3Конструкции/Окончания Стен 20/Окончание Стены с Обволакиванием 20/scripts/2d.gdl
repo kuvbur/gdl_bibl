@@ -1,0 +1,497 @@
+
+!text2 0, 0, SYMB_MIRRORED
+!text2 0, -0.1, onWallBeg
+
+
+if _bShowWrappedEnd then
+
+	rot2 -90
+
+	! --- general drawing parameters ---
+	bLocalFill = 0
+	bFitToSkinFill = 0 
+	if iSkinsParameter <> SKINSPARAM_CUSTOM and isComposite then
+	gs_fill_type = WALL_SKINS_PARAMS[iUsedSkin][SKIN_FILL]
+	gs_fill_pen = WALL_SKINS_PARAMS[iUsedSkin][SKIN_FILL_PEN]
+	gs_back_pen = WALL_SKINS_PARAMS[iUsedSkin][SKIN_FILL_BACK_PEN]
+	bLocalFill = WALL_SKINS_PARAMS[iUsedSkin][SKIN_FILL_ORIENTATION]
+	bFitToSkinFill = WALL_SKINS_PARAMS[iUsedSkin][16]
+	endif
+
+	if iSkinsParameter = SKINSPARAM_AUTO and not(isComposite) then
+	gs_fill_type = 1
+	endif
+
+	if useWallPen then
+	if isComposite then
+		gs_cont_pen = WALL_SKINS_PARAMS[iLeftmost][SKIN_UPPER_LINE_PEN]
+		gs_cont_lt = WALL_SKINS_PARAMS[iLeftmost][SKIN_UPPER_LINE_TYPE]
+	else
+		if iOnlyCutSkin > 0 then
+			gs_cont_pen = WALL_SKINS_PARAMS[iOnlyCutSkin][SKIN_UPPER_LINE_PEN]
+			gs_cont_lt = WALL_SKINS_PARAMS[iOnlyCutSkin][SKIN_UPPER_LINE_TYPE]
+		else
+			gs_cont_pen = WALL_SECT_PEN
+			gs_cont_lt = WALL_LINETYPE
+		endif
+	endif
+	endif
+
+	if abs(wallIncl) > EPS then
+	if not(SYMB_MIRRORED) then
+		firstTrapType = 0
+		secTrapType = 2
+	else
+		firstTrapType = 2
+		secTrapType = 0
+	endif
+	else
+	firstTrapType = 0
+	secTrapType = 0
+	endif
+
+
+	! ==============================================================================
+	! THE WALL AREA
+	! ==============================================================================
+
+	if not(isComposite) then
+
+	! ===== SIMPLE WALL =====
+
+	fill WALL_FILL
+	pen WALL_SECT_PEN
+	if WALL_COMPS_NAME <> "" then
+		wallFillPen = WALL_SKINS_PARAMS[1][SKIN_FILL_PEN]
+		wallFillBGPen = WALL_SKINS_PARAMS[1][SKIN_FILL_BACK_PEN]
+	else
+		wallFillPen = WALL_FILL_PEN
+		wallFillBGPen = WALL_FBGD_PEN
+	endif
+	call "SkinRect" PARAMETERS startX = thickCap, startY = yWallStart + thickFirst,
+			endX = thickCap, endY = thickSecFromBeg,
+			innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+			incAngle = wallIncl, trapType = 1,
+			fillPen = wallFillPen, fillBGPen = wallFillBGPen,
+			fillType = 2,
+			bLocalFill = WALL_SKINS_PARAMS[1][SKIN_FILL_ORIENTATION],
+			bFitToSkinFill = WALL_SKINS_PARAMS[1][16],
+			bChangeFitToSkinFillOrient = 0,
+			bCircularDistortion	= 0,
+			shContour = 0,
+			startLinePen = gs_cont_pen, startLineCont = 0
+
+	else
+
+	! ===== COMPOSITE WALL =====
+
+	! --- index of the last core skin (which goes trapeze) ---
+	trapezoidCoreSkin = 0
+	for j = 1 to WALL_SKINS_NUMBER
+		if abs(WALL_SKINS_PARAMS [j][SKIN_THICKEN_TRAPEZOID] - 1) < EPS then
+			trapezoidCoreSkin = j
+		endif
+	next j
+
+	! --- draw cut skins between the arms ---
+	currBeg = 0
+	startAngle = alpha * thickCap / length
+	for i = 1 to WALL_SKINS_NUMBER
+		if (i >= trapezoidCoreSkin and SYMB_MIRRORED) or (i <= trapezoidCoreSkin and not(SYMB_MIRRORED)) or abs(wallIncl) < EPS then
+			skinThickness = WALL_SKINS_PARAMS[i][SKIN_THICKNESS]
+		else
+			skinThickness = WALL_SKINS_PARAMS[i][SKIN_THICKNESS] / cos(wallIncl)
+		endif
+		startSkin = currBeg
+		endSkin = currBeg + skinThickness
+
+		if (i > trapezoidCoreSkin and SYMB_MIRRORED) or (i < trapezoidCoreSkin and not(SYMB_MIRRORED)) then
+			trapType = 0
+		else
+			if trapezoidCoreSkin = i then
+
+				compositeThickness = 0
+				for j = 1 to WALL_SKINS_NUMBER
+					if (j >= trapezoidCoreSkin and SYMB_MIRRORED) or (j <= trapezoidCoreSkin and not(SYMB_MIRRORED)) or abs(wallIncl) < EPS then
+						compositeThickness = compositeThickness + WALL_SKINS_PARAMS[j][SKIN_THICKNESS]
+					else
+						compositeThickness = compositeThickness + WALL_SKINS_PARAMS[j][SKIN_THICKNESS] / cos(wallIncl)
+					endif
+				next j
+				if (WALL_END_THICKNESS <= WALL_START_THICKNESS) then
+					modifier = WALL_END_THICKNESS - compositeThickness
+				else
+					modifier = WALL_START_THICKNESS - compositeThickness
+				endif
+
+				if onWallBeg then
+					if WALL_THICKNESS > WALL_END_THICKNESS then
+						modifier = modifier + WALL_THICKNESS - WALL_END_THICKNESS
+					endif
+				else
+					if WALL_THICKNESS > WALL_START_THICKNESS then
+						modifier = modifier + (WALL_THICKNESS - WALL_START_THICKNESS)
+					endif
+				endif
+				endSkin = endSkin + modifier
+				currBeg = currBeg + modifier
+				trapType = 1
+			else
+				trapType = 2
+			endif
+		endif
+
+		if startSkin < thickFirst + yWallStart or endSkin > thickSecFromBeg then
+			if startSkin < thickFirst + yWallStart then
+				if endSkin < thickFirst  + yWallStart + EPS and trapezoidCoreSkin <> i then
+					endSkin = 0
+				else
+					if trapType < 2 or SYMB_MIRRORED then
+						startSkin = thickFirst + yWallStart
+					endif
+				endif
+			endif
+			if endSkin > thickSecFromBeg then
+				if startSkin > thickSecFromBeg - EPS and trapezoidCoreSkin <> i then
+					endSkin = startSkin
+				else
+					if trapType < 2 or not(SYMB_MIRRORED) then
+						endSkin = thickSecFromBeg
+					endif
+				endif
+			endif
+		endif
+
+		if ((endSkin > yWallStart + EPS and startSkin + EPS < endSkin) or trapezoidCoreSkin = i) and (WALL_SKINS_PARAMS[i][SKIN_TYPE] < 0.01) then
+			startLinePen = 0
+			if alwaysLine or abs(gs_fill_type - WALL_SKINS_PARAMS[i][SKIN_FILL]) > EPS then
+				if useWallPen > EPS then
+					startLinePen = WALL_SKINS_PARAMS[i][SKIN_END_FACE_PEN]
+				else
+					startLinePen = gs_cont_pen
+				endif
+			endif
+			bBottomLine = 1
+			if abs(endSkin - thickSecFromBeg) < EPS then
+				bBottomLine = 0
+				if abs(wallIncl) > EPS and secTrapType = 2 and trapType = 0 then
+					bBottomLine = 1
+				endif
+			endif
+			if abs(endSkin - thickFirst) < EPS then
+				bBottomLine = 0
+				if abs(wallIncl) > EPS and firstTrapType = 2 and trapType = 1 then
+!					bBottomLine = 1		! specification changed, this is a bug now
+				endif
+			endif
+			bottomLinePen = 0
+			if bBottomLine then
+				bottomLinePen = WALL_SKINS_PARAMS[i][SKIN_LOWER_LINE_PEN]
+			endif
+
+			line_type 1
+			fill WALL_SKINS_PARAMS[i][SKIN_FILL]
+			call "SkinRect" PARAMETERS startX = thickCap, startY = startSkin,
+					endX = thickCap, endY = endSkin,
+					innerRadius = r0, incAngle = wallIncl,
+					trapType = trapType,
+					fillPen = WALL_SKINS_PARAMS[i][SKIN_FILL_PEN], fillBGPen = WALL_SKINS_PARAMS[i][SKIN_FILL_BACK_PEN],
+					fillType = 2,
+					bLocalFill = WALL_SKINS_PARAMS[i][SKIN_FILL_ORIENTATION],
+					bFitToSkinFill = WALL_SKINS_PARAMS[i][16],
+					bChangeFitToSkinFillOrient = 0,
+					bCircularDistortion	= 0,
+					bCoverFill = (abs(WALL_SKINS_PARAMS[i][SKIN_TYPE] - 1) < EPS),
+					startLinePen = startLinePen, startLineCont = 0,
+					bottomLinePen = bottomLinePen, bottomLineLineType = WALL_SKINS_PARAMS[i][SKIN_LOWER_LINE_TYPE]
+
+		endif
+
+		currBeg = currBeg + skinThickness
+
+	next i
+
+	endif
+
+
+	! ==============================================================================
+	! THE END-CAP
+	! ==============================================================================
+
+	! --- flags for side contour lines ---
+	penUpperSideContour = 0
+	penLowerSideContour = 0
+	penUpperInnerContour = 0
+	ltUpperInnerContour = gs_cont_lt
+	penLowerInnerContour = 0
+	ltLowerInnerContour = gs_cont_lt
+
+	if not(isComposite) then
+	penUpperSideContour = gs_cont_pen
+	penLowerSideContour = gs_cont_pen
+	penUpperInnerContour = gs_cont_pen
+	penLowerInnerContour = gs_cont_pen
+	else
+	if alwaysLine or abs(gs_fill_type - WALL_SKINS_PARAMS[iLeftmost][SKIN_FILL]) > EPS then
+		penLowerSideContour = gs_cont_pen
+		penLowerInnerContour = gs_cont_pen
+	else
+		if thickFirst > WALL_SKINS_PARAMS[iLeftMost][SKIN_THICKNESS]-EPS then
+			if abs(wallIncl) < EPS then
+				penLowerInnerContour = gs_cont_pen
+			endif
+			if (firstTrapType = 0 or firstTrapType = 2) and WALL_SKINS_PARAMS[iLeftmost][SKIN_THICKEN_TRAPEZOID] < 1-EPS then
+				penLowerInnerContour = gs_cont_pen
+			endif
+		endif
+	endif
+	if useWallPen and (abs(thickFirst - WALL_SKINS_PARAMS[iLeftmost][SKIN_THICKNESS]) < EPS) then
+		penLowerInnerContour = WALL_SKINS_PARAMS[iLeftmost][SKIN_LOWER_LINE_PEN]
+		ltLowerInnerContour = WALL_SKINS_PARAMS[iLeftmost][SKIN_LOWER_LINE_TYPE]
+	endif
+
+	if alwaysLine or abs(gs_fill_type - WALL_SKINS_PARAMS[iRightmost][SKIN_FILL]) > EPS then
+		penUpperSideContour = gs_cont_pen
+		penUpperInnerContour = gs_cont_pen
+	else
+		if thickSecond > WALL_SKINS_PARAMS[iRightmost][SKIN_THICKNESS]-EPS then
+			if abs(wallIncl) < EPS then
+				penUpperInnerContour = gs_cont_pen
+			endif
+			if (secTrapType = 0 or secTrapType = 2) and WALL_SKINS_PARAMS[iRightmost][SKIN_THICKEN_TRAPEZOID] < 1-EPS then
+				penUpperInnerContour = gs_cont_pen
+			endif
+		endif
+	endif
+	if useWallPen and (abs (thickSecond - WALL_SKINS_PARAMS[iRightmost][SKIN_THICKNESS]) < EPS) then
+		penUpperInnerContour = WALL_SKINS_PARAMS[iRightmost-1][SKIN_LOWER_LINE_PEN]
+		ltUpperInnerContour = WALL_SKINS_PARAMS[iRightmost-1][SKIN_LOWER_LINE_TYPE]
+	endif
+	endif
+	if gs_fill_pen < 1 then
+	gs_fill_pen = 1
+	endif
+
+	! --- the 3 rectangles ---
+	fillType = 1	! cut first
+	set fill 0
+	for i = 1 to 2
+	call "SkinRect" PARAMETERS startX = thickCap, startY = yWallStart,
+			endX = length, endY = yWallStart + thickFirst,
+			innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+			incAngle = wallIncl, trapType = firstTrapType,
+			fillPen = gs_fill_pen, fillBGPen = gs_back_pen,
+			fillType = fillType,
+			bLocalFill = bLocalFill,
+			bFitToSkinFill = bFitToSkinFill,
+			bChangeFitToSkinFillOrient = 1,
+			bCircularDistortion	= 1,
+			endLinePen = penLowerSideContour, endLineLineType = gs_cont_lt, endLineCont = 0,
+			bottomLinePen = penLowerInnerContour, bottomLineLineType = ltLowerInnerContour, bottomLineCont = 0,
+			topLinePen = gs_cont_pen, topLineLineType = gs_cont_lt, topLineCont = 1
+	call "SkinRect" PARAMETERS startX = 0, startY = yWallStart,
+			endX = thickCap, endY = yWallEnd,
+			innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+			incAngle = wallIncl, trapType = 1,
+			fillPen = gs_fill_pen, fillBGPen = gs_back_pen,
+			fillType = fillType,
+			bLocalFill = bLocalFill,
+			bFitToSkinFill = bFitToSkinFill,
+			bChangeFitToSkinFillOrient = 0,
+			bCircularDistortion	= 0,
+			startLinePen = gs_cont_pen, startLineLineType = gs_cont_lt, startLineCont = 1,
+			bottomLinePen = gs_cont_pen, bottomLineLineType = gs_cont_lt, bottomLineCont = 1,
+			topLinePen = gs_cont_pen, topLineLineType = gs_cont_lt, topLineCont = 1
+	call "SkinRect" PARAMETERS startX = thickCap, startY = thickSecFromBeg,
+			endX = length, endY = yWallEnd,
+			innerRadius = r0, outerRadius = r0 + WALL_THICKNESS,
+			incAngle = wallIncl, trapType = secTrapType,
+			fillPen = gs_fill_pen, fillBGPen = gs_back_pen,
+			fillType = fillType,
+			bLocalFill = bLocalFill,
+			bFitToSkinFill = bFitToSkinFill,
+			bChangeFitToSkinFillOrient = 1,
+			bCircularDistortion	= 1,
+			endLinePen = penUpperSideContour, endLineLineType = gs_cont_lt, endLineCont = 0,
+			bottomLinePen = gs_cont_pen, bottomLineLineType = gs_cont_lt, bottomLineCont = 1,
+			topLinePen = penUpperInnerContour, topLineLineType = ltUpperInnerContour, topLineCont = 0
+
+	fillType = 0	! then fill
+	set fill gs_fill_type
+	next i
+
+	! ==============================================================================
+	! HOTSPOTS
+	! ==============================================================================
+
+	unID = 1
+	midPos = (length + thickcap) / 2
+
+	! --- fix hotspots at the end line ---
+	xMoveTo = length
+	gosub 1
+
+	HOTSPOT2 0, additionIfMirr+yWallStart+thickFirst, unID						! fix
+	unID = unID + 1
+	HOTSPOT2 0, additionNotMirr+yWallEnd-thickSecond, unID	! fix
+	unID = unID + 1
+
+	del moveStepNum
+
+	! --- fix hotspots on the main side ---
+	xMoveTo = thickCap
+	gosub 1
+
+	HOTSPOT2 0, additionIfMirr+yWallStart+thickFirst, unID						! fix
+	unID = unID + 1
+	HOTSPOT2 0, additionNotMirr+yWallEnd-thickSecond, unID	! fix
+	unID = unID + 1
+
+	del moveStepNum
+
+	! --- editable HSs on the sides ---
+	if not(isComposite and useSkinThickness) then
+	xMoveTo = midPos
+	gosub 1
+
+	if SYMB_MIRRORED then
+		HOTSPOT2 0, additionIfMirr+yWallStart, unID, thickOtherSide, 1+128				! base
+		unID = unID + 1
+		HOTSPOT2 0, additionIfMirr+yWallStart-0.1, unID, thickOtherSide, 3				! reference
+		unID = unID + 1
+		HOTSPOT2 0, additionIfMirr+yWallStart+thickOtherSide, unID, thickOtherSide, 2	! moving
+		unID = unID + 1
+
+		HOTSPOT2 0, additionNotMirr+yWallEnd, unID, thickRefSide, 1+128			! base
+		unID = unID + 1
+		HOTSPOT2 0, additionNotMirr+yWallEnd+0.1, unID, thickRefSide, 3			! reference
+		unID = unID + 1
+		HOTSPOT2 0, additionNotMirr+yWallEnd-thickRefSide, unID, thickRefSide, 2	! moving
+		unID = unID + 1
+	else
+		HOTSPOT2 0, additionIfMirr+yWallStart, unID, thickRefSide, 1+128				! base
+		unID = unID + 1
+		HOTSPOT2 0, additionIfMirr+yWallStart-0.1, unID, thickRefSide, 3				! reference
+		unID = unID + 1
+		HOTSPOT2 0, additionIfMirr+yWallStart+thickRefSide, unID, thickRefSide, 2		! moving
+		unID = unID + 1
+
+		HOTSPOT2 0, additionNotMirr+yWallEnd, unID, thickOtherSide, 1+128			! base
+		unID = unID + 1
+		HOTSPOT2 0, additionNotMirr+yWallEnd+0.1, unID, thickOtherSide, 3			! reference
+		unID = unID + 1
+		HOTSPOT2 0, additionNotMirr+yWallEnd-thickOtherSide, unID, thickOtherSide, 2	! moving
+		unID = unID + 1
+	endif
+
+	del moveStepNum
+	endif
+
+	! --- editable HS on the main side ---
+	if r0 < EPS then
+
+	! --- editable HS on the main side ---
+	xMoveTo = thickCap
+	gosub 1
+
+	yMainEditHP = ((yWallStart + thickFirst + additionIfMirr) + (yWallEnd - thickSecond + additionNotMirr)) / 2
+	HOTSPOT2 -thickCap, yMainEditHP, unID, thickcap, 1+128		! base
+	unID = unID + 1
+	HOTSPOT2 -thickCap-0.1, yMainEditHP, unID, thickcap, 3		! reference
+	unID = unID + 1
+	HOTSPOT2 0, yMainEditHP, unID, thickcap, 2					! moving
+	unID = unID + 1
+
+	del moveStepNum
+	else
+
+	! --- editable HS on the main side ---
+	revAngleExtra = 0
+	if not(onWallBeg) then
+		revAngleExtra = 512
+	endif
+	yMainEditHP = (yWallStart + thickFirst + yWallEnd - thickSecond) / 2
+	HOTSPOT2 0, yMainEditHP, unID, thickCapAngle, 4+128			! base
+	unID = unID + 1
+	xMoveTo = -0.1
+	gosub 1
+	HOTSPOT2 0, yMainEditHP, unID, thickCapAngle, 7				! reference
+	del moveStepNum
+	unID = unID + 1
+	xMoveTo = thickCap
+	gosub 1
+	HOTSPOT2 0, yMainEditHP, unID, thickCapAngle, 5, thickCap		! moving - display param: thickCap
+	del moveStepNum
+	unID = unID + 1
+	if onWallBeg then
+		HOTSPOT2 0, r0+WALL_THICKNESS, unID, thickCapAngle, 6+revAngleExtra	! centerpoint
+	else
+		HOTSPOT2 0, -r0, unID, thickCapAngle, 6+revAngleExtra				! centerpoint
+	endif
+	unID = unID + 1
+
+	endif
+
+	! --- replace AC hotspots at the ends ---
+	call "Resize Wall End" PARAMETERS GS_HotspotUnIDBegin = 20000,
+		cutWidthAngle = cutWidthAngle, AC_CutWidth = AC_CutWidth,
+		r0 = r0, wallIncl = wallIncl, onWallBeg = onWallBeg
+endif
+
+end
+
+
+! =============================================================================
+! === SUBROUTINES
+! =============================================================================
+
+! =============================================================================
+!		Move the coorinate system to a given X coordinate
+! -----------------------------------------------------------------------------
+! Input Parameters:
+!	r0:			inner radius of the curved wall (0 otherwise)
+!	wallIncl:	signed inclination of trapeze wall (0 otherwise)
+!	alpha:		angle of the object in curved wall
+!	length:		full length of the object
+!	xMoveTo:	the X coordinate to move to
+! Output:
+!	additionIfMirr:		Y addition at the current X position if SYMB_MIRRORED = 1
+!	additionNotMirr:	Y addition at the current X position if SYMB_MIRRORED = 0
+!	moveStepNum:		number of the transformation added by the subroutine
+! Remark:
+!	The macro moves the coordinate system to the desired X coordinate,
+!	after the place operation write a 'del moveStepNum' command
+! =============================================================================
+
+1:
+
+additionIfMirr = 0
+additionNotMirr = 0
+if r0 > EPS then
+
+	if onWallBeg then
+		add2 0, r0+WALL_THICKNESS
+		rot2 alpha * xMoveTo / length
+		add2 0, -r0-WALL_THICKNESS
+	else
+		add2 0, -r0
+		rot2 -alpha * xMoveTo / length
+		add2 0, r0
+	endif
+
+	moveStepNum = 3
+
+else
+
+	if SYMB_MIRRORED then
+		additionIfMirr = xMoveTo * tan(wallIncl)
+	else
+		additionNotMirr = xMoveTo * tan(wallIncl)
+	endif
+
+	add2 xMoveTo, 0
+	moveStepNum = 1
+
+endif
+
+return

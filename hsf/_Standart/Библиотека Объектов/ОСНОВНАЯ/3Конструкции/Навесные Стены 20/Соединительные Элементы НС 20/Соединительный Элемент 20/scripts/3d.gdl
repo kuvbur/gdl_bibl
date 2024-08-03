@@ -1,0 +1,332 @@
+
+addz gs_spider_height+AC_panelThickness+gs_base_hegiht
+hotspot 0,0,0
+del 1
+
+sect_fill gs_sect_fill, gs_sect_bg_pen, gs_sect_fill_pen, gs_sect_cont_pen
+
+if gs_detlevel_3D_m = 0 then END
+
+if not(gs_shadow) then SHADOW OFF
+
+RESOL gs_resol
+PEN gs_cont_pen
+
+!=====================================
+! Flip depended parameters calculation 
+!=====================================
+	gosub "parametersCalculation"
+
+!============================
+! Panel modelling for debug
+!============================
+	gosub "debug"
+
+!============================
+! Spider Heads
+!============================
+for i=1 to gs_panel_num
+	if AC_panelPresences[i] then
+
+	rotx gs_panelAngleX[i]
+	roty gs_panelAngleY[i]
+		add cos(gs_armDirs2[i])*gs_spider_rad,sin(gs_armDirs2[i])*gs_spider_rad,AC_panelThickness/2
+
+		gosub "headPart"
+
+		del 5
+	endif
+next i
+
+!============================
+! Base with arms
+!============================
+material gs_base_material
+
+addz gs_spider_height
+
+cylind gs_base_hegiht,gs_base_rad
+
+cutpolya 2,2,0,
+	0,0,900,
+	gs_base_rad,360,4000
+
+for i=1 to gs_panel_num
+	if AC_panelPresences[i] then
+
+		armlenght = gs_spider_rad-gs_branch_rad
+
+		if abs(gs_panelAngleX[i]) > EPS then
+			workAngle = (gs_panelAngleX[i])
+			panelCenterX = armlenght  * cos(gs_armDirs2[i])
+			panelCenterY = cos(workAngle) * armlenght * sin(gs_armDirs2[i])
+			panelCenterZ = sin(workAngle) * armlenght  * sin(gs_armDirs2[i])
+
+			panthkX = 0
+			panthkY = AC_panelThickness/2 * sin(workAngle)
+			panthkZ = -1*AC_panelThickness/2 * cos(workAngle)
+
+			coordModX = panelCenterX - panthkX
+			coordModY = panelCenterY - panthkY
+			coordModZ = panelCenterZ - panthkZ
+
+			closerX = gs_branch_rad * cos(gs_armDirs2[i])
+			closerY = cos(workAngle) * gs_branch_rad * sin(gs_armDirs2[i])
+			closerZ = sin(workAngle) * gs_branch_rad * sin(gs_armDirs2[i])
+		else
+			workAngle = (gs_panelAngleY[i])
+			panelCenterX = cos(workAngle) * armlenght * cos(gs_armDirs2[i])
+			panelCenterY = armlenght  * sin(gs_armDirs2[i])
+			panelCenterZ = -1 * sin(workAngle) * armlenght  * cos(gs_armDirs2[i])
+
+			panthkX = AC_panelThickness/2 * sin(workAngle)
+			panthkY = 0
+			panthkZ = AC_panelThickness/2 * cos(workAngle)
+
+			coordModX = panelCenterX + panthkX
+			coordModY = panelCenterY + panthkY
+			coordModZ = panelCenterZ + panthkZ
+		
+			closerX = cos(workAngle) * gs_branch_rad * cos(gs_armDirs2[i])
+			closerY = gs_branch_rad * sin(gs_armDirs2[i])
+			closerZ = -1 * sin(workAngle) * gs_branch_rad * cos(gs_armDirs2[i])
+		endif
+
+		if gs_debug then
+			addy coordModY
+			addz -gs_spider_height+ coordModZ
+			addx coordModX
+			sphere 0.01
+			del 3
+			
+			addy coordModY + closerY
+			addz -gs_spider_height+ coordModZ + closerZ
+			addx coordModX + closerX
+			sphere 0.01
+			del 3
+
+			addy coordModY + closerY + closerY
+			addz -gs_spider_height+ coordModZ + closerZ + closerZ
+			addx coordModX + closerX + closerX
+			sphere 0.01
+			del 3
+	endif
+
+		gosub "armPart"
+	endif
+next i
+
+	del 1
+
+for i=1 to gs_panel_num
+	if AC_panelPresences[i] then cutend
+next i
+cutend
+
+end
+
+!============================
+"parametersCalculation":
+!============================
+	if SYMB_MIRRORED then
+		for i = 1 to gs_panel_num
+			AC_frameDirs[i][3] = -AC_frameDirs[i][3]
+		next i
+endif
+
+	dim gs_frameAngle[]
+	dim gs_armDirs[][3]
+	dim gs_armDirs2[]
+	dim gs_panelAngleX[]
+	dim gs_panelAngleY[]
+	dim gs_arm_angle[]
+
+	for i=1 to gs_panel_num
+		!================================================
+		! Set the angle of frames
+		!================================================
+		if abs(AC_frameDirs[i][1]) > EPS then
+			if AC_frameDirs[i][1] > EPS then
+				if abs(AC_frameDirs[i][2]) > EPS then
+					if AC_frameDirs[i][2] > EPS then
+						gs_frameAngle[i] = atn(AC_frameDirs[i][2]/AC_frameDirs[i][1])
+					else
+						gs_frameAngle[i] = 360 + atn(AC_frameDirs[i][2]/AC_frameDirs[i][1])
+					endif
+				else
+					if AC_frameDirs[i][1] > 0 then
+						gs_frameAngle[i] = 0
+					endif
+				endif
+			else
+				if abs(AC_frameDirs[i][1]) < EPS then
+					gs_frameAngle[i] = 180
+				else
+					gs_frameAngle[i] = 180 + atn(AC_frameDirs[i][2]/AC_frameDirs[i][1])
+				endif
+			endif
+		else
+			if AC_frameDirs[i][2] > 0 then
+				gs_frameAngle[i] = 90
+			else
+				gs_frameAngle[i] = 270
+			endif
+		endif
+	next i
+
+for i=1 to gs_panel_num
+		!================================================
+		! Set the vektor, and the angle of arms to X axis
+		!================================================
+	if i < gs_panel_num Then
+		gs_armDirs[i][1] = AC_frameDirs[i][1]+AC_frameDirs[i+1][1]
+		gs_armDirs[i][2] = AC_frameDirs[i][2]+AC_frameDirs[i+1][2]
+		gs_armDirs[i][3] = AC_frameDirs[i][3]+AC_frameDirs[i+1][3]
+		gs_armDirs2[i] = (gs_frameAngle[i+1]-gs_frameAngle[i])/2 + gs_frameAngle[i]
+	else
+		gs_armDirs[i][1] = AC_frameDirs[i][1]+AC_frameDirs[1][1]
+		gs_armDirs[i][2] = AC_frameDirs[i][2]+AC_frameDirs[1][2]
+		gs_armDirs[i][3] = AC_frameDirs[i][3]+AC_frameDirs[1][3]
+		gs_armDirs2[i] = (360-gs_frameAngle[i])/2 + gs_frameAngle[i]
+		endif
+	
+		!=====================================
+		! Set the panels angle to X and Y axis
+		!=====================================
+		if i = 1 Then
+			if ABS(AC_frameDirs[i][1]) > EPS then
+				gs_panelAngleY[i] = -atn(AC_frameDirs[i][3]/(AC_frameDirs[i][1]))
+				gs_panelAngleY[gs_panel_num] = gs_panelAngleY[i]
+			endif
+			if ABS(AC_frameDirs[i][2]) > EPS then
+				gs_panelAngleX[i] = atn(AC_frameDirs[i][3]/(AC_frameDirs[i][2]))
+				gs_panelAngleX[gs_panel_num] = gs_panelAngleX[i]
+			endif
+		else
+			if ABS(AC_frameDirs[i][1]) > EPS then
+				gs_panelAngleY[i] = -atn(AC_frameDirs[i][3]/(AC_frameDirs[i][1]))
+				gs_panelAngleY[i-1] = gs_panelAngleY[i]
+			endif
+			if ABS(AC_frameDirs[i][2]) > EPS then
+				gs_panelAngleX[i] = atn(AC_frameDirs[i][3]/(AC_frameDirs[i][2]))
+				gs_panelAngleX[i-1] = atn(AC_frameDirs[i][3]/(AC_frameDirs[i][2]))
+			endif
+		endif
+	
+		!================================
+		! Set the angle of arms to Z axis
+		!================================
+		gs_arm_angle[i] = 0.00-atn((AC_panelOffsets[i]+gs_spider_height)/(gs_spider_rad-gs_base_rad-gs_branch_rad))
+	next i
+return
+
+!============================
+"debug":
+!============================
+!!!	if gs_debug then
+!!!		if gs_print_armangles then
+!!!			for i = 1 to gs_panel_num
+!!!				print i,"/",gs_panel_num, "PP:", AC_panelPresences[i],"\n", "Got param: ",i, " X: ",ac_framedirs[i][1], ", Y: ", ac_framedirs[i][2], ", Z: ", ac_framedirs[i][3], ",  Famea: ",  gs_frameAngle[i], "\n","Arm a:", gs_armdirs2[i]
+!!!			next i
+!!!		endif
+!!!	
+!!!		addz gs_spider_height
+!!!		brick 0.5,0.02,0.02
+!!!		addx 0.51
+!!!		text 0.02,0,"X"
+!!!		del 1
+!!!	
+!!!		brick 0.02,0.5,0.02
+!!!		addy 0.51
+!!!		text 0.02,0,"Y"
+!!!		del 1
+!!!	
+!!!		brick 0.02,0.02,0.5
+!!!		del 1
+!!!	
+!!!		sphere 0.01
+!!!		for i = 1 to vardim1(AC_frameDirs)
+!!!			lin_ 0, 0, 0, AC_frameDirs[i][1], AC_frameDirs[i][2], AC_frameDirs[i][3]
+!!!			add AC_frameDirs[i][1], AC_frameDirs[i][2], AC_frameDirs[i][3]
+!!!			text  0.02,0,i
+!!!			del 1
+!!!		next i
+!!!	
+!!!		for i = 1 to vardim1(gs_armDirs)
+!!!			if ac_panelPresences[i] then
+!!!				lin_ 0, 0, 0, gs_armDirs[i][1], gs_armDirs[i][2], gs_armDirs[i][3]
+!!!			endif
+!!!		next i
+!!!	
+!!!		if gs_draw_panel then
+!!!			material 29
+!!!			for i = 1 to gs_panel_num
+!!!				addz -AC_panelThickness/2
+!!!				rotx gs_panelAngleX[i]
+!!!				roty gs_panelAngleY[i]
+!!!	
+!!!				if ac_panelPresences[i] then
+!!!					prism_ 4, AC_panelThickness,
+!!!							0,0,15,
+!!!							0,gs_armDirs[i][2],15,
+!!!							gs_armDirs[i][1],gs_armDirs[i][2],15,
+!!!							gs_armDirs[i][1],0,15
+!!!	
+!!!					if i < gs_panel_num then
+!!!						 print i, ":",AC_panelPresences[i],"| Xn:",ac_framedirs[i][1],"Yn:", ac_framedirs[i][2],"Xn+1:", ac_framedirs[i+1][1],"Yn+1:", ac_framedirs[i+1][2], "angle:", gs_armDirs2[i]
+!!!					else
+!!!						 print i, ":",AC_panelPresences[i],"| Xn:",ac_framedirs[i][1],"Yn:", ac_framedirs[i][2],"Xn+1:", ac_framedirs[1][1],"Yn+1:", ac_framedirs[1][2], "angle:", gs_armDirs2[i]
+!!!					endif
+!!!				endif
+!!!	
+!!!				del 3
+!!!			next i
+!!!		endif
+!!!	endif
+return
+
+
+!============================
+"headPart":
+!============================
+	material gs_head_material
+
+	cylind gs_branch_hegiht,gs_branch_rad
+
+	addz -AC_panelThickness-gs_branch_hegiht
+
+	cylind gs_branch_hegiht,gs_branch_rad
+
+	addz -gs_branch_hegiht
+
+	material gs_screw_material
+
+	if gs_detlevel_3D_m = 2 then
+		cylind gs_branch_hegiht*4+0.01,gs_branch_rad/3
+	endif
+
+	cutpolya 2,2,0,
+		0,0,900,
+		gs_branch_rad,360,4000
+return
+
+!============================
+"armPart":
+!============================
+	material gs_arm_material
+
+	tube 4,6,51,
+		-gs_branch_hegiht/3,0,1,
+		gs_branch_hegiht/3,0,1,
+		gs_branch_hegiht/3,gs_branch_hegiht,1,
+		-gs_branch_hegiht/3,gs_branch_hegiht,1,
+
+		-1,				0,	0, 0,
+		0,				0,	0, 0,
+		gs_base_rad * cos(gs_armDirs2[i]),	gs_base_rad * sin(gs_armDirs2[i]),	0, 0,
+
+		coordModX,				coordModY,				-gs_spider_height + coordModZ, -15,
+		coordModX + closerX,	coordModY + closerY,	-gs_spider_height+ coordModZ + closerZ, -15,
+		coordModX + closerX*2,	coordModY + closerY*2,	-gs_spider_height+ coordModZ + closerZ*2, 0
+return
+

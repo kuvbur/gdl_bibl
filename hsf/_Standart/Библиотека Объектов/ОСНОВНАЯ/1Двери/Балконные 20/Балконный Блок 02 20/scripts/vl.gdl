@@ -1,0 +1,735 @@
+
+! =============================================================================
+! GS Terrace Door Functions
+! =============================================================================
+
+call "GS Terrace Door Functions",
+	parameters all	gs_IsCurved			= 0,
+					gs_stCavityClosure	= gs_stCavityClosure,
+					gs_stWindowSillTrim	= gs_stWindowSillTrim
+
+
+! ==============================================================================
+! Uniform Surfaces
+! ==============================================================================
+
+dim	surfaceParNames[6]						:	dim	surfaceParameters[6]
+	surfaceParNames[1]	= "gs_frame_mat"	:		surfaceParameters[1]	= gs_frame_mat
+	surfaceParNames[2]	= "gs_frame_mat2"	:		surfaceParameters[2]	= gs_frame_mat2
+	surfaceParNames[3]	= "gs_sash_mat"		:		surfaceParameters[3]	= gs_sash_mat
+	surfaceParNames[4]	= "gs_leaf_matin"	:		surfaceParameters[4]	= gs_leaf_matin
+	surfaceParNames[5]	= "gs_matpanes"		:		surfaceParameters[5]	= gs_matpanes
+	surfaceParNames[6]	= "gs_grill_matin"	:		surfaceParameters[6]	= gs_grill_matin
+
+_lastModSurfaceParameter = gs_frame_mat
+
+if stored_material[1][1] <> -9999 then
+	for i = 1 to vardim1(surfaceParNames)
+		if GLOB_MODPAR_NAME = surfaceParNames[i] then
+			_lastModSurfaceParameter	= surfaceParameters[i]
+			stored_material[1][i]	= surfaceParameters[i]
+			stored_material[2][i]	= 1
+
+			for j = 1 to i-1
+				stored_material[2][j]	= 0
+				parameters stored_material[2][j]	= stored_material[2][j]
+			next j
+
+			for k = i+1 to vardim1(surfaceParNames)
+				stored_material[2][k]	= 0
+				parameters stored_material[2][k]	= stored_material[2][k]
+			next k
+		endif
+
+		parameters	stored_material[1][i]	= stored_material[1][i],
+					stored_material[2][i]	= stored_material[2][i]
+
+		if stored_material[2][i] = 1 then
+			_lastModSurfaceParameter = stored_material[1][i]
+		endif
+	next i
+else
+	gosub "preloadSurfaces"
+endif
+
+if bLinkSurfacesFrameSash then
+	parameters	gs_frame_mat	= _lastModSurfaceParameter,
+				gs_frame_mat2	= _lastModSurfaceParameter,
+				gs_sash_mat		= _lastModSurfaceParameter,
+				gs_leaf_matin	= _lastModSurfaceParameter,
+				gs_matpanes		= _lastModSurfaceParameter,
+				gs_grill_matin	= _lastModSurfaceParameter
+else
+	if GLOB_MODPAR_NAME = "bLinkSurfacesFrameSash" then
+		parameters	gs_frame_mat	= stored_material[1][1],
+					gs_frame_mat2	= stored_material[1][2],
+					gs_sash_mat		= stored_material[1][3],
+					gs_leaf_matin	= stored_material[1][4],
+					gs_matpanes		= stored_material[1][5],
+					gs_grill_matin	= stored_material[1][6]
+	else
+		gosub "preloadSurfaces"
+	endif
+endif
+
+
+! =============================================================================
+! Orientation
+! =============================================================================
+
+values{2} "gs_list_orientationDef_m"	0, `Автоматически`,
+										1, `Специальный`
+
+if gs_list_orientationDef_m = 0 then
+	ac_OpeningSide = ""
+	if	loc_op2 = 2 |\		! Side Hung
+		loc_op2 = 4 then	! Tilt-Turn
+
+		if SYMB_MIRRORED then
+			ac_OpeningSide = stOpeningSide[2]
+		else
+			ac_OpeningSide = stOpeningSide[1]
+		endif
+	endif
+	if	loc_op2 = 3 |\		! Side Hung Mirrored
+		loc_op2 = 5 then	! Tilt-Turn Mirrored
+
+		if SYMB_MIRRORED then
+			ac_OpeningSide = stOpeningSide[1]
+		else
+			ac_OpeningSide = stOpeningSide[2]
+		endif
+	endif
+	parameters ac_OpeningSide = ac_OpeningSide
+
+	lock "ac_OpeningSide"
+	hideparameter "ac_OpeningSide"
+endif
+
+
+! =============================================================================
+! IFC Parameters
+! =============================================================================
+
+ifc_optype = 10		! WIN_OP_USER_DEFINED
+parameters ifc_optype = ifc_optype
+call "IFC_optype_window" parameters ifc_optype = ifc_optype
+
+lock "ifc_optypestr"
+
+
+!!! FM Types
+call "FM_types" parameters all
+
+
+!***************** tolerance / A-B / Unit Size ****************
+
+if GLOB_MODPAR_NAME = "A" or GLOB_MODPAR_NAME = "gs_tolerance" then
+	parameters gs_frame_sizex = A - gs_tolerance * 2
+endif
+
+if GLOB_MODPAR_NAME = "B" or GLOB_MODPAR_NAME = "gs_tolerance" then
+	parameters gs_frame_sizey = B - gs_tolerance
+endif
+
+if GLOB_MODPAR_NAME = "gs_frame_sizex" then
+	parameters A = gs_frame_sizex + gs_tolerance * 2
+	A = gs_frame_sizex + gs_tolerance * 2
+endif
+
+if GLOB_MODPAR_NAME = "gs_frame_sizey" then
+	parameters B = gs_frame_sizey + gs_tolerance
+	B = gs_frame_sizey + gs_tolerance
+endif
+
+
+
+!*********************** Opening in 3D *******************
+
+ac_zone_on_reveal_side = 1
+if WIDO_REVEAL_SIDE exor not(gS_bOpeningToZone) then
+	ac_zone_on_reveal_side = not(ac_zone_on_reveal_side)
+endif
+parameters ac_zone_on_reveal_side = ac_zone_on_reveal_side
+
+values "gs_op" range [0,90]
+values "gs_opt" range [0,90]
+values "op2" range [0,90]
+values "opt2" range [0,90]
+values "gs_ow21" range [0,90]
+values "gs_ow22" range [0,90]
+
+
+values{2} "iWindowOpeningType" 	SASH_SIDE_HUNG, `Распашная`,
+								SASH_TILT_TURN, `Наклонно-Поворотная `
+
+values{2} "iDoorOpeningType" 	SASH_SIDE_HUNG, `Распашная`,
+								SASH_SIDE_HUNG_M, `Распашная Зеркальная`,
+								SASH_TILT_TURN, `Наклонно-Поворотная `,
+								SASH_TILT_TURN_M, `Наклонно-Поворотная Зеркальная`
+
+if gs_og then
+
+	values{2} "iTransomOpeningType" 	SASH_FIXED, `Фиксированное Остекление`,
+									SASH_SIDE_HUNG, `Распашная`,
+									SASH_TILT_TURN, `Наклонно-Поворотная `
+
+else
+
+	values{2} "iTransomOpeningType" 	SASH_FIXED, `Фиксированное Остекление`,
+									SASH_SIDE_HUNG, `Распашная`,
+									SASH_SIDE_HUNG_M, `Распашная Зеркальная`,
+									SASH_TILT_TURN, `Наклонно-Поворотная `,
+									SASH_TILT_TURN_M, `Наклонно-Поворотная Зеркальная`,
+									SASH_BOTTOM_HUNG, `Нижнеподвесная`,
+									SASH_TOP_HUNG, `Верхнеподвесная`
+
+endif
+
+values{2} "iDoorTransomOpeningType" 	SASH_FIXED, `Фиксированное Остекление`,
+										SASH_SIDE_HUNG, `Распашная`,
+										SASH_SIDE_HUNG_M, `Распашная Зеркальная`,
+										SASH_TILT_TURN, `Наклонно-Поворотная `,
+										SASH_TILT_TURN_M, `Наклонно-Поворотная Зеркальная`,
+										SASH_BOTTOM_HUNG, `Нижнеподвесная`,
+										SASH_TOP_HUNG, `Верхнеподвесная`
+
+
+if loc_op_o1=1 then lock "gs_opt"
+if loc_op_o2=1 then lock "opt2"
+
+
+if gs_kamp=0 then
+	lock "gs_opt"
+	lock "opt2"
+	lock	"iTransomOpeningType"
+	lock	"iDoorTransomOpeningType"
+endif
+
+
+
+
+!*********** frame / sash widths
+
+if gs_stockb=0 then
+	lock "gs_stb_ob"
+	lock "stb_w"
+	lock "gs_stb_l"
+	lock "gs_stb_r"
+	lock "gs_stb_m"
+endif
+
+if ver_r=0 then
+	lock "gs_rab_ob"
+	lock "gs_rab_u"
+endif
+
+
+!****** Grid No. ranges
+
+values "gs_sh" range [1, )
+values "sh2" range [1, )
+values "gs_sv" range [1, )
+values "sv2" range [1, )
+values "gs_sho" range [1, )
+values "gs_svo" range [1, )
+values "svo2" range [1, )
+
+
+!******************** Detail Level *******************
+
+values{2} "iDWDetSE"	DETLEV_SE_SCALESENSITIVE,	`Зависит от Масштаба`,
+						DETLEV_SE_DETAILED,			`Детальный`,
+						DETLEV_SE_MIDDLE,			`Середина`,
+						DETLEV_SE_SIMPLE,			`Простой`,
+						DETLEV_SE_OFF,				`Откл.`
+
+!values "gs_detlevel_3D" stDetail[2], stDetail[3], stDetail[4]
+
+
+! =============================================================================
+! 3D Detail Level
+! =============================================================================
+
+
+if gs_3DDetEnable =0 then
+
+    values{2} "iDWDet3D" 	DETLEVEL_DW3D_DETAILED,		`Детальный`,
+						    DETLEVEL_DW3D_SIMPLE,		`Простой`,
+						    DETLEVEL_DW3D_OFF,			`Откл.`
+else
+	dim n3DScaleValueMask[]
+	dim n3DScaleValueMask_m[]
+
+	i=1
+	if bittest( gs_3DDetEnable, 0) then                                              ! Scale Sensitive in Value list, 1
+				n3DScaleValueMask[i] = stDetail[1]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_SCALESENS
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 1) then                                              ! Detailed in Value list,2
+				n3DScaleValueMask[i] = stDetail[2]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_DETAILED
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 2) then                                              ! Simple in Value list,4
+				n3DScaleValueMask[i] = stDetail[3]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_SIMPLE
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 3) then                                              ! Off in Value list,8
+				n3DScaleValueMask[i] = stDetail[4]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_OFF
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 4) then                                              ! Chinese Simple in Value list,16
+				n3DScaleValueMask[i] = stDetail[5]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_CHI_SIMPLE
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 5) then                                              ! Chinese Detailed in Value list,32
+				n3DScaleValueMask[i] = stDetail[6]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_CHI_DETAILED
+				i = i + 1
+	endif
+
+	values{2} "iDWDet3D" n3DScaleValueMask_m, n3DScaleValueMask
+endif
+
+
+
+!***************** simmetry
+
+if symm then
+	parameters bf1=a*2/3
+	lock "bf1"
+endif
+
+
+
+!****************** Transom / bottom window
+
+if gs_kamp=0 then
+	lock "gs_k"
+	lock "gs_og"
+	lock "gs_sho"
+	lock "gs_svo"
+	lock "svo2"
+endif
+
+if gs_kamp=1 then
+
+	if bTop1FieldFix+bTop2FieldFix<2 then
+
+		values "gs_k" range (parapeth+stb_w-vb+rab_u+rab_ob-vb,\
+						  b-stb_ob-gs_frame_width+2*vb-rab_ob-rab_u+gs_lich*WIDO_HEAD_DEPTH)
+	else
+
+		values "gs_k" range (parapeth+stb_w-vb+rab_u+rab_ob-vb,\
+						  b-stb_ob-gs_frame_width+gs_lich*WIDO_HEAD_DEPTH)
+	endif
+
+endif
+
+
+! =============================================================================
+! Wall Contour Lines
+! =============================================================================
+
+values "gs_wcont_line_w" stWallContourLine
+values "iWallContourLineW" WALL_CONTOUR_OFF, WALL_CONTOUR_INSIDE, WALL_CONTOUR_OUTSIDE, WALL_CONTOUR_BOTHSIDES
+
+if GLOB_MODPAR_NAME = "gs_wcont_line_w" then
+	iWallContourLineW = WALL_CONTOUR_OFF
+	for i = 2 to vardim1(stWallContourLine)
+		if gs_wcont_line_w = stWallContourLine[i] then
+			iWallContourLineW = i
+			i = vardim1(stWallContourLine)
+		endif
+	next i
+	parameters iWallContourLineW = iWallContourLineW
+else
+	gs_wcont_line_w = stWallContourLine[min(max(1,iWallContourLineW),vardim1(stWallContourLine))]
+	parameters gs_wcont_line_w = gs_wcont_line_w
+endif
+
+values "gs_wcont_line_d" stWallContourLine
+values "iWallContourLineD" WALL_CONTOUR_OFF, WALL_CONTOUR_INSIDE, WALL_CONTOUR_OUTSIDE, WALL_CONTOUR_BOTHSIDES
+
+if GLOB_MODPAR_NAME = "gs_wcont_line_d" then
+	iWallContourLineD = WALL_CONTOUR_OFF
+	for i = 2 to vardim1(stWallContourLine)
+		if gs_wcont_line_d = stWallContourLine[i] then
+			iWallContourLineD = i
+			i = vardim1(stWallContourLine)
+		endif
+	next i
+	parameters iWallContourLineD = iWallContourLineD
+else
+	gs_wcont_line_d = stWallContourLine[min(max(1,iWallContourLineD),vardim1(stWallContourLine))]
+	parameters gs_wcont_line_d = gs_wcont_line_d
+endif
+
+!**** heizkorpernische
+
+if gs_hn=0 then lock "gs_thn"
+
+
+!***************** Sonnenschutz / Sturz ***********************
+
+if sonn+sonn2>0 then
+	parameters gs_sturz=1
+	lock "gs_sturz"
+endif
+
+if sonn+sonn2=0 then
+	lock "ws"
+	lock "matlam"
+	lock "penlam"
+	lock "ltyp_lam"
+	lock "rotation"
+	lock "offlam"
+	lock "shadcast"
+endif
+
+if t_sonn=0 then
+	lock "offladen"
+	lock "bedec"
+	lock "rab_s"
+	lock "rabu_s"
+	lock "ras_s"
+	lock "hlbsc"
+	lock "alpha"
+	lock "mats"
+	lock "matls"
+	lock "matsc"
+	lock "sck"
+	lock "vsc"
+	lock "vsh"
+	lock "shutterStyle", "iShutterStyle"
+	lock "res"
+	lock "nnsc"
+	lock "mmsc"
+	lock "rsc"
+endif
+
+values "shutterStyle" stShutterStyles
+values "iShutterStyle" SHUTTER_LOUVER,  SHUTTER_FIX, SHUTTER_FRAMED, SHUTTER_HOLES, SHUTTER_SOLID
+
+if GLOB_MODPAR_NAME = "shutterStyle" then
+	iShutterStyle = SHUTTER_LOUVER
+	if shutterStyle = stShutterStyles[2] then iShutterStyle = SHUTTER_FIX
+	if shutterStyle = stShutterStyles[3] then iShutterStyle = SHUTTER_FRAMED
+	if shutterStyle = stShutterStyles[4] then iShutterStyle = SHUTTER_HOLES
+	if shutterStyle = stShutterStyles[5] then iShutterStyle = SHUTTER_SOLID
+	parameters iShutterStyle = iShutterStyle
+else
+	shutterStyle = stShutterStyles[1]
+	if iShutterStyle = SHUTTER_FIX then shutterStyle = stShutterStyles[2]
+	if iShutterStyle = SHUTTER_FRAMED then shutterStyle = stShutterStyles[3]
+	if iShutterStyle = SHUTTER_HOLES then shutterStyle = stShutterStyles[4]
+	if iShutterStyle = SHUTTER_SOLID then shutterStyle = stShutterStyles[5]
+	parameters shutterStyle = shutterStyle
+endif
+
+if iShutterStyle = SHUTTER_HOLES or iShutterStyle = SHUTTER_LOUVER or iShutterStyle = SHUTTER_SOLID then
+	hideparameter "rabu_s"
+	lock "rabu_s"
+endif
+
+if iShutterStyle <> SHUTTER_HOLES then
+	hideparameter "res"
+	hideparameter "nnsc"
+	hideparameter "mmsc"
+	hideparameter "rsc"
+	lock "res"
+	lock "nnsc"
+	lock "mmsc"
+	lock "rsc"
+endif
+
+if iShutterStyle <> SHUTTER_LOUVER then
+	hideparameter "alpha"
+	lock "alpha"
+
+	hideparameter "hlbsc"
+	lock "hlbsc"
+endif
+
+if GLOB_MODPAR_NAME="t_sonn" and t_sonn=1 then parameters gs_fbl=WIDO_SILL+0.02
+
+
+!********************************  Fensterbank
+
+values "sillType" stSillTypes
+values "iSillType" SILL_SOLID, SILL_METAL
+
+if GLOB_MODPAR_NAME = "sillType" then
+	iSillType = SILL_SOLID
+	if sillType = stSillTypes[2] then iSillType = SILL_METAL
+	parameters iSillType = iSillType
+else
+	sillType = stSillTypes[1]
+	if iSillType = SILL_METAL then sillType = stSillTypes[2]
+	parameters sillType = sillType
+endif
+
+if  iSillType = SILL_METAL then
+	lock "gs_suba_r"
+	lock "gs_suba_l"
+	lock "gs_nd"
+	lock "gs_w"
+endif
+
+if feba_i+feba_i2=0 then
+	parameters gs_dars_2D=0
+	dars_2D=0
+	lock "gs_dars_2D"
+	lock "gs_pen_sims"
+	lock "gs_siv"
+	lock "gs_subi_l"
+	lock "gs_subi_r"
+	lock "gs_sfbi"
+	lock "gs_matfi"
+endif
+
+if GLOB_MODPAR_NAME="gs_fi" and feba_i=1 then
+	parameters gs_dars_2D=1
+	dars_2D=1
+endif
+
+if gs_feba_a+feba_a2=0 then
+	lock "sillType", "iSillType"
+	lock "gs_fbl"
+	lock "gs_suba_l"
+	lock "gs_suba_r"
+	lock "gs_fbh"
+	lock "gs_nh"
+	lock "gs_w"
+	lock "gs_nd"
+	lock "gs_matfa"
+	lock "gs_pen_schnitt"
+	lock "gs_fill_schnitt"
+	lock "gs_fbh"
+	lock "gs_p_schnittschraff"
+endif
+
+vbl=stb_l-vb
+vbr=stb_r-vb
+vbm=(stb_m-vb*2)/2
+if symm then bf1=a-(a+vbm-vbr+vb+2*vbl)/3
+aleft=bf1-vbl-vbm
+aright=a-bf1-vbr-vbm
+
+!********** vertical sizes ************
+!**************************************
+
+!**** transom sash vertical sizes
+
+if not(bTop1FieldFix) then
+	b021=b-gs_k-gs_frame_width-stb_ob+vb*2
+	h021=gs_k+gs_frame_width-vb
+else
+	b021=b-gs_k-gs_frame_width-stb_ob
+	h021=gs_k+gs_frame_width
+endif
+
+if not(bTop2FieldFix) then
+	b022=b-gs_k-gs_frame_width-stb_ob+vb*2
+	h022=gs_k+gs_frame_width-vb
+else
+	b022=b-gs_k-gs_frame_width-stb_ob
+	h022=gs_k+gs_frame_width
+endif
+
+!**** main window sash vertical sizes
+
+if gs_kamp then
+	if bMainFieldFix then
+		bmain=gs_k-parapeth-stb_w
+		hmain=parapeth+stb_w
+	else
+		bmain=gs_k-parapeth-stb_w+2*vb
+		hmain=parapeth+stb_w-vb
+	endif
+	bmain2=gs_k-stb_u+2*vb
+	hmain2=stb_u-vb
+else
+	if bMainFieldFix then
+		bmain=b-parapeth-stb_w-stb_ob
+		hmain=parapeth+stb_w
+	else
+		bmain=b-parapeth-stb_ob-stb_w+2*vb
+		hmain=parapeth+stb_w-vb
+	endif
+	bmain2=b-stb_u-stb_ob+2*vb
+	hmain2=stb_u-vb
+endif
+
+!********** horizontal sizes 2 **********
+!****************************************
+!****************** transom
+
+if not(bTop1FieldFix) and not(bTop2FieldFix) then
+	alefto=bf1-vbl-vbm
+	arighto=a-bf1-vbr-vbm
+else
+	if bTop1FieldFix and bTop2FieldFix then
+		alefto=bf1-stb_l-stb_m/2
+		arighto=a-bf1-stb_r-stb_m/2
+	else
+		if bTop1FieldFix then
+			alefto=bf1-stb_l-stb_m/2
+			arighto=a-bf1-vbr-vbm
+		else	! field 2 is fix
+			alefto=bf1-vbm-vbl
+			arighto=a-bf1-stb_r-stb_m/2
+		endif
+	endif
+endif
+
+aleftfix2=(bf1-stb_l-stb_m/2-gs_frame_width)/2
+aleft2 = aleft + vb
+
+! =============================================================================
+! Total Glazed Area Listing Parameters
+! =============================================================================
+if NOT(gs_list_glassarea_override) then
+	if GLOB_MODPAR_NAME = "gs_list_glassarea" then
+		gs_list_glassarea_tmp = gs_list_glassarea
+		parameters gs_list_glassarea_tmp = gs_list_glassarea_tmp
+	else
+		gs_list_glassarea = gs_list_glassarea_tmp
+		parameters gs_list_glassarea = gs_list_glassarea
+	endif
+
+	gs_list_glassarea	= 0
+	PanelGlassArea		= 0
+	!*** left Window sash
+	call "W_Sash_bal_2" parameters a	= aleft2/2, b = bmain, rab = rab, rab1 = rab_ob,
+								rab2	=	rab_u,
+								sh		= gs_sh,
+								sv		= gs_sv,
+								spb		= gs_spb,
+						returned_parameters	PanelGlassArea
+	gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+	!*** right Window sash
+	call "W_Sash_bal_2" parameters a	= aleft2/2, b = bmain, rab = rab, rab1 = rab_ob,
+								rab2	= rab_u,
+								sh		= gs_sh,
+								sv		= gs_sv,
+								spb		= gs_spb,
+						returned_parameters	PanelGlassArea
+	gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+	!*** Door
+	call "W_Sash_bal" parameters a	= aright, b = bmain2, rab = rab, rab1 = rab_ob,
+							rab2	=rab_u2,
+							sh		= sh2,
+							sv		= sv2,
+							spb		= gs_spb,
+					returned_parameters	PanelGlassArea
+	gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+	if gs_kamp then
+		if gs_og then !Divided transom
+			if bTop1FieldFix then ! Fixed transom
+				!*** left Transom sash
+				call "W_Sash_fix" parameters a	= aleftfix2,
+											b	= b021,
+											sh		= gs_sho,
+											sv		= gs_svo,
+											spb		= gs_spb,
+									returned_parameters	PanelGlassArea
+				gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+				!*** right Transom sash
+				call "W_Sash_fix" parameters a	= aleftfix2,
+											b	= b021,
+											sh		= gs_sho,
+											sv		= gs_svo,
+											spb		= gs_spb,
+									returned_parameters	PanelGlassArea
+				gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+			else
+				!*** left Transom sash
+				call "W_Sash_bal_2" parameters	a	= aleft2/2, b = b021, rab = rab, rab1 = rab,
+											rab2	= rab,
+											sh		= gs_sho,
+											sv		= gs_svo,
+											spb		= gs_spb,
+									returned_parameters	PanelGlassArea
+				gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+				!*** right Transom sash
+				call "W_Sash_bal_2" parameters a	= aleft2/2, b = b021, rab = rab, rab1 = rab,
+											rab2	= rab,
+											sh		= gs_sho,
+											sv		= gs_svo,
+											spb		= gs_spb,
+									returned_parameters	PanelGlassArea
+				gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+			endif
+		else
+			if bTop1FieldFix then  !fixed transom
+				call "W_Sash_fix" parameters a	= alefto,
+											b	= b021,
+											sh	= gs_sho,
+											sv	= gs_svo,
+											spb	= gs_spb,
+									returned_parameters	PanelGlassArea
+				gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+
+			else
+				call "W_Sash_bal" parameters a	= alefto, b = b021, rab = rab, rab1= rab_ob,
+										rab2	= rab,
+										sh		= gs_sho,
+										sv		= gs_svo,
+										spb		= gs_spb,
+								returned_parameters	PanelGlassArea
+				gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+			endif
+		endif
+
+		if bTop2FieldFix then  !fixed door transom
+			call "W_Sash_fix" parameters a	= arighto,
+										b	= b022,
+										sh	= gs_sho,
+										sv	= svo2,
+										spb	= gs_spb,
+								returned_parameters	PanelGlassArea
+			gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+		else
+			call "W_Sash_bal" parameters a	= arighto, b = b022, rab = rab, rab1 = rab_ob,
+									rab2	= rab,
+									sh		= gs_sho,
+									sv		= svo2,
+									spb		= gs_spb,
+							returned_parameters	PanelGlassArea
+			gs_list_glassarea = gs_list_glassarea + PanelGlassArea
+		endif
+	endif
+
+	parameters gs_list_glassarea = gs_list_glassarea
+	lock "gs_list_glassarea"
+else
+	if GLOB_MODPAR_NAME = "gs_list_glassarea" then
+		gs_list_glassarea_tmp = gs_list_glassarea
+		parameters gs_list_glassarea_tmp = gs_list_glassarea_tmp
+	else
+		gs_list_glassarea = gs_list_glassarea_tmp
+		parameters gs_list_glassarea = gs_list_glassarea
+	endif
+endif
+
+end
+
+"preloadSurfaces":
+	parameters	stored_material[1][1] = gs_frame_mat,
+				stored_material[1][2] = gs_frame_mat2,
+				stored_material[1][3] = gs_sash_mat,
+				stored_material[1][4] = gs_leaf_matin,
+				stored_material[1][5] = gs_matpanes,
+				stored_material[1][6] = gs_grill_matin
+return

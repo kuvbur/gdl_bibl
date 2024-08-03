@@ -1,0 +1,109 @@
+
+hideparameter all "A", "B", "Zzyzx" 
+
+call "FM_types" parameters all
+
+dim stDetLevel3d[3]
+	stDetLevel3d[1] = `Детальный`
+	stDetLevel3d[2] = `Простой`
+	stDetLevel3d[3] = `Откл.`
+
+
+values{2} "gs_detlevel_3D_m" 2, stDetLevel3d[1],
+							0, stDetLevel3d[3]
+
+dim stAxisConditionValues[3]
+	stAxisConditionValues[1] = `С осью`
+	stAxisConditionValues[2] = `Без оси`
+	stAxisConditionValues[3] = `Только Ось`
+
+values "stAxisCondition" stAxisConditionValues
+values "iAxisCondition" AXIS_WITH, AXIS_WITHOUT, AXIS_ONLY
+
+if GLOB_MODPAR_NAME = "stAxisCondition" then
+	iAxisCondition = AXIS_WITH
+	if stAxisCondition = stAxisConditionValues[2] then iAxisCondition = AXIS_WITHOUT
+	if stAxisCondition = stAxisConditionValues[3] then iAxisCondition = AXIS_ONLY
+	parameters iAxisCondition = iAxisCondition
+else
+	stAxisCondition = stAxisConditionValues[1]
+	if iAxisCondition = AXIS_WITHOUT then stAxisCondition = stAxisConditionValues[2]
+	if iAxisCondition = AXIS_ONLY then stAxisCondition = stAxisConditionValues[3]
+	parameters stAxisCondition = stAxisCondition
+endif
+
+if gs_cont_pen=0 then parameters gs_cont_pen=90
+if gs_fill_pen=0 then parameters gs_fill_pen=19
+
+values "B" range [2*gs_chord_thk+gs_strut_thk,)
+values "B2" range [(2*gs_chord_thk+gs_strut_thk)/2,)
+
+If GLOB_MODPAR_NAME="B" Then parameters B2=B/2
+If GLOB_MODPAR_NAME="B2" Then parameters B=B2*2
+
+If GLOB_MODPAR_NAME="ZZYZX" Then parameters gs_truss_hgt=ZZYZX
+If GLOB_MODPAR_NAME="gs_truss_hgt" Then parameters ZZYZX=gs_truss_hgt
+
+dim stConstrMethodValues[3]
+	stConstrMethodValues[1] = `Фиксированная высота`
+	stConstrMethodValues[2] = `Фиксированный угол`
+	stConstrMethodValues[3] = `Свободная Высота и Угол`
+
+values "stConstrMethod" stConstrMethodValues
+values "iConstrMethod" CONST_FIXHEIGHT, CONST_FIXANGLE, CONST_FREE
+
+if GLOB_MODPAR_NAME = "stConstrMethod" then
+	iConstrMethod = CONST_FIXHEIGHT
+	if stConstrMethod = stConstrMethodValues[2] then iConstrMethod = CONST_FIXANGLE
+	if stConstrMethod = stConstrMethodValues[3] then iConstrMethod = CONST_FREE
+	parameters iConstrMethod = iConstrMethod
+else
+	stConstrMethod = stConstrMethodValues[1]
+	if iConstrMethod = CONST_FIXANGLE then stConstrMethod = stConstrMethodValues[2]
+	if iConstrMethod = CONST_FREE then stConstrMethod = stConstrMethodValues[3]
+	parameters stConstrMethod = stConstrMethod
+endif
+
+If iConstrMethod = CONST_FREE Then
+	hgt=gs_truss_hgt-2*gs_chord_thk
+	n=int((a-2*gs_sup_len)/(2*(hgt-gs_strut_thk/cos(gs_angle))/tan(gs_angle)))
+	oplen=(2*(hgt-gs_strut_thk/cos(gs_angle))/tan(gs_angle))
+	parameters gs_num=2*n, gs_distance=oplen
+	hideparameter "gs_sup_len"
+
+	lock "gs_num","gs_distance"
+EndIf
+
+If iConstrMethod = CONST_FIXHEIGHT Then
+	values "gs_truss_hgt" range[2*gs_chord_hgt,)
+	values "ZZYZX" range[2*gs_chord_hgt,)
+
+	If GLOB_MODPAR_NAME="stConstrMethod" | GLOB_MODPAR_NAME="iConstrMethod" then parameters gs_angle=45
+	ang=45
+	hgt=gs_truss_hgt-2*gs_chord_thk
+
+	n=int((a-2*gs_sup_len)/(2*tan(ang)*(hgt-gs_strut_thk/cos(ang))))
+	len=(a-2*gs_sup_len)/n/2
+
+	sin_ang_1=(-(2*gs_strut_thk*len)+sqr((2*gs_strut_thk*len)^2-4*(len^2+hgt^2)*(gs_strut_thk^2-hgt^2)))/(2*(len^2+hgt^2))
+	sin_ang_2=(-(2*gs_strut_thk*len)-sqr((2*gs_strut_thk*len)^2-4*(len^2+hgt^2)*(gs_strut_thk^2-hgt^2)))/(2*(len^2+hgt^2))
+	angle=asn(max(sin_ang_1,sin_ang_2))
+
+	oplen=(2*(hgt-gs_strut_thk/cos(gs_angle))/tan(gs_angle))
+
+	values "A" range[2*gs_sup_len+2*hgt*cos(angle),)
+
+	parameters gs_angle=angle, gs_num=2*n, gs_distance=oplen
+	lock "gs_angle","gs_num","gs_distance"
+EndIf
+
+If iConstrMethod = CONST_FIXANGLE Then
+	If int(gs_num/2)<>gs_num/2 Then parameters gs_num=gs_num+1
+
+	len=(a-2*gs_sup_len)/gs_num
+	hgt=tan(gs_angle)*len+gs_strut_thk/cos(gs_angle)+2*gs_chord_thk
+
+	parameters gs_truss_hgt=hgt, ZZYZX=hgt, gs_distance=2*len
+	lock "ZZYZX","gs_truss_hgt","gs_distance"
+EndIf
+

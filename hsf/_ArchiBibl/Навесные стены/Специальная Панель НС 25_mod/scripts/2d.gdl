@@ -1,0 +1,66 @@
+
+! --- setting detail level ---
+
+if iDetlevel2D = DETLEVEL2D_SCALESENSITIVE then
+	if GLOB_SCALE > 150 then iDetlevel2D = DETLEVEL2D_SCHEMATIC
+	if GLOB_SCALE <= 150 and GLOB_SCALE > 75 then iDetlevel2D = DETLEVEL2D_SIMPLE
+	if GLOB_SCALE <= 75 then iDetlevel2D = DETLEVEL2D_DETAILED
+endif
+if iDetlevel2D = DETLEVEL2D_MVO then
+	iDetlevel2D = GLOB_MVO_CWPANEL_DETLEVEL 	! Schematic, Simple, Detailed
+endif
+
+_yDistort = 1
+if 	abs(CWPANEL_VERTICAL_DIRECTION) > EPS then
+	_yDistort = 1 / sin(CWPANEL_VERTICAL_DIRECTION)		! Distort Panel Thickness in case of slanted CW
+endif
+
+tranWidth = 0
+tranX = 0
+call "CW Transformation_mod" parameters A = A, AC_PanelCoords = AC_PanelCoords, ac_originIsFrameCenter = ac_originIsFrameCenter returned_parameters tranWidth, tranX
+mul2 tranWidth, _yDistort
+add2 -tranX, 0
+
+! Initialize attributes
+_fillPanel	= SYMB_FILL
+_penFgPanel	= SYMB_FILL_PEN
+_penBgPanel	= SYMB_FBGD_PEN
+bSucceed = request{2} ("Building_Material_info", panelBMat, "gs_bmat_cutfill_properties", _fillPanel, _penFgPanel, _penBgPanel)
+
+pen penCut
+fill _fillPanel
+
+if iDetlevel2D = DETLEVEL2D_SCHEMATIC then
+	! Reset sizes only in 2D Schematic model generation
+	nCorners_in = vardim1 (AC_FrameAxisCoords)
+	
+	leftSide_X  = AC_FrameAxisCoords[1][1]
+	rightSide_X = AC_FrameAxisCoords[1][1]
+	
+	for i = 1 to nCorners_in
+		if AC_FrameAxisCoords[i][1] < leftSide_X  then leftSide_X  = AC_FrameAxisCoords[i][1]
+		if AC_FrameAxisCoords[i][1] > rightSide_X then rightSide_X = AC_FrameAxisCoords[i][1]
+	next i
+
+	line2 leftSide_X, 0, rightSide_X, 0
+endif
+
+if iDetlevel2D = DETLEVEL2D_SIMPLE | iDetlevel2D = DETLEVEL2D_DETAILED then
+	! No Detailed/Middle Symbol if panel is only in frame clamps
+	if vardim1(AC_clampFreeRegionCoords) < 3 then end
+	
+	_status = 0 + bExtendedPanel * (iDetlevel2D = DETLEVEL2D_DETAILED)
+
+	add2 0, AC_clampWidth / 2 - offsetPanel
+	poly2_b 	5, 1+2+32+64,
+				_penFgPanel, _penBgPanel,
+				leftSide_X,		 0,			 1,
+				rightSide_X,	 0,			 _status,
+				rightSide_X,	-panelThk,	 1,
+				leftSide_X,		-panelThk,	 _status,
+				leftSide_X,		 0,			-1
+	del 1
+endif
+
+
+end

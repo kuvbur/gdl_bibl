@@ -1,0 +1,1658 @@
+
+! ========================================================================================
+!	-------------	-------------
+!	|	--------|---|--------	|
+!	|	| Head	|	|		|	|
+!	|	| Body	|	|		|	|
+!	|	|		|	|		|	|
+!	|	| Prefix|	|Content|	|
+!	----|--------	--------|---- Division Line
+!	----|--------	--------|----
+!	|	| 		|	|		|	|
+!	|	| 		|	|		|	|
+!	|	--------|---|--------	|
+!	|	(Prefix)|	|Content	|
+!	-------------	-------------
+!
+! Body:
+!	has own text style
+!		penTextHeader
+!		fontTypeHeader				- font style
+!		sizeFontHeader_mm			- font size
+!		_iStyleFontHeader			- font style
+!		sizeLeadingHeader			- leading, line space percent - 100 % is the real size
+!		_iAlignmentPrefixBody		- text alignment - 1: left aligned, 2: center aligned, 3: right aligned, 4: full justified
+!		_iAlignmentContentBody		- text alignment - 1: left aligned, 2: center aligned, 3: right aligned, 4: full justified
+! Prefix: (main or above the head division line)
+!		input with sPrefixStringsHead array - one column : 1.prefix
+! Content: (main or above the head division Line)
+!		input with sContentStringsHead array - 30 column
+!			column properties : [1.note1 2.frac 3.unit 4.unitindex 5.suffix] * 6 possibility
+!			can be displayed 6 calculated and separated data with unit in one row
+! Content: (under the division Line)
+!		input with sContentStringsHeadBottom array - 30 column
+!
+!	-----------------------------	
+!	| List box on leader line	|
+!	| 							|	
+!	-----------------------------
+!
+! List Box:
+!	has own text style
+!		penTextBoxOnLine
+!		sTypeFontTextBoxOnLine			- font style
+!		sizeFontTextBoxOnLine			- font size
+!		iStyleFontTextBoxOnLine			- font style
+!		sizeLeadingTextBoxOnLine		- leading, line space percent - 100 % is the real size
+!		iAlignmentTextBoxOnLine			- text alignment - 1: left aligned, 2: center aligned, 3: right aligned, 4: full justified
+!
+! Content:
+!		input with sContentStringsList array - 30 column
+!			column properties : [1.note1 2.frac 3.unit 4.unitindex 5.suffix] * 6 possibility
+!			can be displayed 6 calculated and separated data with unit in one row
+!
+! ========================================================================================
+
+_numberofRow			= vardim1(sContentStringsHead)
+_numberofRowBottom		= vardim1(sContentStringsHeadBottom)
+_numberofRowList		= vardim1(sContentStringsList)
+_numberMaxContentCells	= 30
+
+_isPreview 				= (GLOB_CONTEXT = 5)
+totalRotate				= 0
+_penindex				= 1
+
+! ========================================================================================
+! Fill out arrays to 30 fixed cells number - initialization 
+! ========================================================================================
+
+dim _sContentStringsHead[][]
+	_sContentStringsHead = sContentStringsHead
+for i = 1 to _numberofRow
+	for iCell = vardim2(sContentStringsHead)+1 to _numberMaxContentCells
+		_sContentStringsHead[i][iCell] = ""
+	next iCell
+next i
+
+if bUseTextBoxOnLine then
+	dim _sContentStringsList[][]
+		_sContentStringsList = sContentStringsList
+	for i = 1 to _numberofRowList
+		for iCell = vardim2(sContentStringsList)+1 to _numberMaxContentCells
+			_sContentStringsList[i][iCell] = ""
+		next iCell
+	next i
+endif
+
+dim _sContentStringsHeadBottom[][]
+	_sContentStringsHeadBottom = sContentStringsHeadBottom
+if bUseBottomContentColumn then
+	for i = 1 to _numberofRowBottom
+		for iCell = vardim2(sContentStringsHeadBottom)+1 to _numberMaxContentCells
+			_sContentStringsHeadBottom[i][iCell] = ""
+		next iCell
+	next i
+
+endif
+
+! ========================================================================================
+! Define styles and ratio of line spacing
+! ========================================================================================
+
+! normal text:
+define style{2} "mainStyleHeader"  fontTypeHeader, sizeFontHeader_mm * GLOB_SCALE/1000, _iStyleFontHeader
+n = request("Height_of_style", "mainStyleHeader", _heightRowHeader, descent, leading)
+_heightRowHeader = _heightRowHeader * sizeLeadingHeader
+
+define style{2} "mainStyleListBox"  sTypeFontTextBoxOnLine, sizeFontTextBoxOnLine * GLOB_SCALE/1000, iStyleFontTextBoxOnLine
+n = request("Height_of_style", "mainStyleListBox", _heightRowListBox, descent, leading)
+_heightRowListBox = _heightRowListBox * sizeLeadingTextBoxOnLine
+
+! superscript style - upper index text (for extra precision or unit extension) without underline and striketrough style by design
+_iStyleFontHeaderExtra = bitset(bitset(_iStyleFontHeader,	2, 0),
+															7, 0)
+
+_iStyleFontTextBoxOnLineExtra = bitset(bitset(iStyleFontTextBoxOnLine,	2, 0),
+																		7, 0)
+
+define style{2} "extraStyleHeader"  fontTypeHeader, sizeFontHeader_mm * GLOB_SCALE/1000, _iStyleFontHeaderExtra + 32
+define style{2} "extraStyleListBox"	sTypeFontTextBoxOnLine, sizeFontTextBoxOnLine * GLOB_SCALE/1000, _iStyleFontTextBoxOnLineExtra + 32
+
+
+! ========================================================================================
+! Fill style arrays for paragraph
+! ========================================================================================
+
+dim _sStyleHeadPrefix[]
+dim _sStyleHeadContent[][30]
+for i = 1 to _numberofRow
+	if bUsePrefixColumn then
+		_sStyleHeadPrefix[i] = "mainStyleHeader"
+	endif
+	for iCell = 1 to vardim2(sContentStringsHead)
+		if abs(((iCell+5) MOD 5) - 2) < EPS  | abs(((iCell+5) MOD 5) - 4) < EPS then
+			_sStyleHeadContent[i][iCell] = "extraStyleHeader"
+		else
+			_sStyleHeadContent[i][iCell] = "mainStyleHeader"
+		endif
+	next iCell
+	for iCell = vardim2(sContentStringsHead)+1 to _numberMaxContentCells
+		_sStyleHeadContent[i][iCell] =  "mainStyleHeader" ! dummy - no need
+	next iCell
+next i
+
+if bUseTextBoxOnLine then
+	dim _sStyleList[][30]
+	for i = 1 to _numberofRowList
+		for iCell = 1 to vardim2(sContentStringsList)
+			if abs(((iCell+5) MOD 5) - 2) < EPS  | abs(((iCell+5) MOD 5) - 4) < EPS then
+				_sStyleList[i][iCell] = "extraStyleListBox"
+			else
+				_sStyleList[i][iCell] = "mainStyleListBox"
+			endif
+		next iCell
+		for iCell = vardim2(sContentStringsList)+1 to _numberMaxContentCells
+			_sStyleList[i][iCell] =  "mainStyleListBox" ! dummy - no need
+		next iCell
+	next i
+endif
+
+dim _sStyleHeadContentBottom[][30]
+if bUseBottomContentColumn then
+	for i = 1 to _numberofRowBottom
+		for iCell = 1 to vardim2(_sContentStringsHeadBottom)
+			if abs(((iCell+5) MOD 5) - 2) < EPS  | abs(((iCell+5) MOD 5) - 4) < EPS then
+				_sStyleHeadContentBottom[i][iCell] = "extraStyleListBox"
+			else
+				_sStyleHeadContentBottom[i][iCell] = "mainStyleListBox"
+			endif
+		next iCell
+		for iCell = vardim2(_sContentStringsHeadBottom)+1 to _numberMaxContentCells
+			_sStyleHeadContentBottom[i][iCell] =  "mainStyleListBox" ! dummy - no need
+		next iCell
+	next i
+endif
+
+! ==========================================================================
+! Calculating textbox`s dimensions - using paragraph subroutine
+! --------------------------------------------------------------------------
+! - in head text box using wrapping function, list text box dont
+! ==========================================================================
+_xPosTB			= 0
+_yPosTB			= 0
+
+dim _sStylePrefixPG[]
+dim	_sPrefixStringsPG[]
+dim _sStyleContentPG[][]
+dim _sContentStringsPG[][]
+
+if bShowHead then
+	_drawRichText 		= 0	! just for calculations
+	_ratioLineSpace		= sizeLeadingHeader
+	_iAlignment			= 1
+	_iReferencePoint	= 1 ! table form its simplier to handle with 1 anchor point
+
+	_sStylePrefixPG		= _sStyleHeadPrefix
+	_sPrefixStringsPG	= sPrefixStringsHead
+	_sStyleContentPG 	= _sStyleHeadContent
+	_sContentStringsPG 	= _sContentStringsHead
+
+	dim _stringwidthPrefix[]
+	dim _stringheightPrefix[]
+	dim _stringwidthContent[]
+	dim _stringheightContent[]
+	dim _heightRow[]
+
+	_calculatedWidthPrefixTextBox = 0
+	_calculatedWidthContentTextBox = 0
+	_calculatedWidthFullTextBox = 0
+	if bWrapText then
+		if bUsePrefixColumn then
+			_calculatedWidthPrefixTextBox = widthTextBoxPrefix_mm
+		endif
+		if bUseContentColumn then
+			_calculatedWidthContentTextBox = widthTextBoxContent_mm
+		endif
+		_calculatedWidthFullTextBox = _calculatedWidthPrefixTextBox + _calculatedWidthContentTextBox +\
+									 (widthTextBoxOffset * 2 * (bUsePrefixColumn & bUseContentColumn))
+	endif
+
+	for i = 1 to _numberofRow
+
+		if bUsePrefixColumn then
+			_usePrefixChapter	= 1
+			_widthTextBlock		= _calculatedWidthPrefixTextBox	! -> zero means automatic calculations
+			gosub "usePharagraph"	! returned automatic dim or calculated
+			if bWrapText then
+				! the recalculated text box width is not always matching with the given widths because of paragraph standard
+				! and the text box width can be longer then the automatic by design
+				_stringwidthPrefix[i] = _widthTextBlock
+			else
+				_stringwidthPrefix[i] = _widthTB
+			endif
+			_stringheightPrefix[i] = _heightTB
+		else
+			_stringwidthPrefix[i] = 0
+			_stringheightPrefix[i] = 0
+		endif
+
+		if bUseContentColumn then
+			_usePrefixChapter	= 0
+			if bEnableCustomHeaderStyle and i = 1 then
+				_widthTextBlock = _calculatedWidthFullTextBox
+				gosub "usePharagraph"	! returned automatic dim or calculated
+			else
+				_widthTextBlock		= _calculatedWidthContentTextBox	! -> zero means automatic calculations
+				gosub "usePharagraph"	! returned automatic dim or calculated
+			endif
+			if bWrapText then
+				! the recalculated text box width is not always matching with the given widths because of paragraph standard
+				! and the text box width can be longer then the automatic by design
+				_stringwidthContent[i] = _widthTextBlock
+			else
+				_stringwidthContent[i] = _widthTB
+			endif
+			_stringheightContent[i] = _heightTB
+		else
+			_stringwidthContent[i] = 0
+			_stringheightContent[i] = 0
+		endif
+		_heightRow[i] = max(_stringheightPrefix[i], _stringheightContent[i])
+	next i
+
+	_widthPrefixTextBox = 0
+	for iCalc = 1 to vardim1(_stringwidthPrefix)
+		_widthPrefixTextBox = max(_widthPrefixTextBox, _stringwidthPrefix[iCalc])
+	next iCalc
+	_widthContentTextBox = 0
+	for iCalc = 1 to vardim1(_stringwidthContent)
+		_widthContentTextBox = max(_widthContentTextBox, _stringwidthContent[iCalc])
+	next iCalc
+
+	_widthFullTextBox = _widthPrefixTextBox + _widthContentTextBox + (widthTextBoxOffset * 2 * (bUsePrefixColumn & bUseContentColumn))
+	_heightFullTextBox = 0
+	for iCalc = 1 to vardim1(_heightRow)
+		_heightFullTextBox = _heightFullTextBox + _heightRow[iCalc]
+	next iCalc
+
+	! --------------------------------------------------------------------------
+	! - in head text box using wrapping function, list text box dont
+
+	dim _sStyleContentPG[][]
+	dim _sContentStringsPG[][]
+
+	_sStyleContentPG 	= _sStyleHeadContentBottom
+	_sContentStringsPG 	= _sContentStringsHeadBottom
+	_widthTextBoxBottom			= 0
+	_heightTextBoxBottom		= 0
+	_widthContentColumnBottom 	= 0
+	_heightContentColumnBottom 	= 0
+
+	if bUseBottomContentColumn then
+		for i = 1 to _numberofRowBottom
+			if bUseBottomContentColumn then	! by Division Line
+				_usePrefixChapter	= 0
+				_widthTextBlock		= _calculatedWidthContentTextBox	! -> zero means automatic calculations
+				gosub "usePharagraph"
+				if bWrapText then
+					! the recalculated text box width is not always matching with the given widths because of paragraph standard
+					! and the text box width can be longer then the automatic by design
+					_widthContentColumnBottom = _widthTextBlock
+				else
+					_widthContentColumnBottom = _widthTB
+				endif
+				_heightContentColumnBottom 	= _heightTB
+			endif
+			_widthTextBoxBottom		= max(_widthTextBoxBottom, _widthContentColumnBottom )
+			_heightTextBoxBottom	= _heightTextBoxBottom + _heightContentColumnBottom
+		next i
+
+		! recalculating text box sizes in head at division function
+		_widthFullTextBox 	= max(_widthFullTextBox, _widthTextBoxBottom)
+		_posBottomTextBox = max(_heightFullTextBox, _heightTextBoxBottom) - _heightFullTextBox
+		_heightFullTextBox 	= max(_heightFullTextBox, _heightTextBoxBottom) * 2
+
+	endif
+endif
+
+
+if bUseTextBoxOnLine then
+	dim _sStyleContentPG[][]
+	dim _sContentStringsPG[][]
+	_sStyleContentPG 		= _sStyleList
+	_sContentStringsPG 		= _sContentStringsList
+	_widthTextBoxOnLine		= 0
+	_heightTextBoxOnLine	= 0
+
+	_drawRichText 			= 0	! just for calculations
+	_usePrefixChapter		= 0
+	_widthTextBlock			= 0	! -> zero means automatic calculations
+	_ratioLineSpace			= sizeLeadingTextBoxOnLine
+	_iReferencePoint		= 7
+	_iAlignment				= 1
+
+	for i = 1 to _numberofRowList
+		gosub "usePharagraph"
+		_widthTextBoxOnLine		= max(_widthTextBoxOnLine , _widthTB)
+		_heightTextBoxOnLine	= _heightTextBoxOnLine + _heightTB
+	next i
+
+endif
+
+! ==============================================================================
+! Install label position
+! ==============================================================================
+! ------------------------------------------------------------------------------
+! Label positioning - global behavior for Marker form Labels
+! - origin is where AC gives, the table begins with top left anchor 
+! - LABEL_ROTANGLE (anglePosition) rotating is handled by AC, only need for readability calculation
+! - bUseBuiltinPointer OFF (without AC Arrow)
+! 		- the origin is at the arrow peak
+! 		- orientation is rotated from gdl parameter and working as at Word Labels
+!			1. Paralell/Horizontal/Vertical - LABEL_ROTANGLE has no effect
+!			2. Custom - only LABEL_ROTANGLE lives
+! 		- Reference Point is cordinated by user if there is no Leader Line function
+! - bUseBuiltinPointer ON (with AC Arrow)
+!		- the origin is at the boundary
+!		- handling of rotation is belongs to AC (AC_CustomReadabilty OFF)
+!		- Reference Point is cordinated at Pointer tabpage
+! input:
+!	iLabelOrientation	- type Orientation
+!	anglePosition		- LABEL_ROTANGLE
+!	angleParentPosition	- Parent tool direction using at Parallel
+!	_isPreview
+! ==============================================================================
+nTrans 	= 0
+unID 	= 1
+signMirror = not(bMirrorLabel) - bMirrorLabel
+signLabel = not(bFlipLabel) - bFlipLabel
+
+if bUseBuiltinPointer then
+	if not(bEnableHeadWithPointer) then
+		iReferencePoint			= 1
+		iLabelOrientation		= 0	! none
+
+		bShowLeaderLine			= 0
+		distanceLabelHead_mm	= 0
+
+		bFitFrameToText 		= 1
+		iShapeHead 				= MARKER_HEAD_RECTANGLE
+
+		if bUseTextBoxOnLine then
+			bShowHead			= 0
+		endif
+	else
+		bShowLeaderLine			= 0
+		distanceLabelHead_mm	= 0
+	endif
+endif
+
+
+if not(_isPreview) and not(bUseBuiltinPointer) then
+	angleViewRot = 0
+	rrr = REQUEST ("View_Rotangle", "", angleViewRot)
+	totalRotate = (angleViewRot) MOD 360
+
+	if iLabelOrientation = ORIENTATION_PARALLEL then
+		rot2 angleParentPosition - anglePosition
+		nTrans = nTrans + 1
+		totalRotate = ( totalRotate + angleParentPosition ) MOD 360
+	else
+		if iLabelOrientation = ORIENTATION_HORIZONTAL then
+			rot2 -totalRotate - anglePosition
+			nTrans = nTrans + 1
+			totalRotate = 0
+		else
+			if iLabelOrientation = ORIENTATION_VERTICAL then
+				rot2 -totalRotate + 90 - anglePosition
+				nTrans = nTrans + 1
+				totalRotate = 90
+			else
+				! at CUSTOM the LABEL_ROTANGLE (anglePosition) is handled by AC
+				totalRotate = (anglePosition + totalRotate) MOD 360
+			endif
+		endif
+	endif
+	if bFlipLabel then
+		mul2 1,-1
+		nTrans = nTrans + 1
+		totalRotate = (totalRotate + 180) MOD 360
+	endif
+
+	hotspot2  0,0, unID : unID=unID+1
+endif
+
+! ========================================================================================
+! Drawing Label Line Form - if is enabled - bEnableLeaderLine ON
+! ========================================================================================
+
+if bShowLeaderLine then
+	_modDoubleLine = 0
+
+	if bExtLineParallel then
+		! Rotate the coordinate system to parallel to the Parent
+		_horRotation	= (angleViewRot) MOD 360 + angleParentPosition
+		_vertRotation	= (angleViewRot) MOD 360 + 90 + angleParentPosition
+
+		if _horRotation MOD 90 > EPS then
+			if iExtensionLineStyle = EXTLINE_RECT then
+				_modDoubleLineHor = (thkLeaderLine_mm/2) / tan(90 - _horRotation)
+			else
+				_modDoubleLineHor = tan(90 - (180 - _horRotation)/2) * thkLeaderLine_mm/2
+			endif
+		else
+			_modDoubleLineHor = 0
+		endif
+		if _vertRotation MOD 90 > EPS then
+			if iExtensionLineStyle = EXTLINE_RECT then
+				_modDoubleLineVert = (thkLeaderLine_mm/2) / tan(90 - _vertRotation)
+			else
+				_modDoubleLineVert = tan(90 - (180 - _vertRotation)/2) * thkLeaderLine_mm/2
+			endif
+		else
+			_modDoubleLineVert = 0
+		endif
+
+		if iLabelOrientation = ORIENTATION_HORIZONTAL then
+			if bFlipLabel then
+				rot2 - _horRotation
+				_modDoubleLine = - _modDoubleLineHor
+			else
+				rot2 _horRotation
+				_modDoubleLine = _modDoubleLineHor
+			endif
+		endif
+		if iLabelOrientation = ORIENTATION_VERTICAL then
+			if bFlipLabel then
+				rot2 -_vertRotation
+				_modDoubleLine = - _modDoubleLineVert
+			else
+				rot2 _vertRotation
+				_modDoubleLine = _modDoubleLineVert
+			endif
+		endif
+		nTrans = nTrans + 1
+	endif
+
+	gosub "draw_extension_line"
+	
+	if bExtLineParallel then
+		_startLeaderLine 		= 0
+		_distanceLabelHead_mm	= distanceLabelHead_mm - lengthExtensionLine_mm
+
+		add2 0,  lengthExtensionLine_mm
+
+		! Rotate back the coordinate system to Horizontal / Vertical position
+		if iLabelOrientation = ORIENTATION_HORIZONTAL then
+			if bFlipLabel then
+				rot2 _horRotation
+			else
+				rot2 - _horRotation
+			endif
+		endif
+		if iLabelOrientation = ORIENTATION_VERTICAL then
+			if bFlipLabel then
+				rot2 _vertRotation
+			else
+				rot2 - _vertRotation
+			endif
+		endif
+		nTrans = nTrans + 2
+	else
+		_startLeaderLine 		= lengthExtensionLine_mm
+		_distanceLabelHead_mm	= distanceLabelHead_mm
+	endif	
+
+	gosub "draw_leader_line"
+else
+    _distanceLabelHead_mm	= distanceLabelHead_mm
+endif
+
+! ========================================================================================
+! Drawing Label Head Form
+! ========================================================================================
+
+if bShowHead then
+	nHeadTrans = 0
+
+	! calculating from center of head frame shape -------------------------------------------------------------
+	gosub "set_headDimensions"	
+
+	! setting center points of head frame shape -------------------------------------------------------------
+	centerX = 0
+	centerY = 0
+	if bEnableLeaderLine then
+		! in this case iReferencePoint is always 5
+		centerY = _distanceLabelHead_mm + _heightHeadFrame/2
+
+		if iShapeHead = MARKER_HEAD_TRIANGLE_UP then
+			centerY = _distanceLabelHead_mm + (_heightHeadFrame * sin(30))/2
+		endif
+
+		if	iShapeHead = MARKER_HEAD_TRIANGLE_LEFT |\
+			iShapeHead = MARKER_HEAD_TRIANGLE_RIGHT then
+			centerY =  _distanceLabelHead_mm + (_heightHeadFrame * tan(30))/2
+		endif
+
+		if iShapeHead = MARKER_HEAD_PENTAGON_UP then
+			centerY =  _distanceLabelHead_mm + (_heightHeadFrame * sin(54))/2
+		endif
+
+		if iShapeHead = MARKER_HEAD_HEXAGON then
+			centerY =  _distanceLabelHead_mm + (_heightHeadFrame * sin(60))/2
+		endif
+
+		if iShapeHead = MARKER_HEAD_OCTOGON then
+			centerY =  _distanceLabelHead_mm + (_heightHeadFrame * sin(67.5))/2
+		endif
+	else
+		! defult iReferencePoint is 5
+		centerX = 0
+		centerY = 0
+		if iReferencePoint = 1 | iReferencePoint = 4 | iReferencePoint = 7 then centerX = widthTextBoxOffset + _widthFullTextBox/2
+		if iReferencePoint = 3 | iReferencePoint = 6 | iReferencePoint = 9 then centerX = -widthTextBoxOffset -_widthFullTextBox/2
+		if iReferencePoint = 1 | iReferencePoint = 2 | iReferencePoint = 3 then centerY = -widthTextBoxOffset -_heightFullTextBox/2
+		if iReferencePoint = 7 | iReferencePoint = 8 | iReferencePoint = 9 then centerY = widthTextBoxOffset + _heightFullTextBox/2
+	endif
+
+	add2 centerX,centerY
+	nHeadTrans = nHeadTrans + 1
+
+	! Drawing head poligon from head center ---------------------------------------------------------------------
+	gosub "draw_headform"
+
+	! Setting head text box ccordinate system -----------------------------------------------------------------
+	! - position text box as a table with 5 ReferencePoint for easy readable rotating
+	! > Readabilty - transform the full table
+	if not(_isPreview) then
+		if bAlwaysReadable and AC_CustomReadability then
+			if (totalRotate > 90+EPS & totalRotate < 270-EPS) then
+				mul2 -1, -1
+				nHeadTrans = nHeadTrans + 1
+			endif
+		endif
+	endif
+
+	! Setting head text base position -----------------------------------------------------------------
+	! - after position need to jump to 1 Reference Point to draw table row by row from up to bottom
+
+	_posX = -_widthFullTextBox/2
+	_posY = _heightFullTextBox/2
+	add2 _posX, _posY
+	nHeadTrans = nHeadTrans + 1
+
+	! printing head text -----------------------------------------------------------------------
+	dim _sStylePrefixPG[]
+	dim	_sPrefixStringsPG[]
+	dim _sStyleContentPG[][]
+	dim _sContentStringsPG[][]
+	_sStylePrefixPG			= _sStyleHeadPrefix
+	_sPrefixStringsPG		= sPrefixStringsHead
+	_sStyleContentPG 		= _sStyleHeadContent
+	_sContentStringsPG 		= _sContentStringsHead
+
+	_drawRichtext 		= 1
+	_yPosTB 			= 0
+	_iReferencePoint	= 1 ! table form its simplier to handle with 1 anchor point
+	_penindex			= penTextHeader
+	_ratioLineSpace		= sizeLeadingHeader
+
+	for i = 1 to _numberofRow
+
+	! --------------------------------------------------------------------------
+	!  displaying content type name column 
+	! --------------------------------------------------------------------------
+
+		if bUsePrefixColumn then
+			_xPosTB 			= 0
+			_usePrefixChapter 	= 1
+			_widthTextBlock 	= _widthPrefixTextBox
+			_iAlignment			= _iAlignmentPrefixBody
+			gosub "usePharagraph"
+		endif
+
+	! --------------------------------------------------------------------------
+	! displaying content body main column 
+	! --------------------------------------------------------------------------
+
+		if bUseContentColumn then
+			_xPosTB 			= _widthPrefixTextBox + widthTextBoxOffset * 2 * bUsePrefixColumn
+			_usePrefixChapter 	= 0
+			if bUseBottomContentColumn then	! by using division line
+				_widthTextBlock 	= _widthFullTextBox
+			else
+				_widthTextBlock 	= _widthContentTextBox
+			endif
+			_iAlignment	= _iAlignmentContentBody
+			gosub "usePharagraph"
+		endif
+
+		_yPosTB = _yPosTB - _heightRow[i]
+	next i
+
+	! --------------------------------------------------------------------------
+	! displaying content body bottom column ! Division line function
+	! --------------------------------------------------------------------------
+
+	if bUseBottomPrefixColumn | bUseBottomContentColumn then
+		dim _sStyleContentPG[][]
+		dim _sContentStringsPG[][]
+		_sStyleContentPG 	= _sStyleHeadContentBottom
+		_sContentStringsPG 	= _sContentStringsHeadBottom
+		_yPosTB = _yPosTB - _posBottomTextBox
+	
+		_drawRichText 		= 1
+		_ratioLineSpace		= sizeLeadingHeader
+		_penindex			= penTextBoxOnLine
+		_iReferencePoint	= 1 ! table form its simplier to handle with 1 anchor point
+	
+		for i = 1 to _numberofRowBottom
+			if bUseBottomContentColumn then	! by Division Line
+				_xPosTB 			= _widthPrefixTextBox
+				_usePrefixChapter	= 0
+				_widthTextBlock 	= _widthFullTextBox	! -> zero means automatic calculations
+				_iAlignment			= _iAlignmentContentBody
+				gosub "usePharagraph"
+				_heightContentColumnBottom 	= _heightTB
+			endif
+			_yPosTB = _yPosTB - _heightContentColumnBottom
+		next i
+	endif
+
+	del	nHeadTrans : nHeadTrans = 0
+
+endif
+
+! ========================================================================================
+! Drawing List Box
+! ========================================================================================
+if bUseTextBoxOnLine then
+	_xDistanceListBox = 0
+	if iExtensionLineStyle = EXTLINE_RECT & (lengthExtensionLine_mm > (listTextTopDistance_mm - EPS)) then
+		_xDistanceListBox = signMirror * thkExtensionLine_mm/2
+	else
+		if iLeaderLineStyle = LINE_DOUBLE then _xDistanceListBox = signMirror * thkLeaderLine_mm/2
+	endif
+	add2 _xDistanceListBox, listTextTopDistance_mm
+
+	if bMirrorLabel then
+		mul2 -1, 1
+		nTrans = nTrans + 1
+	endif
+
+	if not(bHideTextBoxContour) then
+		_widthTextBoxOnLine		= _widthTextBoxOnLine + widthTextBoxOffset*2
+		_heightTextBoxOnLine	= _heightTextBoxOnLine + widthTextBoxOffset*2
+	endif
+
+	! Readabilty - transform the full table ------------------------------------
+	if not(_isPreview) then
+		if bAlwaysReadable and AC_CustomReadability then
+			if (totalRotate > 90+EPS & totalRotate < 270-EPS) then
+				mul2 -1, -1
+				add2 -_widthTextBoxOnLine, _heightTextBoxOnLine
+			endif
+		endif
+	endif
+	gosub "draw_bodybox_form"
+
+	dim _sStyleContentPG[][]
+	dim _sContentStringsPG[][]
+	_sStyleContentPG = _sStyleList
+	_sContentStringsPG = _sContentStringsList
+
+	_xPosTB 				= widthTextBoxOffset * not(bHideTextBoxContour)
+	_yPosTB					= -widthTextBoxOffset * not(bHideTextBoxContour)
+
+	_drawRichtext 			= 1
+	_penindex				= penTextBoxOnLine
+	_iReferencePoint 		= 1
+	_iAlignment				= iAlignmentTextBoxOnLine
+	_widthTextBlock 		= _widthTextBoxOnLine
+	_ratioLineSpace	= sizeLeadingTextBoxOnLine
+
+	for i = 1 to _numberofRowList
+
+		gosub "usePharagraph"
+		_yPosTB = _yPosTB - _heightTB
+
+		if bShowSeparatorLines then
+			pen penLeaderLine
+			line_type linetypeLeaderLine
+			fill fillType
+
+			line2 0, _yPosTB, _widthTextBoxOnLine, _yPosTB
+		endif
+	next i
+
+	if	not(_isPreview) &\
+		bAlwaysReadable & AC_CustomReadability &\
+		(totalRotate > 90+EPS & totalRotate < 270-EPS) then
+		del 2
+	endif
+	if bMirrorLabel then
+		del 1
+	endif
+
+	del 1
+
+endif
+
+! ==============================================================================================
+END
+! ==============================================================================================
+
+! ==============================================================================================
+"draw_headform" :
+! ----------------------------------------------------------------------------------------------
+! input : 	
+! 	centerX			Head Origo coord x
+! 	centerY			Head Origo coord y
+! 	_totalRotate		angle of oriented view
+! 	_widthFullTextBox		width of the text box
+!	_heightFullTextBox		height of the text box
+!	_widthHeadFrame
+!	_heightHeadFrame
+!
+! output:
+!	stack filled with head polygon relative coords (from head center)
+! ==============================================================================================
+
+	! Shape Type --------------------------------------------------------
+
+
+	_isRegularShape = 0
+	if 	iShapeHead = MARKER_HEAD_TRIANGLE_UP |\
+		iShapeHead = MARKER_HEAD_TRIANGLE_DOWN |\
+		iShapeHead = MARKER_HEAD_TRIANGLE_LEFT |\
+		iShapeHead = MARKER_HEAD_TRIANGLE_RIGHT |\
+		iShapeHead = MARKER_HEAD_DIAMOND |\
+		iShapeHead = MARKER_HEAD_SQUARE_ROTATED |\
+		iShapeHead = MARKER_HEAD_PENTAGON_UP |\ 
+		iShapeHead = MARKER_HEAD_PENTAGON_DOWN |\
+		iShapeHead = MARKER_HEAD_HEXAGON_ROTATED |\
+		iShapeHead = MARKER_HEAD_HEXAGON |\
+		iShapeHead = MARKER_HEAD_OCTOGON |\
+		iShapeHead = MARKER_HEAD_OCTOGON_ROTATED then
+		_isRegularShape = 1
+	endif
+
+	_isNeedBoundaryHotspots = 1
+	if iShapeHead = MARKER_HEAD_RECTANGLE and not(bUseBuiltinPointer) then	! by design (Laura)
+		_isNeedBoundaryHotspots = 0
+	endif
+
+	_xDivisionLeft = _widthHeadFrame/2
+	_xDivisionRight = -_widthHeadFrame/2
+
+	unID = 10
+
+	pen penHead
+	line_type lineTypeHead
+	fill fillType
+
+	if _isRegularShape then
+		! Regular Poligons
+		gosub "put_regularHead_points"
+
+		poly2_b	nsp/3, bShowHeadContour + 2 + 4, penForeground, penBackground,
+			use(nsp)
+
+		_minPosX = 0
+		_maxPosX = 0
+		for i = 1 to NSP step 3
+			xPos = get(1)
+			_dummy = get(1)
+			_dummy = get(1)
+
+			if xPos < _minPosX then _minPosX = xPos
+			if xPos > _maxPosX then _maxPosX = xPos
+		next i
+
+		if 	iShapeHead = MARKER_HEAD_TRIANGLE_UP |\
+			iShapeHead = MARKER_HEAD_TRIANGLE_DOWN then
+
+			_minPosX = 2 * _minPosX/3
+			_maxPosX = 2 * _maxPosX/3
+		endif
+
+		if 	iShapeHead = MARKER_HEAD_PENTAGON_UP |\ 
+			iShapeHead = MARKER_HEAD_PENTAGON_DOWN then
+
+			_minPosX = _minPosX * sin(54) / (sin(108) * cos(18))
+			_maxPosX = _maxPosX * sin(54) / (sin(108) * cos(18))
+		endif
+
+		if bEnableSeparatorLine & bShowSeparatorLines then
+			line2 _minPosX,	0,	_maxPosX, 0
+		endif
+
+		gosub "put_regularHead_points"
+
+		xPosStart = get(1)
+		yPosStart = get(1)
+		dummy = get(1)
+		_num = nsp
+		for iPeak = 1 to _num/3
+			xPosEnd = get(1)
+			yPosEnd = get(1)
+			dummy = get(1)
+
+			hotline2 xPosStart,yPosStart, xPosEnd, yPosEnd , unID : unID = unID + 1
+
+			xPosStart = xPosEnd
+			yPosStart = yPosEnd
+		next iPeak
+
+		if bDivisionLine then
+			! Regular Poligons
+			gosub "put_regularHead_points"
+			_num = nsp/3
+
+			pipX1 = get(1)
+			pipY1 = get(1)
+			dummy = get(1)
+
+			_numSectionPoint = 1
+			dim _foundDivisionX[]
+				_foundDivisionX[1] = 0
+				_foundDivisionX[2] = 0
+			for pipI = 1 to _num-1
+				pipX2 = get(1)
+				pipY2 = get(1)
+				dummy = get(1)
+		
+				line1X1 = pipX1
+				line1Y1 = pipY1
+				line1X2 = pipX2
+				line1Y2 = pipY2
+		
+				line2X1 = -1000
+				line2Y1 = 0
+				line2X2 = 1000
+				line2Y2 = 0
+	
+				gosub "segment_segment_intersection"
+				! Result: state, cx,cy
+	
+				if state = 3 then
+					if abs(line1X2 - cx) > EPS | abs(line1Y2 - cy) > EPS then
+						if abs(line1X1 - cx) < EPS & abs(line1Y1 - cy) < EPS then
+							if sgn(pipY0 - pntY) <> sgn(pipY2 - pntY) then
+								pipIntersection = pipIntersection + 1
+								_foundDivisionX[_numSectionPoint] = cx
+								_numSectionPoint = _numSectionPoint + 1
+							endif
+						else
+							pipIntersection = pipIntersection + 1
+							_foundDivisionX[_numSectionPoint] = cx
+							_numSectionPoint = _numSectionPoint + 1
+						endif
+					endif
+				endif
+		
+				pipX0 = pipX1
+				pipY0 = pipY1
+		
+				pipX1 = pipX2
+				pipY1 = pipY2
+			next pipI
+
+			_xDivisionLeft = _foundDivisionX[1]
+			_xDivisionRight = _foundDivisionX[2]
+
+		endif
+
+	else
+
+		if iShapeHead = MARKER_HEAD_NONE then
+			poly2_b 4, 0 + 2 + 4, 0, 0,
+				-_widthHeadFrame/2,	-_heightHeadFrame/2,	1,
+				-_widthHeadFrame/2,	 _heightHeadFrame/2,	1,
+				 _widthHeadFrame/2,	 _heightHeadFrame/2,	1,
+				 _widthHeadFrame/2,	-_heightHeadFrame/2, 1
+
+			hotline2 -_widthHeadFrame/2, -_heightHeadFrame/2, -_widthHeadFrame/2, _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 -_widthHeadFrame/2, _heightHeadFrame/2, _widthHeadFrame/2, _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2, _heightHeadFrame/2, _widthHeadFrame/2, -_heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2, -_heightHeadFrame/2, -_widthHeadFrame/2, -_heightHeadFrame/2, unID : unID = unID + 1
+		endif
+		if iShapeHead = MARKER_HEAD_CIRCLE then
+			mul2 1, _heightHeadFrame/_widthHeadFrame
+			poly2_b	2, bShowHeadContour + 2 + 4, penForeground, penBackground,
+					0, 0,		901,
+					_widthHeadFrame/2, 360, 	4001
+
+			hotarc2 0,0, _widthHeadFrame/2, 0,      180,    unID : unID = unID + 1
+			hotarc2 0,0, _widthHeadFrame/2, -180,   0,      unID : unID = unID + 1
+			del 1
+		endif
+		if iShapeHead = MARKER_HEAD_OVAL then
+			if _widthHeadFrame < _heightHeadFrame then _widthHeadFrame = _heightHeadFrame
+			poly2_b 6, bShowHeadContour + 2 + 4, penForeground, penBackground,
+				-_widthHeadFrame/2 + _heightHeadFrame/2,	-_heightHeadFrame/2,	1,
+				-_widthHeadFrame/2 + _heightHeadFrame/2,	0,				900,
+				 _heightHeadFrame/2,					-180,			4001,
+				 _widthHeadFrame/2 - _heightHeadFrame/2,	_heightHeadFrame/2,	1,
+				 _widthHeadFrame/2 - _heightHeadFrame/2,	0,				900,
+				 _heightHeadFrame/2,					-180,			4001
+
+			hotline2 -_widthHeadFrame/2 + _heightHeadFrame/2, -_heightHeadFrame/2, +_widthHeadFrame/2 - _heightHeadFrame/2,	-_heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 -_widthHeadFrame/2 + _heightHeadFrame/2, _heightHeadFrame/2, +_widthHeadFrame/2 - _heightHeadFrame/2,	_heightHeadFrame/2, unID : unID = unID + 1
+			hotarc2 -_widthHeadFrame/2 + _heightHeadFrame/2, 0, _heightHeadFrame/2, -90, 90, unID : unID = unID + 1
+			hotarc2 _widthHeadFrame/2 - _heightHeadFrame/2, 0, _heightHeadFrame/2, 90, -90, unID : unID = unID + 1
+		endif
+		if iShapeHead = MARKER_HEAD_RECTANGLE then
+			poly2_b 4, bShowHeadContour + 2 + 4, penForeground, penBackground,
+				-_widthHeadFrame/2,	-_heightHeadFrame/2,	1,
+				-_widthHeadFrame/2,	_heightHeadFrame/2,	1,
+				_widthHeadFrame/2,	_heightHeadFrame/2,	1,
+				_widthHeadFrame/2,	-_heightHeadFrame/2, 1
+
+			hotline2 -_widthHeadFrame/2, -_heightHeadFrame/2, -_widthHeadFrame/2, _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 -_widthHeadFrame/2, _heightHeadFrame/2, _widthHeadFrame/2, _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2, _heightHeadFrame/2, _widthHeadFrame/2, -_heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2, -_heightHeadFrame/2, -_widthHeadFrame/2, -_heightHeadFrame/2, unID : unID = unID + 1
+		endif
+		if iShapeHead = MARKER_HEAD_ROUNDED_RECT then
+			if bFitFrameToText then
+				_curveRadius = _heightFullTextBox/4
+			else
+				_curveRadius = min(_heightFullTextBox, _heightHeadFrame)/4
+			endif
+
+			poly2_b 13, bShowHeadContour + 2 + 4, penForeground, penBackground,
+				-_widthHeadFrame/2 + _curveRadius,	-_heightHeadFrame/2,				1,
+				-_widthHeadFrame/2 + _curveRadius,	-_heightHeadFrame/2 + _curveRadius,	900,
+				0,									-90,								4001,
+				-_widthHeadFrame/2,					 _heightHeadFrame/2 - _curveRadius,	1,
+				-_widthHeadFrame/2 + _curveRadius,	 _heightHeadFrame/2 - _curveRadius,	900,
+				0,									-90,								4001,
+				 _widthHeadFrame/2 - _curveRadius,	 _heightHeadFrame/2,				1,
+				 _widthHeadFrame/2 - _curveRadius,	 _heightHeadFrame/2 - _curveRadius,	900,
+				0,									-90,								4001,
+				 _widthHeadFrame/2,					-_heightHeadFrame/2 + _curveRadius,	1,
+				 _widthHeadFrame/2 - _curveRadius,	-_heightHeadFrame/2 + _curveRadius,	900,
+				0,									-90,								4001,
+				-_widthHeadFrame/2 + _curveRadius,	-_heightHeadFrame/2,				-1
+
+			hotline2 -_widthHeadFrame/2, -_heightHeadFrame/2, -_widthHeadFrame/2, _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 -_widthHeadFrame/2, _heightHeadFrame/2, _widthHeadFrame/2, _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2, _heightHeadFrame/2, _widthHeadFrame/2, -_heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2, -_heightHeadFrame/2, -_widthHeadFrame/2, -_heightHeadFrame/2, unID : unID = unID + 1
+		endif
+		if iShapeHead = MARKER_HEAD_POINTED_RECT_90 then
+			if _widthHeadFrame < _heightHeadFrame then _widthHeadFrame = _heightHeadFrame
+			poly2_b 6, bShowHeadContour + 2 + 4, penForeground, penBackground,
+				-_widthHeadFrame / 2, 		 			0, 	1,
+				-_widthHeadFrame / 2 + _heightHeadFrame / 2,	-_heightHeadFrame / 2,	1,
+				 _widthHeadFrame / 2 - _heightHeadFrame / 2,	-_heightHeadFrame / 2,	1,
+				 _widthHeadFrame / 2, 		 			0, 	1,
+				 _widthHeadFrame / 2 - _heightHeadFrame / 2,   _heightHeadFrame / 2,	1,
+				-_widthHeadFrame / 2 + _heightHeadFrame / 2,	 _heightHeadFrame / 2,	1
+
+			hotline2 -_widthHeadFrame/2, 0, -_widthHeadFrame/2 + _heightHeadFrame/2, -_heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 -_widthHeadFrame/2 + _heightHeadFrame/2,	-_heightHeadFrame/2, _widthHeadFrame/2 - _heightHeadFrame/2, -_heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2 - _heightHeadFrame/2, -_heightHeadFrame/2, _widthHeadFrame/2, 	0, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2, 	0, _widthHeadFrame/2 - _heightHeadFrame/2,   _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2 _widthHeadFrame/2 - _heightHeadFrame/2,   _heightHeadFrame/2, -_widthHeadFrame/2 + _heightHeadFrame/2,	 _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2  -_widthHeadFrame/2 + _heightHeadFrame/2, _heightHeadFrame/2, -_widthHeadFrame/2, 0, unID : unID = unID + 1
+		endif
+
+		if iShapeHead = MARKER_HEAD_POINTED_RECT_120 then
+			if _widthHeadFrame < _heightHeadFrame * tan(30) then _widthHeadFrame = _heightHeadFrame * tan(30)
+			poly2_b 6, bShowHeadContour + 2 + 4, penForeground, penBackground,
+				-_widthHeadFrame / 2, 		 					0, 	1,
+				-_widthHeadFrame / 2 + _heightHeadFrame/2 * tan(30),	-_heightHeadFrame / 2,	1,
+				 _widthHeadFrame / 2 - _heightHeadFrame/2 * tan(30),	-_heightHeadFrame / 2,	1,
+				 _widthHeadFrame / 2, 		 					0, 	1,
+				 _widthHeadFrame / 2 - _heightHeadFrame/2 * tan(30),   	 _heightHeadFrame / 2,	1,
+				-_widthHeadFrame / 2 + _heightHeadFrame/2 * tan(30), 	_heightHeadFrame / 2,	1
+		
+
+			hotline2 -_widthHeadFrame/2, 0, -_widthHeadFrame/2 + _heightHeadFrame/2 * tan(30),	-_heightHeadFrame/2, unID : unID = unID + 1
+			hotline2  -_widthHeadFrame/2 + _heightHeadFrame/2 * tan(30),	-_heightHeadFrame/2,  _widthHeadFrame/2 - _heightHeadFrame/2 * tan(30), -_heightHeadFrame/2, unID : unID = unID + 1
+			hotline2  _widthHeadFrame/2 - _heightHeadFrame/2 * tan(30), -_heightHeadFrame/2, _widthHeadFrame/2, 0, unID : unID = unID + 1
+			hotline2  _widthHeadFrame/2, 0,  _widthHeadFrame/2 - _heightHeadFrame/2 * tan(30),  _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2  _widthHeadFrame/2 - _heightHeadFrame/2 * tan(30),  _heightHeadFrame/2, -_widthHeadFrame/2 + _heightHeadFrame/2 * tan(30), _heightHeadFrame/2, unID : unID = unID + 1
+			hotline2  -_widthHeadFrame/2 + _heightHeadFrame/2 * tan(30), _heightHeadFrame/2, -_widthHeadFrame/2, 0, unID : unID = unID + 1
+
+		endif
+
+		if bEnableSeparatorLine & bShowSeparatorLines then
+			line2 -_widthHeadFrame/2,	0,	_widthHeadFrame/2, 0
+		endif
+
+	endif
+
+	if bDivisionLine then
+		pen penDivisionLine
+		line_type lineTypeHead
+		line2 _xDivisionLeft, 0, _xDivisionRight, 0
+	endif
+
+	unID = 50
+	if _isNeedBoundaryHotspots then
+		if _isRegularShape then
+			! Regular Poligons
+			gosub "put_regularHead_points"
+
+			_maxX = 0
+			_minX = 0
+			_maxY = 0
+			_minY = 0
+			_actMask = 0
+			for i = 1 to numPeak + 1
+				_actX = get(1)
+				_maxX = max(_actX, _maxX)
+				_minX = min(_actX, _minX)
+				_actY = get(1)
+				_maxY = max(_actY, _maxY)
+				_minY = min(_actY, _minY)
+				_actMask = get(1)
+			next i
+	
+			hotspot2 _minX,	_maxY,			unID : unID = unID + 1
+			hotspot2 _maxX,	_maxY,			unID : unID = unID + 1
+			hotspot2 _maxX,	_minY, 			unID : unID = unID + 1
+			hotspot2 _minX,	_minY,			unID : unID = unID + 1
+		else
+			hotspot2 - _widthHeadFrame/2,	+ _heightHeadFrame/2,	unID : unID = unID + 1
+			hotspot2 + _widthHeadFrame/2,	+ _heightHeadFrame/2,	unID : unID = unID + 1
+			hotspot2 + _widthHeadFrame/2,	- _heightHeadFrame/2, 	unID : unID = unID + 1
+			hotspot2 - _widthHeadFrame/2,	- _heightHeadFrame/2,	unID : unID = unID + 1
+		endif
+	endif
+
+return
+
+! ==============================================================================================
+"draw_bodybox_form" :
+! ----------------------------------------------------------------------------------------------
+! input : 	
+! 	_widthTextBoxOnLine	- List Box Text dimension with offset
+! 	_heightTextBoxOnLine	- List Box Text dimension with offset
+!	penHead
+!	lineTypeHead
+!	fillType
+!	bShowTextBoxContour
+! ==============================================================================================
+
+	pen penHead
+	line_type lineTypeHead
+	fill fillType
+
+	_bShowTextBoxContour = (LABEL_FRAME_ON & not(bHideTextBoxContour))
+	if bHideTextBoxContour then	! transparens fill is always needed
+		penForeground = 0
+		penBackground = 0
+	endif
+
+	if (_widthTextBoxOnLine > EPS &  _heightTextBoxOnLine> EPS) then 
+		poly2_b 5, _bShowTextBoxContour + 2 + 4, penForeground, penBackground,
+			0,								0,									1,
+			_widthTextBoxOnLine,	0,									1,
+			_widthTextBoxOnLine,	-_heightTextBoxOnLine,	1,
+			0,								-_heightTextBoxOnLine,	1,
+			0,								0,									1
+	endif
+
+	hotline2	0,								0,									_widthTextBoxOnLine,	0
+	hotline2	_widthTextBoxOnLine,	0, 									_widthTextBoxOnLine,	-_heightTextBoxOnLine
+	hotline2	_widthTextBoxOnLine,	-_heightTextBoxOnLine,	0,								-_heightTextBoxOnLine
+	hotline2	0, 								-_heightTextBoxOnLine,	0,								0
+
+	if bUseBuiltinPointer then
+		hotspot2 	0,								0,									unID : unID = unID + 1
+		hotspot2 	_widthTextBoxOnLine,	0,									unID : unID = unID + 1
+		hotspot2 	_widthTextBoxOnLine,	-_heightTextBoxOnLine,	unID : unID = unID + 1
+		hotspot2 	0,								-_heightTextBoxOnLine,	unID : unID = unID + 1
+	endif
+return
+
+
+! ==============================================================================================
+"set_headDimensions":
+! ----------------------------------------------------------------------------------------------
+! input : 	
+! 	_heightFullTextBox			height of the Text Box
+! 	_widthFullTextBox			width of the Text Box
+!	widthTextBoxOffset		text offset
+! 	heightHead_mm			width of the Label head
+! 	widthHead_mm			height of the Label head
+!
+! output:
+! 	_heightHeadFrame		width of the Label head 
+! 	_widthHeadFrame		height of the Label head
+! ==============================================================================================
+
+	_widthTextBoxwithOffset = _widthFullTextBox + widthTextBoxOffset * 2
+	_heightTextBoxwithOffset = _heightFullTextBox + widthTextBoxOffset * 2
+
+	if bFitFrameToText then
+
+		_widthHeadFrame	= _widthTextBoxwithOffset
+		_heightHeadFrame = _heightTextBoxwithOffset
+
+		if	iShapeHead = MARKER_HEAD_CIRCLE then
+			_widthHeadFrame = sqr(_widthTextBoxwithOffset^2 + _heightTextBoxwithOffset^2)!/2
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_TRIANGLE_UP |\
+			iShapeHead = MARKER_HEAD_TRIANGLE_DOWN then
+			if ((_widthTextBoxwithOffset / _heightTextBoxwithOffset) > tan(30)) then
+				_widthHeadFrame = _widthTextBoxwithOffset/tan(30) + _heightTextBoxwithOffset		! common: two box corners on two triangle sides
+			else
+				_widthHeadFrame = _heightTextBoxwithOffset / sin(30)					! common: one box side on one triangle side
+			endif
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_TRIANGLE_LEFT |\
+			iShapeHead = MARKER_HEAD_TRIANGLE_RIGHT then
+			if ((_heightTextBoxwithOffset/ _widthTextBoxwithOffset) > tan(30)) then
+				_widthHeadFrame = _heightTextBoxwithOffset/tan(30) + _widthTextBoxwithOffset		! common: two box corners on two triangle sides
+			else
+				_widthHeadFrame = _widthTextBoxwithOffset/ sin(30)					! common: one box side on one triangle side
+			endif
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_SQUARE_ROTATED then
+			_widthHeadFrame	= _widthTextBoxwithOffset + _heightTextBoxwithOffset
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_ROUNDED_RECT then
+			_widthHeadFrame	= _widthTextBoxwithOffset + _heightTextBoxwithOffset/2
+		endif
+
+		if	iShapeHead = MARKER_HEAD_POINTED_RECT_90 |\
+			iShapeHead = MARKER_HEAD_OVAL then
+			_widthHeadFrame	= _widthTextBoxwithOffset + _heightTextBoxwithOffset
+		endif
+
+		if	iShapeHead = MARKER_HEAD_POINTED_RECT_120 then
+			_widthHeadFrame	= _widthTextBoxwithOffset + _heightTextBoxwithOffset * tan(30)
+		endif
+
+		if	iShapeHead = MARKER_HEAD_DIAMOND  then
+			_widthHeadFrame	= _widthTextBoxwithOffset * 2
+			_heightHeadFrame = _heightTextBoxwithOffset * 2
+		endif
+
+		if	iShapeHead = MARKER_HEAD_PENTAGON_UP |\
+			iShapeHead = MARKER_HEAD_PENTAGON_DOWN then
+			if ((_widthTextBoxwithOffset / _heightTextBoxwithOffset ) < tan(18)) then
+				_widthHeadFrame =  _heightTextBoxwithOffset / sin(54)							! common: one box side on one pent. side
+			else
+				if ((_heightTextBoxwithOffset / _widthTextBoxwithOffset ) > tan(36)) then
+					_widthHeadFrame = _heightTextBoxwithOffset + tan(36) * _widthTextBoxwithOffset 		! common: two box corners on two adjacent pent. sides
+				else
+					_widthHeadFrame = ((_widthTextBoxwithOffset + tan(18) * _heightTextBoxwithOffset ) * sin(72)) / sin(54)	! common: two box corners on two non-adjacent pent. sides
+				endif
+			endif
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_HEXAGON then
+			if ((_heightTextBoxwithOffset / _widthTextBoxwithOffset ) > tan(60)) then
+				_widthHeadFrame = _heightTextBoxwithOffset / sin(60)						! common: two box sides on two hex. sides
+			else
+				_widthHeadFrame = _widthTextBoxwithOffset + tan(30) * _heightTextBoxwithOffset 		! common: four box corners on four hex. sides
+			endif
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_HEXAGON_ROTATED then
+			if ((_widthTextBoxwithOffset / _heightTextBoxwithOffset ) > tan(60)) then
+				_widthHeadFrame = _widthTextBoxwithOffset / sin(60)						! common: two box sides on two hex. sides
+			else
+				_widthHeadFrame = _heightTextBoxwithOffset + tan(30) * _widthTextBoxwithOffset 		! common: four box corners on four hex. sides
+			endif
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_OCTOGON then
+			if ((_heightTextBoxwithOffset / _widthTextBoxwithOffset ) > tan(67.5)) then
+				_widthHeadFrame = _heightTextBoxwithOffset / cos(22.5)						! common: two box sides on two oct. sides
+			else
+				if ((_widthTextBoxwithOffset / _heightTextBoxwithOffset ) > tan(67.5)) then
+					_widthHeadFrame = _widthTextBoxwithOffset / cos(22.5)						! common: two box sides on two oct. sides
+				else
+					_widthHeadFrame = (((_heightTextBoxwithOffset + _widthTextBoxwithOffset )/2) / cos(45)) / cos(22.5)		! common: four box corners on four oct. sides
+				endif
+			endif
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_OCTOGON_ROTATED then
+			if ((_heightTextBoxwithOffset / _widthTextBoxwithOffset ) > tan(45)) then
+				_widthHeadFrame = _heightTextBoxwithOffset + _widthTextBoxwithOffset * tan(22.5)
+			else
+				_widthHeadFrame = _widthTextBoxwithOffset + _heightTextBoxwithOffset * tan(22.5)
+			endif
+			_heightHeadFrame = _widthHeadFrame
+		endif
+	else
+
+		_widthHeadFrame	= widthHead_mm
+		_heightHeadFrame = heightHead_mm
+
+		if	iShapeHead = MARKER_HEAD_TRIANGLE_UP |\
+			iShapeHead = MARKER_HEAD_TRIANGLE_DOWN then
+
+			_widthHeadFrame	= widthHead_mm / cos(30)
+			_heightHeadFrame = 2 * heightHead_mm / (1 + sin(30))
+		endif
+
+		if	iShapeHead = MARKER_HEAD_TRIANGLE_LEFT |\
+			iShapeHead = MARKER_HEAD_TRIANGLE_RIGHT then
+
+			_widthHeadFrame	= 2 * widthHead_mm / (1 + sin(30))
+			_heightHeadFrame = heightHead_mm / cos(30)
+		endif
+
+		if	iShapeHead = MARKER_HEAD_PENTAGON_UP |\
+			iShapeHead = MARKER_HEAD_PENTAGON_DOWN then
+			_widthHeadFrame	= widthHead_mm / cos(18)
+			_heightHeadFrame = _widthHeadFrame
+		endif
+
+		if	iShapeHead = MARKER_HEAD_HEXAGON then
+			_widthHeadFrame  = widthHead_mm
+			_heightHeadFrame = heightHead_mm / cos(30)
+		endif
+
+		if	iShapeHead = MARKER_HEAD_HEXAGON_ROTATED then
+			_widthHeadFrame  = widthHead_mm / cos(30)
+			_heightHeadFrame = heightHead_mm
+		endif
+
+		if	iShapeHead = MARKER_HEAD_OCTOGON then
+			_widthHeadFrame  = widthHead_mm / cos(22.5)
+			_heightHeadFrame = heightHead_mm / cos(22.5)
+		endif
+	endif
+return
+
+! ==============================================================================
+"put_regularHead_points":
+! ==============================================================================
+
+	if iShapeHead = MARKER_HEAD_TRIANGLE_UP then
+		numPeak = 3
+		alfa = 90
+	endif
+
+	if iShapeHead = MARKER_HEAD_TRIANGLE_DOWN then
+		numPeak = 3
+		alfa = 30
+	endif
+
+	if iShapeHead = MARKER_HEAD_TRIANGLE_LEFT then
+		numPeak = 3
+		alfa = 60
+	endif
+
+	if iShapeHead = MARKER_HEAD_TRIANGLE_RIGHT then
+		numPeak = 3
+		alfa = 0
+	endif
+
+	if	iShapeHead = MARKER_HEAD_DIAMOND |\
+		iShapeHead = MARKER_HEAD_SQUARE_ROTATED then
+		numPeak = 4
+		alfa = 0
+	endif
+
+	if iShapeHead = MARKER_HEAD_PENTAGON_UP then
+		numPeak = 5
+		alfa = 90
+	endif
+
+	if iShapeHead = MARKER_HEAD_PENTAGON_DOWN then
+		numPeak = 5
+		alfa = 54
+	endif
+
+	if iShapeHead = MARKER_HEAD_HEXAGON_ROTATED then
+		numPeak = 6
+		alfa = 90
+	endif
+
+	if iShapeHead = MARKER_HEAD_HEXAGON then
+		numPeak = 6
+		alfa = 60
+	endif
+
+	if iShapeHead = MARKER_HEAD_OCTOGON then
+		numPeak = 8
+		alfa = 67.5
+	endif
+
+	if iShapeHead = MARKER_HEAD_OCTOGON_ROTATED then
+		numPeak = 8
+		alfa = 0
+	endif
+
+
+	for i = 1 to numPeak + 1
+		put _widthHeadFrame/2 * cos(alfa), _heightHeadFrame/2 * sin(alfa), 1
+		alfa = alfa + 360 / numPeak
+	next i
+
+
+return
+
+! ==============================================================================
+"draw_extension_line":
+! input parameters
+! 	iExtensionLineStyle
+! 	lengthExtensionLine_mm
+! 	thkLeaderLine_mm
+!	_modDoubleLine
+! ==============================================================================
+
+	pen penLeaderLine
+	line_type linetypeLeaderLine
+	fill fillType
+	
+	if lengthExtensionLine_mm > EPS then
+		if iExtensionLineStyle = EXTLINE_RECT then
+			poly2_b 4, 1 + 2 + 4, penLeaderLine, penLeaderLine,
+				-thkExtensionLine_mm/2, -lengthExtensionLine_mm, 1,
+				thkExtensionLine_mm/2, -lengthExtensionLine_mm, 1,
+				thkExtensionLine_mm/2, lengthExtensionLine_mm , 1,
+				-thkExtensionLine_mm/2, lengthExtensionLine_mm , 1
+		else
+			if iLeaderLineStyle = LINE_SINGLE then
+				line2 0, -lengthExtensionLine_mm, 0, lengthExtensionLine_mm
+			else
+				line2 thkLeaderLine_mm/ 2,	-lengthExtensionLine_mm,  thkLeaderLine_mm/ 2, lengthExtensionLine_mm - _modDoubleLine
+				line2 -thkLeaderLine_mm/ 2,	-lengthExtensionLine_mm, -thkLeaderLine_mm/ 2, lengthExtensionLine_mm  + _modDoubleLine
+			endif
+		endif
+	endif
+
+return
+
+! ==============================================================================
+"draw_leader_line":
+! input parameters
+! 	iLeaderLineStyle
+! 	thkLeaderLine_mm
+!	lengthExtensionLine_mm
+! 	_distanceLabelHead_mm
+!	bExtLineParallel
+!	_modDoubleLine
+! ==============================================================================
+
+	pen penLeaderLine
+
+	if not(bShowHead) then
+		if iLeaderLineStyle = LINE_SINGLE then
+			line2 0, _startLeaderLine, 0, listTextTopDistance_mm
+		else
+			line2 thkLeaderLine_mm/2,	_startLeaderLine,  thkLeaderLine_mm/2, listTextTopDistance_mm
+			line2 -thkLeaderLine_mm/2,	_startLeaderLine, -thkLeaderLine_mm/2, listTextTopDistance_mm
+		endif
+	
+		hotspot2  0, 0, unID : unID = unID + 1
+		hotline2 0, _startLeaderLine-lengthExtensionLine_mm, 0, listTextTopDistance_mm
+	else
+		if iLeaderLineStyle = LINE_SINGLE then
+			line2 0, _startLeaderLine, 0, _distanceLabelHead_mm
+		else
+			line2 thkLeaderLine_mm/2,	_startLeaderLine + _modDoubleLine,  thkLeaderLine_mm/2, _distanceLabelHead_mm
+			line2 -thkLeaderLine_mm/2,	_startLeaderLine - _modDoubleLine, -thkLeaderLine_mm/2, _distanceLabelHead_mm
+		endif
+
+		if not(bExtLineParallel) then
+			hotspot2  0, 0, unID : unID = unID + 1
+		else
+			unID = unID + 1
+		endif
+
+		hotline2 0, _startLeaderLine-lengthExtensionLine_mm, 0, _distanceLabelHead_mm
+	endif
+return
+
+! ==============================================================================
+"usePharagraph" :
+! ------------------------------------------------------------------------------
+! input for paragraph:
+! 		_iAlignment					! 1: left aligned, 2: center aligned, 3: right aligned, 4: full justified
+!		_penindex					! text pen
+!		_ratioLineSpace				! (character size + distance to the next line) defined by the actual style will be multiplied by this number
+!		xFirstIndentParagraph		! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+!		xLeftIndentParagraph		! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+!		xRightIndentParagraph		! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+!		xTabPositionParagraph		! consecutive tabulator positions (each relative to the beginning of the paragraph). Default values (0) are used (12.7 mm). Works only with '\t' special character.
+!		sContentStrings[][30]		! content column strings
+!		_sStyleContentPG[][30]			! style for content
+!
+! input for textblock:
+!		_widthTextBlock				! textblock width in mm or m in model space, if 0 it is calculated automatically
+!		anglePosition				! rotation angle of the textblock in degrees
+!		_iReferencePoint				! code of the position point in the text 1-9
+!		widthFactorTextBlock		! width_factor: Character widths defined by the actual style will be multiplied by this number		
+!		charspaceFactorTextBlock	! charspace_factor: The horizontal distance between two characters will be multiplied by this number! output:
+!		iFixedHeightTextBlock		! fixed_height: Possible values: 	1: the placed TEXTBLOCK will be scale-independent and all specified length type parameters will mean millimeters, !
+!		 																0: the placed TEXTBLOCK will be scale-dependent and all specified length type parameters will mean meters in model space
+!		_drawRichText				! use richtext (1) or just calculate textblock sizes (0)
+! output:
+!		texbox sizes - _widthTB, _heightTB
+! ==============================================================================
+	pen _penindex
+
+	doSplit = '\n'
+
+	_stNamePG 			= "nameParaGraph"
+	_iAlignPG 			= _iAlignment				! 1: left aligned, 2: center aligned, 3: right aligned, 4: full justified
+	_xFirstIndentPG	 	= xFirstIndentParagraph		! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+	_xLeftIndentPG 		= xLeftIndentParagraph		! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+	_xRightIndentPG 	= xRightIndentParagraph		! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+	_ratioLineSpacePG	= _ratioLineSpace		! (character size + distance to the next line) defined by the actual style will be multiplied by this number
+	_xTabPosPG	 		= xTabPositionParagraph		! consecutive tabulator positions (each relative to the beginning of the paragraph). Default values (0) are used (12.7 mm). Works only with '\t' special character.
+	_penindexPG			= _penindex
+
+	if _usePrefixChapter = 1 then
+		paragraph _stNamePG _iAlignPG,
+			_xFirstIndentPG, _xLeftIndentPG, _xRightIndentPG,
+			_ratioLineSpacePG, _xTabPosPG,
+			_penindexPG
+			style _sStylePrefixPG[i]
+			_sPrefixStringsPG[i]
+		endparagraph
+	else
+		paragraph _stNamePG _iAlignPG,
+			_xFirstIndentPG, _xLeftIndentPG, _xRightIndentPG,
+			_ratioLineSpacePG, _xTabPosPG,
+			_penindexPG
+			style _sStyleContentPG[i][1]
+			_sContentStringsPG[i][1]
+			style _sStyleContentPG[i][2]
+			_sContentStringsPG[i][2]
+			style _sStyleContentPG[i][3]
+			_sContentStringsPG[i][3]
+			style _sStyleContentPG[i][4]
+			_sContentStringsPG[i][4]
+			style _sStyleContentPG[i][5]
+			_sContentStringsPG[i][5]
+			style _sStyleContentPG[i][6]
+			_sContentStringsPG[i][6]
+			style _sStyleContentPG[i][7]
+			_sContentStringsPG[i][7]
+			style _sStyleContentPG[i][8]
+			_sContentStringsPG[i][8]
+			style _sStyleContentPG[i][9]
+			_sContentStringsPG[i][9]
+			style _sStyleContentPG[i][10]
+			_sContentStringsPG[i][10]
+			style _sStyleContentPG[i][11]
+			_sContentStringsPG[i][11]
+			style _sStyleContentPG[i][12]
+			_sContentStringsPG[i][12]
+			style _sStyleContentPG[i][13]
+			_sContentStringsPG[i][13]
+			style _sStyleContentPG[i][14]
+			_sContentStringsPG[i][14]
+			style _sStyleContentPG[i][15]
+			_sContentStringsPG[i][15]
+			style _sStyleContentPG[i][16]
+			_sContentStringsPG[i][16]
+			style _sStyleContentPG[i][17]
+			_sContentStringsPG[i][17]
+			style _sStyleContentPG[i][18]
+			_sContentStringsPG[i][18]
+			style _sStyleContentPG[i][19]
+			_sContentStringsPG[i][19]
+			style _sStyleContentPG[i][20]
+			_sContentStringsPG[i][20]
+			style _sStyleContentPG[i][21]
+			_sContentStringsPG[i][21]
+			style _sStyleContentPG[i][22]
+			_sContentStringsPG[i][22]
+			style _sStyleContentPG[i][23]
+			_sContentStringsPG[i][23]
+			style _sStyleContentPG[i][24]
+			_sContentStringsPG[i][24]
+			style _sStyleContentPG[i][25]
+			_sContentStringsPG[i][25]
+			style _sStyleContentPG[i][26]
+			_sContentStringsPG[i][26]
+			style _sStyleContentPG[i][27]
+			_sContentStringsPG[i][27]
+			style _sStyleContentPG[i][28]
+			_sContentStringsPG[i][28]
+			style _sStyleContentPG[i][29]
+			_sContentStringsPG[i][29]
+			style _sStyleContentPG[i][30]
+			_sContentStringsPG[i][30]
+		endparagraph
+	endif
+
+	_stNameTB			= "nameTextBlock"
+	_widthTB			= _widthTextBlock
+	_angleTB			= 0
+	if _angleTB < 180-EPS then
+		_iAnchorTB	= _iReferencePoint
+	else
+		_iAnchorTB  = 5
+		if _iReferencePoint	= 1 then _iAnchorTB = 9
+		if _iReferencePoint	= 2 then _iAnchorTB = 8
+		if _iReferencePoint	= 3 then _iAnchorTB = 7
+		if _iReferencePoint	= 4 then _iAnchorTB = 6
+		if _iReferencePoint	= 6 then _iAnchorTB = 4
+		if _iReferencePoint	= 7 then _iAnchorTB = 3
+		if _iReferencePoint	= 8 then _iAnchorTB = 2
+		if _iReferencePoint	= 9 then _iAnchorTB = 1
+	endif
+	_ratioWidthTB		= widthFactorTextBlock			! width_factor: Character widths defined by the actual style will be multiplied by this number
+	_ratioCharspaceTB	= charspaceFactorTextBlock		! charspace_factor: The horizontal distance between two characters will be multiplied by this number
+	_iScale 			= iFixedHeightTextBlock			! fixed_height: Possible values: 		1: the placed TEXTBLOCK will be scale-independent and all specified length type parameters will mean millimeters, 
+														!		 								0: the placed TEXTBLOCK will be scale-dependent and all specified length type parameters will mean meters in model space.
+
+	textblock _stNameTB _widthTB,
+		_iAnchorTB, _angleTB, _ratioWidthTB, _ratioCharspaceTB, _iScale,
+		_stNamePG
+
+	rrr = REQUEST ("TEXTBLOCK_INFO", _stNameTB, _widthTB, _heightTB)
+
+	if _drawRichText then
+		richtext2 _xPosTB, _yPosTB, _stNameTB
+	endif
+return
+
+! ==============================================================================
+! Segment - Segment intersection
+! ==============================================================================
+! Input:
+!	line1X1:		line1 startpoint X
+!	line1Y1:		line1 startpoint Y
+!	line1X2:		line1 endpoint X
+!	line1Y2:		line1 endpoint Y
+!	line2X1:		line2 startpoint X
+!	line2Y1:		line2 startpoint Y
+!	line2X2:		line2 endpoint X
+!	line2Y2:		line2 endpoint Y
+!
+! Output:
+!	ret:			output status
+!						-1: no intersection, segments is not paralel
+!						 0: no intersection, parallel segments
+!						 1: intersection point lies on S1 segment, but not lies on S2
+!						 2: intersection point lies on S2 segment, but not lies on S1
+!						 3: intersection point lies on both segments
+!	cx:				intersection point X
+!	cy:				intersection point Y
+! ==============================================================================
+
+"segment_segment_intersection":
+	gosub "line_line_intersection"	! Intersection of Line - Line
+
+	if state then
+		state = 0
+
+		if abs(line1X1 - line1X2) < EPS then
+			if (line1Y1-EPS <= cy & cy <= line1Y2+EPS) | (line1Y1+EPS >= cy & cy >= line1Y2-EPS) then state = 1
+		else
+			if (line1X1-EPS <= cx & cx <= line1X2+EPS) | (line1X1+EPS >= cx & cx >= line1X2-EPS) then state = 1
+		endif
+		if abs(line2X1 - line2X2) < EPS then
+			if (line2Y1-EPS <= cy & cy <= line2Y2+EPS) | (line2Y1+EPS >= cy & cy >= line2Y2-EPS) then state = state + 2
+		else
+			if (line2X1-EPS <= cx & cx <= line2X2+EPS) | (line2X1+EPS >= cx & cx >= line2X2-EPS) then state = state + 2
+		endif
+
+		if state = 0 then state = -1
+	endif
+return
+
+! ==============================================================================
+! Line - Line intersection
+! ==============================================================================
+! Input:
+!	line1X1:		line1 startpoint X
+!	line1Y1:		line1 startpoint Y
+!	line1X2:		line1 endpoint X
+!	line1Y2:		line1 endpoint Y
+!	line2X1:		line2 startpoint X
+!	line2Y1:		line2 startpoint Y
+!	line2X2:		line2 endpoint X
+!	line2Y2:		line2 endpoint Y
+!
+! Output:
+!	state:			output status
+!						 0: no intersection, parallel lines
+!						 1: lines are intersects
+!	cx:				intersection point X
+!	cy:				intersection point Y
+! ==============================================================================
+
+"line_line_intersection":
+
+	lliDiv = (line1X1-line1X2) * (line2Y1-line2Y2) - (line1Y1-line1Y2) * (line2X1-line2X2)
+
+	if abs(lliDiv) > EPS then
+		! Intersection
+
+		temp1 = line1X1 * line1Y2 - line1Y1 * line1X2
+		temp2 = line2X1 * line2Y2 - line2Y1 * line2X2
+
+		tempx = temp1 * (line2X1-line2X2) - (line1X1-line1X2) * temp2
+		tempy = temp1 * (line2Y1-line2Y2) - (line1Y1-line1Y2) * temp2
+
+		state = 1
+		cx = (tempx / lliDiv)
+		cy = (tempy / lliDiv)
+	else
+		! No Intersection
+		state = 0
+		cx = 0
+		cy = 0
+	endif
+
+return

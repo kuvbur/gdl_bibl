@@ -1,0 +1,654 @@
+
+! Contact person: <BD, BO, NJ>
+
+! =============================================================================
+
+gs_fillFr		= gs_bFills * gs_fillFr
+gs_fillSh		= gs_bFills * gs_fillSash
+gs_penSh_fg		= gs_bFills * gs_penSash_fg
+gs_penSh_bg		= gs_bFills * gs_penSash_bg
+gs_fillShCover	= gs_bFills * gs_fillShCover
+
+
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then		! Demolition
+	gs_symbLineType = gs_Demolition_linetype
+else
+	gs_symbLineType = 1
+endif
+
+line_type gs_symbLineType
+
+
+! =============================================================================
+! GS Corner Window Functions
+! =============================================================================
+
+call "GS Corner Window Functions",
+	parameters all	iWindowShape			= iWindowShape,
+					gs_IsCurved				= gs_IsCurved,
+					bParalellInCurvedWalls	= bParalellInCurvedWalls,
+					bDisabeMirroring		= bDisabeMirroring,
+
+					bLeftCornerFunction		= bLeftCornerFunction,
+					leftCornerAngle			= leftCornerAngle,
+					bLeftDiffConnWall		= bLeftDiffConnWall,
+					leftConnWallThk			= leftConnWallThk,
+					bRightCornerFunction	= bRightCornerFunction,
+					rightCornerAngle		= rightCornerAngle,
+					bRightDiffConnWall		= bRightDiffConnWall,
+					rightConnWallThk		= rightConnWallThk,
+					bOneLineSymbolinMVO		= 1,
+					returned_parameters	ac_unit_width,
+						gs_frame_ovhg_left_out,
+						gs_frame_ovhg_right_out,
+						gs_frame_ovhg_left_in,
+						gs_frame_ovhg_right_in,
+						bMirrored,
+						addPrmX, addPrmY,
+						mulPrmX, mulPrmY,
+						iLoD2D,
+
+						gs_opLinePen,
+						gs_iSwingType,
+						gs_swingLineType,
+						bShowAddHotspots, bShowUnitHotspots,
+						bOneLineSymbolin2D
+
+if iLoD2D = 0 then end
+
+if iTypeDemolitionFill = RENOVATION_FILL_NEW & gs_bShowNewOnCC then end		! New
+
+drawindex 40 	! Draw symbol at the top
+
+bFullSashOpeningIn2D 	= 0
+iSymbolGlassType		= SYMBGLASS_SIMPLEGLASS
+bDrawOnlyOuterSash		= 0
+
+if (iLoD2D = SYMBW_S_1LINE and bOneLineSymbolin2D) | iLoD2D = SYMBW_S_CENTERLINE then
+	bDrawOnlyOuterSash		= 1
+endif
+
+if iLoD2D = SYMBW_D_2GLASS then 				! Detailed --> NOR 50
+	bFullSashOpeningIn2D	= 1
+	iSymbolGlassType		= SYMBGLASS_DOUBLEGLASS
+endif
+
+add2 addPrmX, addPrmY
+mul2 mulPrmX, mulPrmY
+
+mul2 1,-1
+add2 0,WIDO_FRAME_THICKNESS
+
+temp = gs_frame_ovhg_left_out
+gs_frame_ovhg_left_out = gs_frame_ovhg_left_in
+gs_frame_ovhg_left_in = temp
+
+temp = gs_frame_ovhg_right_out
+gs_frame_ovhg_right_out = gs_frame_ovhg_right_in
+gs_frame_ovhg_right_in = temp
+
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then gs_swingLineType = gs_Demolition_linetype	! Demolition
+
+bListView = (GLOB_CONTEXT = 6 | GLOB_CONTEXT = 46)
+
+bShowEndLineLeft  = bListView | not ((gs_tolerance_left > EPS) & gs_stack_left)
+bShowEndLineRight = bListView | not ((gs_tolerance_right > EPS) & gs_stack_right)
+
+pen gs_pen_2D
+if iLoD2D > SYMBW_M_9 then
+	frameWidth = gs_frame_width
+	frameThickness = gs_frame1_thk
+else
+	frameWidth = gs_frame_width - gs_rebate_width + gs_sash_width
+	frameThickness = gs_frame_thk
+endif
+
+if iLoD2D > SYMBW_S_9 then
+	if iLoD2D > SYMBW_M_9 then
+		if iFrameType = FRAME_OFFSET then add2 0, -gs_frame2_thk
+	endif
+
+	! COVER FILL
+	pen gs_pen_2D
+	line_property 0
+	fill gs_fillShCover
+
+	if NOT(bFullSashOpeningIn2D) then
+		poly2_b 4, 1 + 2 + 4 + 64, gs_penShCov_fg, gs_penShCov_bg,
+			-ac_unit_width/2 + gs_frame_width, 0, 0,
+			ac_unit_width/2 - gs_frame_width, 0, 0,
+			ac_unit_width/2 - gs_frame_width, -frameThickness, 0,
+			-ac_unit_width/2 + gs_frame_width, -frameThickness, 0
+	endif
+
+	pen gs_frame_pen
+	line_property 0
+	fill gs_fillFr
+
+	if iFrameType = FRAME_FULL or not(iLoD2D > SYMBW_M_9) then
+		leftFrameCornerModOut = gs_frame_ovhg_left_out
+		leftFrameCornerModIn = gs_frame_ovhg_left_in
+		ratioLeft = ((gs_frame_ovhg_left_out - gs_frame_ovhg_left_in) / WALL_THICKNESS)
+	else
+		ratioLeft = ((gs_frame_ovhg_left_out - gs_frame_ovhg_left_in) / gs_frame_thk)
+		if iFrameType = FRAME_OFFSET then
+			if WIDO_REVEAL_SIDE then
+				leftFrameCornerModOut	= gs_frame_ovhg_left_in + ratioLeft * (gs_frame1_thk + gs_frame2_thk)
+				leftFrameCornerModIn	= gs_frame_ovhg_left_in + ratioLeft * gs_frame2_thk
+			else
+				leftFrameCornerModIn	= gs_frame_ovhg_left_in + ratioLeft * gs_frame2_thk
+				leftFrameCornerModOut	= gs_frame_ovhg_left_in + ratioLeft * (gs_frame1_thk + gs_frame2_thk)
+			endif
+		else
+			if WIDO_REVEAL_SIDE then
+				leftFrameCornerModOut	= gs_frame_ovhg_left_out
+				leftFrameCornerModIn	= gs_frame_ovhg_left_in + ratioLeft * (gs_frame2_thk)
+			else
+				leftFrameCornerModIn	= gs_frame_ovhg_left_in + ratioLeft * (gs_frame2_thk)
+				leftFrameCornerModOut	= gs_frame_ovhg_left_in + ratioLeft * (gs_frame1_thk + gs_frame2_thk)
+			endif
+		endif
+	endif
+
+	! Left frame
+	poly2_b 6, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+		-ac_unit_width/2, 0, 32 + 1,
+		-ac_unit_width/2, 0, 32 + 1,
+		-ac_unit_width/2 + frameWidth, 0, 32 + 1,
+		-ac_unit_width/2 + frameWidth, -frameThickness, 32 + 1,
+		-ac_unit_width/2, -frameThickness, 32 + 1,
+		-ac_unit_width/2, -frameThickness, 32 + bShowEndLineLeft
+
+	if (leftFrameCornerModOut > EPS) | (leftFrameCornerModIn > EPS) then
+		if (leftFrameCornerModOut > EPS) then put -ac_unit_width/2 - leftFrameCornerModOut,	 0,	32 + 1
+		put -ac_unit_width/2,  0,				32 + 1
+		put -ac_unit_width/2, -frameThickness,	32 + (bShowEndLineLeft | (leftFrameCornerModIn > EPS))
+		if (leftFrameCornerModIn > EPS) then put -ac_unit_width/2 - leftFrameCornerModIn, -frameThickness,	32 + bShowEndLineLeft
+
+		poly2_b nsp/3, 1 + 2*bLeftCornerFunction + 4 + 16 + 32, gs_penFr_fg, gs_penFr_bg,
+				get(nsp)
+	endif
+
+	if iFrameType = FRAME_FULL or not(iLoD2D > SYMBW_M_9) then
+		rightFrameCornerModOut = gs_frame_ovhg_right_out
+		rightFrameCornerModIn = gs_frame_ovhg_right_in
+		ratioRight = ((gs_frame_ovhg_right_out - gs_frame_ovhg_right_in) / WALL_THICKNESS)
+	else
+		ratioRight = ((gs_frame_ovhg_right_out - gs_frame_ovhg_right_in) / gs_frame_thk)
+		if iFrameType = FRAME_OFFSET then
+			if WIDO_REVEAL_SIDE then
+				rightFrameCornerModOut	= gs_frame_ovhg_right_in + ratioRight * (gs_frame1_thk + gs_frame2_thk)
+				rightFrameCornerModIn	= gs_frame_ovhg_right_in + ratioRight * gs_frame2_thk
+			else
+				rightFrameCornerModIn	= gs_frame_ovhg_right_in + ratioRight * gs_frame2_thk
+				rightFrameCornerModOut	= gs_frame_ovhg_right_in + ratioRight * (gs_frame1_thk + gs_frame2_thk)
+			endif
+		else
+			if WIDO_REVEAL_SIDE then
+				rightFrameCornerModOut	= gs_frame_ovhg_right_out
+				rightFrameCornerModIn	= gs_frame_ovhg_right_in + ratioRight * (gs_frame2_thk)
+			else
+				rightFrameCornerModIn	= gs_frame_ovhg_right_in + ratioRight * (gs_frame2_thk)
+				rightFrameCornerModOut	= gs_frame_ovhg_right_in + ratioRight * (gs_frame1_thk + gs_frame2_thk)
+			endif
+		endif
+	endif
+
+	!Right frame
+	poly2_b 6, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+		ac_unit_width/2, 0, 32 + 1,
+		ac_unit_width/2, 0, 32 + 1,
+		ac_unit_width/2 - frameWidth, 0, 32 + 1,
+		ac_unit_width/2 - frameWidth, -frameThickness, 32 + 1,
+		ac_unit_width/2, -frameThickness, 32 + 1,
+		ac_unit_width/2, -frameThickness, 32 + bShowEndLineRight
+
+	if (rightFrameCornerModOut > EPS) | (rightFrameCornerModIn > EPS) then
+		if (rightFrameCornerModOut > EPS) then put ac_unit_width/2 + rightFrameCornerModOut,	 0,	32 + 1
+		put ac_unit_width/2,  0,				32 + 1
+		put ac_unit_width/2, -frameThickness,	32 + (bShowEndLineRight | (rightFrameCornerModIn > EPS))
+		if (rightFrameCornerModIn > EPS) then put ac_unit_width/2 + rightFrameCornerModIn, -frameThickness,	32 + bShowEndLineRight
+
+		poly2_b nsp/3, 1 + 2*(bRightCornerFunction | bCornerWindow) + 4 + 16 + 32, gs_penFr_fg, gs_penFr_bg,
+				get(nsp)
+	endif
+
+	if iLoD2D > SYMBW_M_9 then
+		if iFrameType = FRAME_OFFSET then del 1
+	endif
+
+	if iLoD2D = SYMBW_M_2LINE_GLASS and abs(gs_open_2D) < EPS then
+		line2 -ac_unit_width/2 + frameWidth, -frameThickness / 2, ac_unit_width/2 - frameWidth, -frameThickness / 2
+	endif
+endif
+
+!---- 1:100 or 1:200
+if iLoD2D < SYMBW_D_SGLASS then
+	pen gs_frame_pen
+
+	if WIDO_REVEAL_SIDE then
+		line2  -ac_unit_width / 2 - gs_frame_ovhg_left_out,	0,
+				ac_unit_width / 2 + gs_frame_ovhg_right_out, 0
+	else
+		line2  -ac_unit_width / 2 - gs_frame_ovhg_left_in, 0,
+				ac_unit_width / 2 + gs_frame_ovhg_right_in, 0
+	endif
+
+	if NOT(bDrawOnlyOuterSash) then
+		if WIDO_REVEAL_SIDE then
+			line2 -ac_unit_width / 2, -frameThickness, ac_unit_width / 2, -frameThickness
+		else
+			line2 -ac_unit_width / 2, -frameThickness, ac_unit_width / 2, -frameThickness
+		endif
+	endif
+endif
+
+!---- 1:50
+if iLoD2D > SYMBW_M_9 then
+	if iFrameType = FRAME_OFFSET then add2 0, -gs_frame2_thk
+
+	if iFrameType = FRAME_OFFSET then
+		_bLeftOuterFrameFull	= 0
+		_bRightOuterFrameFull	= 0
+	else
+		if (bLeftCornerFunction) and not(gs_corner_column) then
+			if (gs_frame_ovhg_left_in < gs_frame_ovhg_left_out) then
+				_bLeftOuterFrameFull	= 1
+			else	
+				_bLeftOuterFrameFull	= 0
+			endif	
+		else
+			_bLeftOuterFrameFull	= 1
+		endif
+
+		if (bRightCornerFunction | bCornerWindow) and not(gs_corner_column) then
+			if (gs_frame_ovhg_right_in < gs_frame_ovhg_right_out) then
+				_bRightOuterFrameFull	= 1
+			else
+				_bRightOuterFrameFull	= 0
+			endif
+		else
+			_bRightOuterFrameFull	= 1
+		endif
+	endif
+	
+	if	iFrameType = FRAME_FULL | \
+		iFrameType = FRAME_CORNER & gs_frame2_thk >= WALL_THICKNESS | \
+		iFrameType = FRAME_OFFSET & (AC_wido_sill + gs_frame2_thk + gs_rebate_depth) >= WALL_THICKNESS then
+	
+		if iFrameType = FRAME_FULL then
+			if (gs_frame_ovhg_left_in < gs_frame_ovhg_left_out) then
+				_bLeftInnerFrameFull	= 0
+			else
+				_bLeftInnerFrameFull	= 1
+			endif
+		else
+			_bLeftInnerFrameFull	= 1
+		endif
+
+		if iFrameType = FRAME_FULL then
+			if (gs_frame_ovhg_right_in < gs_frame_ovhg_right_out) then
+				_bRightInnerFrameFull	= 0
+			else
+				_bRightInnerFrameFull	= 1
+			endif
+		else
+			if (bCornerWindow and (gs_frame_ovhg_right_in > gs_frame_ovhg_right_out)) | not(bCornerWindow) then
+				_bRightInnerFrameFull	= 1
+			else
+				_bRightInnerFrameFull	= 0
+			endif
+		endif
+	else
+		_bLeftInnerFrameFull	= 0
+		_bRightInnerFrameFull	= 0
+	endif
+
+	! FRAME
+
+	pen gs_frame_pen
+	line_property 0
+	fill gs_fillFr
+
+	leftFrameCornerModIn1 = 0
+	leftFrameCornerModIn2 = 0
+	leftFrameCornerModOut2 = 0
+	leftFrameCornerModOut1 = 0
+	if bLeftCornerFunction and not(gs_corner_column) then
+		if iFrameType = FRAME_OFFSET then
+			if WIDO_REVEAL_SIDE then
+				leftFrameCornerModIn1 = gs_frame_ovhg_left_in + ratioLeft * gs_frame2_thk
+				leftFrameCornerModIn2 = gs_frame_ovhg_left_in
+				leftFrameCornerModOut2 = gs_frame_ovhg_left_out
+				leftFrameCornerModOut1 = gs_frame_ovhg_left_in + ratioLeft * (gs_frame1_thk + gs_frame2_thk)
+			else
+				leftFrameCornerModOut1 = gs_frame_ovhg_left_in + ratioLeft * (gs_frame1_thk + gs_frame2_thk)
+				leftFrameCornerModOut2 = gs_frame_ovhg_left_out
+				leftFrameCornerModIn2 = gs_frame_ovhg_left_in
+				leftFrameCornerModIn1 = gs_frame_ovhg_left_in + ratioLeft * gs_frame2_thk
+			endif
+		endif
+		if iFrameType = FRAME_CORNER then
+			if WIDO_REVEAL_SIDE then
+				leftFrameCornerModIn1 = gs_frame_ovhg_left_in + ratioLeft * gs_frame2_thk
+				leftFrameCornerModIn2 = gs_frame_ovhg_left_in
+				if (gs_frame_ovhg_left_in > gs_frame_ovhg_left_out) then
+					leftFrameCornerModOut2 = -gs_frame_ovhg_left_in - ratioLeft * gs_frame1_thk
+					leftFrameCornerModOut1 = -gs_frame_ovhg_left_out
+				endif
+			else
+				leftFrameCornerModIn2 = gs_frame_ovhg_left_in
+				leftFrameCornerModIn1 = gs_frame_ovhg_left_in + ratioLeft * gs_frame2_thk
+			endif
+		endif
+
+		if iFrameType = FRAME_FULL then
+			if WIDO_REVEAL_SIDE then
+				if (gs_frame_ovhg_left_in < gs_frame_ovhg_left_out) then
+					leftFrameCornerModIn2 = -gs_frame_ovhg_left_in - ratioLeft * gs_frame2_thk
+				else
+					leftFrameCornerModOut2 = ratioLeft * gs_frame2_thk
+				endif
+			endif
+		endif
+	endif
+
+	rightFrameCornerModIn1 = 0
+	rightFrameCornerModIn2 = 0
+	rightFrameCornerModOut2 = 0
+	rightFrameCornerModOut1 = 0
+	if (bRightCornerFunction | bCornerWindow) and not(gs_corner_column) then
+		if iFrameType = FRAME_OFFSET then
+			if WIDO_REVEAL_SIDE then
+				rightFrameCornerModIn1 = -gs_frame_ovhg_right_in - ratioRight * gs_frame2_thk
+				rightFrameCornerModIn2 = -gs_frame_ovhg_right_in
+				rightFrameCornerModOut1 = -gs_frame_ovhg_right_out
+				rightFrameCornerModOut2 = -gs_frame_ovhg_right_in - ratioRight * (gs_frame1_thk + gs_frame2_thk)
+			else
+				rightFrameCornerModOut1 = gs_frame_ovhg_right_in + ratioRight * (gs_frame1_thk + gs_frame2_thk)
+				rightFrameCornerModOut2 = gs_frame_ovhg_right_out
+				rightFrameCornerModIn2 = gs_frame_ovhg_right_in
+				rightFrameCornerModIn1 = gs_frame_ovhg_right_in + ratioRight * gs_frame2_thk
+			endif
+		endif
+		if iFrameType = FRAME_CORNER then
+			if WIDO_REVEAL_SIDE then
+				if (gs_frame_ovhg_right_in > gs_frame_ovhg_right_out) then
+					rightFrameCornerModIn1 = gs_frame_ovhg_right_out + ratioRight * gs_frame1_thk
+					rightFrameCornerModIn2 = -gs_frame_ovhg_right_in
+
+					rightFrameCornerModOut2 = -gs_frame_ovhg_right_out
+					rightFrameCornerModOut1 = gs_frame_ovhg_right_in + ratioRight * gs_frame1_thk
+				else
+					rightFrameCornerModIn1 = -gs_frame_ovhg_right_out + ratioRight * gs_frame1_thk
+					rightFrameCornerModIn2 = gs_frame_ovhg_right_in
+				endif
+			else
+				rightFrameCornerModIn2 = gs_frame_ovhg_right_out
+				rightFrameCornerModIn1 = gs_frame_ovhg_right_in + ratioRight * gs_frame2_thk
+			endif
+		endif
+		if iFrameType = FRAME_FULL then
+			if WIDO_REVEAL_SIDE then
+				if (gs_frame_ovhg_right_in > gs_frame_ovhg_right_out) then
+					rightFrameCornerModOut1 = -ratioRight * gs_frame2_thk
+				else
+					rightFrameCornerModIn2 = ratioRight * gs_frame2_thk
+				endif
+			endif
+		endif
+	endif
+
+	! Left Outer frame
+		poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+			-ac_unit_width/2 + gs_frame_width - gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), 0, 32 + 1,
+			-ac_unit_width/2 + gs_frame_width - gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), gs_frame2_thk, 32 + 1,
+			-ac_unit_width/2 + _bLeftOuterFrameFull * (gs_frame_width - gs_rebate_width - gs_frame2_width) - leftFrameCornerModOut2, gs_frame2_thk, 32 + 1,
+			-ac_unit_width/2 + _bLeftOuterFrameFull * (gs_frame_width - gs_rebate_width - gs_frame2_width) - leftFrameCornerModOut1, 0, 32 + 1
+
+	! Right Outer frame
+	if iFrameType = FRAME_OFFSET | (iFrameType <> FRAME_OFFSET and gs_frame_width - gs_rebate_width > rightFrameCornerModOut1) then
+		poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+			ac_unit_width/2 - gs_frame_width + gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), 0, 32 + 1,
+			ac_unit_width/2 - gs_frame_width + gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), gs_frame2_thk, 32 + 1,
+			ac_unit_width/2 + _bRightOuterFrameFull * (-gs_frame_width + gs_rebate_width + gs_frame2_width) - rightFrameCornerModOut1, gs_frame2_thk, 32 + 1,
+			ac_unit_width/2 + _bRightOuterFrameFull * (-gs_frame_width + gs_rebate_width + gs_frame2_width) - rightFrameCornerModOut2, 0, 32 + 1
+	else
+		poly2_b 3, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+			ac_unit_width/2 - gs_frame_width + gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), 0, 32 + 1,
+			ac_unit_width/2 + _bRightOuterFrameFull * (-gs_frame_width + gs_rebate_width + gs_frame2_width) + gs_rebate_width - gs_frame_width, (gs_rebate_width - gs_frame_width) / ratioRight, 32 + 1,
+			ac_unit_width/2 + _bRightOuterFrameFull * (-gs_frame_width + gs_rebate_width + gs_frame2_width) - rightFrameCornerModOut2, 0, 32 + 1
+	endif
+
+	add2 0, -gs_frame1_thk
+	! Left Inner frame
+		poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+			-ac_unit_width/2 + gs_frame_width - gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), 0, 32 + 1,
+			-ac_unit_width/2 + gs_frame_width - gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), -gs_frame2_thk, 32 + 1,
+			-ac_unit_width/2 + _bLeftInnerFrameFull * (gs_frame_width - gs_rebate_width - gs_frame2_width) - leftFrameCornerModIn2, -gs_frame2_thk, 32 + 1,
+			-ac_unit_width/2 + _bLeftInnerFrameFull * (gs_frame_width - gs_rebate_width - gs_frame2_width) - leftFrameCornerModIn1, 0, 32 + 1
+
+	! Right Inner frame
+	if iFrameType = FRAME_OFFSET | (iFrameType <> FRAME_OFFSET and gs_frame_width - gs_rebate_width > rightFrameCornerModIn2) then
+		poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+			ac_unit_width/2 - gs_frame_width + gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), 0, 32 + 1,
+			ac_unit_width/2 - gs_frame_width + gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), -gs_frame2_thk, 32 + 1,
+			ac_unit_width/2 + _bRightInnerFrameFull * (-gs_frame_width + gs_rebate_width + gs_frame2_width) - rightFrameCornerModIn2, -gs_frame2_thk, 32 + 1,
+			ac_unit_width/2 + _bRightInnerFrameFull * (-gs_frame_width + gs_rebate_width + gs_frame2_width) - rightFrameCornerModIn1, 0, 32 + 1
+	else
+		poly2_b 3, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+			ac_unit_width/2 - gs_frame_width + gs_rebate_width*(gs_optype_m_01 <> SASH_FIXED), 0, 32 + 1,
+			ac_unit_width/2 + _bRightInnerFrameFull * (-gs_frame_width + gs_rebate_width + gs_frame2_width) + gs_rebate_width - gs_frame_width, (gs_rebate_width - gs_frame_width) / ratioRight, 32 + 1,
+			ac_unit_width/2 + _bRightInnerFrameFull * (-gs_frame_width + gs_rebate_width + gs_frame2_width) - rightFrameCornerModIn1, 0, 32 + 1
+	endif
+	del 1
+
+
+	if gs_optype_m_01 = SASH_FIXED then
+		sashWidth = ac_unit_width - 2*(gs_frame_width - gs_sash_width)
+	else
+		sashWidth = ac_unit_width - 2*(gs_frame_width - gs_rebate_width)
+	endif
+
+	OUTERSASH	= 1
+	INNERSASH	= 2
+	for ii = OUTERSASH to INNERSASH
+		gosub "drawSash"
+	next ii
+
+	if iFrameType = FRAME_OFFSET then del 1
+endif
+
+
+!--- Opening lines
+! Outer sash
+line_type gs_symbLineType
+
+add2 0, -gs_frame_thk/2
+
+if iLoD2D > SYMBW_M_9 then					!!1:50
+	sashop_width = sashWidth
+	sashop_yoffs = gs_sash_thk
+	if iFrameType = FRAME_CORNER then add2 0, gs_frame2_thk/2
+else
+	sashop_width = ac_unit_width - 2*gs_frame_width + 2*gs_rebate_width - 2*gs_sash_width
+	sashop_yoffs = -gs_frame_thk / 2 * (iLoD2D = SYMBW_M_2LINE_GLASS)
+	if iFrameType = FRAME_CORNER then
+		sashop_yoffs = gs_frame2_thk / 2 - gs_frame_thk / 2 * (iLoD2D = SYMBW_M_2LINE_GLASS)
+	endif
+	if iFrameType = FRAME_OFFSET then
+		sashop_yoffs = gs_frame2_thk - gs_frame_thk / 2 * (iLoD2D = SYMBW_M_2LINE_GLASS)
+	endif
+endif
+
+!!! Opening line hotspot editings
+
+if gs_optype_m_01 <> SASH_FIXED then
+	if gs_optype_m_01 = SASH_SIDE_HUNG then
+		mul2 -1,1
+
+		unID = 500
+		hotspot2 - sashop_width/2, 	sashop_yoffs + gs_frame1_thk/2, unID,		gs_open_2D, 6			! Center
+		hotspot2 sashop_width/2,  	sashop_yoffs + gs_frame1_thk/2, unID + 1,	gs_open_2D, 4+128		! Base
+		hotspot2 - sashop_width/2+sashop_width*cos(gs_open_2D), \
+					sashop_yoffs + gs_frame1_thk/2 + sashop_width*sin(gs_open_2D), \
+					unID + 2, gs_open_2D,5						! Moving
+
+		unID = 503
+		if NOT(bDrawOnlyOuterSash) then
+			hotspot2 - sashop_width/2, - sashop_yoffs - gs_frame1_thk/2, unID,		gs_open_2D, 6 + 512		! Center
+			hotspot2 sashop_width/2,  - sashop_yoffs - gs_frame1_thk/2, unID + 1,	gs_open_2D, 4+128		! Base
+			hotspot2 - sashop_width/2+sashop_width*cos(gs_open_2D), \
+						- sashop_yoffs - gs_frame1_thk/2 - sashop_width*sin(gs_open_2D), \
+						unID + 2, gs_open_2D,5						! Moving
+		endif
+	else
+		unID = 500
+		hotspot2 - sashop_width/2, 	-sashop_yoffs - gs_frame1_thk/2, unID,		gs_open_2D, 6			! Center
+		hotspot2 sashop_width/2,  	-sashop_yoffs - gs_frame1_thk/2, unID + 1,	gs_open_2D, 4+128		! Base
+		hotspot2 - sashop_width/2+sashop_width*cos(gs_open_2D), \
+					-(sashop_yoffs + gs_frame1_thk/2 + sashop_width*sin(gs_open_2D)), \
+					unID + 2, gs_open_2D,5						! Moving
+
+		unID = 503
+		if NOT(bDrawOnlyOuterSash) then
+			hotspot2 - sashop_width/2, + sashop_yoffs + gs_frame1_thk/2, unID,		gs_open_2D, 6 + 512		! Center
+			hotspot2 sashop_width/2,  + sashop_yoffs + gs_frame1_thk/2, unID + 1,	gs_open_2D, 4+128		! Base
+			hotspot2 - sashop_width/2+sashop_width*cos(gs_open_2D), \
+						-(- sashop_yoffs - gs_frame1_thk/2 - sashop_width*sin(gs_open_2D)), \
+						unID + 2, gs_open_2D,5						! Moving
+		endif
+	endif
+	if gs_open_2D > 0 then
+
+		pen gs_opLinePen
+		line_type gs_symbLineType
+
+		!!! Sash lines
+		if NOT(bFullSashOpeningIn2D ) then
+			line2	-sashop_width/2, sashop_yoffs + gs_frame1_thk/2,
+					-sashop_width/2 + sashop_width * COS(gs_open_2D), sashop_yoffs + gs_frame1_thk/2 + sashop_width * SIN(gs_open_2D)
+			if NOT(bDrawOnlyOuterSash) then
+				line2	-sashop_width/2, - sashop_yoffs - gs_frame1_thk/2,
+						-sashop_width/2 + sashop_width * COS(gs_open_2D), - sashop_yoffs - gs_frame1_thk/2 - sashop_width * SIN(gs_open_2D)
+			endif
+		endif
+
+		!!! Swing lines
+		pen gs_opLinePen
+		line_type gs_swingLineType
+
+		if gs_iSwingType = 1 then			!!!arch
+			if gs_open_2D > ASN(gs_sash_thk / sashop_width) * bFullSashOpeningIn2D then
+				arc2 -sashop_width/2, sashop_yoffs + gs_frame1_thk/2, sashop_width, 0, gs_open_2D - ASN(gs_sash_thk / sashop_width) * bFullSashOpeningIn2D
+				if NOT(bDrawOnlyOuterSash) then
+					arc2 -sashop_width/2,  - sashop_yoffs - gs_frame1_thk/2, sashop_width, -gs_open_2D + ASN(gs_sash_thk / sashop_width) * bFullSashOpeningIn2D, 0
+				endif
+			endif
+		endif
+		if gs_iSwingType = 2 then			!!!line
+			line2	sashop_width/2, sashop_yoffs + gs_frame1_thk/2,
+					-sashop_width/2 + sashop_width * COS(gs_open_2D) + gs_sash_thk * sin(gs_open_2D) * bFullSashOpeningIn2D, sashop_yoffs + gs_frame1_thk/2 + sashop_width * SIN(gs_open_2D) - gs_sash_thk * cos(gs_open_2D) * bFullSashOpeningIn2D
+			if NOT(bDrawOnlyOuterSash) then
+				line2	sashop_width/2, - sashop_yoffs - gs_frame1_thk/2,
+						-sashop_width/2 + sashop_width * COS(gs_open_2D) + gs_sash_thk * sin(gs_open_2D) * bFullSashOpeningIn2D, - sashop_yoffs - gs_frame1_thk/2 - sashop_width * SIN(gs_open_2D) + gs_sash_thk * cos(gs_open_2D) * bFullSashOpeningIn2D
+			endif
+		endif
+
+	endif
+endif
+
+del 1
+if gs_optype_m_01 = SASH_SIDE_HUNG then
+	del 1
+endif
+
+if iLoD2D > SYMBW_M_9 & iFrameType = FRAME_CORNER then del 1
+
+! =============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! =============================================================================
+
+"drawSash":
+
+	bMirroredSash	= gs_optype_m_01 = SASH_SIDE_HUNG_M
+
+	add2 0, -(gs_frame1_thk + gs_sash_thk) * (ii = INNERSASH)
+
+	pen gs_pen_2D
+	line_property 0
+	fill gs_fillShCover
+
+	if bFullSashOpeningIn2D then
+		if bMirroredSash then
+			add2 -sashWidth/2, gs_sash_thk * (ii = OUTERSASH)
+			rot2 -gs_open_2D * (ii = INNERSASH) + gs_open_2D * (ii = OUTERSASH)
+			add2 sashWidth/2, -gs_sash_thk * (ii = OUTERSASH)
+		else
+			add2 sashWidth/2, gs_sash_thk * (ii = OUTERSASH)
+			rot2 gs_open_2D * (ii = INNERSASH) - gs_open_2D * (ii = OUTERSASH)
+			add2 -sashWidth/2, -gs_sash_thk * (ii = OUTERSASH)
+		endif
+	endif
+
+	if iMullionStyle_01 <> MULLION_SOLID_PANEL then
+		!!! Outer sash cover
+		poly2_b 4, 1 + 2 + 4 + 64, gs_penShCov_fg, gs_penShCov_bg,
+			-sashWidth/2 + gs_sash_width, gs_sash_thk, 1,
+			sashWidth/2 - gs_sash_width, gs_sash_thk, 0,
+			sashWidth/2 - gs_sash_width, 0, 1,
+			-sashWidth/2 + gs_sash_width, 0, 0
+
+		!Glass line
+		if iSymbolGlassType = SYMBGLASS_DOUBLEGLASS then
+			poly2_b 4, 1+2+4+16+32, gs_penFr_fg, gs_penFr_bg,
+				-sashWidth/2 + gs_sash_width, gs_sash_thk/2 - gs_glass_thk / 2, 32 + 1,
+				sashWidth/2 - gs_sash_width, gs_sash_thk/2 - gs_glass_thk / 2, 0,
+				sashWidth/2 - gs_sash_width, gs_sash_thk/2 + gs_glass_thk / 2, 32 + 1,
+				-sashWidth/2 + gs_sash_width, gs_sash_thk/2 + gs_glass_thk / 2, 0
+		else
+			line2 -sashWidth/2 + gs_sash_width, gs_sash_thk/2, sashWidth/2 - gs_sash_width, gs_sash_thk/2
+		endif
+	endif
+
+	pen gs_sash_pen
+	fill gs_fillSash
+	if gs_optype_m_01 <> SASH_FIXED then
+		if iMullionStyle_01 = MULLION_SOLID_PANEL then
+			!Outer sash
+			poly2_b 4, 1+2+4+16+32, gs_penSash_fg, gs_penSash_bg,
+				-sashWidth/2, 0, 32 + 1,
+				-sashWidth/2, gs_sash_thk, 32 + 1,
+				sashWidth/2, gs_sash_thk, 32 + 1,
+				sashWidth/2, 0, 32 + 1
+		else
+			!Outer sash left frame
+			poly2_b 4, 1+2+4+16+32, gs_penSash_fg, gs_penSash_bg,
+				-sashWidth/2, 0, 32 + 1,
+				-sashWidth/2 + gs_sash_width,  0, 32 + 1,
+				-sashWidth/2 + gs_sash_width,  gs_sash_thk, 32 + 1,
+				-sashWidth/2, gs_sash_thk, 32 + 1
+
+			!Outer sash right frame
+			poly2_b 4, 1+2+4+16+32, gs_penSash_fg, gs_penSash_bg,
+				sashWidth/2, 0, 32 + 1,
+				sashWidth/2 - gs_sash_width, 0, 32 + 1,
+				sashWidth/2 - gs_sash_width,  gs_sash_thk, 32 + 1,
+				sashWidth/2, gs_sash_thk, 32 + 1
+		endif
+	else
+		if iMullionStyle_01 = MULLION_SOLID_PANEL then
+			!Outer sash
+			poly2_b 4, 1+2+4+16+32, gs_penSash_fg, gs_penSash_bg,
+				-sashWidth/2 + gs_sash_width, 0, 32 + 1,
+				-sashWidth/2 + gs_sash_width, gs_sash_thk, 32 + 1,
+				sashWidth/2 - gs_sash_width, gs_sash_thk, 32 + 1,
+				sashWidth/2 - gs_sash_width, 0, 32 + 1
+		endif
+	endif
+
+	if bFullSashOpeningIn2D then del 3
+
+	del 1
+
+return

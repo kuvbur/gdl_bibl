@@ -1,0 +1,246 @@
+
+if gs_detlevel_3D_m = DETLEVEL3D_OFF then end
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+!gs_2D_projection_type:
+!	0 - Normal 3D
+!	1 - View Edges
+!	2 - View Polygons
+!	3 - Overhead Edges
+!	4 - Cut Lines
+!	5 - Cut Polygons
+!	6 - Bottom Range Cut Lines
+!	7 - Top Range Cut Lines
+
+nProjectionCut = 0
+if gs_2D_projection then
+	if AC_symb_show_projection_to = PROJECTION_FLOOR_PLAN_RANGE | (AC_symb_show_projection_to = PROJECTION_DISPLAY_LIMIT & gs_bottom_range_height < gs_cutplane_height) then
+		addz gs_bottom_range_height
+		cutplane{2} 180, 2
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+	if gs_2D_projection_type <> 6 then
+		addz gs_cutplane_height
+		cutplane{2} 180 * (gs_2D_projection_type = 3), 1
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+	if AC_symb_show_projection_to <> 3 then
+		addz gs_top_range_height
+		cutplane{2} 0, 2
+		nProjectionCut = nProjectionCut + 1
+		del 1
+	endif
+endif
+
+IF gs_shadow=0 THEN SHADOW OFF
+IF gs_shadow=1 THEN SHADOW ON
+
+unID=1
+gosub 1000
+
+b=zzyzx
+pen gs_pen_3d
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! truss
+
+material gs_truss_mat
+prism_ 5,crh,
+	0,0,15,
+	a,0,15,
+	a,crd,15,
+	0,crd,15,
+	0,0,-1
+
+addz b-crh
+prism_ 5,crh,
+	0,0,15,
+	a,0,15,
+	a,crd,15,
+	0,crd,15,
+	0,0,-1
+del 1
+
+dx=(a-crh)/nn
+
+addz crh
+for n=0 to nn
+	if (gs_detlevel_3D_m = DETLEVEL3D_DETAILED) | (n = 0) | (n = nn) then
+		prism_ 5,b-(2*crh),
+			0,0,15,
+			crh,0,15,
+			crh,crd,15,
+			0,crd,15,
+			0,0,-1
+	endif
+	addx dx
+next n
+del n
+
+del 1
+
+
+if gs_detlevel_3D_m = DETLEVEL3D_DETAILED then
+
+	d1=((dx-crh)*(crh/2))/(b-crh)
+	dx1=sqr(((crh/2)*(crh/2))+(d1*d1))
+	d2=((b-crh)*(crh/2))/(dx-crh)
+	dy1=sqr(((crh/2)*(crh/2))+(d2*d2))
+
+	m=nn/2
+
+	for t=0 to m-1
+		add crh,crd,crh
+		rotx 90
+		prism_ 7,crd,
+			0,b-(2*crh),15,
+			0,b-(2*crh)-dy1,15,
+			dx-crh-dx1,0,15,
+			dx-crh,0,15,
+			dx-crh,dy1,15,
+			dx1,b-(2*crh),15,
+			0,b-(2*crh),-1
+		del 2
+		addx dx
+	next t
+	del t
+
+	addx nn*dx+crh
+	mulx -1
+	for t=0 to m-1
+		add crh,crd,crh
+		rotx 90
+		prism_ 7,crd,
+			0,b-(2*crh),15,
+			0,b-(2*crh)-dy1,15,
+			dx-crh-dx1,0,15,
+			dx-crh,0,15,
+			dx-crh,dy1,15,
+			dx1,b-(2*crh),15,
+			0,b-(2*crh),-1
+		del 2
+		addx dx
+	next t
+	del t
+	del 2
+
+	!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Steel Plates
+
+	if stp then
+		material mat2
+
+		for h=0 to 1
+			for g=0 to 1
+				for f=0 to m-1
+					addz b-(dy1+crh)
+					rotx 90
+					prism_ 6,0.005,
+						0,0,15,
+						crh,0,15,
+						crh+dx1,dy1,15,
+						crh+dx1,dy1+crh,15,
+						0,dy1+crh,15,
+						0,0,-1
+					del 2
+					addx dx
+				next f
+				del f
+
+
+				addx nn*dx+crh
+				mulx -1
+				for f=0 to m-1
+					addz b-(dy1+crh)
+					rotx 90
+					prism_ 6,0.005,
+						0,0,15,
+						crh,0,15,
+						crh+dx1,dy1,15,
+						crh+dx1,dy1+crh,15,
+						0,dy1+crh,15,
+						0,0,-1
+					del 2
+					addx dx
+				next f
+				del f
+				del 2
+				addy crd+0.005
+			next g
+			del g
+			mulz -1
+			addz -b
+		next h
+
+		for j=0 to 1
+			for i=0 to 1
+				addx (a-crh)/2
+				rotx 90
+				prism_ 5,0.005,
+					0,0,15,
+					crh,0,15,
+					crh,dy1+crh,15,
+					0,dy1+crh,15,
+					0,0,-1
+				del 2
+				addz b-(dy1+crh)
+			next i
+			del i
+			mulz -1
+			addz -b
+			addy crd+0.005
+		next j
+		del j
+		del 8
+	endif
+
+	del top
+endif
+
+for i = 1 to nProjectionCut
+	cutend
+next i
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ==============================================================================
+
+1000:
+
+!!---- Hotspot Editing
+hotspot a/2,b/2,0,unID,zzyzx,1+128 : unID=unID+1
+hotspot a/2,b/2,-1,unID,zzyzx,3 : unID=unID+1
+hotspot a/2,b/2,zzyzx,unID,zzyzx,2 : unID=unID+1
+
+hotspot 0, b/2, 0, unID, zzyzx, 1+128:unID=unID+1
+hotspot 0, b/2, -1, unID, zzyzx, 3:unID=unID+1
+hotspot 0, b/2, zzyzx, unID, zzyzx, 2:unID=unID+1
+
+hotspot a, b/2, 0, unID, zzyzx, 1+128:unID=unID+1
+hotspot a, b/2, -1, unID, zzyzx, 3:unID=unID+1
+hotspot a, b/2, zzyzx, unID, zzyzx, 2:unID=unID+1
+
+hotspot 0,b/2,0,unID,a,1+256 : unID=unID+1
+hotspot -1,b/2,0,unID,a,3 : unID=unID+1
+hotspot a,b/2,0,unID,a,2 : unID=unID+1
+
+hotspot 0,0,0,unID,a,1+256 : unID=unID+1
+hotspot -1,0,0,unID,a,3 : unID=unID+1
+hotspot a,0,0,unID,a,2 : unID=unID+1
+
+hotspot 0,b,0,unID,a,1+256 : unID=unID+1
+hotspot -1,b,0,unID,a,3 : unID=unID+1
+hotspot a,b,0,unID,a,2 : unID=unID+1
+
+hotspot 0,0,0,unID,b,1+256 : unID=unID+1
+hotspot 0,-1,0,unID,b,3 : unID=unID+1
+hotspot 0,b,0,unID,b,2 : unID=unID+1
+
+hotspot a,0,0,unID,b,1+256 : unID=unID+1
+hotspot a,-1,0,unID,b,3 : unID=unID+1
+hotspot a,b,0,unID,b,2 : unID=unID+1
+
+return
+

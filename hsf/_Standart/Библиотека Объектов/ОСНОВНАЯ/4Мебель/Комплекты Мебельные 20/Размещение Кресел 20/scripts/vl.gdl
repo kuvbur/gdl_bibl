@@ -1,0 +1,174 @@
+
+call "FM_types" parameters all
+
+values{2} "iCalcMethod" 	CALCMETHOD_SEATS, `по Количеству Мест`,
+							CALCMETHOD_AREA, `по Площади`
+values{2} "iSeatArrangement" 	ARRANGE_STAGGEREDROWS, `Со Смещением`,
+								ARRANGE_EVENROWS, `Без Смещения`
+values{2} "iRowElevationType" 	ROWELEVTYPE_STEPHEIGHT, `Ступени`,
+								ROWELEVTYPE_SLOPE, `Наклон`
+values{2} "iLegType" 	LEGTYPE_1, `Тип 1`,
+						LEGTYPE_2, `Тип 2`
+values{2} "gs_detlevel_3D_m" 	DLEV3D_DETAILED, `Детальный`,
+								DLEV3D_SIMPLE, `Простой`,
+								DLEV3D_OFF, `Откл.`
+values{2} "iLayoutType" 	LAYOUT_STRAIGHT, `Прямой`,
+							LAYOUT_CURVED, `Криволинейный`
+values{2} "iPositioning" 	POSITIONING_CENTER, `По Центру`,
+							POSITIONING_SIDE, `Сбоку`
+if iLayoutType = LAYOUT_STRAIGHT then
+	lock	"iPositioning"
+	hideparameter	"iPositioning"
+endif
+
+if iLayoutType = LAYOUT_STRAIGHT then lock "radrow", "bRadial"
+
+call "2dDetailLevel" parameters gs_detlevel_2D	= gs_detlevel_2D,
+							gs_detlevel_2D_m	= gs_detlevel_2D_m,
+							enable2dDetLevels	= 2+4+8+16+32
+if gs_detlevel_2D_m <> 4 then HIDEPARAMETER "gs_SymbolType"
+call "fa_ChairSymbol" parameters all stSymbolTypes = stSymbolTypes
+
+IF iCalcMethod = CALCMETHOD_AREA THEN
+	IF iSeatArrangement = ARRANGE_EVENROWS THEN
+		values "A" RANGE [gs_seat_width,)
+		values "B" RANGE [di,)
+	ELSE
+		values "A" RANGE [gs_seat_width*2,)
+		values "B" RANGE [di*2,)
+	ENDIF
+ENDIF
+
+VALUES "ZZYZX" RANGE [gs_arm_height,)
+IF iSeatArrangement = ARRANGE_EVENROWS THEN
+	values "N" RANGE [1,)
+	values "M" RANGE [1,)
+ELSE
+	values "N" RANGE [2,)
+	values "M" RANGE [2,)
+ENDIF
+values "di" RANGE [gs_seat_depth+CushThk+0.3,)
+values "gs_hi" RANGE [0,)
+values "gs_angle" RANGE [0,)
+
+values "gs_seat_width" RANGE [0.2,)
+values "gs_seat_depth" RANGE [0.2,)
+values "gs_seat_height" RANGE [0,)
+values "gs_arm_height" RANGE [gs_seat_height,ZZYZX]
+values "ArmWidth" RANGE [0.02,gs_seat_width/2]
+values "RadBackArc" RANGE [0,gs_seat_width/2]
+values "RadCushCorner" RANGE [0,MIN(gs_seat_width/2,gs_seat_depth/2)]
+values "RadCushEdge" RANGE [0,CushThk/2]
+
+values "CushArcResol" RANGE [1,)
+values "CushFilletResol" RANGE [1,)
+values "CushEdgeResol" RANGE [3,)
+
+if GLOB_MODPAR_NAME = "temp_AA" then
+	parameters A = temp_AA * 2
+	parameters B = temp_AA * 2
+	parameters temp_BB = temp_AA
+else
+	if GLOB_MODPAR_NAME = "temp_BB" then
+		parameters A = temp_BB * 2
+		parameters B = temp_BB * 2
+		parameters temp_AA = temp_BB
+	else
+		if GLOB_MODPAR_NAME = "B" then
+			parameters A = B
+			parameters temp_AA = B / 2
+			parameters temp_BB = B / 2
+		else
+			parameters B = A
+			parameters temp_AA = A / 2
+			parameters temp_BB = A / 2
+		endif
+	endif
+endif
+
+if not(bSeatHeightIncludesCushion) then
+	parameters bSeatHeightIncludesCushion = 1
+	gs_seat_height = gs_seat_height + CushThk
+	parameters gs_seat_height = gs_seat_height
+endif
+
+IF gs_arm=0 THEN LOCK "ArmCushMat"
+IF iLegType = LEGTYPE_2 THEN LOCK "BaseWidth", "ArmLegMat"
+if gs_detlevel_3D_m = DLEV3D_SIMPLE then
+	lock "RadCushCorner", "RadCushEdge", "CushFilletResol", "CushEdgeResol", "CushArcResol"
+	hideparameter "RadCushCorner", "RadCushEdge", "CushFilletResol", "CushEdgeResol", "CushArcResol"
+endif
+if gs_detlevel_3D_m = DLEV3D_OFF then
+	lock "RadCushCorner", "RadCushEdge", "CushFilletResol", "CushEdgeResol", "CushArcResol", "gs_shadow"
+	hideparameter "RadCushCorner", "RadCushEdge", "CushFilletResol", "CushEdgeResol", "CushArcResol", "gs_shadow"
+endif
+
+IF gs_cont_pen=0 then PARAMETERS gs_cont_pen=4
+IF gs_fill_pen=0 then PARAMETERS gs_fill_pen=7
+
+! ==============================================================================
+!Parameters VALUES for Macro
+! ==============================================================================
+
+! --- Rise between Rows, ZZYZX -----------------------------------------------------------------
+if iRowElevationType = ROWELEVTYPE_STEPHEIGHT then
+	PARAMETERS gs_angle = ATN(gs_hi / di)
+	lock "gs_angle"
+endif
+
+if iRowElevationType = ROWELEVTYPE_SLOPE then
+	PARAMETERS gs_hi = di*TAN(gs_angle)
+	lock "gs_hi"
+endif
+
+
+VALUES "gs_detlevel_3D_m" 	2,1,0
+
+IF iCalcMethod = CALCMETHOD_AREA then
+	! --- Number of Columns -----------------------------------------------------------------
+	if bRadial then
+		PARAMETERS m = int(A*radrow / (gs_seat_width * (n*di+radrow)))+1
+	else
+		PARAMETERS m = int(a/gs_seat_width)
+	endif
+	! --- Number of Rows -----------------------------------------------------------------
+	PARAMETERS n=int(b/(di))
+
+	LOCK "m"
+	LOCK "n"
+ELSE
+	! --- Number of Columns and Rows -----------------------------------------------------------------
+	M=M
+	N=N
+
+	! --- A,B -----------------------------------------------------------------
+	if bRadial then
+		PARAMETERS A = gs_seat_width*(m) * (n*di+radrow)/radrow
+	else
+		PARAMETERS A = gs_seat_width*(m)
+	endif
+
+	PARAMETERS B=di*n
+
+	LOCK "A"
+	LOCK "B"
+ENDIF
+
+! Minimal Space
+
+if MSFront < 0 then
+	MSFront = 0
+	parameters MSFront = MSFront
+endif
+if MSSide < 0 then
+	MSSide = 0
+	parameters MSSide = MSSide
+endif
+if MSSide2 < 0 then
+	MSSide2 = 0
+	parameters MSSide2 = MSSide2
+endif
+if MSRear < 0 then
+	MSRear = 0
+	parameters MSRear = MSRear
+endif

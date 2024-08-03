@@ -1,0 +1,637 @@
+
+bShowHandleonActualLeaf = 0
+
+reverse2dAngleMask = 512
+reverse2dAngle2Mask = 0
+
+unID_Opening = 1000
+unID_Garage	 = 2000
+
+if gs_leaf_pen_2D > 0 then pen gs_leaf_pen_2D
+
+gs_fillLeaf	= gs_fillLeaf * gs_bFills
+gs_FillSdl = gs_FillSdl * gs_bFills
+
+a_nom = ac_unit_width
+
+LeafIsSimple50 = 0
+if bSimpleLeafin50 & lod2D = DET2D_DETAILED then
+	lod2D = DET2D_MIDDLE		!simple leaf in detailed symbol
+	LeafIsSimple50 = 1
+endif
+
+!*** same 2D for different doors
+
+frameDiff = (gs_frw1 - gs_frw2) / 2
+toleranceDiff = (gs_tolerance_right - gs_tolerance_left) / 2
+
+bHideInnerContour = 0
+leafOffsetForPivot = 0
+
+if iDoorPanelType <> 0 then
+	if gs_d_type_2d = "Gar1"		then gosub "SingleLeafDoor"
+	if gs_d_type_2d = "Gar2"		then gosub "SingleLeafDoor"
+	if gs_d_type_2d = "Gar3"		then gosub "DoubleLeafDoor"
+else
+	if gs_iSwingType = LINE_SHAPE_SWING_SIMPLE_LINE then
+		gosub "LineShapeSimpleLine"
+	endif
+endif
+
+! ------------------------------------------------------------------------------
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ------------------------------------------------------------------------------
+
+! ==============================================================================
+! Subroutines
+! ==============================================================================
+
+! ------------------------------------------------------------------------------
+"SingleLeafDoor":
+! ------------------------------------------------------------------------------
+
+	bHotspotEdit2D = 1
+	bShowHandleonActualLeaf = 1
+
+	if lod2D = DET2D_SIMPLE | lod2D = DET2D_SIMPLE_CHI then									! 1:200
+		a_nom = ac_wallhole_width
+		lw = ac_wallhole_width
+	endif
+
+	if lod2D = DET2D_MIDDLE then									! 1:100
+		if LeafIsSimple50 then
+			lw = ac_leaf_width
+		else
+			lw = ac_egress_width+2*gs_ds_w*(gs_frame_style_m=2)
+		endif
+	endif
+
+	if lod2D = DET2D_DETAILED | lod2D = DET2D_DETAILED_CHI then		! 1:50
+		lw = ac_leaf_width - (lod2D = DET2D_DETAILED_CHI) * 2 * gs_rebate_width
+		glassdiv_n=int(lw/glassPanelWidth)
+		glassdiv_w=lw/glassdiv_n
+	endif
+
+	nFlipTrans = 0
+	if gs_d_type_2d = "Gar1" then
+		! Flip Corrections for Tilt Garage Door
+		mul2 1, -1
+		add2 0, WIDO_FRAME_THICKNESS
+		nFlipTrans = 2
+	endif
+
+	gosub "DrawSingleLeaf"
+
+	del nFlipTrans
+return
+
+
+! ------------------------------------------------------------------------------
+"DoubleLeafDoor":
+! ------------------------------------------------------------------------------
+
+	bHotspotEdit2D = 1
+	bShowHandleonActualLeaf = 1
+
+	if lod2D = DET2D_SIMPLE | lod2D = DET2D_SIMPLE_CHI then		! 1:200
+		a_nom = ac_wallhole_width
+		lw = ac_wallhole_width
+	endif
+
+	if lod2D = DET2D_MIDDLE then		! 1:100
+		if LeafIsSimple50 then
+			lw = ac_leaf_width
+		else
+			lw = ac_egress_width+2*gs_ds_w*(gs_frame_style_m=2)
+		endif
+	endif
+
+	if lod2D = DET2D_DETAILED | lod2D = DET2D_DETAILED_CHI then		! 1:50
+		lw = ac_leaf_width - (lod2D = DET2D_DETAILED_CHI) * 2 * gs_rebate_width
+	endif
+
+	gosub "DrawDoubleLeaf"
+
+return
+
+
+! ------------------------------------------------------------------------------
+"DrawSingleLeaf":
+! ------------------------------------------------------------------------------
+
+	if lod2D <> DET2D_SIMPLE_CHI & lod2D <> DET2D_DETAILED_CHI then
+
+		if bHotspotEdit2D and gs_d_type_2d = "Gar3" then
+			add2 frameDiff + toleranceDiff * (lod2D = DET2D_SIMPLE), 0
+
+			hotspot2 lw/2, 0, unID_Opening, gs_open_2D, 6 + reverse2dAngleMask		! 1000
+			hotspot2 0, 0, unID_Opening + 1, gs_open_2D, 4+128			! 1001
+			hotspot2 lw/2-lw*cos(gs_open_2D), lw*sin(gs_open_2D), unID_Opening + 2, gs_open_2D,5	! 1002
+			unID_Opening = unID_Opening + 10
+
+			del 1
+		endif
+
+		if gs_d_type_2d = "Gar1" | gs_d_type_2d = "Gar2" then
+			if gs_iSwingType = LINE_SHAPE_SWING_SIMPLE_LINE | gs_iSwingType = LINE_SHAPE_SWING_LEAF_LINE then
+				gosub "LineShapeSimpleLine"
+			endif
+
+			line_type gs_panelLineType
+			pen gs_leaf_pen_2D
+		endif
+
+		if gs_d_type_2d = "Gar1" & gs_opline_2D then
+			line_type gs_opline_type_2D
+			pen gs_opLinePen
+
+			mul2 1,-1
+			poly2 4, 1,
+				-a/2+gs_frw1,0,
+				-a/2+gs_frw1,b,
+				a/2-gs_frw2,b,
+				a/2-gs_frw2,0
+
+			line2 -a/2+gs_frw1, b, a/2-gs_frw2, 0
+			line2 -a/2+gs_frw1, 0, a/2-gs_frw2, b
+			hotspot2 -a/2+gs_frw1, b, unID_Garage	! 2000
+			hotspot2  a/2-gs_frw2, b, unID_Garage+1	! 2001
+			unID_Garage = unID_Garage + 2
+
+			del 1
+
+			line_type gs_panelLineType
+			pen gs_leaf_pen_2D
+		endif
+	endif
+
+	if lod2D = DET2D_SIMPLE or lod2D = DET2D_MIDDLE then		! 1:200 / 1:100
+		pen gs_leaf_pen_2D
+		add2 frameDiff*(lod2D = DET2D_MIDDLE) + toleranceDiff * (lod2D = DET2D_SIMPLE), 0
+		line2 lw/2 , 0, -lw/2, 0
+		del 1
+	endif
+
+	if lod2D = DET2D_DETAILED then		! 1:50
+		add2 frameDiff, 0
+
+		add2 lw/2, 0
+		rot2 -gs_open_2D
+
+		gosub "FillInLeaf"
+
+		del 2
+
+		pen gs_opLinePen
+
+		line_type gs_swingLineType
+		swingModify = gs_leaf_thk
+
+		if gs_open_2D > 0 then
+			if gs_iSwingType = LINE_SHAPE_SWING_CURVED then
+				if 180-gs_open_2D+asn(swingModify/(lw)) < 180 then
+					arc2 lw/2, 0, (lw),
+						180 - gs_open_2D + asn(swingModify / lw), 180
+				endif
+			else
+				line2	-lw/2, 0,
+						 lw/2 - (lw * cos(gs_open_2D)) - (swingModify) * cos(gs_open_2D - 90),
+						(lw * sin(gs_open_2D)) + (swingModify) * sin(gs_open_2D - 90)
+			endif
+		endif
+
+		line_type gs_panelLineType
+
+		del 1
+	endif
+
+	! --- Chinese -----------------------------------------------------------------
+	if lod2D = DET2D_SIMPLE_CHI | lod2D = DET2D_DETAILED_CHI then
+		add2 toleranceDiff * (lod2D = DET2D_SIMPLE_CHI),-gs_frame_thk/2
+
+		if lod2D = DET2D_DETAILED_CHI then
+			add2 lw/2, 0
+			rot2 -gs_open_2D
+
+			gosub "FillInLeaf"
+
+			del 2
+		endif
+
+		if gs_frame_wthk then
+			if WIDO_REVEAL_SIDE then
+				add2 0,WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL
+			else
+				add2 0, WIDO_SILL
+			endif
+		endif
+
+		unID = 1100 + i * 10
+		hotspot2 lw/2, 0, unID, gs_open_2D, 6+reverse2dAngleMask
+		unID = unID + 1
+		hotspot2 0, 0, unID, gs_open_2D, 4+128
+		unID = unID + 1
+		hotspot2 lw/2-(lw)*cos(gs_open_2D),(lw)*sin(gs_open_2D),unID,gs_open_2D,5
+
+		!! LEAF !!
+		if gs_leaf_pen_2D then pen gs_leaf_pen_2D
+
+		if iDoorPanelType<>0 then
+			lfsug=(lw-2*gs_frame_width)
+
+			pen gs_leaf_pen_2D
+			if not(lod2D = DET2D_DETAILED_CHI) then
+				line2 lw/2, 0, (lw/2)-(lw)*cos(gs_open_2D), (lw)*sin(gs_open_2D)
+			endif
+
+			pen gs_opLinePen
+			if gs_open_2D>0 then
+				if gs_iSwingType = LINE_SHAPE_SWING_CURVED then
+					arc2 lw/2, 0, (lw), 180-gs_open_2D, 180
+				else
+					line2  -lw/2, 0, \
+							lw/2 - (lod2D = DET2D_DETAILED_CHI) * gs_leaf_thk * sin(gs_open_2D) - (lfsug*cos(gs_open_2D)), - (lod2D = DET2D_DETAILED_CHI) * gs_leaf_thk * cos(gs_open_2D) + (lfsug*sin(gs_open_2D))
+				endif
+			endif
+			pen gs_leaf_pen_2D
+		endif
+
+		if gs_frame_wthk then del 1
+
+		del 1
+	endif
+
+return
+
+
+! ------------------------------------------------------------------------------
+"DrawDoubleLeaf":
+! ------------------------------------------------------------------------------
+
+	if gs_iSwingType = LINE_SHAPE_SWING_SIMPLE_LINE then
+		gosub "LineShapeSimpleLine"
+	else
+
+		! --- Right panel width ---
+		lar=lw*gs_rttl/100
+
+		! --- Left panel width ---
+		lal=lw*(100-gs_rttl)/100
+
+		if gs_iSwingType = LINE_SHAPE_SWING_LEAF_LINE then
+			add2 lal/2, 0
+			gosub "LineShapeSimpleLine"
+
+			add2 -lw/2, 0
+			unID_Opening = unID_Opening + 2
+			gosub "LineShapeSimpleLine"
+			del 2
+		else
+			if lod2D <> DET2D_SIMPLE_CHI & lod2D <> DET2D_DETAILED_CHI then
+	
+				if bHotspotEdit2D then
+					add2 frameDiff * (lod2D <> DET2D_SIMPLE) + toleranceDiff * (lod2D = DET2D_SIMPLE), 0
+	
+					hotspot2 lw/2, 0, unID_Opening, gs_open_2D, 6+reverse2dAngleMask		! 1000
+					hotspot2 0, 0, unID_Opening + 1, gs_open_2D, 4+128		! 1001
+					hotspot2 lw/2-lar*cos(gs_open_2D), lar*sin(gs_open_2D), unID_Opening + 2,gs_open_2D, 5		! 1002
+					unID_Opening = unID_Opening + 10
+	
+					hotspot2 -lw/2, 0, unID_Opening, gs_open_2D, 6+reverse2dAngle2Mask		! 1010
+					hotspot2 0, 0, unID_Opening + 1, gs_open_2D, 4+128			! 1011
+					hotspot2 -lw/2+lal*cos(gs_open_2D), lal*sin(gs_open_2D), unID_Opening + 2,gs_open_2D, 5	! 1012
+					unID_Opening = unID_Opening + 10
+	
+					del 1
+				endif
+			endif
+	
+			if lod2D = DET2D_SIMPLE or lod2D = DET2D_MIDDLE then	! 1:200 / 1:100
+				add2 frameDiff * (lod2D = DET2D_MIDDLE) + toleranceDiff * (lod2D = DET2D_SIMPLE), 0
+	
+				! leaf
+				for i = 1 to 2
+					pen gs_leaf_pen_2D
+	
+					if i = 1 then law=lar
+					if i = 2 then law=lal
+	
+					line2 lw/2, 0, lw/2-law*cos(gs_open_2D), law*sin(gs_open_2D)
+	
+					mul2 -1, 1
+				next i
+				del 2
+	
+				! swingline
+				for I=1 to 2
+					if I=1 then law=lar
+					if I=2 then law=lal
+	
+					pen gs_opLinePen
+	
+					line_type gs_swingLineType
+	
+					if gs_open_2D>0 then
+						if gs_iSwingType = LINE_SHAPE_SWING_CURVED then
+							arc2 lw/2, 0, law, 180-gs_open_2D, 180
+						else
+							line2 lw/2-law, 0, lw/2-law*cos(gs_open_2D), law*sin(gs_open_2D)
+						endif
+					endif
+	
+					mul2 -1, 1
+				next I
+	
+				del 3
+			endif
+	
+	
+			if lod2D = DET2D_DETAILED then		! 1:50
+	
+				add2 frameDiff, 0
+	
+				! leaf
+				for I=1 to 2
+	
+					if I=1 then law=lar
+					if I=2 then law=lal
+					glassdiv_n=int(law/glassPanelWidth)
+					glassdiv_w=law/glassdiv_n
+	
+					add2 lw/2, 0
+					rot2 -gs_open_2D
+	
+					pen gs_leaf_pen_2D
+	
+					gosub "FillInLeaf2"
+	
+					del 2
+	
+					mul2 -1, 1
+	
+				next I
+				del 2
+	
+				! swingline
+				for I=1 to 2
+	
+					if I=1 then law=lar
+					if I=2 then law=lal
+					glassdiv_n=int(law/glassPanelWidth)
+					glassdiv_w=law/glassdiv_n
+	
+					pen gs_opLinePen
+	
+					line_type gs_swingLineType
+	
+					if gs_open_2D>0 then
+						if gs_iSwingType = LINE_SHAPE_SWING_CURVED then
+							if 180-gs_open_2D+atn(gs_leaf_thk/law) < 180 then
+								arc2 lw/2, 0, law, 180-gs_open_2D+atn(gs_leaf_thk/law), 180
+							endif
+						else
+							line2 lw/2-law, 0,
+								lw/2-law*cos(gs_open_2D)-(gs_leaf_thk)*cos(gs_open_2D-90),
+								law*sin(gs_open_2D)+(gs_leaf_thk)*sin(gs_open_2D-90)
+						endif
+					endif
+	
+					mul2 -1, 1
+				next I
+	
+				del 3
+			endif
+	
+	
+			! ---------------------------Chinese-------------------------------------
+			if lod2D = DET2D_SIMPLE_CHI | lod2D = DET2D_DETAILED_CHI then
+	
+				!*** Right panel width
+				lar=lw*gs_rttl/100
+	
+				!*** Left panel width
+				lal=lw*(100-gs_rttl)/100
+	
+				add2 toleranceDiff * (lod2D = DET2D_SIMPLE_CHI),-gs_frame_thk/2
+	
+				!! HOTSPOT EDITING !!
+				if gs_frame_wthk then
+					if WIDO_REVEAL_SIDE then
+						add2 0,WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL
+					else
+						add2 0, WIDO_SILL
+					endif
+				endif
+	
+				unID = 1000
+				hotspot2 lw/2, 0, unID, gs_open_2D, 6+reverse2dAngleMask
+				unID = unID + 1
+				hotspot2 0, 0, unID, gs_open_2D, 4+128
+				unID = unID + 1
+				hotspot2 lw/2-lar*cos(gs_open_2D), lar*sin(gs_open_2D), unID,gs_open_2D, 5
+	
+				unID = 1010
+				hotspot2 -lw/2, 0, unID, gs_open_2D, 6+reverse2dAngle2Mask
+				unID = unID + 1
+				hotspot2 0, 0, unID, gs_open_2D, 4+128
+				unID = unID + 1
+				hotspot2 -lw/2+lal*cos(gs_open_2D), lal*sin(gs_open_2D), unID,gs_open_2D, 5
+	
+	
+				if gs_frame_wthk=1 then del 1
+				!! END OF HOTSPOT EDITING !!
+	
+				!! LEAF !!
+				if gs_leaf_pen_2D then pen gs_leaf_pen_2D
+	
+				if iDoorPanelType<>0 then
+				if gs_leaf_pen_2D then pen gs_leaf_pen_2D
+	
+				if gs_frame_wthk=1 then
+					if WIDO_REVEAL_SIDE then add2 0,WALL_THICKNESS-WIDO_FRAME_THICKNESS-WIDO_SILL
+					if not(WIDO_REVEAL_SIDE) then add2 0,WIDO_SILL
+				endif
+	
+	
+				for I=1 to 2
+					if I=1 then law=lar
+					if I=2 then law=lal
+	
+					glassdiv_n=int(law/glassPanelWidth)
+					glassdiv_w=law/glassdiv_n
+	
+					if lod2D = DET2D_DETAILED_CHI then
+						add2 lw/2, 0
+						rot2 -gs_open_2D
+	
+						!!! Chinese additional symbols
+						gosub "FillInLeaf2"
+	
+						del 2
+					endif
+	
+	
+					line2 lw/2, 0, lw/2-law*cos(gs_open_2D), law*sin(gs_open_2D)
+	
+					pen gs_opLinePen
+					if gs_open_2D>0 then
+						if gs_iSwingType = LINE_SHAPE_SWING_CURVED then
+							arc2 lw/2, 0, law, 180-gs_open_2D, 180
+						else
+							line2 lw/2-law, 0,
+									lw/2-law*cos(gs_open_2D) - (lod2D = DET2D_DETAILED_CHI) * gs_leaf_thk * sin(gs_open_2D),
+									law*sin(gs_open_2D) - (lod2D = DET2D_DETAILED_CHI) * gs_leaf_thk * cos(gs_open_2D)
+						endif
+					endif
+					pen gs_leaf_pen_2D
+					mul2 -1, 1
+	
+	
+				next I
+				del 2
+	
+				if gs_frame_wthk=1 then del 1
+	
+				endif
+				!! END OF LEAF !!
+	
+				del 1
+			endif
+		endif
+	endif
+
+return
+
+
+! ------------------------------------------------------------------------------
+"FillInLeaf":
+! ------------------------------------------------------------------------------
+
+	drawindex 20
+
+	pen gs_leaf_pen_2D
+
+	add2 0, leafOffsetForPivot
+	if bShowAirtightPanel then 		!!! Chinese additional symbols
+		fill gs_fillAirtight
+		poly2_b 4, 1+2+4+32, gs_penAirtight_fg, gs_penAirtight_bg,
+			 0,	0, 1+32,
+			-lw, 0, 1+32,
+			-lw, -airtightWidth,	1+32,
+			 0,	-airtightWidth, 1-bHideInnerContour+32
+		fill gs_fillLeaf
+		poly2_b 4, 1+2+4+32, gs_penLeaf_fg, gs_penLeaf_bg,
+			 0,	-airtightWidth, 1+32,
+			-lw, -airtightWidth, 1+32,
+			-lw, -gs_leaf_thk,	1+32,
+			 0,	-gs_leaf_thk, 1-bHideInnerContour+32
+	else
+		fill gs_fillLeaf
+		poly2_b 4, 1+2+4+32, gs_penLeaf_fg, gs_penLeaf_bg,
+			 0,	0, 1+32,
+			-lw, 0, 1+32,
+			-lw, -gs_leaf_thk,	1+32,
+			 0,	-gs_leaf_thk, 1-bHideInnerContour+32
+
+		if bShowGlassPanelOnSymbol then		!!! Chinese additional symbols
+			line_property 2
+			for gls=1 to glassdiv_n-1
+				line2 -glassdiv_w, 0, -glassdiv_w, -gs_leaf_thk
+				add2 -glassdiv_w, 0
+			next gls
+			del glassdiv_n-1
+			line_property 0
+		endif
+	endif
+
+	if bShowHandleOnSymbol and bShowHandleonActualLeaf then	!!! Chinese additional symbols
+		add2 -lw-hand2DWidth/2+hand2DDist, 0
+		for hon=1 to 2
+		fill gs_fillLeaf
+		poly2_b 4, 1+2+4+32, gs_penLeaf_fg, gs_penLeaf_bg,
+			 0,	0, 1+32,
+			 hand2DWidth, 0, 1+32,
+			 hand2DWidth, hand2DThk,	1+32,
+			 0,	hand2DThk, 1+32
+		mul2 1, -1
+		add2 0, gs_leaf_thk
+		next hon
+		del 4+1
+	endif
+
+
+	del 1
+
+return
+
+
+! ------------------------------------------------------------------------------
+"FillInLeaf2":
+! ------------------------------------------------------------------------------
+
+	drawindex 20
+
+	if bShowAirtightPanel then
+		fill gs_fillAirtight
+		poly2_b 4, 1+2+4+32, gs_penAirtight_fg, gs_penAirtight_bg,
+			 0,	0, 1+32,
+			-law, 0, 1+32,
+			-law, -airtightWidth,	1+32,
+			 0,	-airtightWidth, 1+32
+		fill gs_fillLeaf
+		poly2_b 4, 1+2+4+32, gs_penLeaf_fg, gs_penLeaf_bg,
+			 0,	-airtightWidth, 1+32,
+			-law, -airtightWidth, 1+32,
+			-law, -gs_leaf_thk,	1+32,
+			 0,	-gs_leaf_thk, 1+32
+	else
+		fill gs_fillLeaf
+		poly2_b 4, 1+2+4+32, gs_penLeaf_fg, gs_penLeaf_bg,
+			 0,	0, 1+32,
+			-law, 0, 1+32,
+			-law, -gs_leaf_thk,	1+32,
+			 0,	-gs_leaf_thk, 1+32
+
+		if bShowGlassPanelOnSymbol then
+			line_property 2
+			for gls=1 to glassdiv_n-1
+				line2 -glassdiv_w, 0, -glassdiv_w, -gs_leaf_thk
+				add2 -glassdiv_w, 0
+			next gls
+			del glassdiv_n-1
+			line_property 0
+		endif
+	endif
+
+	if bShowHandleOnSymbol and bShowHandleonActualLeaf then
+		add2 -law-hand2DWidth/2+hand2DDist, 0
+		for hon=1 to 2
+			fill gs_fillLeaf
+			poly2_b 4, 1+2+4+32, gs_penLeaf_fg, gs_penLeaf_bg,
+				 0,	0, 1+32,
+				 hand2DWidth, 0, 1+32,
+				 hand2DWidth, hand2DThk,	1+32,
+				 0,	hand2DThk, 1+32
+			mul2 1, -1
+			add2 0, gs_leaf_thk
+		next hon
+		del 4+1
+	endif
+
+return
+
+"LineShapeSimpleLine":
+	drawindex 10
+
+	pen gs_opLinePen
+	line_type gs_swingLineType
+	if (gs_d_type_2d = "Gar2" | gs_d_type_2d = "Gar3") & (lod2D = DET2D_SIMPLE) then
+		add2 toleranceDiff, (-gs_fthk/2) * (lod2D = DET2D_MIDDLE | lod2D = DET2D_DETAILED)
+	else
+		add2 frameDiff, (-gs_fthk/2) * (lod2D = DET2D_MIDDLE | lod2D = DET2D_DETAILED)
+	endif
+	hotspot2 0, -0.50, unID_Opening
+	hotspot2 0, 0.50, unID_Opening + 1
+	line2 0, -0.50, 0, 0.50
+	del 1
+return

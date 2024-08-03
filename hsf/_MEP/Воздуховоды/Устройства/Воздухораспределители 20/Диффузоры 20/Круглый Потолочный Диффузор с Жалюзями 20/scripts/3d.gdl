@@ -1,0 +1,102 @@
+!-----------3d---------------------
+if show_el < EPS then end
+IF gs_detlevel_3D_m < EPS THEN END
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pen, sMat, gs_InsMat, MEP_cline_pen, show_el
+if not(not(show_axis) and GLOB_CONTEXT=2) then call "2dmacro" parameters all, type_symb = type_symb
+if show_axis then
+	hotspot 0,0,0
+	end
+endif
+duct_show = duct_show*not(show_axis)
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+res = 24	! Detailed
+IF gs_detlevel_3D_m = 1 THEN res = 8	! Simple
+
+MainBoxMaterial = sMat
+MATERIAL MainBoxMaterial
+
+PEN gs_cont_pen
+RESOL res
+
+
+				! --- TRANSFORMATION --- !
+
+XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+		MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+		MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+operatedMode = 0
+addStatus = 0
+IF GLOB_CONTEXT > 40 AND GLOB_CONTEXT < 50 THEN
+	operatedMode = 1
+	addStatus = 1
+ENDIF
+
+
+				! --- MAIN BOX + LOUVERS --- !
+
+unID = 1
+HOTSPOT -ruledLRadius, 0, 0, unID: unID=unID+1
+HOTSPOT ruledLRadius, 0, 0, unID: unID=unID+1
+HOTSPOT 0, -ruledLRadius, 0, unID: unID=unID+1
+HOTSPOT 0, ruledLRadius, 0, unID: unID=unID+1
+
+IF gs_detlevel_3D_m = 2 THEN
+
+	 alpha_k = 360/res
+	 alpha = 0
+	FOR k=1 TO res
+		PUT ruledLRadius*COS(alpha), ruledLRadius*SIN(alpha), 1
+		 alpha = alpha+alpha_k
+	NEXT k
+	FOR k=1 TO res
+		PUT ruledURadius*COS(alpha), ruledURadius*SIN(alpha), ZZYZX
+		 alpha = alpha+alpha_k
+	NEXT k
+
+	RULED NSP/6, addStatus+2+4+16+32,
+		GET (NSP)
+
+	IF operatedMode < EPS THEN
+		divThick = A/10
+		ruledLHeight = ZZYZX*0.15
+		louverLRadius = 0
+
+		FOR i = 1 TO 4
+			RESOL res
+			IF i = 1 THEN RESOL res/2
+			IF i = 2 THEN RESOL res*2/3
+
+			 louverLRadius = louverLRadius+divThick
+			EXTRUDE 2, 0, 0, ruledLHeight, 16+32,
+				0, 0, 901,
+				louverLRadius, 360, 4001
+		NEXT i
+	ENDIF
+ELSE
+	CONE ZZYZX, ruledLRadius, ruledURadius, 90, 90
+ENDIF
+
+
+				! --- CONNECTIONS --- !
+
+CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+		MEP_NumberConnections = MEP_NumberConnections,
+		MEP_NumConnectionData = gs_Connections,
+		gs_AddConnections = gs_AddConnections,
+		cShow3D = 1,
+		gs_ConMat = MainBoxMaterial,
+		MEP_InsShow = 0,
+		MEP_cline_show_3D = 0,
+		gs_cont_pen = gs_cont_pen,
+		ConPosX_1=ConPosX_1, ConPosY_1=ConPosY_1, ConPosZ_1=ConPosZ_1, ConLength_1=ConLength_1, ConEdit_1 = 1, MEP_StrConnectionData = MEP_StrConnectionData
+DEL TOP
+
+END

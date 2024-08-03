@@ -1,0 +1,208 @@
+!!!Вызов с параметром-массивом
+!!!dim coord_arr[][3]
+!!!dim coord_arr_out[][3]
+!!!call "macro_rotate" parameters coord_arr = coord_arr ,ang = 60, axis = 1, bDict=0, RETURNED_PARAMETERS coord_arr_out
+
+!!!Вызов с параметром-словарём
+!!!dict coord_rotate
+!!!call "macro_rotate" parameters coord = ogr_data.st.set.path ,ang = 60, axis = 1, bDict=1, RETURNED_PARAMETERS coord_rotate
+
+
+ROT_X = 1 		!!Поворот вдоль X
+ROT_Y = 2 		!!Поворот вдоль Y
+ROT_Z = 3 		!!Поворот вдоль Z
+ROT_FROM_LOC = 4
+ROT_TO_LOC = 5
+
+ADD_X = 6 		!!Перенос вдоль X
+ADD_Y = 7 		!!Перенос вдоль Y
+ADD_Z = 8 		!!Перенос вдоль Z
+
+MUL_X = 9 		!!Масштаб вдоль X
+MUL_Y = 10 		!!Масштаб вдоль Y
+MUL_Z = 100 	!!Масштаб вдоль Z
+
+ix = 1 : iy = 2 : iz = 3
+EPS = 0.0001
+
+dim rot_arr[3][3]
+dim _arr_start[1][3]
+	_arr_start[1][ix] = 0
+	_arr_start[1][iy] = 0
+	_arr_start[1][iz] = 0
+
+dim _arr[][]
+dim _t[][]
+
+flag_skip = 1 !При нулевых значениях углов просто возвращаем прежние координаты
+
+if bDict then
+	coord.error = "-"
+	coord.skip = 0
+	if not(haskey(coord.in)) then goto "m_end"
+	if vardim1(coord.in)<1 then goto "m_end"
+	if haskey(coord.ang) then ang = coord.ang
+	if haskey(coord.ladd) then ladd = coord.ladd
+	if haskey(coord.axis) then axis = coord.axis
+	if haskey(coord.loc.axis) then axis = coord.loc.axis
+	if haskey(coord.loc.ang_pl) then ang_pl = coord.loc.ang_pl
+	if haskey(coord.loc.ang_axis) then axis = coord.loc.ang_axis
+	if haskey(coord.loc.ang_x) then ang_x = coord.loc.ang_x
+	if haskey(coord.loc.x) then _arr_start[1][ix] = coord.loc.x
+	if haskey(coord.loc.y) then _arr_start[1][iy] = coord.loc.y
+	if haskey(coord.loc.z) then _arr_start[1][iz] = coord.loc.z
+	for i=1 to vardim1(coord.in)
+		if haskey(coord.in[i].x) then
+			_arr[i][ix] = coord.in[i].x
+		else
+			_arr[i][ix] = 0
+		endif
+		if haskey(coord.in[i].y) then
+			_arr[i][iy] = coord.in[i].y
+		else
+			_arr[i][iy] = 0
+		endif
+		if haskey(coord.in[i].z) then
+			_arr[i][iz] = coord.in[i].z
+		else
+			_arr[i][iz] = 0
+		endif
+	next i
+else
+	_arr = coord_arr
+	_arr_start = start_coord
+endif
+
+if abs(k)<EPS then k=1 !Коэффицент масштабирования не может быть равен нулю
+
+!!Масштаб
+if axis=MUL_X or axis=MUL_Y or axis=MUL_Z then
+	if abs(k-1)<EPS then
+		flag_skip = 1
+	else
+		flag_skip = 0
+		for i = 1 to vardim1(_arr)
+			if axis=MUL_X then _arr[i][ix] = _arr[i][ix] * k
+			if axis=MUL_Y then _arr[i][iy] = _arr[i][iy] * k
+			if axis=MUL_Z then _arr[i][iz] = _arr[i][iz] * k
+		next i
+	endif
+	goto "m_end"
+endif
+
+!!Перенос
+if axis=ADD_X or axis=ADD_Y or axis=ADD_Z then
+	if abs(ladd)<EPS then
+		flag_skip = 1
+	else
+		flag_skip = 0
+		for i = 1 to vardim1(_arr)
+			if axis=ADD_X then _arr[i][ix] = _arr[i][ix] + ladd
+			if axis=ADD_Y then _arr[i][iy] = _arr[i][iy] + ladd
+			if axis=ADD_Z then _arr[i][iz] = _arr[i][iz] + ladd
+		next i
+	endif
+	goto "m_end"
+endif
+
+if axis=ROT_FROM_LOC then
+	flag_skip = 0
+	ang = ang_axis : axis = ROT_Z : gosub "rot_one_axis"
+	ang = ang_x : axis = ROT_Y : gosub "rot_one_axis"
+	ang = ang_pl : axis = ROT_Z : gosub "rot_one_axis"
+	for i = 1 to vardim1(_arr)
+		for j = 1 to 3
+			_arr[i][j] = _arr[i][j]+_arr_start[1][j]
+		next j
+	next i
+	goto "m_end"
+endif
+
+if axis=ROT_TO_LOC then
+	flag_skip = 0
+	for i = 1 to vardim1(_arr)
+		for j = 1 to 3
+			_arr[i][j] = _arr[i][j]-_arr_start[1][j]
+		next j
+	next i
+	ang = ang_pl : axis = ROT_Z : gosub "rot_one_axis"
+	ang = ang_x : axis = ROT_Y : gosub "rot_one_axis"
+	ang = ang_axis : axis = ROT_Z : gosub "rot_one_axis"
+	goto "m_end"
+endif
+
+if abs(ang)<EPS then
+	flag_skip = 1
+	goto "m_end"
+else
+	flag_skip = 0
+	gosub "rot_one_axis"
+endif
+
+goto "m_end"
+
+"rot_one_axis":
+	if abs(ang)<EPS then return
+	if axis = ROT_X then gosub "get_mat_x"
+	if axis = ROT_Y then gosub "get_mat_y"
+	if axis = ROT_Z then gosub "get_mat_z"
+	gosub "make_rot"
+	_arr = _t
+return
+
+"get_mat_x":
+	!!Матрица поворота вдоль оси X
+	i=0
+	i=i+1 : rot_arr[i][ix]=1 : rot_arr[i][iy]=0 : rot_arr[i][iz]=0
+	i=i+1 : rot_arr[i][ix]=0 : rot_arr[i][iy]=cos(ang) : rot_arr[i][iz]=-sin(ang)
+	i=i+1 : rot_arr[i][ix]=0 : rot_arr[i][iy]=sin(ang) : rot_arr[i][iz]=cos(ang)
+return
+
+"get_mat_y":
+	!!Матрица поворота вдоль оси Y
+	i=0
+	i=i+1 : rot_arr[i][ix]=cos(ang)	: rot_arr[i][iy]=0	: rot_arr[i][iz]=sin(ang)
+	i=i+1 : rot_arr[i][ix]=0			: rot_arr[i][iy]=1	: rot_arr[i][iz]=0
+	i=i+1 : rot_arr[i][ix]=-sin(ang)	: rot_arr[i][iy]=0	: rot_arr[i][iz]=cos(ang)
+return
+
+"get_mat_z":
+	!!Матрица поворота вдоль оси Z
+	i=0
+	i=i+1 : rot_arr[i][ix]=cos(ang) : rot_arr[i][iy]=-sin(ang) : rot_arr[i][iz]=0
+	i=i+1 : rot_arr[i][ix]=sin(ang) : rot_arr[i][iy]=cos(ang) : rot_arr[i][iz]=0
+	i=i+1 : rot_arr[i][ix]=0 : rot_arr[i][iy]=0 : rot_arr[i][iz]=1
+return
+
+"make_rot":
+!!Умножение на матрицу поворота
+	for i=1 to vardim1(_arr)
+		for j=1 to 3
+			_t[i][j] = 0
+			for k=1 to 3
+				_t[i][j] = _t[i][j] + _arr[i][k] * rot_arr[k][j]
+			next k
+		next j
+	next i
+return
+
+"m_end":
+if bDict then
+	if haskey(coord.out) then _d = REMOVEKEY (coord.out)
+	if flag_skip then
+		coord.skip = 1
+		if haskey(coord.in) then coord.out = coord.in
+	else
+		coord.skip = 0
+		for i=1 to vardim1(_t)
+			coord.out[i].x = _arr[i][ix]
+			coord.out[i].y = _arr[i][iy]
+			coord.out[i].z = _arr[i][iz]
+		next i
+	endif
+	coord.error = "ok"
+	exit coord
+else
+	if flag_skip=0 then coord_arr = _arr
+	exit coord_arr
+endif

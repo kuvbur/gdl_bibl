@@ -1,0 +1,180 @@
+
+! bUseTextblock options:
+! ------------------------------------------------------------------------------
+! possible values 0:
+!	old type
+!	this type draws the parts of expression one after another
+!	anchor is always at left (1/7)
+!	contents need to be transformed to follow the alignments
+! 
+! possible values 1:	
+!	this type use pharagraph and textblock commands
+!	the anchor point comes about the alignments parameters (horizontalAlignment, verticalAlignment)  
+!	contents do not need to be transformed to replace the anchor point
+!	wrapping words is an options if widthFixedSize is not empty (0)
+! ------------------------------------------------------------------------------
+
+PAPER_TO_MODEL = GLOB_SCALE / 1000
+
+! ------------------------------------------------------------------------------
+! Defining Style
+! ------------------------------------------------------------------------------
+
+define style "mainStyle"  AC_TextFont, AC_TextSize, iAnchorString, AC_TextStyle
+style "mainStyle"
+
+if not(bUseTextblock) then
+	define style "extraStyle" 		AC_TextFont, 2/3*AC_TextSize, iAnchorString, AC_TextStyle
+else
+	! superscript style
+	define style{2} "extraStyle2"  AC_TextFont, AC_TextSize, AC_TextStyle + 32
+endif
+
+! ------------------------------------------------------------------------------
+! Rotating and positioning
+! ------------------------------------------------------------------------------
+
+mul2 PAPER_TO_MODEL, PAPER_TO_MODEL
+
+if not(bUseTextblock) then
+	gosub "rotate_accordingto_readable"
+
+	gosub "offset_accordingto_alignment"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Text Output
+! ------------------------------------------------------------------------------
+if bShowText then
+	if GLOB_CONTEXT < 20 then
+		if bUseTextblock then
+
+			_stNamePG 			= "nameParaGraph"
+			_iAlignPG 			= horizontalAlignment	! 1: left aligned, 2: center aligned, 3: right aligned, 4: full justified
+			_xFirstIndent	 	= 0						! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+			_xLeftIndent 		= 0						! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+			_xRightIndent 		= 0						! meaning millimeters or meters depends on the fixed_height parameter of the TEXTBLOCK definition
+			_ratioLineSpace		= 1						! (character size + distance to the next line) defined by the actual style will be multiplied by this number
+			_xTabPos	 		= 0						! consecutive tabulator positions (each relative to the beginning of the paragraph). Default values (0) are used (12.7 mm). Works only with '\t' special character.
+			_penindex 			= 1
+
+			paragraph _stNamePG _iAlignPG,
+					_xFirstIndent, _xLeftIndent, _xRightIndent,
+					_ratioLineSpace, _xTabPos,
+					_penindex
+					style "mainStyle"
+					note1
+					style "extraStyle2"
+					frac
+					style "mainStyle"
+					szUnit
+					style "extraStyle2"
+					szUnitIndex
+			endparagraph
+
+			_stNameTB			= "nameTextBlock"
+			_widthTB			= widthFixedSize		! textblock width in mm or m in model space, if 0 it is calculated automatically.
+			_iAnchorTB			= iAnchorString			! code of the position point in the text.
+			_angleTB			= 0						! rotation angle of the textblock in degrees
+			_ratioWidthTB		= 1						! width_factor: Character widths defined by the actual style will be multiplied by this number
+			_ratioCharspaceTB	= 1						! charspace_factor: The horizontal distance between two characters will be multiplied by this number
+			_iScale 			= 0 ! model				! fixed_height: Possible values: 1: the placed TEXTBLOCK will be scale-independent and all specified length type parameters will mean millimeters, 
+														! 								0: the placed TEXTBLOCK will be scale-dependent and all specified length type parameters will mean meters in model space.
+
+			textblock _stNameTB _widthTB,
+				_iAnchorTB, _angleTB, _ratioWidthTB, _ratioCharspaceTB, _iScale,
+				_stNamePG
+
+			richtext2 0, 0, _stNameTB
+		else
+
+			text2 0, vertOffsetMain, note1
+
+			if frac <> "" then
+				style "extraStyle"
+				text2 lengthOfNote1, AC_TextSize/3 + vertOffsetExponent, frac
+			endif
+			if bShowUnit then
+				style "mainStyle"
+				text2 lengthOfNote1 + lengthOfNote2, vertOffsetMain, szUnit
+				if szUnitIndex <> "" then
+					style "extraStyle"
+					text2 lengthOfNote1 + lengthOfNote2 + lengthOfNote3, vertOffsetMain, szUnitIndex
+				endif
+			endif
+		endif
+	else
+		if bFeedbackMode then
+			if verticalAlignment = Alignment_Bottom then
+				rect2 0, 0, totalLength, totalHeight
+			else
+				add2 0, vertOffsetBox
+				rect2 0, -totalHeight, totalLength, 0
+				del 1
+			endif
+		endif
+	endif
+endif
+
+! ==============================================================================
+end totalLength, totalHeight, szExtraPrecision, lengthOfIntegerPart, lengthOfUnit
+! ==============================================================================
+
+
+! ==============================================================================
+! input:
+!    GS_iMarkerDir, AC_Readable, gs_readable_angle,
+!    totalLength, AC_TextSize
+! globals:
+!    EPS,
+!    MarkerDir_Standard, MarkerDir_StandardRotated90,
+!    MarkerDir_Horizontal, MarkerDir_Vertical
+! ==============================================================================
+"rotate_accordingto_readable":
+	angleViewRot = 0
+	if AC_Readable then
+		rrr = REQUEST ("View_Rotangle", "", angleViewRot)
+	endif
+	totalRotate = (SYMB_ROTANGLE + angleViewRot) MOD 360
+
+	if GS_iMarkerDir = MarkerDir_Standard          then rotdir_angle = 0
+	if GS_iMarkerDir = MarkerDir_StandardRotated90 then rotdir_angle = 90
+	if GS_iMarkerDir = MarkerDir_Horizontal        then rotdir_angle = -totalRotate
+	if GS_iMarkerDir = MarkerDir_Vertical          then rotdir_angle = -totalRotate + 90
+
+	rot2 rotdir_angle
+	if AC_Readable then
+		if (totalRotate > (gs_readable_angle + EPS) & totalRotate < (gs_readable_angle + 180 + EPS) & GS_iMarkerDir = MarkerDir_Standard) | \
+			(totalRotate > (gs_readable_angle - 90 + EPS) & totalRotate < (gs_readable_angle + 180 - 90 + EPS) & GS_iMarkerDir = MarkerDir_StandardRotated90) then
+			! turning around: bottom left -> top right corner
+
+			add2 totalLength, AC_TextSize
+			rot2 180
+		endif
+	endif
+return
+
+
+! ==============================================================================
+! input:
+!    horizontalAlignment, totalLength
+! globals:
+!    Alignment_Center, Alignment_Right, Alignment_IntegerPart
+! ==============================================================================
+"offset_accordingto_alignment":
+	if horizontalAlignment = Alignment_Center then
+		add2 -(totalLength)/2, 0
+	endif
+	if horizontalAlignment = Alignment_Right then
+		add2 -totalLength, 0
+	endif
+	if horizontalAlignment = Alignment_IntegerPart then
+		! compute length of integer part
+		add2 -lengthOfIntegerPart, 0
+	endif
+return
+
+
+
+

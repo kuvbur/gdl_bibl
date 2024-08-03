@@ -1,0 +1,686 @@
+
+if gs_detlevel_3D_m = 0 then END
+if not(gs_shadow) then SHADOW OFF
+
+! --- Contour Hotspots ---------------------------------------------------------
+
+unID = 1
+
+HOTSPOT 0,0,			0,unID,b,1+256	: unID=unID+1
+HOTSPOT 0,-0.1,			0,unID,b,3		: unID=unID+1
+HOTSPOT 0,flightWidth,	0,unID,b,2		: unID=unID+1
+
+HOTSPOT a,0,			nRisers*treadHeight,unID,b,1+256	: unID=unID+1
+HOTSPOT a,-0.1,			nRisers*treadHeight,unID,b,3		: unID=unID+1
+HOTSPOT a,flightWidth,	nRisers*treadHeight,unID,b,2		: unID=unID+1
+
+HOTSPOT a,flightWidth,	0,		unID,zzyzx,1+128	: unID=unID+1
+HOTSPOT a,flightWidth,	-0.1,	unID,zzyzx,3		: unID=unID+1
+HOTSPOT a,flightWidth,	zzyzx,	unID,zzyzx,2		: unID=unID+1
+
+HOTSPOT a,	0,	0,		unID,zzyzx,1+128	: unID=unID+1
+HOTSPOT a,	0,	-0.1,	unID,zzyzx,3		: unID=unID+1
+HOTSPOT a,	0,	zzyzx,	unID,zzyzx,2		: unID=unID+1
+
+pen gs_cont_pen
+rotx 90
+mulz -1
+
+n=int(a/treadDepth)
+dx=a/n
+dy=zzyzx/n
+
+alf=atn(zzyzx/a)
+y=stairSlabThk/cos(alf)
+x=stairSlabThk/sin(alf)
+
+bet=(90-alf)/2
+
+
+! --- base ---------------------------------------------------------------------
+material matBase
+SECT_FILL typeFillStringer, penBackFillStringer, penFillStringer, penLineStringer
+
+! --- concrete ---
+if stairBaseType_m = 1 | stairBaseType_m = 3 then
+
+	if stairBaseType_m = 1 then
+		covthicky_t=riserCoverThk
+		for i=1 to n
+			if i=n then covthicky_t=0
+			put (i-1)*dx+riserCoverThk,i*dy-treadThickness,15
+			put i*dx+covthicky_t,i*dy-treadThickness,15
+		next i
+
+		prism_ 4+(2*n),b,
+				riserCoverThk,0,15,
+				get (nsp),
+				a,zzyzx-treadThickness,15,
+				a,zzyzx-y,15,
+				x,0,15
+	endif
+
+	IF ABS(riserCoverThk)>0.001 THEN
+		FOR t=1 to n
+		ADD (t-1)*dx,(t-1)*dy,0
+		MATERIAL matRiser
+		SECT_FILL typeFillRiser, penBackFillRiser, penFillRiser, penLineRiser
+
+		prism_ 4,b,
+			0,0,15,
+			riserCoverThk,0,15,
+			riserCoverThk,dy-treadThickness,15,
+			0,dy-treadThickness,15
+		DEL 1
+		Next t
+	ENDIF
+endif
+
+! --- wood ---
+if stairBaseType_m = 2 then
+	covthicky_t=riserCoverThk
+	for i=1 to n
+		if i=n then covthicky_t=0
+		put (i-1)*dx+riserCoverThk,i*dy-treadThickness,15
+		put i*dx+covthicky_t,i*dy-treadThickness,15
+	next i
+
+	dxx0=flightWidth/2 * (ABS(nWoodCarriages-1)<0.001)
+	addz dxx0+woodCarriageOffsetRight
+	prism_ 4+(2*n),woodBaseThk,
+			riserCoverThk,0,15,
+			use (nsp),
+			a,zzyzx-treadThickness,15,
+			a,zzyzx-y,15,
+			x,0,15
+	del 1
+
+	IF nWoodCarriages > 1 THEN
+		addz b-woodCarriageOffsetLeft-woodBaseThk
+		prism_ 4+(2*n),woodBaseThk,
+				0,0,15,
+				get (nsp),
+				a,zzyzx-treadThickness,15,
+				a,zzyzx-y,15,
+				x,0,15
+		del 1
+	ELSE
+		for i=1 to nsp
+			temp=get(1)
+		next i
+	ENDIF
+
+	IF ABS(riserCoverThk)>0.001 THEN
+		FOR t=1 to n
+		ADD (t-1)*dx,(t-1)*dy,0
+		MATERIAL matRiser
+		SECT_FILL typeFillRiser, penBackFillRiser, penFillRiser, penLineRiser
+
+		prism_ 4,b,
+			0,0,15,
+			riserCoverThk,0,15,
+			riserCoverThk,dy-treadThickness,15,
+			0,dy-treadThickness,15
+		DEL 1
+		Next t
+	ENDIF
+
+endif
+
+! --- Treads -------------------------------------------------------------------
+material matTread
+SECT_FILL typeFillTread, penBackFillTread, penFillTread, penLineTread
+
+IF treadThickness > EPS THEN
+	covthicky_t=riserCoverThk
+	for i=1 to n
+		if i = n then covthicky_t=0
+		put (i-1)*dx-nosing,i*dy-treadThickness,15
+		put i*dx+covthicky_t,i*dy-treadThickness,15
+		put i*dx+covthicky_t,i*dy,15
+		put (i-1)*dx-nosing,i*dy,15
+	next i
+
+	for k=1 to n
+		base
+		prism_ 4,b,
+				get (12)
+
+		vert 0, 0, 0 !#1
+		vert 0, 0, 1 !#2
+		vert 0, 1, 0 !#3
+		vert -1, 0, 0 !#4
+		coor 2, -1, -2,-3, -4
+		body -1
+	next k
+
+ENDIF
+
+DEL 2
+
+
+! --- RAILS --------------------------------------------------------------------
+material matPost
+
+! --- Left rail ---
+if rail_m = 3 | rail_m = 1 then		! Left, Both
+	if bSameRails then
+		leftRailType_m = rightRailType_m
+		leftWireType_m = rightWireType_m
+	endif
+
+	ADD -leftRailOvhgBottom-nosing*0,flightWidth-leftRailOffset-leftRailFrameThk/2,-leftRailOvhgBottom*tan(ang)+treadHeight
+
+	lraSimple=a+leftRailOvhgBottom+leftRailOvhgTop
+	lraComplex=a-treadDepth
+	additionXComplex=leftRailOvhgBottom+treadDepth/2
+	additionZComplex=leftRailOvhgBottom*tan(ang)
+	hrovL=treadDepth/2+leftRailOvhgBottom
+	hrovR=treadDepth/2+leftRailOvhgTop
+	IF leftRailType_m = 10 THEN	! Rail Post with Bars
+		postNumber=max(2,(a-treadDepth)/(3*treadDepth))
+	else
+		postNumber=(a+leftRailOvhgBottom+leftRailOvhgTop)/(3*treadDepth)+1
+	endif
+	railAngle	= ang
+	side = SIDE_LEFT
+	gosub "callRailsForStair"
+
+	DEL 1
+
+	! Bottom side
+	add -nosing*0, flightWidth - leftRailOffset - railFrameThk/2, 0
+	HOTSPOT 0,0,treadHeight+railDist+railHeight-leftRailOvhgBottom*tan(ang),unID,leftRailOvhgBottom, 1+128		: unID=unID+1
+	HOTSPOT 0.1,0,treadHeight+railDist+railHeight-leftRailOvhgBottom*tan(ang),unID,leftRailOvhgBottom, 3		: unID=unID+1
+	HOTSPOT -leftRailOvhgBottom,0,treadHeight+railDist+railHeight-leftRailOvhgBottom*tan(ang),unID,leftRailOvhgBottom, 2		: unID=unID+1
+
+	HOTSPOT -leftRailOvhgBottom,leftRailOffset,treadHeight+railDist-leftRailOvhgBottom*tan(ang),unID,leftRailOffset, 1+128		: unID=unID+1
+	HOTSPOT -leftRailOvhgBottom,leftRailOffset-0.1,treadHeight+railDist-leftRailOvhgBottom*tan(ang),unID,leftRailOffset, 3		: unID=unID+1
+	HOTSPOT -leftRailOvhgBottom,0,treadHeight+railDist-leftRailOvhgBottom*tan(ang),unID,leftRailOffset, 2		: unID=unID+1
+
+	HOTSPOT -leftRailOvhgBottom,0,treadHeight-leftRailOvhgBottom*tan(ang),unID,leftRailDist, 1+128		: unID=unID+1
+	HOTSPOT -leftRailOvhgBottom,0,treadHeight-0.1-leftRailOvhgBottom*tan(ang),unID,leftRailDist, 3		: unID=unID+1
+	HOTSPOT -leftRailOvhgBottom,0,treadHeight+railDist-leftRailOvhgBottom*tan(ang),unID,leftRailDist, 2		: unID=unID+1
+
+	HOTSPOT -leftRailOvhgBottom,0,treadHeight-leftRailOvhgBottom*tan(ang)+railDist,unID,leftRailHeight, 1+128		: unID=unID+1
+	HOTSPOT -leftRailOvhgBottom,0,treadHeight-leftRailOvhgBottom*tan(ang)+railDist-0.1,unID,leftRailHeight, 3		: unID=unID+1
+	HOTSPOT -leftRailOvhgBottom,0,treadHeight-leftRailOvhgBottom*tan(ang)+railDist+railHeight,unID,leftRailHeight, 2	: unID=unID+1
+
+	! Top side
+	HOTSPOT nRisers*treadDepth,0,(nRisers+1)*treadHeight+leftRailOvhgTop*tan(ang)+railHeight+railDist,unID,leftRailOvhgTop, 1+128			: unID=unID+1
+	HOTSPOT nRisers*treadDepth-0.1,0,(nRisers+1)*treadHeight+leftRailOvhgTop*tan(ang)+railHeight+railDist,unID,leftRailOvhgTop, 3			: unID=unID+1
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,0,(nRisers+1)*treadHeight+leftRailOvhgTop*tan(ang)+railHeight+railDist,unID,leftRailOvhgTop, 2			: unID=unID+1
+
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,leftRailOffset,(nRisers+1)*treadHeight+railDist+leftRailOvhgTop*tan(ang),unID,leftRailOffset, 1+128		: unID=unID+1
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,leftRailOffset-0.1,(nRisers+1)*treadHeight+railDist+leftRailOvhgTop*tan(ang),unID,leftRailOffset, 3		: unID=unID+1
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,0,(nRisers+1)*treadHeight+railDist+leftRailOvhgTop*tan(ang),unID,leftRailOffset, 2		: unID=unID+1
+
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,0,(nRisers+1)*treadHeight+(leftRailOvhgTop)*tan(ang),unID,leftRailDist, 1+128		: unID=unID+1
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,0,(nRisers+1)*treadHeight+(leftRailOvhgTop)*tan(ang)-0.1,unID,leftRailDist, 3		: unID=unID+1
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,0,(nRisers+1)*treadHeight+(leftRailOvhgTop)*tan(ang)+railDist,unID,leftRailDist, 2		: unID=unID+1
+
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,0,(nRisers+1)*treadHeight+leftRailOvhgTop*tan(ang)+railDist,unID,leftRailHeight, 1+128			: unID=unID+1
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,0,(nRisers+1)*treadHeight+leftRailOvhgTop*tan(ang)+railDist-0.1,unID,leftRailHeight, 3			: unID=unID+1
+	HOTSPOT nRisers*treadDepth+leftRailOvhgTop,0,(nRisers+1)*treadHeight+leftRailOvhgTop*tan(ang)+railDist+railHeight,unID,leftRailHeight, 2			: unID=unID+1
+	del 1
+ENDIF
+
+! --- Right rail ---
+if rail_m = 2 | rail_m = 1 then		! Right, Both
+	ADD -rightRailOvhgBottom-nosing*0,rightRailOffset+rightRailFrameThk/2,-rightRailOvhgBottom*tan(ang)+treadHeight
+
+	lraSimple=a+rightRailOvhgBottom+rightRailOvhgTop
+	lraComplex=a-treadDepth
+	additionXComplex=rightRailOvhgBottom+treadDepth/2
+	additionZComplex=rightRailOvhgBottom*tan(ang)
+	hrovL=treadDepth/2+rightRailOvhgBottom
+	hrovR=treadDepth/2+rightRailOvhgTop
+	IF rightRailType_m = 10 THEN	! Rail Post with Bars
+		postNumber=max(2,(a-treadDepth)/(3*treadDepth))
+	else
+		postNumber=(a+rightRailOvhgBottom+rightRailOvhgTop)/(3*treadDepth)+1
+	endif
+	railAngle	= ang
+	side = SIDE_RIGHT
+	gosub "callRailsForStair"
+
+	DEL 1
+
+	! Bottom side
+	add -nosing*0, rightRailOffset + railFrameThk/2, 0
+	HOTSPOT 0,0,treadHeight+railDist+railHeight-rightRailOvhgBottom*tan(ang),unID,rightRailOvhgBottom, 1+128		: unID=unID+1
+	HOTSPOT -0.1,0,treadHeight+railDist+railHeight-rightRailOvhgBottom*tan(ang),unID,rightRailOvhgBottom, 3		: unID=unID+1
+	HOTSPOT -rightRailOvhgBottom,0,treadHeight+railDist+railHeight-rightRailOvhgBottom*tan(ang),unID,rightRailOvhgBottom, 2		: unID=unID+1
+
+	HOTSPOT -rightRailOvhgBottom,-rightRailOffset,treadHeight+leftRailDist-rightRailOvhgBottom*tan(ang),unID,rightRailOffset, 1+128		: unID=unID+1
+	HOTSPOT -rightRailOvhgBottom,-rightRailOffset+0.1,treadHeight+leftRailDist-rightRailOvhgBottom*tan(ang),unID,rightRailOffset, 3		: unID=unID+1
+	HOTSPOT -rightRailOvhgBottom,0,treadHeight+leftRailDist-rightRailOvhgBottom*tan(ang),unID,rightRailOffset, 2		: unID=unID+1
+
+	HOTSPOT -rightRailOvhgBottom,0,treadHeight-rightRailOvhgBottom*tan(ang),unID,rightRailDist, 1+128		: unID=unID+1
+	HOTSPOT -rightRailOvhgBottom,0,treadHeight-0.1-rightRailOvhgBottom*tan(ang),unID,rightRailDist, 3		: unID=unID+1
+	HOTSPOT -rightRailOvhgBottom,0,treadHeight+leftRailDist-rightRailOvhgBottom*tan(ang),unID,rightRailDist, 2		: unID=unID+1
+
+	HOTSPOT -rightRailOvhgBottom,0,treadHeight-rightRailOvhgBottom*tan(ang)+railDist,unID,rightRailHeight, 1+128		: unID=unID+1
+	HOTSPOT -rightRailOvhgBottom,0,treadHeight-rightRailOvhgBottom*tan(ang)+railDist-0.1,unID,rightRailHeight, 3		: unID=unID+1
+	HOTSPOT -rightRailOvhgBottom,0,treadHeight-rightRailOvhgBottom*tan(ang)+railDist+railHeight,unID,rightRailHeight, 2	: unID=unID+1
+
+	! Top side
+	HOTSPOT nRisers*treadDepth,0,(nRisers+1)*treadHeight+rightRailOvhgTop*tan(ang)+railDist+railHeight,unID,rightRailOvhgTop, 1+128			: unID=unID+1
+	HOTSPOT nRisers*treadDepth+0.1,0,(nRisers+1)*treadHeight+rightRailOvhgTop*tan(ang)+railDist+railHeight,unID,rightRailOvhgTop, 3			: unID=unID+1
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,0,(nRisers+1)*treadHeight+rightRailOvhgTop*tan(ang)+railDist+railHeight,unID,rightRailOvhgTop, 2			: unID=unID+1
+
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,-rightRailOffset,(nRisers+1)*treadHeight+railDist+rightRailOvhgTop*tan(ang),unID,rightRailOffset, 1+128		: unID=unID+1
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,-rightRailOffset+0.1,(nRisers+1)*treadHeight+railDist+rightRailOvhgTop*tan(ang),unID,rightRailOffset, 3		: unID=unID+1
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,0,(nRisers+1)*treadHeight+railDist+rightRailOvhgTop*tan(ang),unID,rightRailOffset, 2		: unID=unID+1
+
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,0,(nRisers+1)*treadHeight+(rightRailOvhgTop)*tan(ang),unID,rightRailDist, 1+128		: unID=unID+1
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,0,(nRisers+1)*treadHeight+(rightRailOvhgTop)*tan(ang)-0.1,unID,rightRailDist, 3		: unID=unID+1
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,0,(nRisers+1)*treadHeight+(rightRailOvhgTop)*tan(ang)+railDist,unID,rightRailDist, 2		: unID=unID+1
+
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,0,(nRisers+1)*treadHeight+rightRailOvhgTop*tan(ang)+railDist,unID,rightRailHeight, 1+128			: unID=unID+1
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,0,(nRisers+1)*treadHeight+rightRailOvhgTop*tan(ang)+railDist-0.1,unID,rightRailHeight, 3			: unID=unID+1
+	HOTSPOT nRisers*treadDepth+rightRailOvhgTop,0,(nRisers+1)*treadHeight+rightRailOvhgTop*tan(ang)+railDist+railHeight,unID,rightRailHeight, 2			: unID=unID+1
+	del 1
+ENDIF
+
+
+
+
+
+! ==============================================================================
+! top below floor level - currently unused
+! ==============================================================================
+
+
+IF topTreadLevel_m = 2 THEN		! Top Tread below Floor Level
+
+	n=int(a/treadDepth)
+	dx=a/n
+	dy=zzyzx/n
+
+	alf=atn(zzyzx/a)
+	y=stairSlabThk/cos(alf)
+	x=stairSlabThk/sin(alf)
+
+	bet=(90-alf)/2
+
+	n=n-1
+
+	! --- base ---------------------------------------------------------------------
+	material bmat
+	SECT_FILL typeFillStringer, penBackFillStringer, penFillStringer, penLineStringer
+
+	! --- concrete ---
+	if stairBaseType_m = 1 then		! Concrete
+
+		for i=1 to n
+			put (i-1)*dx,i*dy-treadThickness,15
+			put i*dx,i*dy-treadThickness,15
+		next i
+
+		prism_ 4+(2*n),b,
+				0,0,15,
+				get (nsp),
+				a-dx,zzyzx-treadThickness-dy,15,
+				a-dx,zzyzx-y-dy,15,
+				x,0,15
+	endif
+
+	! --- wood ---
+	if stairBaseType_m = 2 then		! Wood
+
+		for i=1 to n
+			put (i-1)*dx,i*dy-treadThickness,15
+			put i*dx,i*dy-treadThickness,15
+		next i
+
+		addz 0.15
+		prism_ 4+(2*n),woodBaseThk,
+				0,0,15,
+				use (nsp),
+				a,zzyzx-treadThickness,15,
+				a,zzyzx-y,15,
+				x,0,15
+		del 1
+
+		addz b-0.2
+		prism_ 4+(2*n),woodBaseThk,
+				0,0,15,
+				get (nsp),
+				a,zzyzx-treadThickness,15,
+				a,zzyzx-y,15,
+				x,0,15
+		del 1
+	endif
+
+	! --- Treads -------------------------------------------------------------------
+	material matTread
+	SECT_FILL typeFillTread, penBackFillTread, penFillTread, penLineTread
+
+	for i=1 to n
+		put (i-1)*dx-nosing,i*dy-treadThickness,15
+		put i*dx,i*dy-treadThickness,15
+		put i*dx,i*dy,15
+		put (i-1)*dx-nosing,i*dy,15
+	next i
+
+	for k=1 to n
+		base
+		prism_ 4,b,
+				get (12)
+
+		vert 0, 0, 0 !#1
+		vert 0, 0, 1 !#2
+		vert 0, 1, 0 !#3
+		vert -1, 0, 0 !#4
+		coor 2, -1, -2,-3, -4
+		body -1
+	next k
+
+
+	! --- RAILS --------------------------------------------------------------------
+	material matPost
+
+	! --- Right rail ---
+	if rail_m = 2 | rail_m = 1 then		! Right, Both
+		bLeftSide = 0
+		railBarDepth = rightRailBarDepth
+		railBarThk = rightRailBarThk
+		railWireDepth = rightRailWireDepth
+		railWireThk = rightRailWireThk
+		RailWireDiam = rightRailWireDiam
+		gosub "one_rail_simple"
+	endif
+	! --- Left rail ---
+	if rail_m = 3 | rail_m = 1 then		! Left, Both
+		addz b-0.09
+		bLeftSide = 1
+		railBarDepth = leftRailBarDepth
+		railBarThk = leftRailBarThk
+		railWireDepth = leftRailWireDepth
+		railWireThk = leftRailWireThk
+		RailWireDiam = leftRailWireDiam
+		gosub "one_rail_simple"
+		del 1
+	endif
+
+ENDIF
+
+end
+
+! ==============================================================================
+"callRailsForStair":
+! ------------------------------------------------------------------------------
+!	lraSimple
+!	lraComplex
+!	additionXComplex
+!	additionZComplex
+!	hrovL: rail overhang start
+!	hrovR: rail overhang end
+!	postNumber:   number of posts
+!	side: SIDE_LEFT or SIDE_RIGHT
+! ==============================================================================
+	ani = railAngle
+	additionXComplex = additionXComplex
+	additionZComplex = additionZComplex
+	if side = SIDE_LEFT then
+		dsComplex = leftRailDist+treadDepth/2*tan(ang)
+	else
+		dsComplex = rightRailDist+treadDepth/2*tan(ang)
+	endif
+
+	gosub "callRails"
+return
+
+
+! ==============================================================================
+"callRails":
+! ------------------------------------------------------------------------------
+!	ani
+!	additionXComplex
+!	additionZComplex
+!	dsComplex
+!  ------------------
+!	side: SIDE_LEFT or SIDE_RIGHT
+!	lraSimple
+!	lraComplex
+!	hrovL: rail overhang start
+!	hrovR: rail overhang end
+!	postNumber:   number of posts
+! ==============================================================================
+	if side = SIDE_LEFT then
+		railBarDepth		= leftRailBarDepth
+		railBarDiam			= railBarDepth
+		railHeight			= leftRailHeight
+		railBarFillThk		= leftRailBarThk
+		railFrameThk		= leftRailFrameThk
+		railDist			= leftRailDist
+		railType_m			= leftRailType_m
+		railPostSize		= leftRailPostSize
+		barNumber			= nBarsLeftRail
+		railWireType		= leftWireType_m
+		if leftRailType_m = RAIL_WIRED then
+			railBarThk		= leftRailWireThk
+			railBarDepth	= leftRailWireDepth
+			railBarDiam		= leftRailWireDiam
+		endif
+	else
+		railBarDepth		= rightRailBarDepth
+		railBarDiam			= railBarDepth
+		railHeight			= rightRailHeight
+		railBarFillThk		= rightRailBarThk
+		railFrameThk		= rightRailFrameThk
+		railDist			= rightRailDist
+		railType_m			= rightRailType_m
+		railPostSize		= rightRailPostSize
+		barNumber			= nBarsRightRail
+		railWireType		= rightWireType_m
+		if rightRailType_m = RAIL_WIRED then
+			railBarThk		= rightRailWireThk
+			railBarDepth	= rightRailWireDepth
+			railBarDiam		= rightRailWireDiam
+		endif
+	endif
+
+	call "stairRails_m" parameters	railType_m				= railType_m,
+									iStairType				= 1,
+									bEnableWired02Rail		= 0,
+									bEnableNonVerticalRail	= 0,
+									additionXComplex		= additionXComplex,
+									additionZComplex		= additionZComplex,
+									ptyp_m					= 1,
+									ani						= ani,
+									ab						= 0,
+									rb						= 0,
+									rom_m					= 1,
+									rmm_m					= 1,
+									lraSimple				= lraSimple,
+									lraComplex				= lraComplex,
+									railHeight				= railHeight,
+									railHeightComplex		= dsComplex,
+									railDist				= railDist,
+									gs_detlevel_3D_m		= gs_detlevel_3D_m,
+									gs_cont_pen				= gs_cont_pen,
+									res						= res,
+									rescs					= rescs,
+									gs_shadow				= gs_shadow,
+
+									railFrameThk			= railFrameThk,
+									railBarDepth			= railBarDepth,
+									railBarFillThk			= railBarFillThk,
+									railBarDiam				= railBarDiam,
+									balusterDist			= treadDepth,
+									railFrameMat			= matBar,
+									railBaluFillMat			= matSurface,
+									barNumber				= barNumber,
+									hrovL					= hrovL,
+									hrovR					= hrovR,
+									railHandrailMat			= matHandrail,
+									iBalusterStyle			= railWireType,
+									railPostDiam			= railPostSize,
+									railPostWidth			= railPostSize,
+									railPostThk				= railFrameThk,
+									postNumber				= postNumber,
+									railPostMat				= matPost
+
+return
+
+! ==============================================================================
+! one side of the railing with simple representation
+!	bLeftSide =
+!	railBarDepth =
+!	railBarThk =
+! ==============================================================================
+"one_rail_simple":
+	material matSurface
+	if rightRailType_m = 6 then
+		addz 0.03
+		poly_ 6,
+				dx/2,dy+0.05+dy/2,1,
+				dx/2,dy+1,1,
+				a-dx/2,zzyzx+1,1,
+				a,zzyzx+1,1,
+				a,zzyzx+0.05+dy/2,1,
+				a-dx/2,zzyzx+0.05+dy/2,1
+		del 1
+	endif
+
+	material matHandrail
+	if rightRailType_m = 5 then
+		addz 0.01
+		prism_ 14,0.05,
+				dx/2,dy+0.05+dy/2,15,
+				dx/2,dy+1,15,
+				a-dx/2,zzyzx+1,15,
+				a,zzyzx+1,15,
+				a,zzyzx+0.05+dy/2,15,
+				a-dx/2,zzyzx+0.05+dy/2,15,
+				dx/2,dy+0.05+dy/2,-1,
+
+				dx/2+0.03,dy+0.05+dy/2+0.03/tan(bet),15,
+				dx/2+0.03,dy+1-0.03*tan(bet),15,
+				a-dx/2+0.03*tan(alf/2),zzyzx+0.97,15,
+				a-0.03,zzyzx+0.97,15,
+				a-0.03,zzyzx+0.08+dy/2,15,
+				a-dx/2-tan(alf/2)*0.03,zzyzx+0.08+dy/2,15,
+				dx/2+0.03,dy+0.05+dy/2+0.03/tan(bet),-1
+		del 1
+	endif
+
+	if rightRailType_m = 6 then
+		addz 0.01
+		prism_ 14,0.05,
+				dx/2,dy+0.05+dy/2,15,
+				dx/2,dy+1,15,
+				a-dx/2,zzyzx+1,15,
+				a,zzyzx+1,15,
+				a,zzyzx+0.05+dy/2,15,
+				a-dx/2,zzyzx+0.05+dy/2,15,
+				dx/2,dy+0.05+dy/2,-1,
+
+				dx/2+0.03,dy+0.05+dy/2+0.03/tan(bet),15,
+				dx/2+0.03,dy+1-0.03*tan(bet),15,
+				a-dx/2+0.03*tan(alf/2),zzyzx+0.97,15,
+				a-0.03,zzyzx+0.97,15,
+				a-0.03,zzyzx+0.08+dy/2,15,
+				a-dx/2-tan(alf/2)*0.03,zzyzx+0.08+dy/2,15,
+				dx/2+0.03,dy+0.05+dy/2+0.03/tan(bet),-1
+
+		addz 0.025
+
+		material matSurface
+		poly_ 6,
+				dx/2+0.03,dy+0.05+dy/2+0.03/tan(bet),1,
+				dx/2+0.03,dy+1-0.03*tan(bet),1,
+				a-dx/2+0.03*tan(alf/2),zzyzx+0.97,1,
+				a-0.03,zzyzx+0.97,1,
+				a-0.03,zzyzx+0.08+dy/2,1,
+				a-dx/2-tan(alf/2)*0.03,zzyzx+0.08+dy/2,1
+
+		del 2
+	endif
+
+	if rightRailType_m = 1 then
+		addz 0.02
+		MATERIAL matHandrail
+		prism_ 14,0.05,
+				dx/2,dy+0.05+dy/2,15,
+				dx/2,dy+1,15,
+				a-dx/2,zzyzx+1,15,
+				a,zzyzx+1,15,
+				a,zzyzx+0.05+dy/2,15,
+				a-dx/2,zzyzx+0.05+dy/2,15,
+				dx/2,dy+0.05+dy/2,-1,
+
+				dx/2+0.03,dy+0.05+dy/2+0.03/tan(bet),15,
+				dx/2+0.03,dy+1-0.03/tan((90+alf)/2),15,
+				a-dx/2+0.03*tan(alf/2),zzyzx+0.97,15,
+				a-0.03,zzyzx+0.97,15,
+				a-0.03,zzyzx+0.08+dy/2,15,
+				a-dx/2-tan(alf/2)*0.03,zzyzx+0.08+dy/2,15,
+				dx/2+0.03,dy+0.05+dy/2+0.03/tan(bet),-1
+
+		add dx/2,dy/2,0.01
+
+		for u=1 to (n)*2-1
+			add dx/2,dy/2,0
+			MATERIAL matBar
+			prism_ 4,0.03,
+					-0.015,dy+0.05-0.015*tan(alf)+0.03/cos(alf),15,
+					-0.015,dy/2+1-0.03/cos(alf)-0.015*tan(alf),15,
+					0.015,dy/2+1-0.03/cos(alf)+0.015*tan(alf),15,
+					0.015,dy+0.05+0.015*tan(alf)+0.03/cos(alf),15
+		next u
+		del (n)*2
+		del 1
+
+		MATERIAL matPost
+		prism_ 4,0.09,
+				a-dx/2-tan(alf/2)*0.03,zzyzx,15,
+				a-dx/2-tan(alf/2)*0.03+0.09,zzyzx,15,
+				a-dx/2-0.03*tan(alf/2)+0.09,zzyzx+1.1,15,
+				a-dx/2-0.03*tan(alf/2),zzyzx+1.1,15
+
+		prism_ 4,0.09,
+				dx/2,dy,15,
+				dx/2-0.09,dy,15,
+				dx/2-0.09,dy+1.1,15,
+				dx/2,dy+1.1,15
+
+	endif
+
+	if rightRailType_m = 2 then
+		if bLeftSide then addz 0.05-railBarDepth
+		addz 0.02
+		barDistance = (0.95-railBarThk-dy/2)/(nBarsRightRail-1)
+		for u=1 to nBarsRightRail
+			MATERIAL matBar
+			prism_ 6,railBarDepth,
+					dx/2,dy+0.05+dy/2,15,
+					dx/2,dy+0.05+dy/2+bth,15,
+					a-dx/2,zzyzx+0.05+dy/2+bth,15,
+					a-railBarDepth-0.04,zzyzx+0.05+dy/2+bth,15,
+					a-railBarDepth-0.04,zzyzx+dy/2+0.05,15,
+					a-dx/2,zzyzx+dy/2+0.05,15
+			addy barDistance
+		next u
+
+		del nBarsRightRail+1
+
+		MATERIAL matPost
+		prism_ 4,railBarDepth+0.04,
+				a,zzyzx,15,
+				a-railBarDepth-0.04,zzyzx,15,
+				a-railBarDepth-0.04,zzyzx+1.1,15,
+				a,zzyzx+1.1,15
+
+		prism_ 4,railBarDepth+0.04,
+				dx/2,dy,15,
+				dx/2-railBarDepth-0.04,dy,15,
+				dx/2-railBarDepth-0.04,dy+1.1,15,
+				dx/2,dy+1.1,15
+
+		if bLeftSide then del 1
+	endif
+
+return

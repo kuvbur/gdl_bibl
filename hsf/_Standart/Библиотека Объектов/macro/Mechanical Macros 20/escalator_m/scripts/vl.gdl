@@ -1,0 +1,194 @@
+
+! ==============================================================================
+! escalator_m
+! ==============================================================================
+
+
+values "xBreaklinePos" range (landingLength + 2 * combLength, A-(landingLength + 2 * combLength))
+
+dim stDetail[3]
+	stDetail[1]=`Детальный`
+	stDetail[2]=`Простой`
+	stDetail[3]=`Откл.`
+
+values "gs_detlevel_3D" stDetail
+values "gs_detlevel_3D_m" 0, 1, 2
+
+if GLOB_MODPAR_NAME = "gs_detlevel_3D" then
+	gs_detlevel_3D_m = 2	! Detailed
+	if gs_detlevel_3D = stDetail[2] then gs_detlevel_3D_m = 1
+	if gs_detlevel_3D = stDetail[3] then gs_detlevel_3D_m = 0
+	parameters gs_detlevel_3D_m = gs_detlevel_3D_m
+else
+	gs_detlevel_3D = stDetail[1]
+	if gs_detlevel_3D_m = 0 then gs_detlevel_3D = stDetail[3]
+	if gs_detlevel_3D_m = 1 then gs_detlevel_3D = stDetail[2]
+	parameters gs_detlevel_3D = gs_detlevel_3D
+endif
+
+
+dim stBalustradeType[2]
+	stBalustradeType[1] = `Сплошной`
+	stBalustradeType[2] = `Стекло`
+
+values{2} "iBalustradeType"	1, stBalustradeType[1],
+							2, stBalustradeType[2]
+
+if iBalustradeType = BALUSTRADE_SOLID then
+	lock "matGlass"
+	hideparameter "matGlass"
+endif
+if iBalustradeType = BALUSTRADE_GLAZED then
+	lock "matBalustrade"
+	hideparameter "matBalustrade"
+endif
+
+IF gs_cont_pen=0 THEN PARAMETERS gs_cont_pen=2
+IF gs_fill_pen=0 THEN PARAMETERS gs_fill_pen=91
+
+IF gs_detlevel_3D_m = 1 then
+	lock "gs_resol"
+	hideparameter "gs_resol"
+else
+	values "gs_resol" range [6, )
+endif
+
+call "2dDetailLevel" parameters gs_detlevel_2D	= gs_detlevel_2D,
+							gs_detlevel_2D_m	= gs_detlevel_2D_m,
+							enable2dDetLevels	= 2 + 4 + 8 + 16
+
+if bShowBreakline = 0 then
+	hideparameter "bShowOverhead", "ltOverhead"
+	lock "bShowOverhead", "ltOverhead"
+endif
+if bStorySensitive = 0 then
+	hideparameter "aboveHomeStory"
+	lock "aboveHomeStory"
+endif
+if GLOB_MODPAR_NAME = "stepWidth" then
+	B = stepWidth + 2 * balustradeWidth
+	parameters B = B
+else
+	stepWidth = B - 2 * balustradeWidth
+	parameters stepWidth = stepWidth
+endif
+
+values "B" range [1, )
+values "tread" range [0.2, 0.6]
+if iObjectType = ESCALATOR then
+	values "A" range [totalTreadLength + 2 * landingLength - 3 * tread + 2 * combLength, totalTreadLength + 2 * landingLength - tread + 2 * combLength]
+	values "landingHeight" range [ceil(10*(trussLowerRadMin * (1 - cos(inclination)) + trussUpperRadMin * (1 - cos(inclination)) + 0.1))/10, )
+	values "riser" range [tread * sin(20), tread * sin(45)]
+	values "inclination" range (20, 45]
+endif
+if iObjectType = MOVING_WALKWAY then
+	if landingHeight > 0 then
+		if GLOB_MODPAR_NAME = "A" | GLOB_MODPAR_NAME = "landingHeight"  then
+			inclination = atn(landingHeight / (A - 2 * landingLength - 8 * tread))
+			riser = tread * sin(inclination)
+			parameters inclination = inclination, riser = riser
+		endif
+
+		if A < 2 * landingLength + 8 * tread + landingHeight / tan(20) then
+			A = 2 * landingLength + 8 * tread + landingHeight / tan(20)
+			parameters A = A
+		endif
+	else
+		values "A" range [2 * landingLength + 8 * tread, )
+		hideparameter "bShowBreakline", "bShowOverhead", "ltOverhead", "aboveHomeStory", "bShowBreaklineUp", "bShowLower2D"
+		lock "bShowBreakline", "bShowOverhead", "ltOverhead", "aboveHomeStory", "bShowBreaklineUp", "bShowLower2D"
+	endif
+	if GLOB_MODPAR_NAME = "inclination" then
+		A = 2 * landingLength + inclTreadLength + 8 * tread
+		parameters A = A
+		if 2 * landingLength + 8 * tread + landingHeight / tan(inclination) > 100 then
+			inclination = atn(landingHeight / (100 - 2 * landingLength - 8 * tread))
+			parameters inclination = inclination
+		endif
+	endif
+	values "landingHeight" range [0, )
+	values "riser" range [0, tread * sin(20)]
+	values "inclination" range (0, 20]
+	lock "riser"
+endif
+ZZYZX = 1 + landingHeight + balustradeHeight + handrailRubberThk
+parameters ZZYZX = ZZYZX
+lock "ZZYZX"
+
+if bShowBreaklineUp = 0 then
+	lock "bShowLower2D"
+	hideparameter "bShowLower2D"
+endif
+
+parameters gs_FontSize= abs(gs_FontSize)
+values "gs_FontSize" range (0,]
+
+
+dim stWalking[4]
+	stWalking[1] = `Нет`
+	stWalking[2] = `Вверх`
+	stWalking[3] = `Вниз в Нижней Части`
+	stWalking[4] = `Вниз в Верхней Части`
+
+dim stTextOrientation[3]
+	stTextOrientation[1] = `Читаемый`
+	stTextOrientation[2] = `Параллельно Основной Линии`
+	stTextOrientation[3] = `Выровнять по Символу`
+
+values "walkingDirUPDN" stWalking
+values "walkingDirUPDN_m" 0,1,2,3
+values "typeTextRotation_UpDn" stTextOrientation
+values "typeTextRotation_UpDn_m" 1,2,3
+
+values "UPDNfontsize" RANGE (0,)
+
+if GLOB_MODPAR_NAME = "walkingDirUPDN" then
+	walkingDirUPDN_m = 0
+	for iWalk = 2 to vardim1(stWalking)
+		if walkingDirUPDN = stWalking[iWalk] then walkingDirUPDN_m = iWalk - 1
+	next iWalk
+	parameters walkingDirUPDN_m = walkingDirUPDN_m
+else
+	walkingDirUPDN_m = max(min(walkingDirUPDN_m,3),0)
+	parameters walkingDirUPDN = stWalking[walkingDirUPDN_m+1]
+endif
+
+if GLOB_MODPAR_NAME = "typeTextRotation_UpDn" then
+	typeTextRotation_UpDn_m = 3
+	for i = 1 to vardim1(stTextOrientation)
+		if typeTextRotation_UpDn = stTextOrientation[i] then	typeTextRotation_UpDn_m = i
+	next i
+	parameters typeTextRotation_UpDn_m = typeTextRotation_UpDn_m
+else
+	typeTextRotation_UpDn_m = max(min(typeTextRotation_UpDn_m,3),1)
+	parameters typeTextRotation_UpDn = stTextOrientation[typeTextRotation_UpDn_m]
+endif
+
+if not(walkingDirUPDN_m) then hideparameter "UPDNfontsize", "typeTextRotation_UpDn", "UPDNfontpen"
+
+AC_show2DHotspotsin3D = 0
+parameters AC_show2DHotspotsin3D = AC_show2DHotspotsin3D
+parameters ac_bottomlevel	= 0
+parameters ac_toplevel 		= landingHeight
+
+
+! =============================================================================
+! IFC Parameters
+! =============================================================================
+
+ifc_CapacityByWeight	= FM_LiftCapacityNumber
+ifc_CapacityByNumber	= FM_TransportablePersons
+parameters	ifc_CapacityByWeight	= ifc_CapacityByWeight,
+			ifc_CapacityByNumber	= ifc_CapacityByNumber
+
+FM_LiftCapacity = str("%~m", FM_LiftCapacityNumber)
+parameters FM_LiftCapacity = FM_LiftCapacity
+
+if iObjectType = ESCALATOR then
+	ifc_optype = 2
+else
+	ifc_optype = 3
+endif
+parameters ifc_optype = ifc_optype
+
+values "FM_LiftCapacityNumber" range[0, )

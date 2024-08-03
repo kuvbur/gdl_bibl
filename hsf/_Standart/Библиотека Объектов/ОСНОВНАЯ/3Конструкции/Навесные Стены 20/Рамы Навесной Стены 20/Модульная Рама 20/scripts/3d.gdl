@@ -1,0 +1,370 @@
+
+if gs_detlevel_3D_m = DETLEV_OFF then END
+
+if gs_shadow then
+	SHADOW ON
+else
+	SHADOW OFF
+endif
+
+cutedgestatus	= 1
+if GLOB_CONTEXT = 5 or GLOB_CONTEXT = 6 then
+	cutedgestatus	= 2
+endif
+
+! =========DEBUG
+!!!if gs_debug then
+!!!	if gs_draw_body then
+!!!	print "gs_rightOffset",gs_rightOffset, "\n", "gs_originOffsetX", gs_originOffsetX
+!!!	addz gs_spider_height
+!!!	brick 0.5,0.02,0.02
+!!!	addx 0.51
+!!!	text 0.02,0,"X"
+!!!	del 1
+!!!
+!!!	brick 0.02,0.5,0.02
+!!!	addy 0.51
+!!!	text 0.02,0,"Y"
+!!!	del 1
+!!!
+!!!	brick 0.02,0.02,0.5
+!!!	del 1
+!!!	endif
+!!!	if gs_print_gotparams then \
+!!!		print "Top plane:",AC_topConnPlane[1],AC_topConnPlane[2],AC_topConnPlane[3],AC_topConnPlane[4],"\n",\
+!!!			"Bottom plane:",AC_bottomConnPlane[1],AC_bottomConnPlane[2],AC_bottomConnPlane[3],AC_bottomConnPlane[4]
+!!!!		print gs_frameAngles[i], ">",OutAngles[i*2-1],InAngles[i*2-1],InAngles[i*2],OutAngles[i*2],"<",VP,"-",ac_nConnectingPanels
+!!!		print "1:",AC_clampvector[1][1],AC_clampvector[1][2],"2:",AC_clampvector[2][1],AC_clampvector[2][2]
+!!!endif
+! =========DEBUG
+
+material gs_material
+RESOL gs_resol
+PEN gs_cont_pen
+if buseSectionPens then
+	sect_fill gs_sect_fill, gs_sect_bg_pen, gs_sect_fill_pen, gs_sect_cont_pen
+endif
+
+! =========Cutplanes - Start Cutting
+modz = zzyzx
+IF GS_Cutting Then
+! =========User  Cuts
+	AB = sqr(FRAME_DEPTH^2 + FRAME_WIDTH^2)
+
+	!!!-------------------- Top Cutting
+	If ABS(gs_cutang1) > EPS OR ABS(gs_cutang2) > EPS Then
+		modz = modz+tan(60)* AB/2
+
+		Rotz gs_cutdir_top
+		addz zzyzx
+		rotx 90
+
+		IF ABS(gs_cutdir_top) < EPS Then
+			HPx = FRAME_WIDTH
+			HPy = FRAME_DEPTH
+		Else
+			HPx = FRAME_DEPTH
+			HPy = FRAME_WIDTH
+		Endif
+
+		cutpoly 5,
+				-AB/2,tan(60)* AB /2,
+				AB/2,tan(60)* AB/2,
+				AB/2, tan(gs_cutang1)* AB/2,
+				0,0,
+				-AB/2, tan(gs_cutang2)* AB/2
+
+		del 3
+	Endif
+
+	!!!-------------------- Bottom Cutting
+	If ABS(gs_cutang3) > EPS OR ABS(gs_cutang4) > EPS Then
+		modz = modz+tan(60)* AB/2
+
+		Rotz gs_cutdir_bot
+		rotx 90
+
+		IF ABS(gs_cutdir_bot) < EPS Then
+			HPx = FRAME_WIDTH
+			HPy = FRAME_DEPTH
+		Else
+			HPx = FRAME_DEPTH
+			HPy = FRAME_WIDTH
+		Endif
+
+		cutpoly 5,
+				-AB/2,-tan(60)* AB/2,
+				AB/2,-tan(60)* AB/2,
+				AB/2, tan(gs_cutang3)* AB/2,
+				0,0,
+				-AB/2, tan(gs_cutang4)* AB/2
+
+		del 2
+		addz -tan(60)*AB/2
+	Endif
+else
+! =========Auto Cuts
+
+	!!!--------------------Auto Cutting at Top
+	if ABS(AC_topConnPlane[3]) > EPS then
+		tempwidthX = modz + A * ABS(TAN(ATN(AC_topConnPlane[1]/AC_topConnPlane[3])))
+		tempwidthY = modz + B * ABS(TAN(ATN(AC_topConnPlane[2]/AC_topConnPlane[3])))
+		modz = modz + max(tempwidthX, tempwidthY)
+	endif
+
+	if ABS(AC_topConnPlane[3]) > EPS then
+		roty ATN(AC_topConnPlane[1]/AC_topConnPlane[3])
+		rotx -ATN(AC_topConnPlane[2]/AC_topConnPlane[3])
+	endif
+
+	addz AC_topConnPlane[4]
+
+	if gs_draw_body then plane 4, -b,b,0,b,b,0,b,-b,0,-b,-b,0
+
+	cutplane 1,1,0,1,cutedgestatus
+
+	if ABS(AC_topConnPlane[3]) > EPS then del 2
+
+	del 1
+
+	!!!--------------------Auto Cutting at bottom
+	if ABS(AC_bottomConnPlane[3]) > EPS then
+		tempwidthX = modz + A * ABS(TAN(ATN(AC_bottomConnPlane[1]/AC_bottomConnPlane[3])))
+		tempwidthY = modz + B * ABS(TAN(ATN(AC_bottomConnPlane[2]/AC_bottomConnPlane[3])))
+		modz = modz + max(tempwidthX, tempwidthY)
+	endif
+
+	if ABS(AC_bottomConnPlane[3]) > EPS then
+		roty ATN(AC_bottomConnPlane[1]/AC_bottomConnPlane[3])
+		rotx -ATN(AC_bottomConnPlane[2]/AC_bottomConnPlane[3])
+	endif
+
+	addz -AC_bottomConnPlane[4]
+
+	if gs_draw_body then plane 4, -b,b,0,b,b,0,b,-b,0,-b,-b,0
+
+	rotx 180
+	cutplane 1,1,0,1,cutedgestatus
+	del 1
+
+	if ABS(AC_bottomConnPlane[3]) > EPS then del 2
+
+	del 1
+
+	if ABS(AC_bottomConnPlane[3]) > EPS then
+		addz - max(A * ABS(TAN(ATN(AC_bottomConnPlane[1]/AC_bottomConnPlane[3]))), B * ABS(TAN(ATN(AC_bottomConnPlane[2]/AC_bottomConnPlane[3]))) )
+	endif
+
+endif
+! =========Cutplanes - End Cutting
+
+
+
+! ========Shape generation
+! =========CORE
+if (ABS(POZ_WIDTH_SEG - AC_clampDepth) > EPS | ABS(NEG_WIDTH_SEG - AC_clampDepth) > EPS) &\
+	(ABS(AC_clampWidth + gs_gasketIN) > EPS | ABS(AC_clampWidth + gs_gasketOUT) > EPS) then
+	prism_ 4,modz,
+		POZ_WIDTH_SEG-AC_clampDepth,-(AC_clampWidth/2)-gs_gasketIN,15,
+		POZ_WIDTH_SEG-AC_clampDepth,(AC_clampWidth/2)+gs_gasketOUT,15,
+		-NEG_WIDTH_SEG+AC_clampDepth,(AC_clampWidth/2)+gs_gasketOUT,15,
+		-NEG_WIDTH_SEG+AC_clampDepth,-(AC_clampWidth/2)-gs_gasketIN,15
+endif
+
+if gs_gasketIN > 0 then
+	if gs_detlevel_3D_m = DETLEV_DETAILED then
+		prism_ 4,modz,
+			POZ_WIDTH_SEG,-(AC_clampWidth/2)-gs_gasketIN,15,
+			POZ_WIDTH_SEG,-(AC_clampWidth/2),15,
+			POZ_WIDTH_SEG-AC_clampDepth,-(AC_clampWidth/2),15,
+			POZ_WIDTH_SEG-AC_clampDepth,-(AC_clampWidth/2)-gs_gasketIN,15
+
+		prism_ 4,modz,
+			-NEG_WIDTH_SEG,-(AC_clampWidth/2)-gs_gasketIN,15,
+			-NEG_WIDTH_SEG,-(AC_clampWidth/2),15,
+			-NEG_WIDTH_SEG+AC_clampDepth,-(AC_clampWidth/2),15,
+			-NEG_WIDTH_SEG+AC_clampDepth,-(AC_clampWidth/2)-gs_gasketIN,15
+	endif
+
+	if gs_detlevel_3D_m = DETLEV_SIMPLE then
+		prism_ 4,modz,
+			POZ_WIDTH_SEG,-(AC_clampWidth/2)-gs_gasketIN,15,
+			POZ_WIDTH_SEG,-(AC_clampWidth/2),15,
+			-NEG_WIDTH_SEG,-(AC_clampWidth/2),15,
+			-NEG_WIDTH_SEG,-(AC_clampWidth/2)-gs_gasketIN,15
+	endif
+
+endif
+
+if gs_gasketOUT > 0 then
+	if gs_detlevel_3D_m = DETLEV_DETAILED then
+		prism_ 4,modz,
+			POZ_WIDTH_SEG,(AC_clampWidth/2)+gs_gasketOUT,15,
+			POZ_WIDTH_SEG,(AC_clampWidth/2),15,
+			POZ_WIDTH_SEG-AC_clampDepth,(AC_clampWidth/2),15,
+			POZ_WIDTH_SEG-AC_clampDepth,(AC_clampWidth/2)+gs_gasketOUT,15
+
+		prism_ 4,modz,
+			-NEG_WIDTH_SEG,(AC_clampWidth/2)+gs_gasketOUT,15,
+			-NEG_WIDTH_SEG,(AC_clampWidth/2),15,
+			-NEG_WIDTH_SEG+AC_clampDepth,(AC_clampWidth/2),15,
+			-NEG_WIDTH_SEG+AC_clampDepth,(AC_clampWidth/2)+gs_gasketOUT,15
+	endif
+
+	if gs_detlevel_3D_m = DETLEV_SIMPLE then
+		prism_ 4,modz,
+			POZ_WIDTH_SEG,(AC_clampWidth/2)+gs_gasketOUT,15,
+			POZ_WIDTH_SEG,(AC_clampWidth/2),15,
+			-NEG_WIDTH_SEG,(AC_clampWidth/2),15,
+			-NEG_WIDTH_SEG,(AC_clampWidth/2)+gs_gasketOUT,15
+	endif
+
+endif
+
+if ABS(AC_ClampVector[1][1]) < EPS & (AC_ClampVector[1][2]) < EPS & \
+	ABS(AC_clampWidth) > EPS & ABS(AC_clampDepth) > EPS then
+	prism_ 4,modz,
+		-NEG_WIDTH_SEG,-(AC_clampWidth/2),15,
+		-NEG_WIDTH_SEG,(AC_clampWidth/2),15,
+		-NEG_WIDTH_SEG+AC_clampDepth,(AC_clampWidth/2),15,
+		-NEG_WIDTH_SEG+AC_clampDepth,-(AC_clampWidth/2),15
+endif
+
+if ABS(AC_ClampVector[2][1]) < EPS & ABS(AC_ClampVector[2][2]) < EPS & \
+	ABS(AC_clampWidth) > EPS & ABS(AC_clampDepth) > EPS then
+	prism_ 4,modz,
+		POZ_WIDTH_SEG,-(AC_clampWidth/2),15,
+		POZ_WIDTH_SEG,(AC_clampWidth/2),15,
+		POZ_WIDTH_SEG-AC_clampDepth,(AC_clampWidth/2),15,
+		POZ_WIDTH_SEG-AC_clampDepth,-(AC_clampWidth/2),15
+endif
+
+! =========CORE
+
+
+! =========FRAME
+if gs_frameType = FRAMETYPE_CUSTOM then
+
+	!Boundary outside
+	if ABS(gs_originOffsetX) < EPS then addx 0
+
+	!Boundary inside
+	if ABS(gs_rightOffset) < EPS then addx -NEG_WIDTH_SEG
+
+	!Boundary center
+	if ABS(gs_rightOffset) > EPS AND ABS(gs_originOffsetX) > EPS then addx -POZ_WIDTH_SEG
+
+	addy -NEG_DEPTH_SEG
+
+	CALL "CW_Frame_Collection" PARAMETERS	a=POZ_WIDTH_SEG+NEG_WIDTH_SEG,
+											b=NEG_DEPTH_SEG-(AC_clampWidth/2)-gs_gasketIN,
+											zzyzx=modz,
+											gs_ptype=gs_CustomFrameName
+	del 2
+
+else
+	if gs_frameType = FRAMETYPE_TYPE1 then
+		put POZ_WIDTH_SEG, -NEG_DEPTH_SEG,15
+		put POZ_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN,15
+		put -NEG_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN,15
+		put -NEG_WIDTH_SEG, -NEG_DEPTH_SEG,15
+	endif
+
+	if gs_frameType = FRAMETYPE_TYPE2 then
+		put tempXorigo+0.004, -NEG_DEPTH_SEG,15
+		put tempXorigo+0.004, 0-(AC_clampWidth/2)-gs_gasketIN-0.008,15
+		put POZ_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN-0.008,15
+		put POZ_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN,15
+		put -NEG_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN,15
+		put -NEG_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN-0.008,15
+		put tempXorigo-0.004, 0-(AC_clampWidth/2)-gs_gasketIN-0.008,15
+		put tempXorigo-0.004, -NEG_DEPTH_SEG,15
+	endif
+
+	if gs_frameType = FRAMETYPE_TYPE3 then
+		put POZ_WIDTH_SEG, -NEG_DEPTH_SEG,15
+		put POZ_WIDTH_SEG, -NEG_DEPTH_SEG+0.008,15
+		put tempXorigo+0.004, -NEG_DEPTH_SEG+0.008,15
+		put tempXorigo+0.004, 0-(AC_clampWidth/2)-gs_gasketIN-0.008,15
+		put POZ_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN-0.008,15
+		put POZ_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN,15
+		put -NEG_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN,15
+		put -NEG_WIDTH_SEG, 0-(AC_clampWidth/2)-gs_gasketIN-0.008,15
+		put tempXorigo-0.004, 0-(AC_clampWidth/2)-gs_gasketIN-0.008,15
+		put tempXorigo-0.004, -NEG_DEPTH_SEG+0.008,15
+		put -NEG_WIDTH_SEG, -NEG_DEPTH_SEG+0.008,15
+		put -NEG_WIDTH_SEG, -NEG_DEPTH_SEG,15
+	endif
+
+	prism_ NSP/3, modz,
+		GET (NSP)
+endif
+! =========FRAME
+
+
+! =========CAP
+if gs_capType = CAPTYPE_CUSTOM then
+
+	!Boundary outside
+	if ABS(gs_originOffsetX) < EPS then addx 0
+
+	!Boundary inside
+	if ABS(gs_rightOffset) < EPS then addx -NEG_WIDTH_SEG
+
+	!Boundary center
+	if ABS(gs_rightOffset) > EPS AND ABS(gs_originOffsetX) > EPS then addx -POZ_WIDTH_SEG
+
+	addy AC_clampWidth/2+gs_gasketOUT
+
+	CALL "CW_Cap_Collection" PARAMETERS	a=POZ_WIDTH_SEG+NEG_WIDTH_SEG,
+											b=POZ_DEPTH_SEG-(AC_clampWidth/2)-gs_gasketOUT,
+											zzyzx=modz,
+											gs_ptype=gs_CustomCapName
+
+	del 2
+
+else
+	if gs_capType = CAPTYPE_TYPE1 then
+		put POZ_WIDTH_SEG, POZ_DEPTH_SEG,15
+		put POZ_WIDTH_SEG, 0+(AC_clampWidth/2)+gs_gasketOUT,15
+		put -NEG_WIDTH_SEG, 0+(AC_clampWidth/2)+gs_gasketOUT,15
+		put -NEG_WIDTH_SEG, POZ_DEPTH_SEG,15
+	endif
+
+	if gs_capType = CAPTYPE_TYPE2 then
+		put tempXorigo, POZ_DEPTH_SEG,15
+		put POZ_WIDTH_SEG, 0+(AC_clampWidth/2)+gs_gasketOUT,15
+		put -NEG_WIDTH_SEG, 0+(AC_clampWidth/2)+gs_gasketOUT,15
+	endif
+
+	if gs_capType = CAPTYPE_TYPE3 then
+		put POZ_WIDTH_SEG, 0+(AC_clampWidth/2)+gs_gasketOUT,15
+		put tempXorigo, 0+(AC_clampWidth/2)+gs_gasketOUT,900
+		put -NEG_WIDTH_SEG, 0+(AC_clampWidth/2)+gs_gasketOUT,3000+15
+	endif
+
+	prism_ NSP/3, modz,
+		GET (NSP)
+endif
+! =========CAP
+! ========Shape generation
+
+
+! =========Cutplanes - End Cutting
+if GS_Cutting then
+	if ABS(gs_cutang1) > EPS OR ABS(gs_cutang2) > EPS then cutend
+
+	if ABS(gs_cutang3) > EPS OR ABS(gs_cutang4) > EPS then
+		del 1
+		cutend
+	endif
+else
+	cutend
+	cutend
+	if ABS(AC_bottomConnPlane[1]) > EPS then
+		del 1
+	endif
+endif
+! =========Cutplanes - End Cutting
+
+END

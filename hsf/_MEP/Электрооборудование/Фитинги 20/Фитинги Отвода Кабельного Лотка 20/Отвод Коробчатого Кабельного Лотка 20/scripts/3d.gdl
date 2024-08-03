@@ -1,0 +1,356 @@
+
+! Cable Tray Bend
+! Zsolt Feke/2008
+
+
+IF gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+ENDIF
+
+IF gs_detlevel_3D_m = 0 THEN END
+
+CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL returned_parameters gs_cont_pen, sMat, gs_InsMat
+
+IF useSysMat AND MEP_StrConnectionData[1][2] <> "0" THEN gs_CableTrayMat = sMat
+
+RESOL res
+PEN gs_cont_pen
+MATERIAL gs_CableTrayMat
+
+
+						! ---------------------- !
+						! --- object rotator --- !
+						! ---------------------- !
+
+IF rot_conn THEN
+	IF rot_conn = 1 THEN
+		dist_x = gs_Connections[2][1]
+		dist_y = gs_Connections[2][2]*0.5
+	ELSE
+		DIM inCoords[20][3]
+		DIM outCoords[20][3]
+
+		DIM cMatrix[3][3]
+
+		cMatrix[1][1] = gs_Connections[rot_conn][4]
+		cMatrix[1][2] = gs_Connections[rot_conn][5]
+		cMatrix[1][3] = gs_Connections[rot_conn][6]
+
+		cMatrix[2][1] = gs_Connections[rot_conn][7]
+		cMatrix[2][2] = gs_Connections[rot_conn][8]
+		cMatrix[2][3] = gs_Connections[rot_conn][9]
+
+		cMatrix[3][1] = -cMatrix[2][2]*cMatrix[1][3]+cMatrix[2][3]*cMatrix[1][2]
+		cMatrix[3][2] = -cMatrix[2][3]*cMatrix[1][1]+cMatrix[2][1]*cMatrix[1][3]
+		cMatrix[3][3] = -cMatrix[2][1]*cMatrix[1][2]+cMatrix[2][2]*cMatrix[1][1]
+
+
+		DIM tMatrix[3][3]
+
+		tMatrix[1][1] = cMatrix[1][1]
+		tMatrix[1][2] = cMatrix[2][1]
+		tMatrix[1][3] = cMatrix[3][1]
+
+		tMatrix[2][1] = cMatrix[1][2]
+		tMatrix[2][2] = cMatrix[2][2]
+		tMatrix[2][3] = cMatrix[3][2]
+
+		tMatrix[3][1] = cMatrix[1][3]
+		tMatrix[3][2] = cMatrix[2][3]
+		tMatrix[3][3] = cMatrix[3][3]
+
+
+								!!! +++ Input Coordinates +++ !!!
+
+		PUT gs_Connections[rot_conn][1], gs_Connections[rot_conn][2], gs_Connections[rot_conn][3]
+
+		Coordinates = NSP/3
+
+		FOR cnum = 1 TO Coordinates
+			inCoords[cnum][1] = GET(1)
+			inCoords[cnum][2] = GET(1)
+			inCoords[cnum][3] = GET(1)
+		NEXT cnum
+
+
+		! --- the Matrix Operation, what make the Output-Coordinates
+
+		FOR cnum = 1 TO Coordinates
+			outCoords[cnum][1] = inCoords[cnum][1]*tMatrix[1][1]+inCoords[cnum][2]*tMatrix[2][1]+inCoords[cnum][3]*tMatrix[3][1]
+			outCoords[cnum][2] = inCoords[cnum][1]*tMatrix[1][2]+inCoords[cnum][2]*tMatrix[2][2]+inCoords[cnum][3]*tMatrix[3][2]
+			outCoords[cnum][3] = inCoords[cnum][1]*tMatrix[1][3]+inCoords[cnum][2]*tMatrix[2][3]+inCoords[cnum][3]*tMatrix[3][3]
+		NEXT cnum
+
+		dist_x = outCoords[1][1]
+		dist_y = outCoords[1][2]*0.5
+	ENDIF
+
+	CALL "MEP_m_object_rotator" PARAMETERS 	rot_conn = rot_conn,
+											MEP_Position = MEP_Position,
+											dist_x = dist_x,
+											dist_y = dist_y,
+											Rotation = Rotation,
+											symbRotangle = SYMB_ROTANGLE,
+											gs_Connections = gs_Connections,
+											MEP_NumberConnections = MEP_NumberConnections,
+											MEP_NumConnectionData = MEP_NumConnectionData,
+											MEP_NumConnectedConnectionData = MEP_NumConnectedConnectionData,
+											defaultMatrix = defaultMatrix
+ENDIF
+
+
+XFORM   MEP_Position[2][1], MEP_Position[3][1], dZx, MEP_Position[1][1],
+		MEP_Position[2][2], MEP_Position[3][2], dZy, MEP_Position[1][2],
+		MEP_Position[2][3], MEP_Position[3][3], dZz, MEP_Position[1][3]
+
+halfWidth 	= cableTrayHalfWidth
+halfHeight 	= cableTrayHalfHeight
+
+IF GLOB_CONTEXT > 40 AND GLOB_CONTEXT < 50 THEN
+	IF MEP_BendAngle < 0.01 THEN
+		ROTy 90
+		PRISM_ 5, EPS,
+			halfHeight, halfWidth, 15,
+			-halfHeight, halfWidth, 15,
+			-halfHeight, -halfWidth, 15,
+			halfHeight, -halfWidth, 15,
+			halfHeight, halfWidth, -1
+		DEL 1
+	ELSE
+		alpha = 0
+
+		ADDz -halfHeight
+
+		PUT -cableCarrierBendStraightLengthA, -halfWidth, 15
+		PUT 0, -halfWidth, 15
+		IF MEP_HeelSegments > 1 THEN
+			PUT heelSegmentLength, -halfWidth, 15
+			FOR i = 1 TO (MEP_HeelSegments-2)
+				 alpha = alpha + bendAngle/(MEP_HeelSegments-2)
+				PUT heelSegmentLength+heelRadius*SIN(alpha), -halfWidth+heelRadius-heelRadius*COS(alpha), 15
+			NEXT i
+			PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle), 15
+		ELSE
+			PUT 0, MEP_BendRadius, 915
+			PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle), 3015
+		ENDIF
+		PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle)+cableCarrierBendStraightLengthB*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle)+cableCarrierBendStraightLengthB*SIN(bendAngle), 15
+
+		PUT (MEP_BendRadius-halfWidth)*SIN(bendAngle)+cableCarrierBendStraightLengthB*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle)+cableCarrierBendStraightLengthB*SIN(bendAngle), 15
+		PUT (MEP_BendRadius-halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle), 15
+		IF MEP_ThroatSegments > 1 THEN
+			alpha = bendAngle
+			PUT throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), 15
+			FOR i = 1 TO (MEP_ThroatSegments-2)
+				 alpha = alpha - bendAngle/(MEP_ThroatSegments-2)
+				PUT throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), 15
+			NEXT i
+			PUT 0, halfWidth, 15
+		ELSE
+			PUT 0, MEP_BendRadius, 915
+			PUT 0, halfWidth, 3015
+		ENDIF
+		PUT -cableCarrierBendStraightLengthA, halfWidth, 15
+
+		PRISM_ NSP/3, halfHeight*2,
+
+			GET (NSP)
+
+		DEL 1
+	ENDIF
+ELSE
+	IF cable_carrier_show THEN			! -----> cable carrier bend <----- !
+		HOTSPOT 0, 0, 0, hceID_1
+		HOTSPOT PointBX, PointBY, 0, hceID_2
+		HOTSPOT PointMX, 0, 0, HptsUnIDBeginForConnEnds
+
+		ADD cableCarrierBendStraightLengthA, 0, -halfHeight
+
+		IF ABS(MEP_EmptySideID - 1) > EPS OR MEP_CoveredCableTray THEN
+			ADDz halfHeight*2
+			GOSUB 10
+			DEL 1
+		ENDIF
+
+		IF ABS(MEP_EmptySideID - 3) > EPS OR MEP_CoveredCableTray THEN GOSUB 10
+
+		IF ABS(MEP_EmptySideID - 2) > EPS OR MEP_CoveredCableTray THEN
+			IF MEP_BendAngle < 0.01 THEN
+				LIN_ 0, halfWidth, 0, 0, halfWidth, halfHeight*2
+			ELSE
+				mm = 1
+				IF MEP_ThroatSegments > 1 THEN mm = 0
+				FOR j = 1 TO 2
+					IF cableCarrierBendStraightLengthB > EPS THEN PUT (MEP_BendRadius-halfWidth)*SIN(bendAngle)+cableCarrierBendStraightLengthB*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle)+cableCarrierBendStraightLengthB*SIN(bendAngle), mm
+					PUT (MEP_BendRadius-halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle), mm
+					IF MEP_ThroatSegments > 1 THEN
+						alpha = bendAngle
+						PUT throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), mm
+						FOR i = 1 TO (MEP_ThroatSegments-2)
+							 alpha = alpha - bendAngle/(MEP_ThroatSegments-2)
+							PUT throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), mm
+						NEXT i
+						PUT 0, halfWidth, mm
+					ELSE
+						alpha = bendAngle
+						rr = MEP_BendRadius - halfWidth
+						FOR i = 1 TO bendRes+1
+							PUT rr*SIN(alpha), MEP_BendRadius-rr*COS(alpha), mm
+							alpha = alpha - bendAngle/bendRes
+						NEXT i
+					ENDIF
+					IF cableCarrierBendStraightLengthA > EPS THEN PUT -cableCarrierBendStraightLengthA, halfWidth, mm
+					mm = halfHeight*2
+				NEXT j
+
+				RULED NSP/6, 16+32,
+
+					  GET(NSP)
+			ENDIF
+		ENDIF
+
+		IF ABS(MEP_EmptySideID - 4) > EPS OR MEP_CoveredCableTray THEN
+			IF MEP_BendAngle < 0.01 THEN
+				LIN_ 0, -halfWidth, 0, 0, -halfWidth, halfHeight*2
+			ELSE
+				mm = 1
+				IF MEP_HeelSegments > 1 THEN mm = 0
+				FOR j = 1 TO 2
+					alpha = 0
+					IF cableCarrierBendStraightLengthA > EPS THEN PUT -cableCarrierBendStraightLengthA, -halfWidth, mm
+					PUT 0, -halfWidth, mm
+					IF MEP_HeelSegments > 1 THEN
+						PUT heelSegmentLength, -halfWidth, mm
+						FOR i = 1 TO (MEP_HeelSegments-2)
+							 alpha = alpha + bendAngle/(MEP_HeelSegments-2)
+							PUT heelSegmentLength+heelRadius*SIN(alpha), -halfWidth+heelRadius-heelRadius*COS(alpha), mm
+						NEXT i
+						PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle), mm
+					ELSE
+						rr = MEP_BendRadius + halfWidth
+						FOR i = 1 TO bendRes+1
+							PUT rr*SIN(alpha), MEP_BendRadius-rr*COS(alpha), mm
+							alpha = alpha + bendAngle/bendRes
+						NEXT i
+					ENDIF
+					IF cableCarrierBendStraightLengthB > EPS THEN PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle)+cableCarrierBendStraightLengthB*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle)+cableCarrierBendStraightLengthB*SIN(bendAngle), mm
+					mm = halfHeight*2
+				NEXT j
+
+				RULED NSP/6, 16+32,
+
+					  GET(NSP)
+			ENDIF
+		ENDIF
+		DEL 1
+
+		BODY -1
+	ENDIF
+
+
+	IF MEP_cline_show_3D THEN		! -----> center line <----- !
+
+		IF MEP_ThroatSegments = 1 AND MEP_HeelSegments = 1 OR MEP_HeelSegments = 1 THEN
+			RESOL INT(360/(bendAngle/bendRes))
+			MODEL WIRE
+			MULy -1
+			ADD cableCarrierBendStraightLengthA, -MEP_BendRadius, 0
+				ARC MEP_BendRadius, 90-bendAngle, 90
+			DEL 2
+			MODEL SOLID
+
+			IF cableCarrierBendStraightLengthA THEN
+				LIN_ 0, 0, 0, cableCarrierBendStraightLengthA, 0, 0
+			ENDIF
+
+			IF cableCarrierBendStraightLengthB THEN
+				xx = MEP_BendRadius*SIN(bendAngle)
+				yy = MEP_BendRadius-MEP_BendRadius*COS(bendAngle)
+				LIN_ xx, yy, 0, xx+cableCarrierBendStraightLengthB*COS(bendAngle), yy+cableCarrierBendStraightLengthB*SIN(bendAngle), 0
+			ENDIF
+		ENDIF
+
+		IF MEP_HeelSegments = 2 THEN
+			LIN_ 0, 0, 0, PointMX, PointMY, PointMZ
+			LIN_ PointMX, PointMY, PointMZ, PointBX, PointBY, PointBZ
+		ENDIF
+
+		IF MEP_HeelSegments > 2 THEN
+				segments = MEP_HeelSegments
+				Len = MEP_BendRadius*TAN(bendAngle/2)
+				rr = Len/(TAN(bendAngle/2)+2*SIN(bendAngle/(2*(segments-2))))
+				segmentLen = 2*rr*SIN(bendAngle/(2*(segments-2)))
+
+			MODEL WIRE
+
+				PUT 0, 0, 1
+				PUT cableCarrierBendStraightLengthA+segmentLen, 0, 1
+				alpha = 0
+				FOR i = 1 TO segments-2
+					alpha = alpha + bendAngle/(segments-2)
+					PUT cableCarrierBendStraightLengthA+segmentLen+rr*SIN(alpha), rr-rr*COS(alpha), 1
+				NEXT i
+				PUT cableCarrierBendStraightLengthA+segmentLen+rr*SIN(alpha)+(segmentLen+cableCarrierBendStraightLengthB)*COS(bendAngle), rr-rr*COS(alpha)+(segmentLen+cableCarrierBendStraightLengthB)*SIN(bendAngle), 0
+
+			POLY_ NSP/3,
+
+				GET(NSP)
+
+			MODEL SOLID
+		ENDIF
+	ENDIF
+ENDIF
+
+DEL TOP
+
+END
+
+10:
+	IF MEP_BendAngle < 0.01 THEN
+		LIN_ 0, halfWidth, 0, 0, -halfWidth, 0
+	ELSE
+		alpha = 0
+		IF cableCarrierBendStraightLengthA > EPS THEN PUT -cableCarrierBendStraightLengthA, -halfWidth, 1
+		PUT 0, -halfWidth, 1
+		IF MEP_HeelSegments > 1 THEN
+			PUT heelSegmentLength, -halfWidth, 1
+			FOR i = 1 TO (MEP_HeelSegments-2)
+				 alpha = alpha + bendAngle/(MEP_HeelSegments-2)
+				PUT heelSegmentLength+heelRadius*SIN(alpha), -halfWidth+heelRadius-heelRadius*COS(alpha), 1
+			NEXT i
+			PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle), 1
+		ELSE
+			rr = MEP_BendRadius + halfWidth
+			FOR i = 1 TO bendRes+1
+				PUT rr*SIN(alpha), MEP_BendRadius-rr*COS(alpha), 1
+				alpha = alpha + bendAngle/bendRes
+			NEXT i
+		ENDIF
+		IF cableCarrierBendStraightLengthB > EPS THEN PUT (MEP_BendRadius+halfWidth)*SIN(bendAngle)+cableCarrierBendStraightLengthB*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius+halfWidth)*COS(bendAngle)+cableCarrierBendStraightLengthB*SIN(bendAngle), 1
+
+		IF cableCarrierBendStraightLengthB > EPS THEN PUT (MEP_BendRadius-halfWidth)*SIN(bendAngle)+cableCarrierBendStraightLengthB*COS(bendAngle), MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle)+cableCarrierBendStraightLengthB*SIN(bendAngle), 1
+		PUT (MEP_BendRadius-halfWidth)*SIN(bendAngle), MEP_BendRadius-(MEP_BendRadius-halfWidth)*COS(bendAngle), 1
+		IF MEP_ThroatSegments > 1 THEN
+			alpha = bendAngle
+			PUT throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), 1
+			FOR i = 1 TO (MEP_ThroatSegments-2)
+				 alpha = alpha - bendAngle/(MEP_ThroatSegments-2)
+				PUT throatSegmentLength+throatRadius*SIN(alpha), halfWidth+throatRadius-throatRadius*COS(alpha), 1
+			NEXT i
+			PUT 0, halfWidth, 1
+		ELSE
+			alpha = bendAngle
+			rr = MEP_BendRadius - halfWidth
+			FOR i = 1 TO bendRes+1
+				PUT rr*SIN(alpha), MEP_BendRadius-rr*COS(alpha), 1
+				alpha = alpha - bendAngle/bendRes
+			NEXT i
+		ENDIF
+		IF cableCarrierBendStraightLengthA > EPS THEN PUT -cableCarrierBendStraightLengthA, halfWidth, 1
+
+		POLY_ NSP/3,
+			GET(NSP)
+	ENDIF
+RETURN

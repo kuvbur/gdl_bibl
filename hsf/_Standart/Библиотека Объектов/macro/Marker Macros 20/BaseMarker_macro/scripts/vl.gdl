@@ -1,0 +1,689 @@
+
+
+! ===================================================================
+! Pens
+! ===================================================================
+maxPenNumber = 255
+dim iPenNumber[255]
+for i = 1 to maxPenNumber
+	iPenNumber[i] = i
+next i
+
+values "penContourHead"			iPenNumber
+values "penMarkerText"			iPenNumber
+values "penMarkerSecondText"	iPenNumber
+values "penDivisionLine"		iPenNumber
+values "penFillCloud"			iPenNumber
+values "penFillHead"			iPenNumber
+
+! ===================================================================
+! Marker Cloud
+! ===================================================================
+
+if (iMarkerObjectType = MARKER_OBJECT_TYPE_DETAIL		|\
+	iMarkerObjectType = MARKER_OBJECT_TYPE_WORKSHEET)	then
+
+	values{2} "iTypeCloud" CLOUD_POLYGON,	strTypeCloud[1],
+					   CLOUD_ROUNDED,	strTypeCloud[2]
+endif
+
+if (iMarkerObjectType = MARKER_OBJECT_TYPE_CHANGE) then
+	values{2} "iTypeCloud" CLOUD_POLYGON,	strTypeCloud[1],
+						   CLOUD_ROUNDED,	strTypeCloud[2],
+						   CLOUD_BISCUIT,	strTypeCloud[3],
+						   CLOUD_PERIODIC,	strTypeCloud[4],
+						   CLOUD_RANDOM,	strTypeCloud[5]
+endif
+
+if not(_hasPolygon) then
+	hideparameter "title_Marker_Cloud"
+	gosub "cloudparameters"
+	gosub "cloudradiusparameters"
+	gosub "cloudperioticparameters"
+	gosub "cloudrandomparameters"
+	gosub "cloudattributes"
+else
+	if (iMarkerObjectType = MARKER_OBJECT_TYPE_DETAIL		|\
+		iMarkerObjectType = MARKER_OBJECT_TYPE_WORKSHEET)	then
+
+		lock "AC_ArcDivParam"
+		hideparameter "AC_ArcDivParam"
+	endif
+
+
+	if 	bEnableFillCloud then
+		if not(bFillCloud) then
+			gosub "cloudattributes"
+		endif
+	else
+		lock "bFillCloud"
+		hideparameter "bFillCloud"
+
+		gosub "cloudattributes"
+	endif
+
+	! Cloud radius is scale independent
+	if iTypeCloud <> CLOUD_ROUNDED then
+		if iTypeCloud <> CLOUD_BISCUIT then gosub "cloudradiusparameters"
+	else
+		if AC_PolygonNodes > 3 then
+			! maximum usable radius for editable hotspot
+			! except Settings dialog where the polygon is sample
+			values "lengthRounded_m"	range (0, _maxUsableRadius/sin(_anglebyMaxRadius) - _maxUsableRadius)
+		endif
+
+		values "radiusCloud_m"		range (0, )
+		values "radiusCloud_mm"		range (0, )
+
+		if GLOB_MODPAR_NAME = "lengthRounded_m" then
+			! for editable hotspots
+			radiusCloud_m	= ( sin(_anglebyMaxRadius) * lengthRounded_m ) / (1 - sin(_anglebyMaxRadius))
+			radiusCloud_mm	= ( sin(_anglebyMaxRadius) * lengthRounded_m ) / (1 - sin(_anglebyMaxRadius)) * 1000
+
+			parameters 	radiusCloud_m	= radiusCloud_m,
+						radiusCloud_mm 	= radiusCloud_mm
+		else
+			if GLOB_MODPAR_NAME = "radiusCloud_m" then
+				! maximum usable radius range
+				if radiusCloud_m > (_maxUsableRadius + EPS) then
+					radiusCloud_m = _maxUsableRadius
+					
+					parameters radiusCloud_m = radiusCloud_m
+				endif
+	
+				radiusCloud_mm	= radiusCloud_m * 1000
+				lengthRounded_m	= radiusCloud_m/sin(_anglebyMaxRadius) - radiusCloud_m
+
+				parameters	radiusCloud_mm	= radiusCloud_mm,
+							lengthRounded_m	= lengthRounded_m
+			else
+				! maximum usable radius range
+				if radiusCloud_mm > (_maxUsableRadius * 1000 + EPS) then
+					radiusCloud_mm = _maxUsableRadius * 1000
+					
+					parameters radiusCloud_mm = radiusCloud_mm
+				endif
+
+				radiusCloud_m	= radiusCloud_mm / 1000
+				lengthRounded_m	= (radiusCloud_mm / 1000)/sin(_anglebyMaxRadius) - (radiusCloud_mm / 1000)
+
+				parameters	radiusCloud_m	= radiusCloud_m,
+							lengthRounded_m	= lengthRounded_m
+			endif
+		endif
+		lock			"radiusCloud_m", "lengthRounded_m"
+		hideparameter	"radiusCloud_m", "lengthRounded_m"
+	endif
+
+	! Cloud radius is scale independent
+	if iTypeCloud <> CLOUD_BISCUIT then
+		if iTypeCloud <> CLOUD_ROUNDED then gosub "cloudradiusparameters"
+	else
+		if GLOB_MODPAR_NAME = "radiusCloud_m" then
+			! Range without arrow on UI
+			if radiusCloud_m < EPS then
+				radiusCloud_m = 0.0001
+				
+				parameters radiusCloud_m = radiusCloud_m
+			endif
+	
+			radiusCloud_mm = radiusCloud_m * 1000
+			
+			parameters radiusCloud_mm = radiusCloud_mm
+		else
+			! Range without arrow on UI
+			if radiusCloud_mm < EPS then
+				radiusCloud_mm = 0.01
+				
+				parameters radiusCloud_mm = radiusCloud_mm
+			endif
+	
+			radiusCloud_m = radiusCloud_mm / 1000
+			parameters radiusCloud_m = radiusCloud_m
+		endif
+		lock			"radiusCloud_m", "lengthRounded_m"
+		hideparameter	"radiusCloud_m", "lengthRounded_m"
+	endif
+	
+	if iTypeCloud <> CLOUD_PERIODIC then
+		gosub "cloudperioticparameters"
+	else
+	
+		values "numRatioCloud" range (0,)
+	
+		if GLOB_MODPAR_NAME = "numRatioCloud" then
+			iRatioCloud_1 = numRatioCloud * 100
+			iRatioCloud_2 = 100
+	
+			_divided = max(iRatioCloud_1, iRatioCloud_2)
+			_divider = min(iRatioCloud_1, iRatioCloud_2)
+	
+			if FRA(_divided / _divider) < EPS then
+				_maindiv = min(iRatioCloud_1, iRatioCloud_2)
+			else
+				_maindiv = 1
+				DO
+					_quotient = INT(_divided / _divider)
+					_left = INT(_divided - (_divider * _quotient))
+					if _left > 0 then _maindiv = _left
+		
+					_divided = _divider
+					_divider = _left
+				WHILE _left > 0
+	
+			endif
+	
+			iRatioCloud_1 = iRatioCloud_1/_maindiv
+			iRatioCloud_2 = iRatioCloud_2/_maindiv
+	
+			parameters iRatioCloud_1 = iRatioCloud_1,
+						iRatioCloud_2 = iRatioCloud_2
+		else
+			! Range without arrow on UI
+			if iRatioCloud_1 <= EPS then
+				iRatioCloud_1 = 1
+				parameters iRatioCloud_1 = iRatioCloud_1
+			endif
+			if iRatioCloud_2 <= EPS then
+				iRatioCloud_2 = 1
+				parameters iRatioCloud_2 = iRatioCloud_2
+			endif
+	
+			numRatioCloud = iRatioCloud_1 / iRatioCloud_2
+			parameters numRatioCloud = numRatioCloud
+		endif
+	
+	
+		! display only on UI
+		hideparameter "iRatioCloud_1", "iRatioCloud_2"
+	endif
+	
+	if iTypeCloud <> CLOUD_RANDOM then
+		gosub "cloudrandomparameters"
+	else
+		if GLOB_MODPAR_NAME = "minradiusCloud_m" then
+			! Range without arrow on UI
+			if minradiusCloud_m < EPS then
+				minradiusCloud_m = 0.0001
+				
+				parameters minradiusCloud_m = minradiusCloud_m
+			endif
+	
+			minradiusCloud_mm = minradiusCloud_m * 1000
+			
+			parameters minradiusCloud_mm = minradiusCloud_mm
+		else
+			! Range without arrow on UI
+			if minradiusCloud_mm < EPS then
+				minradiusCloud_mm = 0.01
+				
+				parameters minradiusCloud_mm = minradiusCloud_mm
+			endif
+	
+			minradiusCloud_m = minradiusCloud_mm / 1000
+			
+			parameters minradiusCloud_m = minradiusCloud_m
+		endif
+		
+		if GLOB_MODPAR_NAME = "maxradiusCloud_m" then
+			! Range without arrow on UI
+			if maxradiusCloud_m < EPS then
+				maxradiusCloud_m = 0.0001
+				parameters maxradiusCloud_m = maxradiusCloud_m
+			endif
+	
+			maxradiusCloud_mm = maxradiusCloud_m * 1000
+			
+			parameters maxradiusCloud_mm = maxradiusCloud_mm
+		else
+			! Range without arrow on UI
+			if maxradiusCloud_mm < EPS then
+				maxradiusCloud_mm = 0.01
+				parameters maxradiusCloud_mm = maxradiusCloud_mm
+			endif
+	
+			maxradiusCloud_m = maxradiusCloud_mm / 1000
+			parameters maxradiusCloud_m = maxradiusCloud_m
+		endif
+		lock			"maxradiusCloud_m", "minradiusCloud_m"
+		hideparameter	"maxradiusCloud_m", "minradiusCloud_m"
+	endif
+endif
+
+! ===================================================================
+! Marker Head
+! ===================================================================
+
+values{2} "iShapeHead"	MARKER_HEAD_CIRCLE 			,_stShapeHead[2],
+						MARKER_HEAD_TRIANGLE_UP 	,_stShapeHead[3],
+						MARKER_HEAD_TRIANGLE_DOWN 	,_stShapeHead[4],
+						MARKER_HEAD_RECTANGLE 		,_stShapeHead[5],
+						MARKER_HEAD_PENTAGON_UP 	,_stShapeHead[6],
+						MARKER_HEAD_PENTAGON_DOWN 	,_stShapeHead[7],
+						MARKER_HEAD_HEXAGON 		,_stShapeHead[8],
+						MARKER_HEAD_HEXAGON_ROTATED ,_stShapeHead[9],
+						MARKER_HEAD_OCTOGON 		,_stShapeHead[10],
+						MARKER_HEAD_OCTOGON_ROTATED ,_stShapeHead[11],
+						MARKER_HEAD_DIAMOND 		,_stShapeHead[12],
+						MARKER_HEAD_LINE 			,_stShapeHead[13],
+						MARKER_HEAD_NONE			,_stShapeHead[1]
+
+if (iMarkerObjectType = MARKER_OBJECT_TYPE_CHANGE) then
+	values{2} "iChangeFirstRow" _icontentText, _contentText
+	values{2} "iChangeSecondRow" _icontentText, _contentText
+endif
+
+if not(_hasHead) then
+	hideparameter "title_Marker_Head"
+	hideparameter "title_Marker_Text"
+	gosub "headparameters"
+	gosub "headattributes"
+	gosub "headtextparameters"
+	gosub "headsecondtextparameters"
+else
+	if (iMarkerObjectType = MARKER_OBJECT_TYPE_CHANGE) then
+		lock "bRotateMarkerwithView"
+		hideparameter "bRotateMarkerwithView"
+	endif
+
+	if not(bFillHead) then
+		gosub "headattributes"
+	endif
+
+	if iShapeHead <> MARKER_HEAD_RECTANGLE &\
+		iShapeHead <> MARKER_HEAD_DIAMOND &\ 
+		iShapeHead <> MARKER_HEAD_LINE then
+		
+		lock			"widthHead_m", "widthHead_mm"
+		hideparameter	"widthHead_m", "widthHead_mm"
+	endif
+
+	values{2} "iRotateHead" 	HEAD_ROTATED, 		_stRotateHead[1],
+								HEAD_HORIZONTAL, 	_stRotateHead[2]
+
+	if iShapeHead = MARKER_HEAD_NONE then	! has no fill
+		lock "bFillHead"
+		hideparameter "bFillHead"
+		gosub "headattributes"
+	endif
+
+! ===================================================================
+! Marker Text
+! ===================================================================
+
+	if not(bDivisionLine) then
+		gosub "headsecondtextparameters"
+	endif
+
+	if (iMarkerObjectType = MARKER_OBJECT_TYPE_CHANGE) then
+		isFirstRun = 0
+		if GLOB_MODPAR_NAME = "iChangeFirstRow" |\
+			GLOB_MODPAR_NAME = "iChangeSecondRow" then
+	
+			n = APPLICATION_QUERY ("parameter_script", "firstoccasion_in_progress", isFirstRun)
+		endif
+
+		if GLOB_MODPAR_NAME = "iChangeFirstRow" then
+			if n and isFirstRun and iChangeFirstRow <> 1 then
+				contentFirstRow = contentFirstRow + _sAutotextMenu[iChangeFirstRow-1][AUTOTEXT_KEY]
+				parameters contentFirstRow = contentFirstRow
+			else
+				iChangeFirstRow = _icontentText[1]
+				parameters iChangeFirstRow = iChangeFirstRow
+			endif
+		endif
+	
+		if GLOB_MODPAR_NAME = "iChangeSecondRow" then
+			if n and isFirstRun and iChangeSecondRow <> 1 then
+				contentSecondRow = contentSecondRow + _sAutotextMenu[iChangeSecondRow-1][AUTOTEXT_KEY]
+				parameters contentSecondRow = contentSecondRow 
+			else
+				iChangeSecondRow = _icontentText[1]
+				parameters iChangeSecondRow = iChangeSecondRow
+			endif
+		endif
+	
+		lock	"title_FirstMarkerText",
+				"bShowReferenceID",
+				"bShowDetailNameInFirstRow",
+				"bShowDrawingID",
+				"bShowFirstCustomText",
+				"firstCustomText",
+				"title_SecondMarkerText",
+				"bShowDetailNameInSecondRow",
+				"bShowLayoutID",
+				"bShowSecondCustomText",
+				"secondCustomText"
+	
+		hideparameter	"title_FirstMarkerText",
+						"bShowReferenceID",
+						"bShowDetailNameInFirstRow",
+						"bShowDrawingID",
+						"bShowFirstCustomText",
+						"firstCustomText",
+						"title_SecondMarkerText",
+						"bShowDetailNameInSecondRow",
+						"bShowLayoutID",
+						"bShowSecondCustomText",
+						"secondCustomText"
+	else
+		if not(AC_ReferToDrawing) then
+			lock "bShowDrawingID", "bShowLayoutID"
+			hideparameter "bShowDrawingID", "bShowLayoutID"
+		endif
+	
+		if AC_NoLinkMarker then
+			lock	"bShowReferenceID",
+					"bShowDetailNameInFirstRow",
+					"bShowDrawingID",
+					"bShowDetailNameInSecondRow",
+					"bShowLayoutID"
+	
+			hideparameter	"bShowReferenceID",
+							"bShowDetailNameInFirstRow",
+							"bShowDrawingID",
+							"bShowDetailNameInSecondRow",
+							"bShowLayoutID"
+		endif
+	
+		if not(bShowFirstCustomText) then
+			lock "firstCustomText"
+			hideparameter "firstCustomText"
+		endif
+	
+		if not(bShowSecondCustomText) then
+			lock "secondCustomText"
+			hideparameter "secondCustomText"
+		endif
+	
+		lock 	"title_Marker_Text",
+				"contentFirstRow",
+				"iChangeFirstRow",
+				"bDivisionLine",
+				"contentSecondRow",
+				"iChangeSecondRow"
+	
+		hideparameter	"title_Marker_Text",
+					 	"contentFirstRow",
+						"iChangeFirstRow",
+						"bDivisionLine",
+						"contentSecondRow",
+						"iChangeSecondRow"
+	endif
+	
+	
+	! ===================================================================
+	! Marker Line
+	! ===================================================================
+
+	if not(bConnectionLine) | iShapeHead = MARKER_HEAD_LINE then
+		lock "iConnectionLine"
+		hideparameter "iConnectionLine"
+	endif
+
+	values{2} "iConnectionLine" LINE_BREAKPOINT, 	_stHeadLineType[1],
+								LINE_STRAIGHT, 		_stHeadLineType[2]
+
+	if iConnectionLine = LINE_STRAIGHT then
+		lock			"iRotateHead", "distanceHead_m", "distanceHead_mm"
+		hideparameter	"iRotateHead", "distanceHead_m", "distanceHead_mm"
+	endif
+
+	values "widthHead_m" range[0,]
+	values "widthHead_mm" range[0,]
+	lock			"widthHead_m"
+	hideparameter	"widthHead_m"
+	
+	values "widthHeadHalf_m" range[0,]
+	values "widthHeadHalf_mm" range[0,]
+	
+	if GLOB_MODPAR_NAME = "widthHeadHalf_m" then
+		widthHead_mm		= widthHeadHalf_m * 1000 * 2
+		widthHead_m			= widthHeadHalf_m * 2
+		widthHeadHalf_mm	= widthHeadHalf_m * 1000
+		
+		parameters	widthHead_mm		= widthHead_mm,
+					widthHead_m			= widthHead_m,
+					widthHeadHalf_mm	= widthHeadHalf_mm
+	else
+		if GLOB_MODPAR_NAME = "widthHead_m" then
+			widthHead_mm		= widthHead_m * 1000
+			widthHeadHalf_mm	= widthHead_m * 1000 / 2
+			widthHeadHalf_m		= widthHead_m / 2
+			
+			parameters	widthHead_mm		= widthHead_mm,
+						widthHeadHalf_mm	= widthHeadHalf_mm,
+						widthHeadHalf_m		= widthHeadHalf_m
+		else
+			widthHead_m			= widthHead_mm / 1000
+			widthHeadHalf_m		= widthHead_mm / 1000 / 2
+			widthHeadHalf_mm	= widthHead_mm / 2
+			
+			parameters	widthHead_m			= widthHead_m,
+						widthHeadHalf_m		= widthHeadHalf_m,
+						widthHeadHalf_mm	= widthHeadHalf_mm
+		endif
+	endif
+	lock			"widthHeadHalf_m", "widthHeadHalf_mm"
+	hideparameter	"widthHeadHalf_m", "widthHeadHalf_mm"
+	
+	if iShapeHead = MARKER_HEAD_RECTANGLE | iShapeHead = MARKER_HEAD_DIAMOND then
+		values "distanceHead_m" range[0,]
+		values "distanceHead_mm" range[0,]
+	else
+		! AC_MarkerSize is paper size
+		values "distanceHead_m"		range[AC_MarkerSize/2 / 1000,]
+		values "distanceHead_mm"	range[AC_MarkerSize/2,]
+	endif
+	
+	if GLOB_MODPAR_NAME = "distanceHead_m" then
+		distanceHead_mm = distanceHead_m * 1000
+		parameters distanceHead_mm = distanceHead_mm
+	else
+		distanceHead_m = distanceHead_mm / 1000
+		parameters distanceHead_m = distanceHead_m
+	endif
+	
+	lock			"distanceHead_m"
+	hideparameter	"distanceHead_m"
+endif
+
+! ===================================================================
+! 2D Attributes
+! ===================================================================
+
+if GLOB_MODPAR_NAME = "ipenFillCloud" then
+	penFillCloud = ipenFillCloud
+	parameters penFillCloud = penFillCloud
+else
+	ipenFillCloud = penFillCloud
+	parameters ipenFillCloud = ipenFillCloud
+endif
+
+if GLOB_MODPAR_NAME = "ibackpenFillCloud" then
+	backpenFillCloud = ibackpenFillCloud
+	parameters backpenFillCloud = backpenFillCloud
+else
+	ibackpenFillCloud = backpenFillCloud
+	parameters ibackpenFillCloud = ibackpenFillCloud
+endif
+
+if GLOB_MODPAR_NAME = "ipenFillHead" then
+	penFillHead = ipenFillHead
+	parameters penFillHead = penFillHead
+else
+	ipenFillHead = penFillHead
+	parameters ipenFillHead = ipenFillHead
+endif
+
+if GLOB_MODPAR_NAME = "ibackpenFillHead" then
+	backpenFillHead = ibackpenFillHead
+	parameters backpenFillHead = backpenFillHead
+else
+	ibackpenFillHead = backpenFillHead
+	parameters ibackpenFillHead = ibackpenFillHead
+endif
+
+if GLOB_MODPAR_NAME = "ipenMarkerText" then
+	penMarkerText = ipenMarkerText
+	parameters penMarkerText = penMarkerText
+else
+	ipenMarkerText = penMarkerText
+	parameters ipenMarkerText = ipenMarkerText
+endif
+
+if GLOB_MODPAR_NAME = "ipenMarkerSecondText" then
+	penMarkerSecondText = ipenMarkerSecondText
+	parameters penMarkerSecondText = penMarkerSecondText
+else
+	ipenMarkerSecondText = penMarkerSecondText
+	parameters ipenMarkerSecondText = ipenMarkerSecondText
+endif
+
+end
+
+"cloudparameters":
+
+	lock 	"iTypeCloud",
+			"lineTypeCloud",
+			"bFillCloud",
+			"AC_ArcDivParam"
+	hideparameter 	"iTypeCloud",
+					"lineTypeCloud",
+					"bFillCloud",
+					"AC_ArcDivParam"
+return
+
+"cloudradiusparameters":
+
+	lock 	"radiusCloud_m",
+			"radiusCloud_mm",
+			"lengthRounded_m"
+	hideparameter 	"radiusCloud_m",
+					"radiusCloud_mm",
+					"lengthRounded_m"
+
+return
+
+
+"cloudperioticparameters":
+
+	lock 	"iRatioCloud_1",
+			"iRatioCloud_2",
+			"numRatioCloud"
+	hideparameter 	"iRatioCloud_1",
+					"iRatioCloud_2",
+					"numRatioCloud"
+
+return
+
+"cloudrandomparameters":
+
+	lock 	"maxradiusCloud_m",
+			"maxradiusCloud_mm",
+			"minradiusCloud_m",
+			"minradiusCloud_mm"
+	hideparameter	"maxradiusCloud_m",
+					"maxradiusCloud_mm",
+					"minradiusCloud_m",
+					"minradiusCloud_mm"
+
+return
+
+
+"cloudattributes":
+	lock 	"typeFillCloud",
+			"penFillCloud",
+			"ipenFillCloud",
+			"backpenFillCloud",
+			"ibackpenFillCloud"
+	hideparameter 	"typeFillCloud",
+					"penFillCloud",
+					"ipenFillCloud",
+					"backpenFillCloud",
+					"ibackpenFillCloud"
+return
+
+"headparameters":
+
+	lock 	"iShapeHead",
+			"bConnectionLine",
+			"iConnectionLine",
+			"widthHead_m",
+			"widthHead_mm",
+			"distanceHead_m",
+			"distanceHead_mm",
+			"widthHeadHalf_m",
+			"widthHeadHalf_mm",
+			"bVerticalTextPosition",
+			"rotateHead",
+			"iRotateHead",
+			"bFillHead",
+			"penContourHead",
+			"bRotateMarkerwithView"
+
+	hideparameter 	"iShapeHead",
+					"bConnectionLine",
+					"iConnectionLine",
+					"widthHead_m",
+					"widthHead_mm",
+					"distanceHead_m",
+					"distanceHead_mm",
+					"widthHeadHalf_m",
+					"widthHeadHalf_mm",
+					"bVerticalTextPosition",
+					"rotateHead",
+					"iRotateHead",
+					"bFillHead",
+					"penContourHead",
+					"bRotateMarkerwithView"
+return
+
+"headattributes":
+
+	lock 	"typeFillHead",
+			"penFillHead",
+			"ipenFillHead",
+			"backpenFillHead",
+			"ibackpenFillHead"
+
+	hideparameter 	"typeFillHead",
+					"penFillHead",
+					"ipenFillHead",
+					"backpenFillHead",
+					"ibackpenFillHead"
+
+return
+
+"headtextparameters":
+
+	lock 	"penMarkerText",
+			"ipenMarkerText",
+			"contentFirstRow",
+			"iChangeFirstRow",
+			"bDivisionLine",
+			"penDivisionLine"
+
+	hideparameter 	"penMarkerText",
+					"ipenMarkerText",
+					"contentFirstRow",
+					"iChangeFirstRow",
+					"bDivisionLine",
+					"penDivisionLine"
+
+return
+
+"headsecondtextparameters":
+	lock 	"penMarkerSecondText",
+			"ipenMarkerSecondText",
+			"contentSecondRow",
+			"iChangeSecondRow",
+			"penDivisionLine"
+			
+
+	hideparameter	"penMarkerSecondText",
+					"ipenMarkerSecondText",
+					"contentSecondRow",
+					"iChangeSecondRow",
+					"penDivisionLine"
+return

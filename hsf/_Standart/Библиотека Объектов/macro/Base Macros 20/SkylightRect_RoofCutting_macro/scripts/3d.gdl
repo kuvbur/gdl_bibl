@@ -1,0 +1,502 @@
+
+upper_angle			= AC_edge_upper_angle
+lower_angle_inside	= AC_edge_lower_angle
+lower_angle_outside	= AC_edge_lower_angle_outside
+
+if AC_edge_upper_type = 0 then upper_angle = 90 + ac_roofang	! Vertical
+if AC_edge_upper_type = 1 then upper_angle = 90					! Perpendicular
+if AC_edge_upper_type = 2 then upper_angle = ac_roofang			! Horizontal
+
+if upper_angle < 0	 then upper_angle = upper_angle + 360
+if upper_angle > 180 then upper_angle = upper_angle + 180
+
+if AC_edge_lower_type = 0 then lower_angle_inside = 90 - ac_roofang		! Vertical
+if AC_edge_lower_type = 1 then lower_angle_inside = 90					! Perpendicular
+if AC_edge_lower_type = 2 then lower_angle_inside = 180 - ac_roofang	! Horizontal
+
+if lower_angle_inside < 0	then lower_angle_inside = lower_angle_inside + 360
+if lower_angle_inside > 180	then lower_angle_inside = lower_angle_inside + 180
+
+if AC_edge_lower_type_outside = 0 then lower_angle_outside  = 90 + ac_roofang	! Vertical
+if AC_edge_lower_type_outside = 1 then lower_angle_outside  = 90				! Perpendicular
+if AC_edge_lower_type_outside = 2 then lower_angle_outside  = ac_roofang		! Horizontal
+
+if lower_angle_outside < 0	 then lower_angle_outside = lower_angle_outside + 360
+if lower_angle_outside > 180 then lower_angle_outside = lower_angle_outside + 180
+
+bSectionElevationContext = (GLOB_VIEW_TYPE = 4) | (GLOB_VIEW_TYPE = 5) | (GLOB_PREVIEW_MODE = 2)
+!if bSectionElevationContext then ShowUpContLines = 0
+
+bNoReveal = (iCutType = CUTTYPE_SKYLIGTH) | (iCutType = CUTTYPE_SHELLWINDOW & revealDepth < eps)
+if iCutType = CUTTYPE_SHELLWINDOW then
+	sameLowerMat	= 1
+else
+	revealDepth	= 0
+	if gs_lower_bott_mat = gs_lower_top_mat then
+		sameLowerMat = 1
+	else
+		sameLowerMat = 0
+	endif
+endif
+
+if SHELLBASE_VIEW_PEN > 0 then
+	pen SHELLBASE_VIEW_PEN
+else
+	pen 1
+endif
+
+
+! =============================================================================
+! Shell and Roof Materials
+! =============================================================================
+shell_upper_mat = 1
+shell_lower_mat = 1
+
+if iShellOpeningMat = 1 then					! Edge
+	if SHELLBASE_MAT_EDGE > 0 then
+		shell_upper_mat = SHELLBASE_MAT_EDGE
+		shell_lower_mat = SHELLBASE_MAT_EDGE
+	endif
+else											! Side or Skyligth
+
+	if SHELLBASE_MAT_REFERENCE > 0	then upper_mat = SHELLBASE_MAT_REFERENCE
+	if SHELLBASE_MAT_OPPOSITE > 0	then lower_mat = SHELLBASE_MAT_OPPOSITE
+
+	if abs(SKYL_ROTANGLE - 180) < EPS then		! SKYL_ROTANGLE = 180 Not Flipped
+		shell_upper_mat = lower_mat
+		shell_lower_mat = upper_mat
+	else
+		shell_upper_mat = upper_mat
+		shell_lower_mat = lower_mat
+	endif
+endif
+
+
+! =============================================================================
+! Vector Calculation
+! =============================================================================
+
+!Inside
+x11 = 0
+y11 = 0
+x12 = x11 - cos(lower_angle_inside)
+y12 = y11 + sin(lower_angle_inside)
+
+x21 = -B
+y21 = 0
+x22 = x21 + cos(upper_angle)
+y22 = y21 + sin(upper_angle)
+
+gosub 100	! Line - Line Intersection
+cxInside = cx
+cyInside = cy
+stateInside = state
+
+!!if stateInside then
+!!	addz -revealDepth
+!!	lin_ 0,-x11,y11,0,-x12,y12
+!!	lin_ 0,-x21,y21,0,-x22,y22
+!!	add 0, -cxInside, cyInside
+!!		sphere 0.02
+!!	del 2
+!!endif
+
+
+!Outside
+x11 = 0
+y11 = 0
+x12 = x11 + cos(-lower_angle_outside)
+y12 = y11 - sin(-lower_angle_outside)
+
+x21 = -B
+y21 = 0
+x22 = x21 + cos(upper_angle)
+y22 = y21 + sin(upper_angle)
+
+gosub 100	! Line - Line Intersection
+cxOutside = cx
+cyOutside = cy
+stateOutside = state
+
+!!if stateOutside then
+!!	addz -revealDepth
+!!	lin_ 0,-x11,y11,0,-x12,y12
+!!	lin_ 0,-x21,y21,0,-x22,y22
+!!	add 0, -cxOutside, cyOutside
+!!		sphere 0.02
+!!	del 2
+!!endif
+
+
+! =============================================================================
+! Upper Cutting
+! =============================================================================
+
+if bUpperCut then
+	material shell_upper_mat
+
+	wn_mask = 31
+	if not(ShowUpContLines) then wn_mask = 30
+
+	if AC_Custom_3D_Hole then
+
+		addz -revealDepth
+
+		addy B/2
+		hotspot	0, 0,  0,						unID, gs_hole_outside_depth, 1+128 : unID=unID+1
+		hotspot	0, 0, -1,						unID, gs_hole_outside_depth, 3     : unID=unID+1
+		hotspot	0, 0,  gs_hole_outside_depth,	unID, gs_hole_outside_depth, 2     : unID=unID+1
+		del 1
+
+		if iCutType = CUTTYPE_SKYLIGTH then
+			if (GLOB_VIEW_TYPE = 3 & GLOB_FEEDBACK_MODE = 1) then
+				model wire
+				prism_ 4, gs_hole_outside_depth,
+					 A/2, 0, 15,
+					 A/2, B, 15,
+					-A/2, B, 15,
+					-A/2, 0, 15
+				model solid
+			endif
+			wallniche 4, 1,2,
+				0,0,1,	gs_hole_outside_depth,
+				 A/2, 0, wn_mask,
+				 A/2, B, wn_mask,
+				-A/2, B, wn_mask,
+				-A/2, 0, wn_mask
+		else
+
+			roty 90
+			addz -A/2
+
+			if (GLOB_VIEW_TYPE = 3 & GLOB_FEEDBACK_MODE = 1) then
+				model wire
+				prism_ 4, A,
+					0,0, 15,
+					-gs_hole_outside_depth,	  - gs_hole_outside_depth * tan(90-lower_angle_outside), 15,
+					-gs_hole_outside_depth, B - gs_hole_outside_depth * tan(90-upper_angle), 15,
+					0, B, 15
+				!model solid
+			endif
+
+			if sameLowerMat then
+				wallniche 4, 1, 2,
+					0,0, 1, A,
+					0,0, 29 + 2 * ShowUpContLines,
+					-gs_hole_outside_depth,	  - gs_hole_outside_depth * tan(90-lower_angle_outside), 29 + 2 * ShowUpContLines,
+					-gs_hole_outside_depth, B - gs_hole_outside_depth * tan(90-upper_angle), 31,
+					0, B, 1 + 30 * ShowUpContLines
+			else
+				wallniche 4, 1, 2,
+					0,0, 1, A,
+					0,0, 29 + 2 * ShowUpContLines,
+					-gs_hole_outside_depth,	  - gs_hole_outside_depth * tan(90-lower_angle_outside),			31,
+					-gs_hole_outside_depth, B - gs_hole_outside_depth * tan(90-upper_angle) - 0.0001,	31,
+					0, B - 0.0001, 1 + 30 * ShowUpContLines
+
+				material gs_lower_top_mat
+				wallniche 4, 1, 2,
+					0,0, 1, A,
+					0, B, 1 + 30 * ShowUpContLines,
+					-gs_hole_outside_depth, B - gs_hole_outside_depth * tan(90-upper_angle),			31,
+					-gs_hole_outside_depth, B - gs_hole_outside_depth * tan(90-upper_angle) - 0.0001,	31,
+					0, B - 0.0001, 31
+			endif
+			del 2
+		endif
+
+		del 1
+
+	else
+
+		if iCutType = CUTTYPE_SKYLIGTH then
+			addz -revealDepth
+
+			wallniche 4, 1,2+16,
+				0,0,-1,	0,
+				 A/2, 0, wn_mask,
+				 A/2, B, wn_mask,
+				-A/2, B, wn_mask,
+				-A/2, 0, wn_mask
+
+			del 1
+		else
+
+			if not(stateOutside) then
+
+				wn_mask = 31
+				if not(ShowUpContLines) then wn_mask = 15
+
+				addz -revealDepth
+
+				wallniche 4, 1, 2+16,
+					0, cos(lower_angle_outside), -sin(lower_angle_outside),	0,
+					 A/2, 0, wn_mask,
+					 A/2, B, wn_mask,
+					-A/2, B, wn_mask,
+					-A/2, 0, wn_mask
+
+				del 1
+			else
+				c_dist = sqr(cxOutside^2 + cyOutside^2)
+
+				rotz 90
+				addz -revealDepth
+
+				wn_mask = 31
+				wh_mask = 15
+				if not(ShowUpContLines) then wn_mask = 30
+
+				if cyOutside < 0 then
+					if sameLowerMat then
+						wallniche 4, 3, 2+16,
+							-cxOutside, 0, cyOutside,	0,
+							0,  A/2, wn_mask,
+							B,  A/2, wn_mask,
+							B, -A/2, wn_mask,
+							0, -A/2, wn_mask
+					else
+						wallniche 4, 3, 2+16,
+							-cxOutside, 0, cyOutside,	0,
+							0,		 A/2,	wn_mask,
+							B,		 A/2,	wn_mask,
+							B - B/4, 0,		wn_mask,
+							B,		-A/2,	wn_mask,
+							0,		-A/2,	wn_mask
+
+						material gs_lower_top_mat
+						wallniche 4, 3, 2+16,
+							-cxOutside, 0, cyOutside,	0,
+							B,		  A/2,	wn_mask,
+							B - B/2,  0,	wn_mask,
+							B,		 -A/2,	wn_mask
+					endif
+				else
+					if sameLowerMat then
+						wallniche 4, 3, 2,
+							-cxOutside, 0, cyOutside,	c_dist,
+							0,  A/2, wn_mask,
+							B,  A/2, wn_mask,
+							B, -A/2, wn_mask,
+							0, -A/2, wn_mask
+					else
+						wallniche 5, 3, 2,
+							-cxOutside, 0, cyOutside,	c_dist,
+							0,		 A/2,	wn_mask,
+							B,		 A/2,	wn_mask,
+							B - B/4, 0,		wn_mask,
+							B,		-A/2,	wn_mask,
+							0,		-A/2,	wn_mask
+
+						material gs_lower_top_mat
+						wallniche 3, 3, 2,
+							-cxOutside, 0, cyOutside,	c_dist,
+							B,		 A/2,	wn_mask,
+							B - B/2, 0,		wn_mask,
+							B,		-A/2,	wn_mask
+					endif
+				endif
+
+				del 2
+			endif
+
+		endif
+	endif
+else
+	unID=unID+3
+endif
+
+
+! =============================================================================
+! Lower Cutting
+! =============================================================================
+
+material shell_lower_mat
+
+
+if AC_Custom_3D_Hole then
+
+! Custom 3D Hole ---------------------------------------------------------------
+
+	if cyInside < 0 then
+		lowerDepth = min(gs_hole_edge_lower_depth, sqr(cxInside^2 + cyInside^2))
+		upperDepth = min(gs_hole_edge_upper_depth, sqr(cxInside^2 + (cyInside + B)^2))
+	else
+		lowerDepth = gs_hole_edge_lower_depth
+		upperDepth = gs_hole_edge_upper_depth
+	endif
+
+	addz -revealDepth
+
+	rotx 90 + lower_angle_inside
+	hotspot	0, 0,  0,						 unID, gs_hole_edge_lower_depth, 1+128 : unID=unID+1
+	hotspot	0, 0, -1,						 unID, gs_hole_edge_lower_depth, 3     : unID=unID+1
+	hotspot	0, 0,  gs_hole_edge_lower_depth, unID, gs_hole_edge_lower_depth, 2     : unID=unID+1
+	del 1
+
+	addy B
+	rotx -90 - upper_angle
+	hotspot	0, 0,  0,						 unID, gs_hole_edge_upper_depth, 1+128 : unID=unID+1
+	hotspot	0, 0, -1,						 unID, gs_hole_edge_upper_depth, 3     : unID=unID+1
+	hotspot	0, 0,  gs_hole_edge_upper_depth, unID, gs_hole_edge_upper_depth, 2     : unID=unID+1
+	del 2
+
+	roty 90
+	addz -A/2
+	if (GLOB_VIEW_TYPE = 3 & GLOB_FEEDBACK_MODE = 1) then
+		model wire
+		prism_ 4, A,
+			0,0, 15,
+			lowerDepth * sin(lower_angle_inside),    -lowerDepth * cos(lower_angle_inside), 15,
+			upperDepth * sin(upper_angle), B + upperDepth * cos(upper_angle), 15,
+			0, B, 15
+		model solid
+	endif
+
+	if sameLowerMat then
+		wallniche 4, 1, 2,
+			0,0, 1, A,
+			0,0, 29 + 2 * ShowUpContLines,
+			lowerDepth * sin(lower_angle_inside),    -lowerDepth * cos(lower_angle_inside), 29 + 2 * ShowUpContLines,
+			upperDepth * sin(upper_angle), B + upperDepth * cos(upper_angle), 31,
+			0, B, 1 + 30 * ShowUpContLines
+	else
+		wallniche 4, 1, 2,
+			0,0, 1, A,
+			0,0, 29 + 2 * ShowUpContLines,
+			lowerDepth * sin(lower_angle_inside),    -lowerDepth * cos(lower_angle_inside),			31,
+			upperDepth * sin(upper_angle), B + upperDepth * cos(upper_angle) - 0.0001,	31,
+			0, B - 0.0001, 1 + 30 * ShowUpContLines
+
+		material gs_lower_top_mat
+		wallniche 4, 1, 2,
+			0,0, 1, A,
+			0, B, 1 + 30 * ShowUpContLines,
+			upperDepth * sin(upper_angle), B + upperDepth * cos(upper_angle),			31,
+			upperDepth * sin(upper_angle), B + upperDepth * cos(upper_angle) - 0.0001,	31,
+			0, B - 0.0001, 31
+	endif
+	del 2 + 1
+else
+
+! Half Infinite 3D Hole --------------------------------------------------------
+
+	if not(stateInside) then
+
+		wn_mask = 31
+		if not(ShowUpContLines) then wn_mask = 15
+
+		addz -revealDepth
+
+		wallniche 4, 1, 2+16,
+			0, cos(lower_angle_inside), sin(lower_angle_inside),	0,
+			 A/2, 0, wn_mask,
+			 A/2, B, wn_mask,
+			-A/2, B, wn_mask,
+			-A/2, 0, wn_mask
+
+		del 1
+	else
+		c_dist = sqr(cxInside^2 + cyInside^2)
+
+		rotz 90
+		addz -revealDepth
+
+		wn_mask = 31
+		if not(ShowUpContLines) then wn_mask = 30
+
+		if cyInside < 0 then
+			if sameLowerMat then
+				wallniche 4, 3, 2,
+					-cxInside, 0, cyInside,	c_dist,
+					0,  A/2, wn_mask,
+					B,  A/2, wn_mask,
+					B, -A/2, wn_mask,
+					0, -A/2, wn_mask
+			else
+				wallniche 5, 3, 2,
+					-cxInside, 0, cyInside,	c_dist,
+					0,	 	 A/2,	wn_mask,
+					B,		 A/2,	wn_mask,
+					B - B/4, 0,		wn_mask,
+					B,		-A/2,	wn_mask,
+					0,		-A/2,	wn_mask
+
+				material gs_lower_top_mat
+				wallniche 3, 3, 2,
+					-cxInside, 0, cyInside,	c_dist,
+					B,		  A/2,	wn_mask,
+					B - B/2,  0,	wn_mask,
+					B,		 -A/2,	wn_mask
+			endif
+		else
+			if sameLowerMat then
+				wallniche 4, 3, 2+16,
+					-cxInside, 0, cyInside,	0,
+					0,  A/2, wn_mask,
+					B,  A/2, wn_mask,
+					B, -A/2, wn_mask,
+					0, -A/2, wn_mask
+			else
+				wallniche 5, 3, 2+16,
+					-cxInside, 0, cyInside,	0,
+					0,		 A/2,	wn_mask,
+					B,		 A/2,	wn_mask,
+					B - B/4, 0,		wn_mask,
+					B,		-A/2,	wn_mask,
+					0,		-A/2,	wn_mask
+
+				material gs_lower_top_mat
+				wallniche 3, 3, 2+16,
+					-cxInside, 0, cyInside,	0,
+					B,		 A/2,	wn_mask,
+					B - B/2, 0,		wn_mask,
+					B,		-A/2,	wn_mask
+			endif
+		endif
+
+		del 2
+	endif
+
+endif
+
+end
+
+
+
+! ==============================================================================
+! Line - Line Intersection
+! ------------------------------------------------------------------------------
+! Input variables:
+!	EPS:				epsylon
+!	x11,y11, x12,y12	line #1
+!	x21,y21, x22,y22	line #2
+!
+! Returned variables:
+!	state:				0 = no intersection point
+!						1 = valid intersection point
+!	cx, cy:				intersection point
+! ==============================================================================
+
+100:
+	lliDiv = (x11-x12) * (y21-y22) - (y11-y12) * (x21-x22)
+
+	if abs(lliDiv) > EPS then
+		! Intersection
+
+		temp1 = x11 * y12 - y11 * x12
+		temp2 = x21 * y22 - y21 * x22
+
+		tempx = temp1 * (x21-x22) - (x11-x12) * temp2
+		tempy = temp1 * (y21-y22) - (y11-y12) * temp2
+
+		state = 1
+		cx = (tempx / lliDiv)
+		cy = (tempy / lliDiv)
+	else
+		! No Intersection
+		state = 0
+		cx = 0
+		cy = 0
+	endif
+return

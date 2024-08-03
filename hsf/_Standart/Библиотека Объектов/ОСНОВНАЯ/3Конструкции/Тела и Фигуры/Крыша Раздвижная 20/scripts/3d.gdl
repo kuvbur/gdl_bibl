@@ -1,0 +1,206 @@
+
+! Tensile Roof
+
+if gs_detlevel_3D_m = DLEV3D_OFF then End
+
+rotx angle_1
+roty angle_2
+
+if gs_shadow then
+	shadow on
+else
+	shadow off
+endif
+
+! Main Body
+pen gs_cont_pen
+material gs_prim_mat
+
+unID=1
+
+!!-------------------------!!
+!!---- Hotspot Editing ----!!
+!!-------------------------!!
+
+!!---- Bounding Area Editing
+hotspot 0,0,0,unID,A,1+256 : unID=unID+1
+hotspot -1,0,0,unID,A,3 : unID=unID+1
+hotspot A,0,0,unID,A,2 : unID=unID+1
+
+hotspot 0,B,0,unID,A,1+256 : unID=unID+1
+hotspot -1,B,0,unID,A,3 : unID=unID+1
+hotspot A,B,0,unID,A,2 : unID=unID+1
+
+hotspot 0,0,0,unID,B,1+256 : unID=unID+1
+hotspot 0,-1,0,unID,B,3 : unID=unID+1
+hotspot 0,B,0,unID,B,2 : unID=unID+1
+
+hotspot A,0,0,unID,B,1+256 : unID=unID+1
+hotspot A,-1,0,unID,B,3 : unID=unID+1
+hotspot A,B,0,unID,B,2 : unID=unID+1
+
+if f > 1 then
+	for i=1 to f-1
+		addx a/f
+		hotspot 0,0,0,unID,B,1+256 : unID=unID+1
+		hotspot 0,-1,0,unID,B,3 : unID=unID+1
+		hotspot 0,B,0,unID,B,2 : unID=unID+1
+	next i
+	del f-1
+endif
+
+!!---- LowPoint Editing
+For i=1 To f+1
+	hotspot 0,B/2,0,unID,C,1+128 : unID=unID+1
+	hotspot 0,B/2,-1,unID,C,3 : unID=unID+1
+	hotspot 0,B/2,C,unID,C,2 : unID=unID+1
+	addx a/f
+Next i
+del f+1
+
+addx a/f/2
+For i=1 To f
+	!!---- HighPoint Editing
+	hotspot 0,B/2,0,unID,D,1+128 : unID=unID+1
+	hotspot 0,B/2,-1,unID,D,3 : unID=unID+1
+	hotspot 0,B/2,D,unID,D,2 : unID=unID+1
+
+	!!---- PeakPoint Editing
+	hotspot 0,0,0,unID,e,1+128 : unID=unID+1
+	hotspot 0,0,-1,unID,e,3 : unID=unID+1
+	hotspot 0,0,e,unID,e,2 : unID=unID+1
+
+	hotspot 0,B,0,unID,e,1+128 : unID=unID+1
+	hotspot 0,B,-1,unID,e,3 : unID=unID+1
+	hotspot 0,B,e,unID,e,2 : unID=unID+1
+	addx a/f
+Next i
+del f+1
+
+!!------------------!!
+!!---- Geometry ----!!
+!!------------------!!
+
+addx A*1.5/F
+z=f
+mulx a/8/z
+muly b/8
+
+	   !-OLD addx a/2+((1-z)*a/(2*z))
+
+addx -8
+
+for k = 1 to z
+   gosub 1
+   addx 8
+next k
+del top
+end
+
+! Subroutine 1
+!
+! One complete roof is actually composed of four
+! quarters. Subroutine 2 plots only one quarter of
+! roof at a time. This block of the program, therefore,
+! calls subroutine 2 four times, each time rearranging the
+! output so as to produce a complete roof.
+
+1:
+			if k=z then
+				mask_border = 2
+			else
+				mask_border = 1
+			endif
+			gosub 2
+
+			if k=1 then
+				mask_border = 2
+			else
+				mask_border = 1
+			endif
+			mulx -1
+			gosub 2
+
+			addy 8
+			muly -1
+			gosub 2
+
+			if k=z then
+				mask_border = 2
+			else
+				mask_border = 1
+			endif
+			mulx -1
+			gosub 2
+
+			return
+end
+
+! Subroutine 2
+!
+! This block of the program plots one quarter of
+! a complete roof. First it calculates the location of
+! a selected points on the roof. It then connects those
+! lines together in a surface.
+
+2: base
+			f = (e-d)/16         ! This line calculates the constant of the
+															! curve that connects two peak points together.
+
+			g = -c/16            ! This line calculates the constant of the
+															! curve that connects two ground points together.
+
+   ! The following code calculates the location of points
+   ! on the surface of the roof. The structure of the roof
+   ! is constructed of cables which assume a paarabolic shape when
+   ! subjected to tension and load.
+
+	for p = 0 to 4
+		h = g*(p-4)*(p-4)+c
+		i = f*(p-4)*(p-4)+d
+		j = (i-h)/16
+		for o = 0 to 4
+			vert o,p,h+j*(o-4)*(o-4)
+		next o
+	next p
+
+   ! This final block of code connects node points on a roof
+   ! together with lines and then connects the lines
+   ! together with a surface.
+	for p = 0 to 3
+		for o = 0 to 3
+			if o = 0 then
+				edge p*5+o+6, p*5+o+1, 8*p+2*o+1, 0, 2				! vertical border
+			else
+				edge p*5+o+6, p*5+o+1, 8*p+2*o+1, 8*p+2*(o-1)+2, 2	! vertical
+			endif
+			if p = 0 then
+				edge p*5+o+1, p*5+o+2, 8*p+2*o+1, 0, 2				! horizontal border
+			else
+				edge p*5+o+1, p*5+o+2, 8*p+2*o+1, 8*(p-1)+2*o+2, 2	! horizontal
+			endif
+			edge p*5+o+2, p*5+o+6, 8*p+2*o+1, 8*p+2*o+2, 2			! diagonal
+		next o
+		edge (p+2)*5, (p+1)*5, (p+1)*8, 0, mask_border
+	next p
+	p = 4
+	for o = 0 to 3
+		edge p*5+o+1, p*5+o+2, 8*(p-1)+2*o+2, 0, 1	! horizontal
+	next o
+
+p = 0
+	for p = 0 to 3
+		for o = 0 to 3
+			pgon 3, 0, 2*0, 13*p+3*o+1, 13*p+3*o+2, 13*p+3*o+3
+			if p < 3 then
+				pgon 3, 0, 2, 13*p+3*o+3, 13*(p+1)+3*o+2, 13*p+3*(o+1)+1
+			else
+				pgon 3, 0, 2, 13*p+3*o+3, 13*(p+1)+o+1, 13*p+3*(o+1)+1
+			endif
+		next o
+	next p
+	body -1+4*0
+
+			return
+
+end

@@ -1,0 +1,326 @@
+
+![#COMPATIBILITY] - START
+
+if iLouverMethod  = -1 then
+	iLouverMethod = LOUVER_ENDS
+endif
+
+![#COMPATIBILITY] - END
+
+gosub "GetLouverMethod"
+
+unID = 1
+if not (gs_shadow) then shadow off
+if gs_detlevel_3d_m = 1 then
+	resol 8
+else
+	resol gs_resol
+endif
+pen gs_cont_pen
+
+sect_fill gs_sect_fill, gs_sect_bg_pen, gs_sect_fill_pen, gs_sect_cont_pen
+
+if AC_globalZDir[1][3] < 0 then mulz -1
+
+! --- select offset parameter to use ----------------------------------------
+if not(bArmLeft) then
+	deltaA1 = AC_deltaABeg + gs_deltaF1
+else
+	deltaA1 = AC_deltaABeg + gs_deltaA1
+endif
+if not(bArmRight) then
+	deltaA2 = -AC_deltaAEnd + gs_deltaF2
+else
+	deltaA2 = -AC_deltaAEnd + gs_deltaA2
+endif
+
+
+! --- defining left and right end angles -------------------------------------
+if AC_validCellDir1 then
+	if abs (AC_leftCellNormalDir [1][2]) < eps then
+		leftAngle  =  90  + gs_rotation_horizontal_left
+	else
+		leftAngle  =   -atn (AC_leftCellNormalDir [1][1]  / AC_leftCellNormalDir [1][2])  + gs_rotation_horizontal_left
+	endif
+else
+	leftAngle = gs_rotation_horizontal_left
+endif
+
+if AC_validCellDir2 then
+	if abs (AC_rightCellNormalDir [1][2]) < eps then
+		rightAngle =  90 + gs_rotation_horizontal_right
+	else
+		rightAngle =   -atn (AC_rightCellNormalDir [1][1] / AC_rightCellNormalDir [1][2]) + gs_rotation_horizontal_right
+	endif
+else
+	rightAngle = gs_rotation_horizontal_right
+endif
+
+armThickness_left  = gs_arm_thickness
+armThickness_right = gs_arm_thickness
+
+! --- arms dimension corrections -----------------------------------------------
+
+if (gs_rotation_vertical + 90) % 360 < 180 then sgn_length = 1 else sgn_length = -1
+if (abs(gs_rotation_vertical) + 90 + EPS) % 180 < 2 * EPS then
+	armLength_left = AC_width * sgn(180 - gs_rotation_vertical)
+	armLength_right = AC_width * sgn(180 - gs_rotation_vertical)
+	leftVerticalAngle  = 90
+	rightVerticalAngle = 90
+	armHeight_left  = AC_height
+	armHeight_right = AC_height
+	startAngleCorrection_left  = 0
+	startAngleCorrection_right = 0
+else
+	armLength_left = AC_width * sgn_length * sqr (1 + cos (gs_rotation_vertical) * cos (gs_rotation_vertical) * tan (leftAngle) * tan (leftAngle))
+	armLength_right = AC_width * sgn_length * sqr (1 + cos (gs_rotation_vertical) * cos (gs_rotation_vertical) * tan (rightAngle) * tan (rightAngle))
+	leftVerticalAngle  = atn (tan(gs_rotation_vertical) * cos (leftAngle))
+	rightVerticalAngle = atn (tan(gs_rotation_vertical) * cos (rightAngle))
+	armHeight_left  = AC_height * cos (leftVerticalAngle)  / cos (gs_rotation_vertical)
+	armHeight_right = AC_height * cos (rightVerticalAngle) / cos (gs_rotation_vertical)
+	startAngleCorrection_left  = (armHeight_left  / 2) * tan (leftVerticalAngle)
+	startAngleCorrection_right = (armHeight_right / 2) * tan (rightVerticalAngle)
+endif
+
+s = AC_height/2 * sin (gs_rotation_vertical)
+
+if (abs(leftVerticalAngle) + EPS) % 90 < 2 * EPS then
+	endAngleCorrection_left = 0
+else
+	s2_left = s / cos (leftAngle)
+	endAngleCorrection_left = s2_left / cos (leftVerticalAngle) - armHeight_left/2 * tan (leftVerticalAngle)
+endif
+
+if (abs(rightVerticalAngle) + EPS) % 90 < 2 * EPS then
+	endAngleCorrection_right = 0
+else
+	s2_right = s / cos (rightAngle)
+	endAngleCorrection_right = s2_right / cos (rightVerticalAngle) - armHeight_right/2 * tan (rightVerticalAngle)
+endif
+
+! --- main hotspots - length and angle editing ---------------------------------
+add 0, gs_offset_horizontal, gs_offset_vertical
+hotspot -a/2,					0, 0, unID, AC_deltaABeg, 1 +128	: unID = unID + 1
+hotspot -a/2 - 1,				0, 0, unID, AC_deltaABeg, 3			: unID = unID + 1
+hotspot -a/2 + AC_deltaABeg,	0, 0, unID, AC_deltaABeg, 2			: unID = unID + 1
+
+hotspot  a/2,					0, 0, unID, AC_deltaAEnd, 1 + 128	: unID = unID + 1
+hotspot  a/2 - 1,				0, 0, unID, AC_deltaAEnd, 3			: unID = unID + 1
+hotspot  a/2 + AC_deltaAEnd,	0, 0, unID, AC_deltaAEnd, 2			: unID = unID + 1
+del 1
+
+!valószínűleg régről bentmaradt hotspot, de rossz helyen van, a right arm végével van fedésben a legtöbb esetben
+!ilyenünk már van lejjebb, de a user ne vesszen hotspotot
+add A/2 - deltaA2, gs_offset_horizontal, AC_width * sin(gs_rotation_vertical) + gs_offset_vertical
+hotspot -AC_width * cos(gs_rotation_vertical) * tan(gs_rotation_horizontal_right), AC_width * cos(gs_rotation_vertical), 0,	unID : unID = unID + 1
+del 1
+
+!left arm angle
+add -A/2 + deltaA1, gs_offset_horizontal, AC_width * sin(gs_rotation_vertical) + gs_offset_vertical
+hotspot 0, 0, -1,																											unID, gs_rotation_horizontal_left, 7 : unID = unID + 1
+hotspot 0, 0, 0,																											unID, gs_rotation_horizontal_left, 6 : unID = unID + 1
+hotspot 0, AC_width * cos(gs_rotation_vertical), 0,																			unID, gs_rotation_horizontal_left, 4 : unID = unID + 1
+hotspot -AC_width * cos(gs_rotation_vertical) * tan(gs_rotation_horizontal_left), AC_width * cos(gs_rotation_vertical), 0,	unID, gs_rotation_horizontal_left, 5 : unID = unID + 1
+del 1
+
+!right arm angle
+add A/2 - deltaA2, gs_offset_horizontal, AC_width * sin(gs_rotation_vertical) + gs_offset_vertical
+hotspot 0, 0, -1,																											unID, gs_rotation_horizontal_right, 7 : unID = unID + 1
+hotspot 0, 0, 0,																											unID, gs_rotation_horizontal_right, 6 : unID = unID + 1
+hotspot 0, AC_width * cos(gs_rotation_vertical), 0,																			unID, gs_rotation_horizontal_right, 4 : unID = unID + 1
+hotspot -AC_width * cos(gs_rotation_vertical) * tan(gs_rotation_horizontal_right), AC_width * cos(gs_rotation_vertical), 0,	unID, gs_rotation_horizontal_right, 5 : unID = unID + 1
+del 1
+
+
+add -a/2 + deltaA1, gs_offset_horizontal, gs_offset_vertical
+
+
+! --- left arm ---
+material gs_material_arm
+if bArmLeft then
+	rotz 90 + leftAngle
+	roty -leftVerticalAngle
+	rotx 90
+
+	addz -armThickness_left / 2
+
+	if bRounded then
+		prism_ 5, armThickness_left,
+			 -startAngleCorrection_left,				-armHeight_left/2, 	15,
+			  armlength_left - armHeight_left/2,		-armHeight_left/2, 	79,
+			  armlength_left - armHeight_left/2,  		 0,					900,
+			  armlength_left - armHeight_left/2,  		 armHeight_left/2, 	1079,
+			  startAngleCorrection_left,	 			 armHeight_left/2,	15
+	else
+		prism_ 4, armThickness_left,
+			-startAngleCorrection_left,					-armHeight_left/2, 	15,
+			 armlength_left + endAngleCorrection_left, 	-armHeight_left/2, 	15,
+			 armlength_left - endAngleCorrection_left,   armHeight_left/2, 	15,
+			 startAngleCorrection_left, 				 armHeight_left/2,	15
+	endif
+	del 4
+endif
+
+! --- right arm ---
+material gs_material_arm
+if bArmRight then
+	addx A - deltaA1 - deltaA2
+	rotz 90 + rightAngle
+	roty -rightVerticalAngle
+	rotx 90
+
+	addz -armThickness_right / 2
+
+	if bRounded then
+		prism_ 5, armThickness_right,
+			-startAngleCorrection_right,				-armHeight_right/2, 	15,
+			 armlength_right - armHeight_right/2,		-armHeight_right/2, 	79,
+			 armlength_right - armHeight_right/2, 		 0,						900,
+			 armlength_right - armHeight_right/2,  		 armHeight_right/2, 	1079,
+			 startAngleCorrection_right, 				 armHeight_right/2,		15
+	else
+		prism_ 4, armThickness_right,
+			-startAngleCorrection_right, 					-armHeight_right/2, 15,
+			 armlength_right + endAngleCorrection_right,	-armHeight_right/2, 15,
+			 armlength_right - endAngleCorrection_right,     armHeight_right/2,	15,
+			 startAngleCorrection_right, 					 armHeight_right/2,	15
+	endif
+	del 5
+endif
+
+
+! --- defining cutting planes ---
+
+rotz leftAngle
+roty 90
+if bArmLeft then addz armThickness_left / 2
+cutplane 1, 1, 0, 1
+del 2
+if bArmLeft then del 1
+
+addx a - deltaA1 - deltaA2
+rotz rightAngle
+roty 90
+if bArmRight then addz -armThickness_right / 2
+cutplane 1, 1, 0, 0
+del 3
+if bArmRight then del 1
+
+
+! --- vertical rotation edit hotspots ---
+addx A/2 - deltaA1
+hotspot -1, 0, 0,																		unID, gs_rotation_vertical, 7		: unID = unID + 1
+hotspot 0, 0, 0,																		unID, gs_rotation_vertical, 6		: unID = unID + 1
+hotspot 0, AC_width, 0,																	unID, gs_rotation_vertical, 4 + 128	: unID = unID + 1
+hotspot 0, AC_width * cos(gs_rotation_vertical), AC_width * sin(gs_rotation_vertical),	unID, gs_rotation_vertical, 5		: unID = unID + 1
+del 1
+
+rotx gs_rotation_vertical
+
+! --- arm/frame offset edit hotspots ---
+addz AC_height / 2
+if bArmLeft then
+	hotspot -gs_deltaA1, 0, 0, 		unID, gs_deltaA1, 1 + 128	: unID = unID + 1
+	hotspot -gs_deltaA1 - 1, 0, 0,	unID, gs_deltaA1, 3			: unID = unID + 1
+	hotspot 0, 0, 0, 				unID, gs_deltaA1, 2			: unID = unID + 1
+else
+	hotspot -gs_deltaF1, 0, 0, 		unID, gs_deltaF1, 1 + 128	: unID = unID + 1
+	hotspot -gs_deltaF1 - 1, 0, 0,	unID, gs_deltaF1, 3			: unID = unID + 1
+	hotspot 0, 0, 0, 				unID, gs_deltaF1, 2			: unID = unID + 1
+endif
+
+addx A - deltaA1 - deltaA2
+
+if bArmRight then
+	hotspot gs_deltaA2, 0, 0, 		unID, gs_deltaA2, 1 + 128	: unID = unID + 1
+	hotspot gs_deltaA2 + 1, 0, 0,	unID, gs_deltaA2, 3			: unID = unID + 1
+	hotspot 0, 0, 0, 				unID, gs_deltaA2, 2			: unID = unID + 1
+else
+	hotspot gs_deltaF2, 0, 0, 		unID, gs_deltaF2, 1 + 128	: unID = unID + 1
+	hotspot gs_deltaF2 + 1, 0, 0,	unID, gs_deltaF2, 3			: unID = unID + 1
+	hotspot 0, 0, 0, 				unID, gs_deltaF2, 2			: unID = unID + 1
+endif
+del 2
+
+
+! --- rod ---
+
+if gs_rod then
+	material gs_material_rod
+	addx -abs (AC_width * tan (leftAngle)) - gs_offset_horizontal / cos (leftAngle)
+	addy (AC_width - AC_height/2)
+	roty 90
+
+	cylind a - deltaA1 - deltaA2 + abs (AC_width * tan (leftAngle)) + abs (AC_width * tan (rightAngle)) + gs_offset_horizontal / cos (leftAngle) + gs_offset_horizontal / cos (rightAngle), gs_rod_radius
+
+	del 3
+endif
+
+
+! --- end frame ---
+
+if bEndFrame then
+	material gs_material_arm
+	addx -abs (AC_width * tan (leftAngle))  - gs_offset_horizontal / cos (leftAngle)
+
+	addy (AC_width - gs_arm_thickness)
+	addz -AC_height / 2
+	prism 4, AC_height,
+		0, 0,
+		0, gs_arm_thickness,
+		a - deltaA1 - deltaA2 + abs (AC_width * tan (leftAngle)) + abs (AC_width * tan (rightAngle)) + gs_offset_horizontal / cos (leftAngle) + gs_offset_horizontal / cos (rightAngle), gs_arm_thickness,
+		a - deltaA1 - deltaA2 + abs (AC_width * tan (leftAngle)) + abs (AC_width * tan (rightAngle)) + gs_offset_horizontal / cos (leftAngle) + gs_offset_horizontal / cos (rightAngle), 0
+	del 3
+endif
+
+! --- slabs ---
+
+if  numLamelles > 0 then
+	if bAutoLouverWidth then
+		if abs (gs_lamelles_angle) > 0 then
+			widthLamelle = abs(AC_height / sin (gs_lamelles_angle)) / 2
+		else
+			widthLamelle = maxLamelleDist
+		endif
+		widthLamelle = min (widthLamelle, maxLamelleDist, AC_Height)
+	else
+		widthLamelle = gs_lamelles_width
+	endif
+
+	material gs_material_lamella
+	addx -abs (AC_width * tan (leftAngle))  - gs_offset_horizontal / cos (leftAngle)
+	addy AC_Height
+	moveLamelle = widthLamelle/2
+	if iLouverMethod = LOUVER_BY_NUM or iLouverMethod = LOUVER_BY_DIST then
+		moveLamelle = -maxLamelleDist/2
+		addy freeLength
+	endif
+
+	for i = 1 to numLamelles
+		numDel = 0
+		if noFrame = 0 or iLouverMethod = LOUVER_ENDS then
+			addy moveLamelle
+			numDel = numDel + 1
+		endif
+		rotx -gs_lamelles_angle
+		addz -gs_lamelles_thickness/2
+		prism 4, gs_lamelles_thickness,
+			0, widthLamelle / 2,
+			a - deltaA1 - deltaA2 + abs (AC_width * tan (leftAngle)) + abs (AC_width * tan (rightAngle)) + gs_offset_horizontal / cos (leftAngle) + gs_offset_horizontal / cos (rightAngle), widthLamelle / 2,
+			a - deltaA1 - deltaA2 + abs (AC_width * tan (leftAngle)) + abs (AC_width * tan (rightAngle)) + gs_offset_horizontal / cos (leftAngle) + gs_offset_horizontal / cos (rightAngle), -widthLamelle / 2,
+			0, -widthLamelle / 2
+		del 2
+		del numDel
+		addy bFromEnd*maxLamelleDist
+	next i
+
+	del i-1
+	if iLouverMethod = LOUVER_BY_NUM or iLouverMethod = LOUVER_BY_DIST then del 1
+	del 2
+endif
+
+cutend
+cutend
+
+if AC_globalZDir[1][3] < 0 then del 1
+

@@ -1,0 +1,1292 @@
+
+! Contact person: <SzL, NJ>
+
+! =============================================================================
+
+lod3D = 0										! Don't draw anything
+if (GLOB_VIEW_TYPE = 9 & GLOB_PREVIEW_MODE = 0) then	! in case of Surface IS Calculation
+	lod3D = 2	! Detailed
+else
+	if iDWDet3D = DETLEVEL_DW3D_SIMPLE then lod3D = 1	! Simple
+	if iDWDet3D = DETLEVEL_DW3D_DETAILED then lod3D = 2	! Detailed
+	if iDWDet3D = DETLEVEL_DW3D_CHI_SIMPLE | iDWDet3D = DETLEVEL_DW3D_CHI_DETAILED then
+		if (GLOB_CONTEXT = 4 | GLOB_CONTEXT = 24 | GLOB_CONTEXT = 6) then
+			lod3D = 5								! Chinese
+		else
+			lod3D = 2
+		endif
+	endif
+endif
+
+gs_fillFr		= gs_bFills * gs_fillFr
+gs_penFr_fg		= gs_bFills * gs_penFr_fg
+gs_penFr_bg		= gs_bFills * gs_penFr_bg
+
+gs_fillSash		= gs_bFills * gs_fillSash
+gs_penSash_fg	= gs_bFills * gs_penSash_fg
+gs_penSash_bg	= gs_bFills * gs_penSash_bg
+
+if not(gs_shadow) then shadow off
+
+
+! =============================================================================
+! GS Window Functions
+! =============================================================================
+
+dim sillPoly[]
+sillPoly[1] = 0
+
+call "GS Window Functions",
+	parameters all	iWindowShape			= iWindowShape,
+					gs_IsCurved				= gs_IsCurved,
+					bParalellInCurvedWalls	= bParalellInCurvedWalls,
+					lod3D					= lod3D,
+					bDisabeMirroring		= bDisabeMirroring,
+	returned_parameters	ac_unit_width,
+						ac_unit_height,
+						gs_frame_ovhg_left_out,
+						gs_frame_ovhg_right_out,
+						gs_frame_ovhg_top_out,
+						gs_frame_ovhg_bottom_out,
+						gs_frame_ovhg_left_in,
+						gs_frame_ovhg_right_in,
+						gs_frame_ovhg_top_in,
+						gs_frame_ovhg_bottom_in,
+						bMirrored,
+						xform11, xform12, xform13, xform14,
+						xform21, xform22, xform23, xform24,
+						xform31, xform32, xform33, xform34,
+
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen,
+						bShowAddHotspots, bShowAddHotspotsForIS, bShowUnitHotspots,
+
+						sillRight,
+						sillLeft,
+						sillBottom,
+						sillBottomOutside,
+						sillSideHeight,
+						sillSideAngle,
+						sillPoly
+
+
+! =============================================================================
+! Block for operator mode
+! =============================================================================
+
+if GLOB_CONTEXT > 40 & GLOB_CONTEXT < 50 then
+	addy gs_tolerance_lower
+	prism_ 6, WIDO_FRAME_THICKNESS,
+		-ac_unit_width/2, 0, 15,
+		 ac_unit_width/2, 0, 15,
+		 ac_unit_width/2, gs_tolerance_lower, 15,
+		-ac_unit_width/2 + gs_frame_width,	gs_frame_width,		979,
+		-ac_unit_width/2,	ac_unit_height,		3079,
+		-ac_unit_width/2, ac_unit_heighr, 15
+	body 1
+	del 1
+	end
+endif
+
+
+if lod3D = 0 then end
+
+xform	xform11, xform12, xform13, xform14,
+		xform21, xform22, xform23, xform24,
+		xform31, xform32, xform33, xform34
+
+muly -1
+addy WIDO_FRAME_THICKNESS
+
+temp = gs_frame_ovhg_left_out
+gs_frame_ovhg_left_out = gs_frame_ovhg_left_in
+gs_frame_ovhg_left_in = temp
+
+temp = gs_frame_ovhg_right_out
+gs_frame_ovhg_right_out = gs_frame_ovhg_right_in
+gs_frame_ovhg_right_in = temp
+
+temp = gs_frame_ovhg_top_in
+gs_frame_ovhg_top_in = gs_frame_ovhg_top_out
+gs_frame_ovhg_top_out = temp
+
+temp = gs_frame_ovhg_bottom_in
+gs_frame_ovhg_bottom_in = gs_frame_ovhg_bottom_out
+gs_frame_ovhg_bottom_out = temp
+
+if ((GLOB_PREVIEW_MODE = 2) | GLOB_CONTEXT = 46) then
+	gs_sill_outside	= 0
+	gs_board_inside	= 0
+	gs_trim_inside	= 0
+	gs_trim_outside	= 0
+endif
+
+if lod3D = 5 then	! Chinese
+	fr_sect_fill_type	= gs_fillShCover
+	fr_sect_fill_fg		= gs_penShCov_fg
+	fr_sect_fill_bg		= gs_penShCov_bg
+else
+	fr_sect_fill_type	= gs_fillFr
+	fr_sect_fill_fg		= gs_penFr_fg
+	fr_sect_fill_bg		= gs_penFr_bg
+endif
+
+rotx 90
+
+Ovhg		=	max(gs_frame_ovhg_left_out, gs_frame_ovhg_left_in)
+topOvhg		=	Ovhg
+bottomOvhg	=	Ovhg
+
+
+! =============================================================================
+! Unit Hotspots
+! =============================================================================
+
+A = ac_unit_width
+B = ac_unit_height
+
+if bShowUnitHotspots then
+	unID=100
+
+	hotspot  ac_unit_width/2, 0, 0,				unID	:unID=unID+1
+	hotspot -ac_unit_width/2, 0, 0,				unID	:unID=unID+1
+	hotspot  ac_unit_width/2, 0, gs_frame_thk,	unID	:unID=unID+1
+	hotspot -ac_unit_width/2, 0, gs_frame_thk,	unID	:unID=unID+1
+
+	hotspot ac_unit_width/2, h, 0,				unID	:unID=unID+1
+	hotspot ac_unit_width/2, h, gs_frame_thk,	unID	:unID=unID+1
+
+	hotspot -ac_unit_width/2, ac_unit_height, 0,			unID	:unID=unID+1
+	hotspot -ac_unit_width/2, ac_unit_height, gs_frame_thk,	unID	:unID=unID+1
+
+	hotspot -ac_unit_width/2 + h, ac_unit_height, 0,			unID	:unID=unID+1
+	hotspot -ac_unit_width/2 + h, ac_unit_height, gs_frame_thk,	unID	:unID=unID+1
+endif
+
+
+! =============================================================================
+! Casing
+! =============================================================================
+
+
+numCuts = 0
+
+if (gs_trim_inside | gs_trim_outside) & lod3D <> 5 then
+
+	! Trim oversize handling
+	tr_ov_out = 0
+	tr_ov_in  = gs_trim_width_in
+
+	tim=(abs(gs_trim_offs_out)>EPS) * 1
+	tom=(abs(gs_trim_offs_in)>EPS) * 4
+
+	pen gs_frame_pen
+
+! Straight Wall ---------------------------------------------------------------
+
+	if abs(WIDO_ORIG_DIST) < EPS & abs(WALL_INCL) < EPS then
+		if not(WIDO_REVEAL_SIDE) then
+			addz WIDO_SILL - WALL_THICKNESS + WIDO_FRAME_THICKNESS    ! Flip
+			mulz -1
+			addz -WALL_THICKNESS
+		else
+			addz -WIDO_SILL
+		endif
+
+		if gs_trim_inside then
+			sect_fill gs_trim_fill_in, gs_trim_pen_bg_in, gs_trim_pen_fg_in, gs_trim_pen_cont
+			material gs_trim_in_mat
+
+			if gs_board_inside then
+				addz WIDO_SILL
+				gosub 400		!Board cutting
+				del 1
+			endif
+
+			if gs_board_inside then
+				boardmody		= gs_board_thk
+			else
+				boardmody		= 0
+			endif
+
+			if gs_trim_width_in > 0 then
+				addz WIDO_SILL+WIDO_FRAME_THICKNESS
+				if gs_board_inside then
+					prism_ 12,WALL_THICKNESS-WIDO_SILL-WIDO_FRAME_THICKNESS,
+						 a/2+tr_ov_out+Ovhg,-tr_ov_out-bottomOvhg,77,
+						 a/2+tr_ov_out+Ovhg,gs_frame_width,77,
+						 0,1,800,
+						-a/2+gs_frame_width,b+tr_ov_out+TopOvhg,1077,
+						-a/2-tr_ov_out-Ovhg,b+tr_ov_out+TopOvhg,77,
+						-a/2-tr_ov_out-Ovhg,-tr_ov_out-bottomOvhg,77,
+
+						-a/2+tr_ov_in-Ovhg,-tr_ov_out-bottomOvhg,11+tom,
+						-a/2+tr_ov_in-Ovhg,b-tr_ov_in+TopOvhg,11+tom,
+						-a/2+gs_frame_width,b-tr_ov_in+TopOvhg,75+tom,
+						 1,0,800,
+						 a/2-tr_ov_in+Ovhg,gs_frame_width,1075+tom,
+						 a/2-tr_ov_in+Ovhg,-tr_ov_out-bottomOvhg,15
+				else
+					prism_ 14,WALL_THICKNESS-WIDO_SILL-WIDO_FRAME_THICKNESS,
+						-a/2-tr_ov_out-Ovhg,-tr_ov_out-bottomOvhg,15,
+						 a/2+tr_ov_out+Ovhg,-tr_ov_out-bottomOvhg,15,
+						 a/2+tr_ov_out+Ovhg,gs_frame_width,79,
+						 0,1,800,
+						-a/2+gs_frame_width,b+tr_ov_out+TopOvhg,1079,
+						-a/2-tr_ov_out-Ovhg,b+tr_ov_out+TopOvhg,15,
+						-a/2-tr_ov_out-Ovhg,-tr_ov_out-bottomOvhg,-1,
+
+						-a/2+tr_ov_in-Ovhg,tr_ov_in-bottomOvhg,11+tom,
+						 a/2-tr_ov_in+Ovhg,tr_ov_in-bottomOvhg,11+tom,
+						 a/2-tr_ov_in+Ovhg,gs_frame_width,75+tom,
+						 0,1,800,
+						-a/2+gs_frame_width,b-tr_ov_in+TopOvhg,1075+tom,
+						-a/2+tr_ov_in-Ovhg,b-tr_ov_in+TopOvhg,11+tom,
+						-a/2+tr_ov_in-Ovhg,tr_ov_in-bottomOvhg,-1
+				endif
+				body 1
+				del 1
+			endif
+
+			if gs_trim_thk_in > 0 then
+				addz WALL_THICKNESS
+
+				base
+				prism_ 4,gs_trim_thk_in,
+					 a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_tw_bottom_in-gs_trim_offs_in-bottomOvhg-boardmody,10,
+					 a/2-tr_ov_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg-boardmody,14,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg-boardmody,10,
+					-a/2+tr_ov_in-gs_tw_right_in-gs_trim_offs_in-Ovhg,tr_ov_in-gs_tw_bottom_in-gs_trim_offs_in-bottomOvhg-boardmody,15
+				vert 0, 0, 0
+				vert 1, 0, 0
+				vert 0, 1, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				base
+				prism_ 16,gs_trim_thk_in,
+					a/2-tr_ov_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg-boardmody,78,
+					a/2-tr_ov_in+gs_trim_offs_in+Ovhg,gs_frame_width-bottomOvhg, 79,
+					a/2-tr_ov_in+gs_trim_offs_in+Ovhg,gs_frame_width, 78,
+					0,1,800,
+					-a/2+gs_frame_width,b-tr_ov_in+gs_trim_offs_in+TopOvhg,1079,
+					-a/2+gs_frame_width-Ovhg,b-tr_ov_in+gs_trim_offs_in+TopOvhg,78,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_trim_offs_in+TopOvhg,10,
+					-a/2+tr_ov_in-gs_tw_right_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,15,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,79,
+					-a/2+gs_frame_width-Ovhg,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,79,
+					-a/2+gs_frame_width,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,79,
+					1,0,800,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,gs_frame_width,1079,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,gs_frame_width-bottomOvhg,79,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg,13,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_tw_bottom_in-gs_trim_offs_in-bottomOvhg-boardmody,10
+				vert 0, 0, 0
+				vert -1, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				base
+				prism_ 4,gs_trim_thk_in,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg-boardmody,10,
+					-a/2+tr_ov_in-gs_tw_right_in-gs_trim_offs_in-Ovhg,tr_ov_in-gs_tw_bottom_in-gs_trim_offs_in-bottomOvhg-boardmody,15,
+					-a/2+tr_ov_in-gs_tw_right_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,10,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_trim_offs_in+TopOvhg,14
+				vert 0, 0, 0
+				vert 0, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				del 1
+			endif
+		endif
+
+		if not(WIDO_REVEAL_SIDE) then
+			del 2
+		endif
+
+		del 1
+	endif
+
+	if abs(WIDO_ORIG_DIST) < EPS then
+		if gs_trim_outside then
+
+			if not(WIDO_REVEAL_SIDE) then
+				addz WIDO_SILL - WALL_THICKNESS + WIDO_FRAME_THICKNESS    ! Flip
+				mulz -1
+				addz -WALL_THICKNESS
+			else
+				addz -WIDO_SILL
+			endif
+
+			sect_fill gs_trim_fill_out, gs_trim_pen_bg_out, gs_trim_pen_fg_out, gs_trim_pen_cont
+			material gs_trim_out_mat
+
+			if gs_sill_outside then
+				sillmody		= SillBottomOutside
+			else
+				sillmody		= tr_ov_in - gs_trim_offs_out
+			endif
+
+			_offsetBottomCasingY = 0
+			if not(bCasingBottomOutside) then
+				if gs_sill_outside then
+					addz WIDO_SILL
+					gosub 300		!cutting below Sill
+					del 1
+				else
+					_offsetBottomCasingY = (gs_trim_width_out+0.01)
+
+					gosub "CasingCuttingOnParapet"
+				endif
+			endif
+
+			if gs_sill_outside then
+
+				addz WIDO_SILL
+				gosub 200		!cutting with Sill
+				del 1
+
+				if gs_trim_width_out > 0 then
+					prism_ 12, WIDO_SILL,
+						 a/2+tr_ov_out+Ovhg,-tr_ov_out-bottomOvhg+sillmody,15,
+						 a/2+tr_ov_out+Ovhg,gs_frame_width,79,
+						 0,1,800,
+						-a/2+gs_frame_width,b+tr_ov_out+TopOvhg,1079,
+						-a/2-tr_ov_out-Ovhg,b+tr_ov_out+TopOvhg,15,
+						-a/2-tr_ov_out-Ovhg,-tr_ov_out-bottomOvhg+sillmody,15,
+						-a/2+tr_ov_in-Ovhg,-tr_ov_out-bottomOvhg+sillmody,14+tim,
+						-a/2+tr_ov_in-Ovhg,b-tr_ov_in+TopOvhg,14+tim,
+						-a/2+gs_frame_width,b-tr_ov_in+TopOvhg,78+tim,
+						 1,0,800,
+						 a/2-tr_ov_in+Ovhg,gs_frame_width,1012+tim,
+						 a/2-tr_ov_in+Ovhg,-tr_ov_out-bottomOvhg+sillmody,14+tim
+				endif
+			else
+				if gs_trim_width_out > 0 then
+					prism_ 14, WIDO_SILL,
+						-a/2-tr_ov_out-Ovhg,-tr_ov_out-bottomOvhg-_offsetBottomCasingY,15,
+						 a/2+tr_ov_out+Ovhg,-tr_ov_out-bottomOvhg-_offsetBottomCasingY,15,
+						 a/2+tr_ov_out+Ovhg,gs_frame_width,79,
+						 0,1,800,
+						-a/2+gs_frame_width,b+tr_ov_out+TopOvhg,1079,
+						-a/2-tr_ov_out-Ovhg,b+tr_ov_out+TopOvhg,15,
+						-a/2-tr_ov_out-Ovhg,-tr_ov_out-bottomOvhg-_offsetBottomCasingY,-1,
+
+						-a/2+tr_ov_in-Ovhg,tr_ov_in-bottomOvhg-_offsetBottomCasingY,14+tim,
+						 a/2-tr_ov_in+Ovhg,tr_ov_in-bottomOvhg-_offsetBottomCasingY,14+tim,
+						 a/2-tr_ov_in+Ovhg,gs_frame_width,78+tim,
+						 0,1,800,
+						-a/2+gs_frame_width,b-tr_ov_in+TopOvhg,1078+tim,
+						-a/2+tr_ov_in-Ovhg,b-tr_ov_in+TopOvhg,14+tim,
+						-a/2+tr_ov_in-Ovhg,tr_ov_in-bottomOvhg-_offsetBottomCasingY,-1
+				endif
+			endif
+			body 1
+
+			if gs_trim_thk_out > 0 then
+				addz -gs_trim_thk_out
+				base
+				prism_ 4,gs_trim_thk_out,
+					a/2-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+Ovhg,sillmody-gs_tw_bottom_out-bottomOvhg-_offsetBottomCasingY,10,
+					a/2-tr_ov_in+gs_trim_offs_out+Ovhg,sillmody-bottomOvhg-_offsetBottomCasingY,11,
+					-a/2+tr_ov_in-gs_trim_offs_out-Ovhg,sillmody-bottomOvhg-_offsetBottomCasingY,10,
+					-a/2+tr_ov_in-gs_tw_right_out-gs_trim_offs_out-Ovhg,sillmody-gs_tw_bottom_out-bottomOvhg-_offsetBottomCasingY,15
+				vert 0, 0, 0
+				vert 1, 0, 0
+				vert 0, 1, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				base
+				prism_ 16,gs_trim_thk_out,
+					a/2-tr_ov_in+gs_trim_offs_out+Ovhg,sillmody-bottomOvhg-_offsetBottomCasingY,75+tom,
+					a/2-tr_ov_in+gs_trim_offs_out+Ovhg,gs_frame_width-bottomOvhg-_offsetBottomCasingY, 75+tom,
+					a/2-tr_ov_in+gs_trim_offs_out+Ovhg,gs_frame_width, 75+tom,
+					0,1,800,
+					-a/2+gs_frame_width,b-tr_ov_in+gs_trim_offs_out+TopOvhg,1075+tom,
+					-a/2+gs_frame_width-Ovhg,b-tr_ov_in+gs_trim_offs_out+TopOvhg,75+tom,
+					-a/2+tr_ov_in-gs_trim_offs_out-Ovhg,b-tr_ov_in+gs_trim_offs_out+TopOvhg,10,
+					-a/2+tr_ov_in-gs_tw_right_out-gs_trim_offs_out-Ovhg,b-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+TopOvhg,15,
+					-a/2+tr_ov_in-gs_trim_offs_out-Ovhg,b-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+TopOvhg,79,
+					-a/2+gs_frame_width-Ovhg,b-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+TopOvhg,79,
+					-a/2+gs_frame_width,b-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+TopOvhg,79,
+					1,0,800,
+					a/2-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+Ovhg,gs_frame_width,1079,
+					a/2-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+Ovhg,gs_frame_width-bottomOvhg-_offsetBottomCasingY,79,
+					a/2-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+Ovhg,sillmody-bottomOvhg-_offsetBottomCasingY,13,
+					a/2-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+Ovhg,sillmody-gs_tw_bottom_out-bottomOvhg-_offsetBottomCasingY,10
+
+				vert 0, 0, 0
+				vert -1, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				base
+				prism_ 4,gs_trim_thk_out,
+					-a/2+tr_ov_in-gs_trim_offs_out-Ovhg,sillmody-bottomOvhg-_offsetBottomCasingY,10,
+					-a/2+tr_ov_in-gs_tw_right_out-gs_trim_offs_out-Ovhg,sillmody-gs_tw_bottom_out-bottomOvhg-_offsetBottomCasingY,15,
+					-a/2+tr_ov_in-gs_tw_right_out-gs_trim_offs_out-Ovhg,b-tr_ov_in+gs_tw_right_out+gs_trim_offs_out+TopOvhg,10,
+					-a/2+tr_ov_in-gs_trim_offs_out-Ovhg,b-tr_ov_in+gs_trim_offs_out+TopOvhg,11+tom
+				vert 0, 0, 0
+				vert 0, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				del 1
+			endif
+
+			if not(WIDO_REVEAL_SIDE) then
+				del 2
+			endif
+
+			del 1
+
+			if numCuts then
+				for i=1 to numCuts
+					cutend
+				next i
+			endif
+			numCuts = 0
+
+		endif
+	endif
+
+! Inclined Wall ---------------------------------------------------------------
+
+	if abs(WIDO_ORIG_DIST) < EPS & abs(WALL_INCL) > EPS then
+
+		wi = WALL_INCL    ! Inclination of the wall surfaces
+
+		if not(WIDO_REVEAL_SIDE) then
+			addz WIDO_SILL-WALL_THICKNESS+WIDO_FRAME_THICKNESS    ! Flip
+			mulz -1
+			addz -WALL_THICKNESS
+		else
+			addz -WIDO_SILL
+		endif
+
+		if gs_trim_inside then
+			sect_fill gs_trim_fill_in, gs_trim_pen_bg_in, gs_trim_pen_fg_in, gs_trim_pen_cont
+			material gs_trim_in_mat
+
+			if gs_trim_width_in > 0 then
+				if not(SYMB_MIRRORED) & abs(SYMB_ROTANGLE-180)<EPS | SYMB_MIRRORED & abs(SYMB_ROTANGLE)<EPS then
+					mulx -1  ! Rotated or mirrored window
+				endif
+
+				rotx 90
+				if wi>0 then
+					cutpolya 4, 1, 0,
+					   -a/2-tr_ov_out-Ovhg,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+Ovhg),   0,
+						a/2+tr_ov_out+Ovhg,  WALL_THICKNESS+tan(wi)*(a/2+tr_ov_out+Ovhg),   0,
+					   -a/2-tr_ov_out-Ovhg,  WALL_THICKNESS+tan(wi)*(a/2+tr_ov_out+Ovhg),   0,
+					   -a/2-tr_ov_out-Ovhg,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+Ovhg),  -1
+				endif
+				if wi<0 then
+					cutpolya 4, 1, 0,
+					   -a/2-tr_ov_out-Ovhg,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+Ovhg),   0,
+						a/2+tr_ov_out+Ovhg,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+Ovhg),   0,
+						a/2+tr_ov_out+Ovhg,  WALL_THICKNESS+tan(wi)*(a/2+tr_ov_out+Ovhg),   0,
+					   -a/2-tr_ov_out-Ovhg,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+Ovhg),  -1
+				endif
+				del 1
+
+				addz WIDO_SILL+WIDO_FRAME_THICKNESS
+				if not(SYMB_MIRRORED) & abs(SYMB_ROTANGLE-180)<EPS | SYMB_MIRRORED & abs(SYMB_ROTANGLE)<EPS then
+					mulx -1  ! Rotated or mirrored window
+				endif
+				prism_ 14,WALL_THICKNESS-WIDO_SILL-WIDO_FRAME_THICKNESS+abs(tan(wi))*(a/2+tr_ov_out+Ovhg),
+					-a/2-tr_ov_out-Ovhg,-tr_ov_out-bottomOvhg,15,
+					 a/2+tr_ov_out+Ovhg,-tr_ov_out-bottomOvhg,15,
+					 a/2+tr_ov_out+Ovhg,gs_frame_width,79,
+					 0,1,800,
+					-a/2+gs_frame_width,b+tr_ov_out+TopOvhg,1079,
+					-a/2-tr_ov_out-Ovhg,b+tr_ov_out+TopOvhg,15,
+					-a/2-tr_ov_out-Ovhg,-tr_ov_out-bottomOvhg,-1,
+
+					-a/2+tr_ov_in-Ovhg,tr_ov_in-bottomOvhg,11+tom,
+					 a/2-tr_ov_in+Ovhg,tr_ov_in-bottomOvhg,11+tom,
+					 a/2-tr_ov_in+Ovhg,gs_frame_width,75+tom,
+					 0,1,800,
+					-a/2+gs_frame_width,b-tr_ov_in+TopOvhg,1075+tom,
+					-a/2+tr_ov_in-Ovhg,b-tr_ov_in+TopOvhg,11+tom,
+					-a/2+tr_ov_in-Ovhg,tr_ov_in-bottomOvhg,-1
+				body 1
+				if not(SYMB_MIRRORED) & abs(SYMB_ROTANGLE-180)<EPS | SYMB_MIRRORED & abs(SYMB_ROTANGLE)<EPS then del 1
+				del 1
+
+				if abs(wi) > EPS then cutend
+			endif
+
+			if gs_trim_thk_in > 0 then
+				if not(WIDO_REVEAL_SIDE) then lwam=3
+				if abs(gs_trim_offs_in)>EPS then lwam=-1
+
+				if not(SYMB_MIRRORED) & abs(SYMB_ROTANGLE-180)<EPS | SYMB_MIRRORED & abs(SYMB_ROTANGLE)<EPS then
+					mulx -1  ! Rotated or mirrored window
+				endif
+
+				cutpolya 7, 1, 0,
+					-a/2+tr_ov_in-gs_trim_offs_in,tr_ov_in-gs_trim_offs_in,9+lwam,
+					 a/2-tr_ov_in+gs_trim_offs_in,tr_ov_in-gs_trim_offs_in,9+lwam,
+					 a/2-tr_ov_in+gs_trim_offs_in,gs_frame_width,73+lwam,
+					 0,1,800,
+					-a/2+gs_frame_width,b-tr_ov_in+gs_trim_offs_in,1073+lwam,
+					-a/2+tr_ov_in-gs_trim_offs_in,b-tr_ov_in+gs_trim_offs_in,9+lwam,
+					-a/2+tr_ov_in-gs_trim_offs_in,tr_ov_in-gs_trim_offs_in,-1
+				if not(SYMB_MIRRORED) & abs(SYMB_ROTANGLE-180)<EPS | SYMB_MIRRORED & abs(SYMB_ROTANGLE)<EPS then del 1
+
+				addz WALL_THICKNESS
+				roty -wi
+
+				if not(SYMB_MIRRORED) & abs(SYMB_ROTANGLE-180)<EPS | SYMB_MIRRORED & abs(SYMB_ROTANGLE)<EPS then
+					mulx -1  ! Rotated or mirrored window
+				endif
+				base
+				prism_ 4,gs_trim_thk_in,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_tw_bottom_in-gs_trim_offs_in-bottomOvhg,10,
+					a/2-tr_ov_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg,14,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg,10,
+					-a/2+tr_ov_in-gs_tw_right_in-gs_trim_offs_in-Ovhg,tr_ov_in-gs_tw_bottom_in-gs_trim_offs_in-bottomOvhg,15
+				vert 0, 0, 0
+				vert 1, 0, 0
+				vert 0, 1, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				base
+				prism_ 16,gs_trim_thk_in,
+					a/2-tr_ov_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg,79,
+					a/2-tr_ov_in+gs_trim_offs_in+Ovhg,gs_frame_width-bottomOvhg, 79,
+					a/2-tr_ov_in+gs_trim_offs_in+Ovhg,gs_frame_width, 79,
+					0,1,800,
+					-a/2+gs_frame_width,b-tr_ov_in+gs_trim_offs_in+TopOvhg,1079,
+					-a/2+gs_frame_width-Ovhg,b-tr_ov_in+gs_trim_offs_in+TopOvhg,79,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_trim_offs_in+TopOvhg,10,
+					-a/2+tr_ov_in-gs_tw_right_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,15,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,79,
+					-a/2+gs_frame_width-Ovhg,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,79,
+					-a/2+gs_frame_width,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,79,
+					1,0,800,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,gs_frame_width,1079,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,gs_frame_width-bottomOvhg,79,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg,13,
+					a/2-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+Ovhg,tr_ov_in-gs_tw_bottom_in-gs_trim_offs_in-bottomOvhg,10
+				vert 0, 0, 0
+				vert -1, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				base
+
+				prism_ 4,gs_trim_thk_in,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,tr_ov_in-gs_trim_offs_in-bottomOvhg,10,
+					-a/2+tr_ov_in-gs_tw_right_in-gs_trim_offs_in-Ovhg,tr_ov_in-gs_tw_bottom_in-gs_trim_offs_in-bottomOvhg,15,
+					-a/2+tr_ov_in-gs_tw_right_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_tw_right_in+gs_trim_offs_in+TopOvhg,10,
+					-a/2+tr_ov_in-gs_trim_offs_in-Ovhg,b-tr_ov_in+gs_trim_offs_in+TopOvhg,14
+				vert 0, 0, 0
+				vert 0, 1, 0
+				vert 1, 0, 0
+				vert 0, 0, 1
+				coor 2, -1, -2, -3, -4
+				body 1
+
+				if not(SYMB_MIRRORED) and abs(SYMB_ROTANGLE-180)<EPS or SYMB_MIRRORED and abs(SYMB_ROTANGLE)<EPS then del 1
+				del 2
+
+				cutend
+
+				if not(SYMB_MIRRORED) and abs(SYMB_ROTANGLE-180)<EPS or SYMB_MIRRORED and abs(SYMB_ROTANGLE)<EPS then del 1
+			endif
+		endif
+
+		if not(WIDO_REVEAL_SIDE) then
+			del 2
+		endif
+
+		del 1
+	endif
+
+! Curved Wall -----------------------------------------------------------------
+
+	if abs(WIDO_ORIG_DIST) > EPS then
+
+		resol WALL_RESOL
+
+		mulz -1
+		addz -WIDO_FRAME_THICKNESS
+
+		!z axis curved wall calculation at subroutine 1000
+		!off1, off2 etc. special offset values for outside, inside etc. elements "rfur" values
+		!different from element to element!
+
+		if gs_trim_inside then
+			sect_fill gs_trim_fill_in, gs_trim_pen_bg_in, gs_trim_pen_fg_in, gs_trim_pen_cont
+			material gs_trim_in_mat
+
+			!1st part
+
+			if gs_trim_thk_in > 0 then
+				off1 = -gs_trim_thk_in
+				off2 = 0
+				off3 = WALL_THICKNESS
+				off4 = -WALL_THICKNESS-gs_trim_thk_in
+				gosub 1000
+
+				!Penetration curve calculation
+				!(Curved wall "Outside" surface and a Cylind with radius of a/2)
+
+				rint=tan(calpha+((gs_tw_right_in-gs_trim_width_in)*180)/(pi*rfur))*r0+(a/2-gs_frame_width)
+				mask = 79
+				gosub "put polygon points"
+
+				rint=a-gs_frame_width-gs_trim_width_in
+				mask = btim1c
+				gosub "put polygon points"
+
+
+				addz k_weitoffset
+				mulz mulstat
+				addz -rfur
+				roty -AC_Hole_Position_Angle
+				addz rfur
+
+				bprism_ gs_trim_in_mat,gs_trim_in_mat,gs_trim_in_mat,
+					8+nsp/3, gs_trim_thk_in, rfur,
+					xoffset-ax/2-gs_tw_right_in+gs_trim_width_in,-gs_tw_bottom_in+gs_trim_width_in,15,
+					xoffset+ax/2+gs_tw_right_in-gs_trim_width_in,-gs_tw_bottom_in+gs_trim_width_in,15,
+					get (nsp/2),
+					xoffset-ax/2-gs_tw_right_in+gs_trim_width_in,b+gs_tw_right_in-gs_trim_width_in,15,
+					xoffset-ax/2-gs_tw_right_in+gs_trim_width_in,-gs_tw_bottom_in+gs_trim_width_in,-1,
+
+					xoffset-ax/2+gs_trim_width_in,gs_trim_width_in,btim1,
+					xoffset+ax/2-gs_trim_width_in,gs_trim_width_in,btim1,
+					get (nsp),
+					xoffset-ax/2+gs_trim_width_in,b-gs_trim_width_in,btim1,
+					xoffset-ax/2+gs_trim_width_in,gs_trim_width_in,-1
+				body 1
+				del 5
+			endif
+
+			!2nd part
+
+			if gs_trim_width_in > 0 then
+				!Cutplanes at frame
+
+				if WIDO_REVEAL_SIDE then
+					cutplane 1,1,0,0
+				else
+					addz WIDO_FRAME_THICKNESS
+					cutplane 1,1,0,1
+					del 1
+				endif
+
+				off1=0
+				off2=-WALL_THICKNESS
+				off3=0
+				off4=-WALL_THICKNESS
+				gosub 1000
+
+
+				!Penetration curve calculation
+				!(Curved wall "Outside" surface and a Cylind with radius of a/2)
+
+				rint=tan(calpha)*r0+(a/2-gs_frame_width)
+				mask = 79
+				gosub "put polygon points"
+
+				rint=a-gs_frame_width-gs_trim_width_in
+				mask = btim2c
+				gosub "put polygon points"
+
+				addz k_weitoffset
+				mulz mulstat
+				addz -rfur
+				roty -AC_Hole_Position_Angle
+				addz rfur
+
+				bprism_ gs_trim_in_mat,gs_trim_in_mat,gs_trim_in_mat,
+					8+nsp/3, WALL_THICKNESS, rfur,
+					xoffset-ax/2,0,15,
+					xoffset+ax/2,0,15,
+					get (nsp/2),
+					xoffset-ax/2,b,15,
+					xoffset-ax/2,0,-1,
+
+					xoffset-ax/2+gs_trim_width_in,gs_trim_width_in,btim2,
+					xoffset+ax/2-gs_trim_width_in,gs_trim_width_in,btim2,
+					get (nsp),
+					xoffset-ax/2+gs_trim_width_in,b-gs_trim_width_in,btim2,
+					xoffset-ax/2+gs_trim_width_in,gs_trim_width_in,-1
+				body 1
+
+				del 5
+
+				cutend
+			endif
+		endif
+
+		if gs_trim_outside then
+			sect_fill gs_trim_fill_out, gs_trim_pen_bg_out, gs_trim_pen_fg_out, gs_trim_pen_cont
+			material gs_trim_out_mat
+
+			if gs_sill_outside then
+				sillmody		= SillBottomOutside - gs_trim_width_out
+			else
+				sillmody		= 0	!tr_ov_in - gs_trim_offs_out
+			endif
+
+
+			!1st part
+
+			off1=WALL_THICKNESS
+			off2=-WALL_THICKNESS-gs_trim_thk_out
+			off3=-gs_trim_thk_out
+			off4=0
+
+			if gs_sill_outside then
+				gosub 200		!cutting with Sill
+			endif
+
+			gosub 1000
+
+			!Penetration curve calculation
+			!(Curved wall "Outside" surface and a Cylind with radius of a/2)
+
+			rint=tan(calpha+((gs_tw_right_out-gs_trim_width_out)*180)/(pi*rfur))*r0+(a/2-gs_frame_width)
+			mask = 79
+			gosub "put polygon points"
+
+			rint=a-gs_frame_width-gs_trim_width_out
+			mask = btim3c
+			gosub "put polygon points"
+
+			_offsetBottomCasingY = 0
+			if not(bCasingBottomOutside) then
+				if gs_sill_outside then
+					gosub 300		!cutting below Sill
+				else
+					_offsetBottomCasingY = (gs_trim_width_out+0.01)
+
+					gosub "CasingCuttingOnParapet"
+				endif
+			endif
+
+			if gs_trim_thk_out > 0 then
+				addz k_weitoffset
+				mulz mulstat
+				addz -rfur
+				roty -AC_Hole_Position_Angle
+				addz rfur
+
+				resol 2*WALL_RESOL
+
+				bprism_  gs_trim_out_mat,gs_trim_out_mat,gs_trim_out_mat,
+					8+nsp/3, gs_trim_thk_out, rfur,
+					xoffset-ax/2-gs_tw_right_out+gs_trim_width_out,  -gs_tw_bottom_out+gs_trim_width_out+sillmody-_offsetBottomCasingY, 15,
+					xoffset+ax/2+gs_tw_right_out-gs_trim_width_out,  -gs_tw_bottom_out+gs_trim_width_out+sillmody-_offsetBottomCasingY, 15,
+					get(nsp/2),
+					xoffset-ax/2-gs_tw_right_out+gs_trim_width_out,  b+gs_tw_right_out-gs_trim_width_out, 15,
+					xoffset-ax/2-gs_tw_right_out+gs_trim_width_out,  -gs_tw_bottom_out+gs_trim_width_out+sillmody-_offsetBottomCasingY, -1,
+
+					xoffset-ax/2+gs_trim_width_out, gs_trim_width_out+sillmody-_offsetBottomCasingY, btim3,
+					xoffset+ax/2-gs_trim_width_out, gs_trim_width_out+sillmody-_offsetBottomCasingY, btim3,
+					get(nsp),
+					xoffset-ax/2+gs_trim_width_out, b-gs_trim_width_out, btim3,
+					xoffset-ax/2+gs_trim_width_out, gs_trim_width_out+sillmody-_offsetBottomCasingY,    -1
+				body 1
+
+				del 5
+			endif
+
+			!2nd part
+
+			if gs_trim_width_out > 0 then
+				!Cutplanes at frame
+
+				if WIDO_REVEAL_SIDE then
+					addz WIDO_FRAME_THICKNESS
+					cutplane 1,1,0,1
+					del 1
+				else
+					cutplane 1,1,0,0
+				endif
+
+				off1=0
+				off2=-WALL_THICKNESS
+				off3=0
+				off4=-WALL_THICKNESS
+				gosub 1000
+
+				!Penetration curve calculation
+				!(Curved wall "Outside" surface and a Cylind with radius of a/2)
+
+				rint=tan(calpha)*r0+(a/2-gs_frame_width)
+				mask = 79
+				gosub "put polygon points"
+
+				rint=a-gs_frame_width-gs_trim_width_out
+				mask = btim4c
+				gosub "put polygon points"
+
+				addz k_weitoffset
+				mulz mulstat
+				addz -rfur
+				roty -AC_Hole_Position_Angle
+				addz rfur
+
+				bprism_  gs_trim_out_mat,gs_trim_out_mat,gs_trim_out_mat,
+					8+nsp/3, WALL_THICKNESS, rfur,
+					xoffset-ax/2,  sillmody-_offsetBottomCasingY, 15,
+					xoffset+ax/2,  sillmody-_offsetBottomCasingY, 15,
+					get (nsp/2),
+					xoffset-ax/2,  b, 15,
+					xoffset-ax/2,  sillmody-_offsetBottomCasingY, -1,
+
+					xoffset-ax/2+gs_trim_width_out, gs_trim_width_out+sillmody-_offsetBottomCasingY, btim4,
+					xoffset+ax/2-gs_trim_width_out, gs_trim_width_out+sillmody-_offsetBottomCasingY, btim4,
+					get (nsp),
+					xoffset-ax/2+gs_trim_width_out, b-gs_trim_width_out, btim4,
+					xoffset-ax/2+gs_trim_width_out, gs_trim_width_out+sillmody-_offsetBottomCasingY,   -1
+				body 1
+
+				del 5
+
+				cutend
+			endif
+		endif
+
+		del 2
+	endif
+
+	body -1
+endif
+
+
+if numCuts then
+	for i=1 to numCuts
+		cutend
+	next i
+endif
+numCuts = 0
+
+
+! =============================================================================
+! Draw Frame
+! =============================================================================
+
+if lod3D = 1 then	! Simple
+	if not(WIDO_REVEAL_SIDE) then
+		frameThk  = gs_frame_thk/2 + gs_glass_thk/2
+		frameThk2 = gs_frame_thk/2 - gs_glass_thk/2
+	else
+		frameThk  = gs_frame_thk/2 - gs_glass_thk/2
+		frameThk2 = gs_frame_thk/2 + gs_glass_thk/2
+	endif
+else
+	frameThk  = gs_frame_thk - gs_rebate_depth
+	frameThk2 = gs_rebate_depth
+endif
+
+if gs_frame_mat = gs_frame_mat2 | frameThk < EPS | frameThk2 < EPS then
+	loopNum = 1
+	if gs_frame_mat = gs_frame_mat2 then
+		frameThk = gs_frame_thk
+	else
+		frameThk = max(frameThk, frameThk2)
+	endif
+	if not(WIDO_REVEAL_SIDE) then
+		frameMatTop		= gs_frame_mat
+		frameMatBottom	= gs_frame_mat2
+	else
+		frameMatTop		= gs_frame_mat2
+		frameMatBottom	= gs_frame_mat
+	endif
+	if WIDO_REVEAL_SIDE then
+		frameMat = gs_frame_mat2
+	else
+		frameMat = gs_frame_mat
+	endif
+	frameMask = 15
+else
+	loopNum = 2
+	if not(WIDO_REVEAL_SIDE) then
+		frameMat  = gs_frame_mat2
+		frameMat2 = gs_frame_mat
+	else
+		frameMat  = gs_frame_mat
+		frameMat2 = gs_frame_mat2
+	endif
+	frameMatTop		= frameMat2
+	frameMatBottom	= frameMat
+
+	frameMask = 11
+	frameMask2 = 14
+endif
+
+pen gs_frame_pen
+sect_fill fr_sect_fill_type, fr_sect_fill_bg, fr_sect_fill_fg, gs_frame_pen_cont
+
+resol gs_res
+for i=1 to loopNum
+
+	material frameMat
+
+	! Quarter round
+	if gs_SashText_typ_num = 1 then
+		put	A/2 + Ovhg,	-bottomOvhg,		frameMask,
+			A/2 + Ovhg,	gs_frame_width,		frameMask + 64
+	else
+		put	A/2 + Ovhg,	gs_frame_width,	frameMask + 64
+	endif
+
+	put	-A/2 + gs_frame_width,	gs_frame_width,		900
+
+	if gs_SashText_typ_num = 1 then
+		put	-A/2 + gs_frame_width,	B + Ovhg,		3000 + frameMask - 2,
+			-A/2 - Ovhg,			B + topOvhg,	10
+	else
+		put -A/2 + gs_frame_width,	B + Ovhg,	3000 + bitset(bitset(bitset(frameMask, 0,0), 1,0), 2,0)
+	endif
+
+	put	-A/2 + gs_frame_width,	B - gs_frame_width,	frameMask + 64,
+		 A/2 - gs_frame_width,	gs_frame_width,		3000 + 10
+
+	cprism_ frameMatTop, frameMatBottom, frameMat, nsp/3, frameThk,
+			get(nsp)
+	body 1
+
+	! Bottom
+	if gs_SashText_typ_num = 1 then
+		put	-A/2 + gs_frame_width,	gs_frame_width,	10,
+			-A/2 - Ovhg,			-bottomOvhg,	frameMask,
+			 A/2 + Ovhg,			-bottomOvhg, 	10,
+			 A/2 - gs_frame_width,	gs_frame_width, frameMask
+	else
+		put	-A/2 + gs_frame_width,	gs_frame_width, 10,
+			-A/2 - Ovhg,			gs_frame_width, frameMask - 2,
+			-A/2 - Ovhg,			-bottomOvhg, 	frameMask,
+			 A/2 + Ovhg,			-bottomOvhg, 	frameMask,
+			 A/2 + Ovhg,			gs_frame_width, 8,
+			 A/2 - gs_frame_width,	gs_frame_width, frameMask
+	endif
+
+	base
+	cprism_ frameMatTop, frameMatBottom, frameMat, nsp/3, frameThk,
+			get(nsp)
+	gosub 4000
+
+	! Left
+	put	-A/2 + gs_frame_width,	gs_frame_width,		frameMask,
+		-A/2 + gs_frame_width,	B - gs_frame_width,	10
+
+	if gs_SashText_typ_num = 1 then
+		put	-A/2 - Ovhg,			B + Ovhg,			frameMask,
+			-A/2 - Ovhg,			-bottomOvhg,		10
+	else
+		put	-A/2 + gs_frame_width,	B + Ovhg,		frameMask - 2,
+			-A/2 - Ovhg,			B + Ovhg,		frameMask,
+			-A/2 - Ovhg,			gs_frame_width,	8
+	endif
+
+	base
+	cprism_ frameMatTop, frameMatBottom, frameMat, nsp/3, frameThk,
+			get(nsp)
+	gosub 3000
+
+	addz frameThk
+	if loopNum > 1 then
+		frameThk = frameThk2
+		frameMatTop		= frameMat2
+		frameMatBottom	= frameMat2
+		frameMat		= frameMat2
+		frameMask = frameMask2
+	endif
+next i
+del loopNum
+
+body -1
+
+
+! =============================================================================
+! Draw Casement
+! =============================================================================
+
+
+pen gs_frame_pen
+material gs_frame_mat
+resol gs_res
+
+
+if lod3D = 5 then	! Chinese
+	sh_sect_fill_type	= gs_fillShCover
+	sh_sect_fill_fg		= gs_penShCov_fg
+	sh_sect_fill_bg		= gs_penShCov_bg
+else
+	sh_sect_fill_type	= gs_fillSash
+	sh_sect_fill_fg		= gs_penSash_fg
+	sh_sect_fill_bg		= gs_penSash_bg
+endif
+
+add 0, 0, gs_frame_thk
+call "Casement_Quarter_Round" parameters	a=a,
+											b=b,
+	lod3D							= lod3D,
+	gs_rebate_width					= gs_rebate_width,
+	gs_rebate_depth					= gs_rebate_depth,
+	gs_frame_width					= gs_frame_width,
+	gs_frame_thk					= gs_frame_thk,
+	iMullionStyle					= iMullionStyle_01,
+	iMullionPosition				= iMullionPosition,
+	gw								= gw,
+	gth								= gth,
+	gs_glass_thk					= gs_glass_thk,
+	gs_SashText_typ_num				= gs_SashText_typ_num,
+	res								= gs_res,
+	gs_frame_pen					= gs_frame_pen,
+	gs_glass_pen					= gs_glass_pen,
+	gs_frame_mat					= gs_frame_mat2,
+	gs_frame_mat2					= gs_frame_mat,
+	gs_grill_mat					= gs_grill_mat2,
+	gs_grill_mat2					= gs_grill_mat,
+	gs_glass_mat					= gs_glass_mat,
+	gs_panel_mat					= gs_panel_mat,
+	gs_panel_mat2					= gs_panel_mat2,
+	gs_optype_m						= SASH_FIXED,
+	gs_sash_pen						= gs_sash_pen,
+	gs_fillSash						= sh_sect_fill_type,
+	gs_penSash_bg					= sh_sect_fill_bg,
+	gs_penSash_fg					= sh_sect_fill_fg,
+	gs_frame_pen_cont				= gs_frame_pen_cont,
+	bOpeningDirectionInside			= WIDO_REVEAL_SIDE,
+	gs_cust_panel					= gs_cust_panel_01
+del 1
+
+
+! =============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! =============================================================================
+
+"CasingCuttingOnParapet":
+	! Cutting with top of parapet
+
+	muly -1
+	rotx -90
+
+	material gs_trim_out_mat
+	cutplane
+
+	!rect 2,2
+	numCuts = numCuts + 1
+
+	del 2
+return
+
+
+200:
+
+
+!Cutting with Sill
+
+if vardim1(sillPoly) > 1 then
+	for i = 1 to (vardim1(sillPoly)-1) step 2
+		put sillPoly[i], sillPoly[i+1], 31
+	next i
+
+	roty 90
+	muly -1
+	addz -sillLeft
+
+	material gs_trim_out_mat
+
+!	prism_ nsp/3, sillRight + sillLeft+3,
+!		get (nsp)
+
+	cutform nsp/3, 1, 2,
+		0, 0, 1, sillRight + sillLeft,
+		get (nsp)
+	numCuts = numCuts + 1
+
+
+	del 3
+endif
+
+return
+
+300:
+
+!Cutting below Sill
+muly -1
+add 0, -sillBottom-sillSideHeight, 0
+rotx -90 + sillSideAngle
+
+material gs_trim_out_mat
+cutplane
+
+!rect 2,2
+numCuts = numCuts + 1
+
+del 3
+
+
+return
+
+
+400:
+
+!Board cutting
+
+	roty 90
+	rotz 90
+	addz -ac_wallhole_width/2 - gs_board_ovhg_left
+	addy gs_frame_thk
+
+	material gs_trim_in_mat
+
+	cutform 4, 1, 2,
+		0, 0, 1, ac_wallhole_width + gs_board_ovhg_left + gs_board_ovhg_right,
+		0, 0,							31,
+		0, 				gs_board_width,	31,
+		gs_board_thk-gs_board_width*tan(gs_board_angle), gs_board_width,31,
+		gs_board_thk, 0,				31
+
+	numCuts = numCuts + 1
+
+!	prism_ 4, ac_wallhole_width + gs_board_ovhg_left + gs_board_ovhg_right,
+!		0, 0,							31,
+!		0, 				gs_board_width,	31,
+!		gs_board_thk-gs_board_width*tan(gs_board_angle), gs_board_width,31,
+!		gs_board_thk, 0,				31
+
+	del 4
+
+
+return
+
+
+1000:
+
+!Curved Wall Calculation
+
+r0=abs(WIDO_ORIG_DIST)
+
+if WIDO_ORIG_DIST<0 then                !Wall is convex from "outside"
+
+	if WIDO_REVEAL_SIDE then                            !Flip is on
+		nframe=WIDO_FRAME_THICKNESS
+		wsill=WIDO_SILL
+		wthickness=WALL_THICKNESS
+
+		mulstat=1
+		rdpi=sqr(a*a/4+(r0+nframe)^2)
+		r=sqr(a*a/4+r0*r0)
+		kdpi=rdpi-r+WIDO_SILL
+		rclo=r+kdpi                         !wall radius_2
+		rfur=rclo-wthickness+off1           !wall radius_1
+		calpha=asn(a/2/r)                   !window half angle
+	else                                     !Flip is off
+		nframe=0
+		wsill=-WIDO_SILL
+		wthickness=-WALL_THICKNESS
+
+		mulstat=1
+		r=sqr(a*a/4+r0*r0)
+		rclo=r+wsill                         !wall radius_2
+		rfur=rclo-wthickness+off2            !wall radius_1
+		calpha=asn(a/2/r)                    !window half angle
+	endif
+
+else                                      !Wall is concave from "outside"
+
+	if WIDO_REVEAL_SIDE then                              !Flip is on
+		nframe=WIDO_FRAME_THICKNESS
+		wsill=WIDO_SILL
+		wthickness=WALL_THICKNESS
+
+		mulstat=-1
+		r0=r0-nframe
+		r=sqr(a*a/4+r0*r0)
+		rfur=r-wsill+off3                    !wall radius_1
+		rclo=rfur+wthickness                 !wall radius_2
+		calpha=asn(a/2/r)                    !window half angle
+	else                                      !Flip is off
+		nframe=WIDO_FRAME_THICKNESS
+		wsill=-WIDO_SILL
+		wthickness=-WALL_THICKNESS
+
+		mulstat=-1
+		rdpi=sqr(a*a/4+r0*r0)
+		r0=r0-nframe
+		r=sqr(a*a/4+r0*r0)
+		kdpi=rdpi-r+WIDO_SILL
+		rfur=r+kdpi+off4                     !wall radius_1
+		rclo=rfur+wthickness                 !wall radius_2
+		calpha=asn(a/2/r)                    !window half angle
+	endif
+
+endif
+
+
+!Additional values
+
+k_weitoffset=rfur*mulstat+WIDO_ORIG_DIST  !gs_window_sill value at window centerpoint
+walpha=2*atn(a/2/r0)                      !Window Opening angle
+xoffset=AC_Hole_Position_Angle/180*pi*rfur                    !Window centerpoint distance from wall origin
+ax=walpha/180*pi*rfur                     !"a" curve lenght (at further radius)
+
+return
+
+
+
+! gs_res:  resolution
+! rint:
+! mask:
+
+"put polygon points":
+	n = int(gs_res/4)+1
+	w = 0
+	for i=1 to n step 1
+		xw=rint*cos(w)-(A/2-gs_frame_width)
+		betaw=atn(xw/r0)
+		ibetaw=betaw/180*pi*rfur
+		put xoffset+ibetaw,gs_frame_width+rint*sin(w),mask
+		w = w + 360/gs_res
+	next i
+return
+
+3000:
+! --- Texture directions -------------------------------------------------------
+
+vert 0, 0, 0
+vert 0, 1, 0
+vert 1, 0, 0
+vert 0, 0, 1
+coor 2, -1, -2, -3, -4
+body 1
+
+return
+
+4000:
+! --- Texture directions -------------------------------------------------------
+
+vert 0, 0, 0
+vert 1, 0, 0
+vert 0, 1, 0
+vert 0, 0, 1
+coor 2, -1, -2, -3, -4
+body 1
+
+return

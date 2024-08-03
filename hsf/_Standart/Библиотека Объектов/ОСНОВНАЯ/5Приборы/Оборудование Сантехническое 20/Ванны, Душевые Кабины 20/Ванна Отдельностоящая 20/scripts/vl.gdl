@@ -1,0 +1,232 @@
+
+call "FM_types" parameters all
+
+
+num = VARDIM1(stBathtubForm)
+IF GLOB_MODPAR_NAME = "gs_bathtub_form" THEN
+	FOR i = 1 TO num
+		IF gs_bathtub_form= stBathtubForm[i] THEN
+			gs_bathtub_form_m = i
+			PARAMETERS gs_bathtub_form_m = gs_bathtub_form_m
+			i = num
+		ENDIF
+	NEXT i
+ELSE
+	FOR i = 1 TO num
+		IF gs_bathtub_form_m = i THEN
+			gs_bathtub_form= stBathtubForm[i]
+			PARAMETERS gs_bathtub_form= gs_bathtub_form
+			i = num
+		ENDIF
+	NEXT i
+ENDIF
+values "gs_bathtub_form" stBathtubForm
+values "gs_bathtub_form_m" 1, 2, 3
+
+num = VARDIM1(stLegType)
+IF GLOB_MODPAR_NAME = "gs_bathtubleg_type" THEN
+	FOR i = 1 TO num
+		IF gs_bathtubleg_type = stLegType[i] THEN
+			gs_bathtubleg_type_m = i-1
+			PARAMETERS gs_bathtubleg_type_m = gs_bathtubleg_type_m
+			i = num
+		ENDIF
+	NEXT i
+ELSE
+	FOR i = 1 TO num
+		IF gs_bathtubleg_type_m = i-1 THEN
+			gs_bathtubleg_type = stLegType[i]
+			PARAMETERS gs_bathtubleg_type = gs_bathtubleg_type
+			i = num
+		ENDIF
+	NEXT i
+ENDIF
+
+values "gs_bathtubleg_type" stLegType
+values "gs_bathtubleg_type_m" 0, 1, 2, 3, 4
+
+IF gs_bathtubleg_type_m THEN
+	LOCK "footing_height", "footing_mat"
+	IF zzyzx<0.2+leg_height THEN
+		zzyzx=0.2+leg_height
+		parameters zzyzx=zzyzx
+	ENDIF
+ELSE
+	LOCK "leg_height"
+	IF zzyzx<0.2 THEN
+		zzyzx=0.2
+		parameters zzyzx=zzyzx
+	ENDIF
+ENDIF
+
+VALUES "footing_height" RANGE(0, ]
+
+IF GLOB_MODPAR_NAME = "gs_detlevel_3D" THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+	PARAMETERS gs_detlevel_3D_m = gs_detlevel_3D_m
+ELSE
+	IF gs_detlevel_3D_m = 0 THEN gs_detlevel_3D = `Откл.`
+	IF gs_detlevel_3D_m = 1 THEN gs_detlevel_3D = `Простой`
+	IF gs_detlevel_3D_m = 2 THEN gs_detlevel_3D = `Детальный`
+	PARAMETERS gs_detlevel_3D = gs_detlevel_3D
+ENDIF
+
+VALUES "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+VALUES "gs_detlevel_3D_m" 2, 1, 0
+
+
+call "2dDetailLevel" parameters	all enable2dDetLevels = 2 + 4 + 8 + 16	! Scale Sensitive, 1:50 - Detailed, 1:100 - Middle, 1:200 - Simple
+
+
+if a<0.7 then parameters a=0.7
+if b<0.4 then parameters b=0.4
+
+if gs_cont_pen=0 then parameters gs_cont_pen=75
+if gs_fill_pen=0 then parameters gs_fill_pen=19
+
+
+!!! ******************************** Minimal Space
+values "MSFront" RANGE [0,)
+
+if gs_bathtubleg_type_m = 4 then
+	values "leg_height" range[0.13, ]
+else
+	values "leg_height" range(0, ]
+endif
+
+values "A" range[0.70, ]
+values "B" range[0.40, ]
+values "ZZYZX" range[0.20+leg_height*(gs_bathtubleg_type_m > 0), ]
+
+IF gs_bathtub_form_m = 1 THEN			! --- Rectangular
+	ConPosX_1 = A/2
+	ConPosY_1 = edgeWidth+0.06
+ENDIF
+IF gs_bathtub_form_m = 2 THEN			! --- Oval 1
+	ConPosX_1 = A/2
+	ConPosY_1 = 0.19*(B/0.90)+0.05
+ENDIF
+IF gs_bathtub_form_m = 3 THEN			! --- Oval 2
+	ConPosX_1 = 0.235*(A/1.70)+0.06
+	ConPosY_1 = B/2
+ENDIF
+PARAMETERS ConPosX_1 = ConPosX_1
+PARAMETERS ConPosY_1 = ConPosY_1
+ConPosZ_1 = leg_height*(gs_bathtubleg_type_m > 0)
+PARAMETERS ConPosZ_1 = ConPosZ_1
+
+IF isMEPEnabled THEN
+
+	IF NOT(ConStatus_1) THEN
+		LOCK "gs_con_mat"
+		HIDEPARAMETER "gs_con_mat"
+	ENDIF
+
+	DIM shape_typ_to_validation[3]
+		shape_typ_to_validation[1] = 0		! Rectangle
+		shape_typ_to_validation[2] = 1		! Circle
+		shape_typ_to_validation[3] = 0		! Oval
+
+					! --- CONNECTIONS --- !
+
+	PARAMETERS MEP_NumberConnections = 1
+
+
+					! --- 1st CONNECTION --- !
+
+	ConID = 1
+	ConName = `Подключение Канализации`
+
+	ConDVecX = 0
+	ConDVecY = 0
+	ConDVecZ = -1
+
+	ConWVecX = -1
+	ConWVecY = 0
+	ConWVecZ = 0
+
+	IF ConWidth_1 < 0.001 THEN
+		ConWidth_1 = 0.001
+		PARAMETERS ConWidth_1 = ConWidth_1
+	ENDIF
+	IF ConWidth_1 > MIN(A/2, B/2) THEN
+		ConWidth_1 = MIN(A/2, B/2)
+		PARAMETERS ConWidth_1 = ConWidth_1
+	ENDIF
+	VALUES "ConWidth_1" RANGE (0, MIN(A/2, zzyzx/2)]
+	PARAMETERS ConDepth_1 = ConWidth_1
+	VALUES "ConLength_1" RANGE [0, ]
+
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_1,
+		ConPosY = ConPosY_1,
+		ConPosZ = ConPosZ_1,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_1,
+		ConNominalDepth = ConNominalDepth_1,
+		ConWidth = ConWidth_1,
+		ConDepth = ConDepth_1,
+		ConLength = ConLength_1,
+		ConWallThickness = ConWallThickness_1,
+		ConConnectorWidth = ConConnectorWidth_1,
+		ConConnectorDepth = ConConnectorDepth_1,
+		ConConnectorWidth2 = ConConnectorWidth2_1,
+		ConToolType = ConToolType_1,
+		ConStatus = ConStatus_1,
+		ConType_1 = ConType_1,
+		ConConnectorType_1 = ConConnectorType_1,
+		ConSystem_1 = ConSystem_1,
+		ui_current_con = ui_current_con,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_1, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+	IF gs_ui_current_page = 4 THEN
+		ac_mep_connectionpage_active = 1
+	ELSE
+		ac_mep_connectionpage_active = 0
+	ENDIF
+	PARAMETERS ac_mep_connectionpage_active = ac_mep_connectionpage_active
+
+	IF SetProgram THEN
+		SetProgram = 0
+		PARAMETERS SetProgram = SetProgram
+	ENDIF
+ELSE
+	HIDEPARAMETER "gs_connection", "gs_con_mat", "useSysMat"
+
+	ac_mep_connectionpage_active = 0
+	PARAMETERS ac_mep_connectionpage_active = ac_mep_connectionpage_active
+ENDIF
+
+call "ui_plumbingfixtures" parameters iObjectType 		= 33,
+								gs_ui_current_page = gs_ui_current_page
+
+! =============================================================================
+! Onorm list Settings
+! =============================================================================
+if LibraryLangCode = "AUT" or LibraryLangCode = "CHE" or LibraryLangCode = "GER" then
+	call "Onorm_Plumbing" parameters all
+else
+	hideparameter "gs_onorm_Title"
+endif
+END

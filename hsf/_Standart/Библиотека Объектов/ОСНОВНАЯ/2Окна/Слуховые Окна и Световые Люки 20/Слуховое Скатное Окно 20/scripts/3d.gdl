@@ -1,0 +1,1158 @@
+
+
+
+
+! =============================================================================
+! GS Skylight Functions
+! =============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= bEnableLining,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+	returned_parameters	iLoD3D,
+						lod3D_Casing,
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen
+
+
+! Horizontal and low Roof
+if abs(ac_roofang) < MIN_ROOF_ANGLE | ac_roofang > 90 + EPS then
+	rotx ac_roofang
+
+	B = max(B, 1.0)
+	B = min(B, 3.0)
+
+	if SHELLBASE_VIEW_PEN > 0 then
+		pen SHELLBASE_VIEW_PEN
+	else
+		pen 1
+	endif
+
+	material ac_side_mat
+	wallniche 4, 1, 8+16,
+		0, 0, 1,	0,
+		 A/2, 0, 31,
+		-A/2, 0, 31,
+		-A/2, B, 31,
+		 A/2, B, 31
+
+	hotspot -A/2,0,0, 100
+	hotspot  A/2,0,0, 101
+	hotspot -A/2,B,0, 102
+	hotspot  A/2,B,0, 103
+
+	del 1
+
+	end
+endif
+
+
+xBreite = a
+! (b wird ignoriert.)
+
+if dToleranz < 0.001 then
+  dToleranz = 0.003
+endif
+
+toler dToleranz
+
+dGlas = 0.01
+matWandAussen = matWandAus
+dBlende = 0.01  ! Dicke der Ortgang-Blende.
+rRinne = xBreiteRinne / 2   ! Halber Durchmesser der Regenrinne.
+
+tanDach = tan(ac_roofang)   !### Wir wollen mit dem Tangens rechnen.
+
+cosDachGaube = cos(wDachGaube)
+sinDachGaube = sin(wDachGaube)
+tanDachGaube = sinDachGaube / cosDachGaube
+
+dSprossenHalb = dSprossen / 2
+hFenster = zOkFenster - zUkFenster
+zUkSprosseMin = zUkFenster + dRahmen + 0.01
+! zUkSprosseMax wird weiter unten je nach Fensterform bestimmt.
+
+xBreiteHalb = xBreite / 2
+xFensterbreiteHalb = xFensterbreite / 2
+xLkFenster = xBreiteHalb - xFensterbreiteHalb
+xRkFenster = xLkFenster + xFensterbreite
+xRkRahmenLinks = xLkFenster + dRahmen
+xLkRahmenRechts = xLkFenster + xFensterbreite - dRahmen
+xLkSprosse = xLkFenster + xFensterbreiteHalb - dSprossenHalb
+xRkSprosse = xLkSprosse + dSprossen
+xLkWandRechts = xBreite - dWandGaube
+
+zOkRahmenUnten = zUkFenster + dRahmen
+zUkRahmenOben = zOkFenster - dRahmen
+dzDachGaube = zDickeDachGaube / cosDachGaube
+
+
+zFrontFirst = zHoeheTraufe + xBreiteHalb * tanDachGaube
+zFrontWand = zHoeheTraufe + tanDachGaube * dWandGaube
+
+xAbschnitt = zDickeDachGaube * sinDachGaube   !### Waagerechter Abschnitt Ende Gaubendach
+yAbschnitt = zDickeDachGaube * cosDachGaube   !### Senkrechter Abschnitt Ende Gaubendach
+zFirstVorne = zHoeheTraufe + dzDachGaube - dUeberstandDachGaube * tanDachGaube  !### Obere Kante unteres Ende Gaubendach.
+if xAbschnitt > dUeberstandDachGaube then
+	zFirstVorne = zFirstVorne - (xAbschnitt-dUeberstandDachGaube)*tanDachGaube
+	xAbschnitt = dUeberstandDachGaube
+endif
+
+
+if matDachLinks <= 0 then
+  matDachLinks = matWandAus
+endif
+
+if matDachRechts <= 0 then
+  matDachRechts = matWandAus
+endif
+
+if matFensterrahmen <= 0 then
+  matFensterrahmen = matWandAus
+endif
+
+
+
+! ==============================================================================
+! Wallhole
+! ==============================================================================
+
+if useroofmat then
+	lower_mat	= ac_lower_mat
+	upper_mat	= ac_upper_mat
+	matDachSi	= ac_side_mat
+	wall_inside_mat	 = ac_lower_mat
+	wall_inside_mat2 = ac_lower_mat
+else
+	lower_mat	= matDachunterseite
+	upper_mat	= matDachOberseite
+	matDachSi	= matOrtgangTraufe
+	wall_inside_mat	 = matWandInnen
+	wall_inside_mat2 = matWandInnen2
+endif
+
+rotx ac_roofang
+
+! Lower cutting
+
+call "SkylightRect_RoofCutting_macro" parameters all A = A - 2*dWandGaube,
+		B = zFrontWand / sin(ac_roofang),
+		AC_edge_lower_type = AC_edge_lower_type,
+		AC_edge_upper_type = 2,
+		ac_upper_mat		= upper_mat,
+		gs_lower_bott_mat	= wall_inside_mat,
+		gs_lower_top_mat	= lower_mat,
+		bUpperCut			= 0,
+		ShowUpContLines		= 1
+
+if SHELLBASE_VIEW_PEN > 0 then
+	pen SHELLBASE_VIEW_PEN
+else
+	pen 1
+endif
+
+material lower_mat
+wallniche 3, 1, 2+16,
+	0, -cos(ac_roofang), sin(ac_roofang),	0,
+	A/2 - dWandGaube, zFrontWand / sin(ac_roofang), 31,
+	0, (zFrontWand + (A/2 - dWandGaube) * tan(wDachGaube)) / sin(ac_roofang), 31,
+	-A/2 + dWandGaube, zFrontWand / sin(ac_roofang), 31
+
+
+! Upper cutting
+
+pen SYMB_VIEW_PEN
+material upper_mat
+
+Eave_bot_hor = zDickeDachGaube * sin(wDachGaube)
+Eave_bot_ver = zDickeDachGaube * cos(wDachGaube)
+Eave_top_ver = zDickeDachGaube / cos(wDachGaube)
+
+wallniche 9, 1, 2+16,
+	0, cos(ac_roofang), -sin(ac_roofang),	0,
+	-A/2, zHoeheTraufe / sin(ac_roofang), 31,
+	-A/2 - dUeberstandDachGaube + Eave_bot_hor, (zHoeheTraufe - (dUeberstandDachGaube - Eave_bot_hor) * tan(wDachGaube)) / sin(ac_roofang), 31,
+	-A/2 - dUeberstandDachGaube, (zHoeheTraufe - (dUeberstandDachGaube - Eave_bot_hor) * tan(wDachGaube)) / sin(ac_roofang), 31,
+	-A/2 - dUeberstandDachGaube, (zHoeheTraufe - (dUeberstandDachGaube - Eave_bot_hor) * tan(wDachGaube) + Eave_bot_ver) / sin(ac_roofang), 31,
+	0, (zHoeheTraufe + tan(wDachGaube) * A/2 + Eave_top_ver) / sin(ac_roofang), 31,
+	A/2 + dUeberstandDachGaube, (zHoeheTraufe - (dUeberstandDachGaube - Eave_bot_hor) * tan(wDachGaube) + Eave_bot_ver) / sin(ac_roofang), 31,
+	A/2 + dUeberstandDachGaube, (zHoeheTraufe - (dUeberstandDachGaube - Eave_bot_hor) * tan(wDachGaube)) / sin(ac_roofang), 31,
+	A/2 + dUeberstandDachGaube - Eave_bot_hor, (zHoeheTraufe - (dUeberstandDachGaube - Eave_bot_hor) * tan(wDachGaube)) / sin(ac_roofang), 31,
+	A/2, zHoeheTraufe / sin(ac_roofang), 31
+
+del 1
+
+if ac_roofang < 90-EPS then
+	addx -A/2
+	roty 90
+	wallniche 3, 1, 2,
+		0, 0, 1, A,
+		0, 0, 31,
+		-zHoeheTraufe, 0, 31,
+		-zHoeheTraufe, zHoeheTraufe/tan(ac_roofang), 31
+	del 2
+endif
+
+
+! ==============================================================================
+! Hotspots
+! ==============================================================================
+
+
+unID = 1
+hotspot 0, 0, 0, unID :	unID=unID+1
+
+hotspot  0,			0,0,	unID,gs_a_half,1+128,A:		unID=unID+1
+hotspot -1,			0,0,	unID,gs_a_half,3,	 A:		unID=unID+1
+hotspot  gs_a_half,	0,0,	unID,gs_a_half,2,	 A:		unID=unID+1
+
+hotspot  0,			0,0,	unID,gs_a_half,1+128,A:		unID=unID+1
+hotspot  1,			0,0,	unID,gs_a_half,3,	 A:		unID=unID+1
+hotspot -gs_a_half,	0,0,	unID,gs_a_half,2,	 A:		unID=unID+1
+
+pen gs_cont_pen
+
+addy -0.0005
+addx -a/2
+
+
+
+!### Linke Seitenwand mit linker Dachhalfte:
+
+if useroofmat then
+	matDachUp	= ac_upper_mat
+	matDachLo	= ac_lower_mat
+	matDachSi	= ac_side_mat
+else
+	matDachUp	= matDachLinks
+	matDachLo	= matDachunterseite
+	matDachSi	= matOrtgangTraufe
+endif
+
+bRinne = bRinneLinks
+textureDirection = 1
+gosub 1000
+
+!### Rechte Seitenwand mit rechter Dachhalfte:
+
+addx xBreite
+mulx -1
+if useroofmat then
+	matDachUp	= ac_upper_mat
+	matDachLo	= ac_lower_mat
+	matDachSi	= ac_side_mat
+else
+	matDachUp	= matDachRechts
+	matDachLo	= matDachunterseite
+	matDachSi	= matOrtgangTraufe
+endif
+
+bRinne = bRinneRechts
+textureDirection = -1
+gosub 1000
+del 2
+
+!### Ortgang-Blende:
+
+rotx 90
+
+if iLoD3D > SYMBS_3D_M_1 then
+	material matOrtgangTraufe
+	addz sizeRoofFrontOverhang
+
+	prism 8, dBlende,
+	  xBreiteHalb, zFrontFirst + dzDachGaube + hBlende,  !### Mitte oben 2.
+	  -dUeberstandDachGaube, zFirstVorne + hBlende,   !### Links unten 3.
+	  -dUeberstandDachGaube, zFirstVorne - yAbschnitt,  !### Links unten 1.
+	  -dUeberstandDachGaube + xAbschnitt, zFirstVorne - yAbschnitt,  !### Links unten 2.
+	  xBreiteHalb, zFrontFirst,  !### Mitte oben 1.
+	  xBreite + dUeberstandDachGaube - xAbschnitt, zFirstVorne - yAbschnitt,  !### Links unten 2.
+	  xBreite + dUeberstandDachGaube, zFirstVorne - yAbschnitt,  !### Links unten 1.
+	  xBreite + dUeberstandDachGaube, zFirstVorne + hBlende   !### Links unten 3.
+	body -1
+	del 1
+endif
+
+!### Vorderwand mit Fensteroffnung:
+
+material matWandAussen   !### (Material des Objekts fur die Wande.)
+
+addz -dWandGaube
+
+if iLoD3D > SYMBS_3D_S_1 then
+	mask_draw = 15
+	mask_hide = 11
+else
+	mask_draw = 1
+	mask_hide = 0
+endif
+
+
+if iLoD3D > SYMBS_3D_S_1 then
+	put xLkWandRechts, 0, mask_hide,  !### Aussenumriss...
+		xLkWandRechts, zFrontWand, mask_draw,
+		xBreiteHalb, zFrontFirst, mask_draw,
+		dWandGaube, zFrontWand, mask_hide,
+		dWandGaube, 0, mask_draw
+else
+	put xLkWandRechts + dWandGaube, 0, 1,  !### Aussenumriss...
+		xLkWandRechts + dWandGaube, zFrontWand - dWandGaube * tan(wDachGaube) + zDickeDachGaube / cos(wDachGaube)-0.0001, 1,
+		xBreiteHalb, zFrontFirst + zDickeDachGaube / cos(wDachGaube)-0.0001, 1,
+		0, zFrontWand - dWandGaube * tan(wDachGaube) + zDickeDachGaube / cos(wDachGaube)-0.0001, 1,
+		0, 0, 1
+endif
+
+
+if zUkFenster > 0 then
+  !### zUkFenster > 0: Brustung vorhanden.
+   put 0, 0, 700  ! Schliesse den Aussenumriss.
+endif
+
+
+if iSkylightWinShape = WINSHAPE_RECTANGULAR then
+  !### Fensteroffnung rechteckig:
+
+  put xLkFenster, zUkFenster, mask_draw,
+	  xLkFenster, zOkFenster, mask_draw,
+	  xRkFenster, zOkFenster, mask_draw,
+	  xRkFenster, zUkFenster, mask_draw
+
+  zUkSprosseMax = zUkRahmenOben - dSprossen - 0.01
+endif
+
+if iSkylightWinShape = WINSHAPE_TRIANGULAR then
+  !### Fensteroffnung spitz:
+
+  zSpitzeFenster = zOkFenster + xFensterbreiteHalb * tanDachGaube
+
+  put xLkFenster, zUkFenster, mask_draw,
+	  xLkFenster, zOkFenster, mask_draw,
+	  xBreiteHalb, zSpitzeFenster, mask_draw,
+	  xRkFenster, zOkFenster, mask_draw,
+	  xRkFenster, zUkFenster, mask_draw
+
+  zInnenSeite = zOkFenster + dRahmen * tanDachGaube - dRahmen / cosDachGaube
+  zUkSprosseMax = zInnenSeite
+endif
+
+if iSkylightWinShape = WINSHAPE_ROUND then
+  !### Fensteroffnung mit Segmentbogen:
+
+  x = xFensterbreiteHalb - dRahmen
+  zInnenSeite = zMittelpunkt + sqr(rRahmenInnen * rRahmenInnen - x * x)
+
+  if abs(rBogen - hStich) < 0.01 then !### Halbkreisbogen ?
+	wBogen = 90 !### Division durch Null vermeiden
+  else
+	wBogen = atn(xBreiteHalb / (rBogen - hStich)) !### Offnungswinkel des Kreissegments
+  endif
+
+  put xLkFenster, zUkFenster, mask_draw,
+	  xLkFenster, zOkFenster, mask_draw,
+	  xBreiteHalb, zMittelpunkt, 900,  ! (Bogenmittelpunkt)
+	  xRkFenster, zOkFenster, mask_draw+3000, ! (Bogen)
+	  xRkFenster, zUkFenster, mask_draw
+
+  zUkSprosseMax = zInnenSeite
+endif
+
+put 0, 0, 700  ! Schliesse die Fensteroffnung ab.
+
+
+if iLoD3D > SYMBS_3D_S_1 then
+	cprism_ matWandAussen, wall_inside_mat2, matWandOeffnung,
+	  nsp/3, dWandGaube, get(nsp)
+else
+	material wall_inside_mat2
+	addz dWandGaube
+	poly_ nsp/3,
+			use(nsp)
+	material matWandAussen
+	addz 0.0002
+	poly_ nsp/3,
+			get(nsp)
+	del 2
+endif
+
+body -1
+
+del 1
+
+
+
+!### Fenster:
+
+
+
+if abs(dRahmen) > eps then
+	!### Fensterrahmen:
+
+	if iLoD3D >= SYMBS_3D_M_1 then
+		mask = 15
+	else
+		mask = 1
+	endif
+
+	bGlas = 0
+	bDebug_Fensterrahmen = 1
+
+	addz -dLeibung - dProfil
+
+	if iSkylightWinShape = WINSHAPE_RECTANGULAR then
+		!### Fenster rechteckig:
+
+		put xLkFenster, zUkFenster, mask,
+			xLkFenster, zOkFenster, mask,
+			xRkFenster, zOkFenster, mask,
+			xRkFenster, zUkFenster, mask
+	endif
+
+	if iSkylightWinShape = WINSHAPE_TRIANGULAR then
+		!### Fenster spitz:
+
+		put xLkFenster, zUkFenster, mask,
+			xLkFenster, zOkFenster, mask,
+			xBreiteHalb, zSpitzeFenster, mask,
+			xRkFenster, zOkFenster, mask,
+			xRkFenster, zUkFenster, mask
+	endif
+
+	if iSkylightWinShape = WINSHAPE_ROUND then
+		!### Fenster mit Segmentbogen:
+
+		put xLkFenster, zUkFenster, mask,
+			xLkFenster, zOkFenster, mask,
+			xBreiteHalb, zMittelpunkt, 900,  ! (Bogenmittelpunkt)
+			xRkFenster, zOkFenster, mask+3000, ! (Bogen)
+			xRkFenster, zUkFenster, mask
+	endif
+
+	if iLoD3D > SYMBS_3D_S_1 then
+		put 0, 0, 700  ! Schliesse den Aussenumriss ab.
+
+		if nSprossenHor = 0 then
+			!### Keine waagerechten Sprossen:
+
+			zUkAusschnitt = zOkRahmenUnten
+			gosub 2001 !### Oberster Ausschnitt (Ggf. mit vert. Sprosse)
+
+		else
+			!### Mindestens eine waagerechte Sprosse.
+
+			zSprosseMin = zUkSprosseMin + dSprossenHalb
+			zSprosseMax = zUkSprosseMax + dSprossenHalb
+
+			if abs(zSprosse1) > eps and abs(zSprosseN) > eps and zSprosse1 > zSprosseN then
+				xSwapped = zSprosse1
+				zSprosse1 = zSprosseN
+				zSprosseN = xSwapped
+			endif
+
+			if abs(zSprosse1) > eps and zSprosse1 < zSprosseMin then
+				zSprosse1 = zSprosseMin
+			endif
+
+			if zSprosseN > zSprosseMax then
+				zSprosseN = zSprosseMax
+			endif
+
+			if zSprosse1 <= 0 and zSprosseN <= 0 then
+				!### Wahle zSprosse1 und zSprosseN automatisch:
+
+				if iSkylightWinShape = WINSHAPE_RECTANGULAR then
+					!### Sprossenhohen fur rechteckiges Fenster:
+
+					hAusschnitt = (hFenster - 2 * dRahmen - nSprossenHor * dSprossen) / (nSprossenHor + 1)
+					zSprosse1 = zOkRahmenUnten + hAusschnitt + dSprossenHalb
+					zSprosseN = zUkRahmenOben - hAusschnitt - dSprossenHalb
+				endif
+
+				if iSkylightWinShape >= 1 then
+					!### Sprossenhohen fur spitzes oder Segmentbogen-Fenster:
+
+					zSprosseN = (zOkFenster + zInnenSeite) / 2   ! zUkSprosseMax ! + dSprossenHalb
+					hAusschnitt = (zUkSprosseMax - zOkRahmenUnten - (nSprossenHor - 1) * dSprossen) / nSprossenHor
+					zSprosse1 = zOkRahmenUnten + hAusschnitt + dSprossenHalb
+				endif
+
+			endif
+
+			if zSprosse1 > 0 and zSprosseN <= 0 then
+				!### Wahle zSprosseN automatisch:
+
+				if iSkylightWinShape = WINSHAPE_RECTANGULAR then
+					!### Sprossenhohen fur rechteckiges Fenster:
+
+					hAusschnitt = (zUkRahmenOben - (zSprosse1 + dSprossenHalb) - (nSprossenHor - 1) * dSprossen) / nSprossenHor
+					zSprosseN = zUkRahmenOben - hAusschnitt - dSprossenHalb
+				endif
+
+				if iSkylightWinShape >= 1 then
+					!### Sprossenhohen fur spitzes oder Segmentbogen-Fenster:
+
+					zSprosseN = (zOkFenster + zInnenSeite) / 2   ! zUkSprosseMax ! + dSprossenHalb
+				endif
+
+			endif
+
+			if zSprosse1 <= 0 and zSprosseN > 0 then
+				!### Wahle zSprosse1 automatisch:
+
+				hAusschnitt = (zSprosseN - dSprossenHalb - zOkRahmenUnten - (nSprossenHor - 1) * dSprossen) / nSprossenHor
+				zSprosse1 = zOkRahmenUnten + hAusschnitt + dSprossenHalb
+			endif
+
+			zUkSprosse1 = zSprosse1 - dSprossenHalb
+			zUkSprosseN = zSprosseN - dSprossenHalb
+
+			zUkAusschnitt = zOkRahmenUnten
+			zOkAusschnitt = zUkSprosse1
+
+			gosub 2000 !### Erster Ausschnitt (Ggf. mit vert. Sprosse)
+
+			if nSprossenHor >= 2 then
+
+				hAusschnitt = (zSprosseN - zSprosse1 - (nSprossenHor - 1) * dSprossen) / (nSprossenHor - 1)
+				dzAusschnitt = hAusschnitt + dSprossen
+				zUkAusschnitt = zUkSprosse1 + dSprossen
+				zOkAusschnitt = zUkAusschnitt + hAusschnitt
+
+				for iSprosse = 2 to nSprossenHor
+					gosub 2000 !### Mittlerer Ausschnitt (Ggf. mit vert. Sprosse)
+
+					zUkAusschnitt = zUkAusschnitt + dzAusschnitt
+					zOkAusschnitt = zOkAusschnitt + dzAusschnitt
+				next iSprosse
+
+			endif
+
+			zUkAusschnitt = zUkSprosseN + dSprossen
+			gosub 2001 !### Oberster Ausschnitt (Ggf. mit vert. Sprosse)
+		endif
+
+
+		material matFensterrahmen   !### Fensterrahmen-Material.
+
+		if iLoD3D >= SYMBS_3D_M_1 then
+			if bDebug_Fensterrahmen then
+				if iLoD3D > SYMBS_3D_M_1 then
+					prism_ nsp / 3, dProfil, get(nsp)
+				else
+					addz -dWandGaube/2 + dProfil
+						prism_ nsp / 3, dWandGaube, get(nsp)
+					del 1
+				endif
+			endif
+		else
+			if bDebug_Fensterrahmen then
+				addz dProfil
+				poly_ nsp / 3, get(nsp)
+				del 1
+			endif
+		endif
+		body -1
+	else
+		material matGlas
+		if bDebug_Fensterrahmen then
+			addz dWandGaube
+			poly_ nsp / 3, get(nsp)
+			del 1
+			body -1
+		endif
+
+		end
+	endif
+
+	if matGlas <> 0 then
+
+		!### Glasscheibe:
+
+		bGlas = 1
+
+		material matGlas
+		addz (dProfil - dGlas) / 2
+
+		bDebug_Fensterrahmen = 1
+
+		if nSprossenHor = 0 then
+			!### Keine waagerechten Sprossen:
+
+			zUkAusschnitt = zOkRahmenUnten
+			gosub 2001 !### Oberster Ausschnitt (Ggf. mit vert. Sprosse)
+
+		else
+			!### Mindestens eine waagerechte Sprosse.
+
+			zUkAusschnitt = zOkRahmenUnten
+			zOkAusschnitt = zUkSprosse1
+
+			gosub 2000 !### Erster Ausschnitt (Ggf. mit vert. Sprosse)
+
+			if nSprossenHor >= 2 then
+
+				hAusschnitt = (zSprosseN - zSprosse1 - (nSprossenHor - 1) * dSprossen) / (nSprossenHor - 1)
+				dzAusschnitt = hAusschnitt + dSprossen
+				zUkAusschnitt = zUkSprosse1 + dSprossen
+				zOkAusschnitt = zUkAusschnitt + hAusschnitt
+
+				for iSprosse = 2 to nSprossenHor
+					gosub 2000 !### Mittlerer Ausschnitt (Ggf. mit vert. Sprosse)
+
+					zUkAusschnitt = zUkAusschnitt + dzAusschnitt
+					zOkAusschnitt = zOkAusschnitt + dzAusschnitt
+				next iSprosse
+
+			endif
+
+			zUkAusschnitt = zUkSprosseN + dSprossen
+
+			gosub 2001 !### Oberster Ausschnitt (Ggf. mit vert. Sprosse)
+
+		endif
+
+		del 1
+
+	endif
+
+endif
+
+
+end
+
+
+!##############################################
+1000: ! Unterroutine Seitenwand mit Dachhalfte:
+!##############################################
+
+!### Die Seitenwand ist topologisch ein 4-eckiges Prisma:
+
+material matWandAus   !### (Material des Objekts fur die Wande.)
+
+if abs(dUeberstandGaubeVorn) < eps then
+	dUeberstandGaubeVorn = 0.0005   !### (ARCHICAD 4.5b6 bricht die Umwandlung des Objekts sonst nach dem BODY ab. GR 7.3.1994)
+endif
+
+if iLoD3D > SYMBS_3D_S_1 then
+	vert 0, 0, 0  !### Vorne unten links.
+	vert dWandGaube, 0, 0  !### Vorne unten rechts.
+	vert dWandGaube, 0, zFrontWand  !### Vorne oben rechts.
+	vert 0, 0, zHoeheTraufe  !### Vorne oben links.
+
+	vert 0, dUeberstandGaubeVorn, 0  !### Hinten unten links.
+	vert dWandGaube, dUeberstandGaubeVorn, 0  !### Hinten unten rechts.
+	vert dWandGaube, dUeberstandGaubeVorn + zFrontWand / tanDach, zFrontWand  !### Hinten oben rechts.
+	vert 0, dUeberstandGaubeVorn + zHoeheTraufe / tanDach, zHoeheTraufe  !### Hinten oben links.
+
+	i1 = 4
+	for i2 = 1 to 2
+		edge i1, i1 + 4, -1,-1, 0
+		edge i1, i2, -1,-1, 0
+		edge i1 + 4, i2 + 4, -1,-1, 0
+		i1 = i2
+	next i2
+
+	i2 = 3
+	edge i1, i1 + 4, -1,-1, 1
+	edge i1, i2, -1,-1, 1 !### (Diese Kante unsichtbar.)
+	edge i1 + 4, i2 + 4, -1,-1, 1
+	i1 = i2
+
+	i2 = 4
+	edge i1, i1 + 4, -1,-1, 0
+	edge i1, i2, -1,-1, 0
+	edge i1 + 4, i2 + 4, -1,-1, 0
+
+	i1 = 10
+	for i2 = 1 to 10 step 3
+		if i2 = 4 then
+			material matWandAussen
+		else
+			material wall_inside_mat
+		endif
+
+		pgon 4, 0, 0, i1, i1 + 2, -i2, -i1 - 1
+		i1 = i2
+	next i2
+
+	material matWandAussen
+	pgon 4, 0, 0, 2,5,8,11
+
+	material matWandOeffnung
+	pgon 4, 0, 0, -12,-9,-6,-3
+else
+	material wall_inside_mat
+	plane_ 3,
+		0,0,0,1,
+		0, dUeberstandGaubeVorn + (zHoeheTraufe + zDickeDachGaube / cos(wDachGaube)) / tanDach, zHoeheTraufe + zDickeDachGaube / cos(wDachGaube)-0.0001, 1,
+		0, 0, zHoeheTraufe+ zDickeDachGaube / cos(wDachGaube)-0.0001, 1
+	material matWandAussen
+	addx -0.0002
+	plane_ 3,
+		0,0,0,1,
+		0, dUeberstandGaubeVorn + (zHoeheTraufe + zDickeDachGaube / cos(wDachGaube)) / tanDach, zHoeheTraufe + zDickeDachGaube / cos(wDachGaube)-0.0001, 1,
+		0, 0, zHoeheTraufe+ zDickeDachGaube / cos(wDachGaube)-0.0001, 1
+	del 1
+endif
+
+
+
+!if GLOB_CONTEXT <> 5 then
+!	material wall_inside_mat
+!
+!	addx dWandGaube + 0.001
+!	roty -90
+!	poly_ 6,
+!		-ac_roofthk / cos(ac_roofang), 0, 1,
+!		0,0,1,
+!		0, dWandGaube, 1,
+!		zFrontWand,  dWandGaube, 1,
+!		zFrontWand, zFrontWand / tanDach, 1,
+!		zFrontWand, dUeberstandGaubeVorn + zFrontWand / tanDach + ac_roofthk / sin(ac_roofang), 1
+!
+!	vert 0, 0, 0
+!	vert 0, 1, 0
+!	vert 1, 0, 0
+!	vert 0, 0, 1
+!	coor 2, -1, -2, -3, -4
+!	body 1
+!
+!	del 2
+!endif
+
+body 1
+
+!### Die Dachhalfte ist topologisch ein 5-eckiges Prisma:
+
+hotspot -dUeberstandDachGaube, -dUeberstandDachGaube, zFirstVorne - yAbschnitt, unID : unID = unID + 1  !### Links unten
+hotspot xBreiteHalb, -dUeberstandDachGaube, zFrontFirst + dzDachGaube, unID : unID = unID + 1 !### Rechts oben
+
+if iLoD3D > SYMBS_3D_S_1 then
+	material matDachUp   !### Dach-Material.
+
+	vert -dUeberstandDachGaube, -sizeRoofFrontOverhang, zFirstVorne - yAbschnitt  !### Links unten 1.
+	vert -dUeberstandDachGaube + xAbschnitt, -sizeRoofFrontOverhang, zFirstVorne - yAbschnitt  !### Links unten 2.
+	vert xBreiteHalb, -sizeRoofFrontOverhang, zFrontFirst  !### Rechts oben 1.
+	vert xBreiteHalb, -sizeRoofFrontOverhang, zFrontFirst + dzDachGaube  !### Rechts oben 2.
+	vert -dUeberstandDachGaube, -sizeRoofFrontOverhang, zFirstVorne   !### Links unten 3.
+
+	vert -dUeberstandDachGaube, dUeberstandGaubeVorn + (zFirstVorne - yAbschnitt) / tanDach, zFirstVorne - yAbschnitt  !### Links unten 1.
+	vert -dUeberstandDachGaube + xAbschnitt, dUeberstandGaubeVorn + (zFirstVorne - yAbschnitt) / tanDach, zFirstVorne - yAbschnitt  !### Links unten 2.
+	vert xBreiteHalb, dUeberstandGaubeVorn + (zFrontFirst) / tanDach, zFrontFirst  !### Rechts oben 1.
+	vert xBreiteHalb, dUeberstandGaubeVorn + (zFrontFirst + dzDachGaube) / tanDach, zFrontFirst + dzDachGaube  !### Rechts oben 2.
+	vert -dUeberstandDachGaube, dUeberstandGaubeVorn + zFirstVorne / tanDach, zFirstVorne   !### Links unten 3.
+
+	i1 = 5
+
+	for i2 = 1 to 5
+		edge_mask = 0
+		if i2 = 3 then edge_mask = 1
+
+		edge i1, i1 + 5, -1,-1, 0
+		edge i1, i2, -1,-1, 0
+		edge i1 + 5, i2 + 5, -1,-1, edge_mask
+
+		i1 = i2
+	next i2
+
+	i1 = 13
+	i2 = 1
+
+	material matDachUp   !### Dach-Material.
+
+	pgon 4, 0, 0, i1, i1 + 2, -i2, -i1 - 1
+	i1 = i2
+	i2 = i2 + 3
+
+
+	material matDachSi
+
+	pgon 4, 0, 0, i1, i1 + 2, -i2, -i1 - 1
+	i1 = i2
+	i2 = i2 + 3
+
+	material matDachLo
+
+	pgon 4, 0, 0, i1, i1 + 2, -i2, -i1 - 1
+	i1 = i2
+	i2 = i2 + 3
+
+	material matDachLo
+
+	pgon 4, 0, 0, i1, i1 + 2, -i2, -i1 - 1
+	i1 = i2
+	i2 = i2 + 3
+
+	material matDachSi
+
+	pgon 4, 0, 0, i1, i1 + 2, -i2, -i1 - 1
+	i1 = i2
+	i2 = i2 + 3
+
+	material matDachSi
+
+	pgon 5, 0, 0, 2,5,8,11,14
+
+	material matDachLo
+
+	pgon 5, 0, 0, -15,-12,-9,-6,-3
+
+else
+	material matDachLo
+	plane_ 4,
+		-dUeberstandDachGaube, -sizeRoofFrontOverhang, zFirstVorne, 1,
+		-dUeberstandDachGaube, dUeberstandGaubeVorn + zFirstVorne / tanDach, zFirstVorne, 1,
+		xBreiteHalb, dUeberstandGaubeVorn + (zFrontFirst + dzDachGaube) / tanDach, zFrontFirst + dzDachGaube, 1,
+		xBreiteHalb, -sizeRoofFrontOverhang, zFrontFirst + dzDachGaube, 1
+	material matDachUp   !### Dach-Material.
+	addz 0.0002
+	plane_ 4,
+		-dUeberstandDachGaube, -sizeRoofFrontOverhang, zFirstVorne, 1,
+		-dUeberstandDachGaube, dUeberstandGaubeVorn + zFirstVorne / tanDach, zFirstVorne, 1,
+		xBreiteHalb, dUeberstandGaubeVorn + (zFrontFirst + dzDachGaube) / tanDach, zFrontFirst + dzDachGaube, 1,
+		xBreiteHalb, -sizeRoofFrontOverhang, zFrontFirst + dzDachGaube, 1
+	del 1
+endif
+
+
+roty -wDachGaube
+rotz -90
+
+base
+vert 0, 0, 0
+vert textureDirection, 0, 0
+vert 0, 1, 0
+vert 0, 0, 1
+coor 2, -1, -2, -3, -4
+body -1
+
+del 2
+
+!if GLOB_CONTEXT <> 5 then
+!	add dWandGaube + 0.001,0,zFrontWand
+!	roty -wDachGaube
+!
+!	material matDachLo
+!	poly_ 5,
+!		(xBreiteHalb - dWandGaube) / cos(wDachGaube), dWandGaube, 1,
+!		0,  dWandGaube, 1,
+!		0, zFrontWand / tanDach, 1,
+!		0, dUeberstandGaubeVorn + zFrontWand / tanDach + ac_roofthk / sin(ac_roofang), 1,
+!		(xBreiteHalb - dWandGaube-0.001) / cos(wDachGaube), dUeberstandGaubeVorn + (zFrontFirst) / tanDach + ac_roofthk / sin(ac_roofang),1
+!	del 2
+!
+!endif
+
+
+if bRinne & iLoD3D > SYMBS_3D_M_1 then
+
+	!### Regenrinne:
+
+	material matRinne
+
+	add -dUeberstandDachGaube - rRinne, -sizeRoofFrontOverhang, zFirstVorne
+	rotz 90
+	rotx 180
+
+	revolve 2, 180, 1+16+32,
+		0, rRinne, 0,
+		sizeRoofFrontOverhang + dUeberstandGaubeVorn + (zFirstVorne - rRinne - 0.03) / tanDach, rRinne, 0
+		body -1
+	del 3
+
+endif
+
+
+
+return
+
+!############ Ende Unterroutine Seitenwand mit Dachhalfte ############
+
+
+
+
+
+!##############################################
+2000: ! Ausschnitt (Ggf. mit vert. Sprosse)
+! Parameter: zUkAusschnitt, zOkAusschnitt
+!##############################################
+
+
+if not(bDebug_Fensterrahmen) then
+	return
+endif
+
+if bSprosseVert then
+
+	!### Ausschnitt mit vertikaler Sprosse (= zwei Ausschnitte):
+
+	put xRkRahmenLinks, zUkAusschnitt, mask,
+		xLkSprosse, zUkAusschnitt, mask,
+		xLkSprosse, zOkAusschnitt, mask,
+		xRkRahmenLinks, zOkAusschnitt, mask,
+		0, 0, 700
+
+	gosub "GlassDrawing"
+
+
+	put xRkSprosse, zUkAusschnitt, mask,
+		xLkRahmenRechts, zUkAusschnitt, mask,
+		xLkRahmenRechts, zOkAusschnitt, mask,
+		xRkSprosse, zOkAusschnitt, mask,
+		0, 0, 700
+
+	gosub "GlassDrawing"
+
+else
+
+	!### Ausschnitt ohne vertikale Sprosse:
+
+	put xRkRahmenLinks, zUkAusschnitt, mask,
+		xLkRahmenRechts, zUkAusschnitt, mask,
+		xLkRahmenRechts, zOkAusschnitt, mask,
+		xRkRahmenLinks, zOkAusschnitt, mask,
+		0, 0, 700
+
+	gosub "GlassDrawing"
+
+endif
+
+return
+
+!############ Ende Unterroutine Ausschnitt ############
+
+
+
+
+
+!###################################################
+2001: ! Oberster Ausschnitt (Ggf. mit vert. Sprosse)
+! Parameter: zUkAusschnitt
+!###################################################
+
+
+if not(bDebug_Fensterrahmen) then
+	return
+endif
+
+if iSkylightWinShape = WINSHAPE_RECTANGULAR then
+	!### Oberster Ausschnitt fur ein rechteckiges Fenster:
+	!### sieht i.w. genauso aus wie die unteren.
+
+	zOkAusschnitt = zUkRahmenOben
+	goto 2000
+	return
+endif
+
+if iSkylightWinShape = WINSHAPE_TRIANGULAR then
+
+	!### Oberster Ausschnitt fur ein spitzes Fenster:
+
+	zInnenSpitze = zSpitzeFenster - dRahmen / cosDachGaube
+
+	if zUkAusschnitt < zInnenSeite then
+		!### Oberster Ausschnitt ist funfeckig:
+
+		if bSprosseVert then
+
+			!### Funfeckiger Ausschnitt mit senkrechter Sprosse (= zwei Ausschnitte):
+
+			zInnenSprosse = zInnenSpitze - dSprossenHalb * tanDachGaube
+
+			put xRkRahmenLinks, zUkAusschnitt, mask,
+				xLkSprosse, zUkAusschnitt, mask,
+				xLkSprosse, zInnenSprosse, mask,
+				xRkRahmenLinks, zInnenSeite, mask,
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+			put xLkRahmenRechts, zUkAusschnitt, mask,
+				xRkSprosse, zUkAusschnitt, mask,
+				xRkSprosse, zInnenSprosse, mask,
+				xLkRahmenRechts, zInnenSeite, mask,
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+		else
+
+			!### Funfeckiger Ausschnitt ohne senkrechte Sprosse:
+
+			put xRkRahmenLinks, zUkAusschnitt, mask,
+				xLkRahmenRechts, zUkAusschnitt, mask,
+				xLkRahmenRechts, zInnenSeite, mask,
+				xBreiteHalb, zInnenSpitze, mask,
+				xRkRahmenLinks, zInnenSeite, mask,
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+		endif
+
+	else
+		!### Oberster Ausschnitt ist dreieckig:
+
+		x = (zUkAusschnitt - zInnenSeite) / tanDachGaube
+		xInnenLinks = xRkRahmenLinks + x
+		xInnenRechts = xLkRahmenRechts - x
+
+		if bSprosseVert then
+
+			!### Dreieckiger Ausschnitt mit senkrechter Sprosse (= zwei Ausschnitte):
+
+			zInnenSprosse = zInnenSpitze - dSprossenHalb * tanDachGaube
+
+			put xInnenLinks, zUkAusschnitt, mask,
+				xLkSprosse, zUkAusschnitt, mask,
+				xLkSprosse, zInnenSprosse, mask,
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+			put xInnenRechts, zUkAusschnitt, mask,
+				xRkSprosse, zUkAusschnitt, mask,
+				xRkSprosse, zInnenSprosse, mask,
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+		else
+
+			!### Dreieckiger Ausschnitt ohne senkrechte Sprosse:
+
+			put xInnenLinks, zUkAusschnitt, mask,
+				xInnenRechts, zUkAusschnitt, mask,
+				xBreiteHalb, zInnenSpitze, mask,
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+		endif
+
+	endif
+
+endif
+
+
+if iSkylightWinShape = WINSHAPE_ROUND then
+
+	!### Oberster Ausschnitt fur ein Segmentbogen-Fenster:
+
+	rBogenInnen = rBogen - dRahmen
+
+	if zUkAusschnitt < zInnenSeite then
+		!### Oberster Ausschnitt hat eine Schulter:
+
+		if bSprosseVert then
+
+			!### Schulterbogen-Ausschnitt mit senkrechter Sprosse (= zwei Ausschnitte):
+
+			zInnenSprosse = zMittelpunkt + sqr(rBogenInnen * rBogenInnen - dSprossenHalb * dSprossenHalb)
+
+			put xRkRahmenLinks, zUkAusschnitt, mask,
+				xLkSprosse, zUkAusschnitt, mask,
+				xLkSprosse, zInnenSprosse, mask,
+				xBreiteHalb, zMittelpunkt, 900,  ! (Bogenmittelpunkt)
+				xRkRahmenLinks, zInnenSeite, mask+3000,  ! (Bogen)
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+			put xLkRahmenRechts, zUkAusschnitt, mask,
+				xRkSprosse, zUkAusschnitt, mask,
+				xRkSprosse, zInnenSprosse, mask,
+				xBreiteHalb, zMittelpunkt, 900,  ! (Bogenmittelpunkt)
+				xLkRahmenRechts, zInnenSeite, mask+3000,  ! (Bogen)
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+		else
+
+			!### Schulterbogen-Ausschnitt ohne senkrechte Sprosse:
+
+			put xRkRahmenLinks, zUkAusschnitt, mask,
+				xLkRahmenRechts, zUkAusschnitt, mask,
+				xLkRahmenRechts, zInnenSeite, mask,
+				xBreiteHalb, zMittelpunkt, 900,  ! (Bogenmittelpunkt)
+				xRkRahmenLinks, zInnenSeite, mask+3000,  ! (Bogen)
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+		endif
+
+	else
+		!### Oberster Ausschnitt ist ein Kreissegment:
+
+		y = zUkAusschnitt - zMittelpunkt
+		x = sqr(rBogenInnen * rBogenInnen - y*y)
+		xInnenLinks = xBreiteHalb - x
+		xInnenRechts = xBreiteHalb + x
+
+		if bSprosseVert then
+
+			!### Kreissegment-Ausschnitt mit senkrechter Sprosse (= zwei Ausschnitte):
+
+			zInnenSprosse = zMittelpunkt + sqr(rBogenInnen * rBogenInnen - dSprossenHalb * dSprossenHalb)
+
+			put xLkSprosse, zUkAusschnitt, mask,
+				xLkSprosse, zInnenSprosse, mask,
+				xBreiteHalb, zMittelpunkt, 900,  ! (Bogenmittelpunkt)
+				xInnenLinks, zUkAusschnitt, mask+3000,  ! (Bogen)
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+			put xRkSprosse, zUkAusschnitt, mask,
+				xRkSprosse, zInnenSprosse, mask,
+				xBreiteHalb, zMittelpunkt, 900,  ! (Bogenmittelpunkt)
+				xInnenRechts, zUkAusschnitt, mask+3000,  ! (Bogen)
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+		else
+
+			!### Kreissegment-Ausschnitt ohne senkrechte Sprosse:
+
+			put xInnenLinks, zUkAusschnitt, mask,
+				xBreiteHalb, zMittelpunkt, 900,  ! (Bogenmittelpunkt)
+				xInnenRechts, zUkAusschnitt, mask+3000,  ! (Bogen)
+				0, 0, 700
+
+			gosub "GlassDrawing"
+
+		endif
+
+	endif
+
+endif
+
+
+return
+
+
+! ############ Drawing the glass ############
+"GlassDrawing":
+
+if bGlas then
+	if iLoD3D > SYMBS_3D_M_1 then
+		prism_ nsp/3, dGlas, get(nsp)
+	else
+		if iLoD3D = SYMBS_3D_M_1 then
+			addz dProfil/2+dGlas/2-dWandGaube/2
+			poly_ nsp / 3, use(nsp)
+			addz dWandGaube
+			poly_ nsp / 3, get(nsp)
+			del 1
+		else
+			addz dProfil/2+dGlas/2
+			poly_ nsp / 3, get(nsp)
+		endif
+		del 1
+	endif
+	body -1
+endif
+
+return

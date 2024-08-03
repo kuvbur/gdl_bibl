@@ -1,0 +1,1453 @@
+
+! ==============================================================================
+! Oriented View
+! ==============================================================================
+
+_angleViewRot = 0
+rrr = REQUEST ("View_Rotangle", "", _angleViewRot)
+if (iMarkerObjectType = MARKER_OBJECT_TYPE_CHANGE) then
+	_totalRotate = 0
+	if GLOB_CONTEXT <> 5 then
+		_totalRotate = (SYMB_ROTANGLE + _angleViewRot) MOD 360
+	endif
+else
+	_totalRotate = _angleViewRot*NOT(bRotateMarkerwithView)
+endif
+
+
+! ==============================================================================
+! Set dimensions and used angle
+! ==============================================================================
+
+PAPER_TO_MODEL = GLOB_SCALE / 1000	! Convert paper size to model size
+
+! set scale dependent parameter values
+! replace PM scripts, because its not running at changing scale
+! paper size parameters
+AC_Markersize 			= AC_Markersize * PAPER_TO_MODEL
+widthHead_model 		= widthHead_m * GLOB_SCALE
+widthHeadHalf_model		= widthHeadHalf_m * GLOB_SCALE
+distanceHead_model		= distanceHead_m * GLOB_SCALE
+radiusCloud_model 		= radiusCloud_m * GLOB_SCALE
+minradiusCloud_model 	= minradiusCloud_m * GLOB_SCALE
+maxradiusCloud_model 	= maxradiusCloud_m * GLOB_SCALE
+if abs(sin(_anglebyMaxRadius)) > EPS then
+	lengthRounded_model 	= min ( (radiusCloud_m * GLOB_SCALE)/sin(_anglebyMaxRadius) - (radiusCloud_m * GLOB_SCALE),
+									(_maxUsableRadius/sin(_anglebyMaxRadius) - _maxUsableRadius) )
+endif
+
+dim _widthHalfHead[13][3]
+! Head Size from Origo to the External Line
+! _widthHalfHead[][1] - half head size on the side
+! _widthHalfHead[][2] - half head size on the top
+! _widthHalfHead[][3] - half head size on the bottom
+gosub "set_array_widthHalfHead"
+
+unID = 1
+vx = 0
+vy = 0
+
+bFeedBackInput = 0
+
+! ==============================================================================
+! Preview
+! ==============================================================================
+
+if GLOB_CONTEXT = 5 then
+
+	distanceHead_model = AC_Markersize/2
+
+	if _hasPolygon then
+		AC_PolygonNodes = 5
+
+		_widthPreviewPolygon = AC_Markersize/2
+		_heightPreviewPolygon = AC_Markersize
+		_posPreviewPolygon = 2*AC_Markersize/3
+
+		AC_PolygonCoords[1][1] = _posPreviewPolygon
+		AC_PolygonCoords[1][2] = -_heightPreviewPolygon/2
+		AC_PolygonCoords[2][1] = _posPreviewPolygon + _widthPreviewPolygon
+		AC_PolygonCoords[2][2] = -_heightPreviewPolygon/2
+		AC_PolygonCoords[3][1] = _posPreviewPolygon + _widthPreviewPolygon
+		AC_PolygonCoords[3][2] = _heightPreviewPolygon/2
+		AC_PolygonCoords[4][1] = _posPreviewPolygon
+		AC_PolygonCoords[4][2] = _heightPreviewPolygon/2
+		AC_PolygonCoords[5][1] = _posPreviewPolygon
+		AC_PolygonCoords[5][2] = -_heightPreviewPolygon/2
+
+		_lengthVector[1] = _widthPreviewPolygon
+		_lengthVector[2] = _heightPreviewPolygon
+		_lengthVector[3] = _widthPreviewPolygon
+		_lengthVector[4] = _heightPreviewPolygon
+
+		_angleVector[1] = 0
+		_angleVector[2] = 90
+		_angleVector[3] = 180
+		_angleVector[4] = 270
+
+		if iTypeCloud = CLOUD_ROUNDED then
+			_maxDistTangentPoint[1] = min(_lengthVector[1], _lengthVector[4])/2
+			_maxDistTangentPoint[2] = min(_lengthVector[2], _lengthVector[1])/2
+			_maxDistTangentPoint[3] = min(_lengthVector[3], _lengthVector[2])/2
+			_maxDistTangentPoint[4] = min(_lengthVector[4], _lengthVector[3])/2
+
+			_angVectorSide[1] = 90
+			_angVectorSide[2] = 90
+			_angVectorSide[3] = 90
+			_angVectorSide[4] = 90
+		endif
+
+	else
+		RefCoord_X = 0.5
+		RefCoord_Y = 0.5
+	endif
+endif
+
+
+! ===================================================================
+! Cloud
+! ===================================================================
+
+if (iMarkerObjectType = MARKER_OBJECT_TYPE_DETAIL		|\
+	iMarkerObjectType = MARKER_OBJECT_TYPE_WORKSHEET)	then
+
+	if _angleViewRot > eps then
+		rot2 _angleViewRot
+	endif
+endif
+
+add2 _RefCoord_X, _RefCoord_Y
+
+dim _radCloud[][]
+dim _numCloud[]
+
+dim _filletRadius[]
+dim _filletCenterPoint[][]
+
+if _hasPolygon then
+	pen SYMB_VIEW_PEN
+	fill typeFillCloud
+
+	for i = 1 to AC_PolygonNodes - 1
+
+		if AC_PolygonNodes < 4 then
+			! If the Marker Geometry is a Circle
+			iTypeCloud = CLOUD_ROUNDED
+
+			line_type lineTypeCloud
+
+			_centerX	= (AC_PolygonCoords[1][1] + AC_PolygonCoords[2][1]) / 2
+			_centerY	= (AC_PolygonCoords[1][2] + AC_PolygonCoords[2][2]) / 2
+			_radius		= sqr((AC_PolygonCoords[1][1] - _centerX)^2 + (AC_PolygonCoords[1][2] - _centerY)^2) - 0*minradiusCloud_model
+
+			_filletRadius[i] = _radius
+			_filletCenterPoint[i][1] = _centerX
+			_filletCenterPoint[i][2] = _centerY
+
+			gosub "draw_boundary_hotspots"
+
+			put	_centerX,	_centerY,	901,
+				_radius,	360,		4001
+		else
+			if iTypeCloud = CLOUD_POLYGON then
+				line_type lineTypeCloud
+				put AC_PolygonCoords[i][1], AC_PolygonCoords[i][2], 1
+				gosub "draw_boundary_hotspots"
+			endif
+
+			if iTypeCloud = CLOUD_ROUNDED then
+				line_type lineTypeCloud
+
+				if i = 1 then
+					xcoordLast = AC_PolygonCoords[AC_PolygonNodes - 1][1]
+					ycoordLast = AC_PolygonCoords[AC_PolygonNodes - 1][2]
+				else
+					xcoordLast = AC_PolygonCoords[i-1][1]
+					ycoordLast = AC_PolygonCoords[i-1][2]
+				endif
+
+				! defining dimensions of rounded peaks :
+				! 1. radius of rounding arc
+				! 2. distance of center of rounding arc from the peak
+				! 3. suspended angle of rounding arc
+				! 4. absolute coords of rounding arc center
+				! 5. absolute coords of targentical points
+				! -------------------------------------------------------
+
+				! 1.1 calculate the angle of vector before the current peak
+				! -------------------------------------------------------
+				vx = AC_PolygonCoords[i][1] - xcoordLast
+				vy = AC_PolygonCoords[i][2] - ycoordLast
+				gosub "check_vector_direction_angle"
+				_angleVectorBefore = angle
+
+				! 1.2 the angle between two vector
+				! -------------------------------------------------------
+				_angleVectorSide = _angVectorSide[i]
+				_usedalpha = _angleVectorSide/2
+	
+				! 1.3 calculate the used cloud circle radius
+				! -------------------------------------------------------
+				_maxUsableLocalRadius = tan(_usedalpha) * _maxDistTangentPoint[i]	! by design
+				if radiusCloud_model > _maxUsableLocalRadius then
+					_usedRadiusCloud = _maxUsableLocalRadius
+				else
+					_usedRadiusCloud = radiusCloud_model
+				endif
+	
+				! 2. calculate distance from circle center point to peak
+				! -------------------------------------------------------
+				_lengthCircleCenter = _usedRadiusCloud/sin(_usedalpha)
+	
+				! 3.1 calculate status of angle - convex or concave (0/1)
+				! -------------------------------------------------------
+				_statusAngleConcave = 1
+				if ((_angleVectorBefore - _angleVector[i] + 360) MOD 360 ) > 180 then
+					_statusAngleConcave = 0
+				endif
+
+				! 3.2 calculate the subtended angle of rounded arc
+				! -------------------------------------------------------
+				_angleArc = (180 - _angleVectorSide)
+				_usedVectorAngle = _angleVector[i]
+				if _statusAngleConcave = 1 then
+					_angleArc = -_angleArc
+				endif
+
+				! 4. calculate circle center coordinates
+				! -------------------------------------------------------
+				if not(_statusAngleConcave) then
+					cx = AC_PolygonCoords[i][1] + _lengthCircleCenter * cos(_angleVectorSide/2 + _angleVector[i])
+					cy = AC_PolygonCoords[i][2] + _lengthCircleCenter * sin(_angleVectorSide/2 + _angleVector[i])
+				else
+					cx = AC_PolygonCoords[i][1] - _lengthCircleCenter * cos(  (_angleVectorSide/2 + _angleVectorBefore))
+					cy = AC_PolygonCoords[i][2] - _lengthCircleCenter * sin(  (_angleVectorSide/2 + _angleVectorBefore))
+				endif
+
+				! 5. calculate targentical point coordinates
+				! -------------------------------------------------------
+				x1 = xcoordLast
+				y1 = ycoordLast
+				x2 = AC_PolygonCoords[i][1]
+				y2 = AC_PolygonCoords[i][2]
+				px = cx
+				py = cy
+				gosub "segment_point_projection"	! returned px,py
+
+				! fill stack with the correct coordinates
+				! -------------------------------------------------------
+				put px, py, 1
+				put cx, cy, 900
+				put 0, _angleArc, 4001	! Arc using centerpoint and angle
+
+				! one editable hotspot in the peak where the maximum radius could be
+				if _placeMaxRadius = i and GLOB_CONTEXT <> 5 then
+					! find the vector angle between circle center and peak
+					vx = AC_PolygonCoords[i][1] - cx
+					vy = AC_PolygonCoords[i][2] - cy
+					gosub "check_vector_direction_angle"	! returned angle
+
+					add2 AC_PolygonCoords[i][1], AC_PolygonCoords[i][2]
+					rot2 angle + 180
+
+					hotspot2  0,					0,	unID, lengthRounded_m, 1+1024+128,	radiusCloud_mm : unID = unID + 1
+					hotspot2 -1,					0,	unID, lengthRounded_m, 3+1024,		radiusCloud_mm : unID = unID + 1
+					hotspot2  lengthRounded_model,	0,	unID, lengthRounded_m, 2+1024,		radiusCloud_mm : unID = unID + 1
+
+					del 2
+				endif
+
+				_filletRadius[i] = _usedRadiusCloud
+				_filletCenterPoint[i][1] = cx
+				_filletCenterPoint[i][2] = cy
+
+				gosub "draw_boundary_hotspots"
+			endif
+
+
+			if iTypeCloud = CLOUD_BISCUIT then
+				line_type 1
+				gosub "standard_cloudy"
+				gosub "draw_boundary_hotspots"
+			endif
+
+			if iTypeCloud = CLOUD_PERIODIC then
+				line_type 1
+				gosub "standard_cloudy"
+				gosub "draw_boundary_hotspots"
+			endif
+
+			if iTypeCloud = CLOUD_RANDOM then
+				line_type 1
+				gosub "standard_cloudy"
+				gosub "draw_boundary_hotspots"
+			endif
+		endif
+
+	next i
+
+
+	poly2_b	nsp/3, 1 + 2*(bFillCloud & 	bEnableFillCloud) + 4, penFillCloud, backpenFillCloud,
+		get(nsp)
+endif
+
+del 1
+
+
+! ==============================================================================
+! Marker Line
+! ==============================================================================
+
+! iLineKind:
+LINEKIND_NO				= 0
+LINEKIND_TO_CIRCLE		= 1
+LINEKIND_TO_LINE		= 2
+LINEKIND_TO_RECTANGLE	= 3
+LINEKIND_TO_POLYGON		= 4
+LINEKIND_TO_POINT		= 5
+
+iLineKind = LINEKIND_NO
+
+pen penContourHead
+line_type 1
+
+if (iMarkerObjectType = MARKER_OBJECT_TYPE_CHANGE) then
+	posX = 0	! last click positions
+	posY = 0
+else
+	posX = gs_pos_X	! last click positions
+	posY = gs_pos_Y
+endif
+_angleExternalLine = 0
+
+drawindex 10
+
+if (iMarkerObjectType = MARKER_OBJECT_TYPE_DETAIL		|\
+	iMarkerObjectType = MARKER_OBJECT_TYPE_WORKSHEET)	then
+
+	hotspot2 gs_pos_X,	 0,			unID,	gs_pos_Y, 1+128, gs_ref_pos_X
+	hotspot2 gs_pos_X,	-1,			unID+1,	gs_pos_Y, 3,	 gs_ref_pos_X
+	hotspot2 gs_pos_X,	 gs_pos_Y,	unID+2,	gs_pos_Y, 2,	 gs_ref_pos_X
+	unID = unID + 3
+
+	hotspot2  0,	 	gs_pos_Y,	unID,	gs_pos_X, 1+128, gs_ref_pos_Y
+	hotspot2 -1,	 	gs_pos_Y,	unID+1,	gs_pos_X, 3,	 gs_ref_pos_Y
+	hotspot2  gs_pos_X,	gs_pos_Y,	unID+2,	gs_pos_X, 2,	 gs_ref_pos_Y
+	unID = unID + 3
+endif
+
+if bConnectionLine then
+
+	! -----------------------------------------------------------------------------
+	! defining status of head position compared to cloud polygon
+	!
+	!	if Component: Cloud and Marker Head or Cloud Only
+	!	- inside			iLineKind = LINEKIND_NO
+	!	- outside			iLineKind = LINEKIND_POLYGON
+	!
+	!	if Component: Cloud and Marker Head or Cloud Only
+	!	- alwasy inside		iLineKind = LINEKIND_TO_POINT
+	! -----------------------------------------------------------------------------
+	if _hasPolygon then
+		ret = 0		! Error
+		pipEnd = 0
+		pipIntersection = 0
+	
+		pipX0 = AC_PolygonCoords[AC_PolygonNodes - 1][1] + _RefCoord_X
+		pipY0 = AC_PolygonCoords[AC_PolygonNodes - 1][2] + _RefCoord_Y
+		pipX1 = AC_PolygonCoords[1][1] + _RefCoord_X
+		pipY1 = AC_PolygonCoords[1][2] + _RefCoord_Y
+	
+		for pipI = 1 to AC_PolygonNodes - 1
+	
+			! Point on polygon vertex test
+			if abs(pipX1 - posX) < EPS & abs(pipY1 - posY) < EPS then
+				ret		= 4					! OnPoint
+				pipI	= AC_PolygonNodes - 1	! Force end loop
+				pipEnd	= 1
+			endif
+	
+			! Point on edge test
+			pipSegLength = sqr((pipX0 - pipX1)^2 + (pipY0 - pipY1)^2)
+			if pipSegLength > EPS & not(pipEnd) then
+				x1 = pipX0
+				y1 = pipY0
+				x2 = pipX1
+				y2 = pipY1
+				px = posX
+				py = posY
+
+				gosub "segment_point_projection"		! returned px,py
+
+				if abs(px - posX) < EPS & abs(py - posY) < EPS then
+					ret		= 3					! OnEdge
+					pipEnd	= 1
+				endif
+			endif
+	
+			pipX2 = AC_PolygonCoords[pipI + 1][1] + _RefCoord_X
+			pipY2 = AC_PolygonCoords[pipI + 1][2] + _RefCoord_Y
+	
+			line1X1 = pipX1
+			line1Y1 = pipY1
+			line1X2 = pipX2
+			line1Y2 = pipY2
+	
+			line2X1 = posX
+			line2Y1 = posY
+			line2X2 = posX + 1000
+			line2Y2 = posY + 1
+
+			gosub "segment_segment_intersection"
+			! Result: state, cx,cy
+	
+			if state = 3 then
+				if abs(line1X2 - cx) > EPS | abs(line1Y2 - cy) > EPS then
+					if abs(line1X1 - cx) < EPS & abs(line1Y1 - cy) < EPS then
+						if sgn(pipY0 - _RefCoord_Y) <> sgn(pipY2 - _RefCoord_Y) then
+							pipIntersection = pipIntersection + 1
+						endif
+					else
+						pipIntersection = pipIntersection + 1
+					endif
+				endif
+			endif
+	
+			pipX0 = pipX1
+			pipY0 = pipY1
+	
+			pipX1 = pipX2
+			pipY1 = pipY2
+		next pipI
+	
+		if (pipIntersection % 2 = 0) & ret <> 3 & ret <> 4 then	! Outside, On Edge, On Line
+			iLineKind = LINEKIND_TO_POLYGON
+		else
+			iLineKind = LINEKIND_NO
+		endif
+	else
+		iLineKind = LINEKIND_TO_POINT
+	endif
+
+	nearestPx = 0 : nearestPy = 0
+	! -----------------------------------------------------------------------------
+	! LINEKIND_TO_POLYGON
+	!	-	calculate the nearest coordinates of cloud polygon from the head
+	!		nearestPx, nearestPy
+	! -----------------------------------------------------------------------------
+	if iLineKind = LINEKIND_TO_POLYGON then
+		nearestDist = 999999
+	
+		for i = 1 to AC_PolygonNodes - 1
+	
+			x1 = AC_PolygonCoords[i][1] + _RefCoord_X
+			y1 = AC_PolygonCoords[i][2] + _RefCoord_Y
+	
+			x2 = AC_PolygonCoords[i + 1][1] + _RefCoord_X
+			y2 = AC_PolygonCoords[i + 1][2] + _RefCoord_Y
+	
+			px = posX
+			py = posY
+			gosub "segment_point_projection"
+	
+			if state <> 0 then
+				dist = (posX - px)^2 + (posY - py)^2
+	
+				if dist < nearestDist then
+					nearestPx = px
+					nearestPy = py
+					nearestDist = dist
+
+					_usedSegment = i
+					nearestEdgex = AC_PolygonCoords[_usedSegment][1]
+					nearestEdgey = AC_PolygonCoords[_usedSegment][2]
+				endif
+			endif
+		next i
+
+		if (iTypeCloud = CLOUD_ROUNDED) then
+
+			! -------------------------------------------------------------------
+			! searching for non-filleted part of used edge
+			! -------------------------------------------------------------------
+
+			! calculate control distance from tangential point to start corner
+			! -------------------------------------------------------------------
+			xs = AC_PolygonCoords[_usedSegment][1]
+			ys = AC_PolygonCoords[_usedSegment][2]
+			xe = AC_PolygonCoords[_usedSegment+1][1]
+			ye = AC_PolygonCoords[_usedSegment+1][2]
+			_nearestPx = nearestPx - _RefCoord_X
+			_nearestPy = nearestPy - _RefCoord_Y
+
+			x1 = AC_PolygonCoords[_usedSegment][1]
+			y1 = AC_PolygonCoords[_usedSegment][2]
+			x2 = AC_PolygonCoords[_usedSegment+1][1]
+			y2 = AC_PolygonCoords[_usedSegment+1][2]
+			px = _filletCenterPoint[_usedSegment][1]
+			py = _filletCenterPoint[_usedSegment][2]
+
+			gosub "segment_point_projection"	! returned px, py tangential point coordinates
+
+			controlDistS = (px - xs)^2 + (py - ys)^2
+
+			! calculate control distance from tangential point to end corner
+			! -------------------------------------------------------------------
+			x1 = AC_PolygonCoords[_usedSegment][1]
+			y1 = AC_PolygonCoords[_usedSegment][2]
+			x2 = AC_PolygonCoords[_usedSegment + 1][1]
+			y2 = AC_PolygonCoords[_usedSegment + 1][2]
+			if _usedSegment + 1 > AC_PolygonNodes - 1 then		! if there is no more filletCenterPoint then go back to start
+				px = _filletCenterPoint[1][1]
+				py = _filletCenterPoint[1][2]
+			else
+				px = _filletCenterPoint[_usedSegment + 1][1]
+				py = _filletCenterPoint[_usedSegment + 1][2]
+			endif
+
+			gosub "segment_point_projection"	! returned px,py
+
+			controlDistE = (px - xe)^2 + (py - ye)^2
+
+			! calculate distance from tangential point to start corner
+			! -------------------------------------------------------------------
+			distS = (_nearestPx - xs)^2 + (_nearestPy - ys)^2
+
+			! calculate distance from tangential point to end corner
+			! -------------------------------------------------------------------
+			distE = (_nearestPx - xe)^2 + (_nearestPy - ye)^2
+
+
+			! change nearest point if it is on the filleted part
+			! -------------------------------------------------------------------
+			if distS < controlDistS | distE < controlDistE then
+
+				! searching for nearest corner point to marker head position 
+				! -------------------------------------------------------------------
+				_nearestDist = 999999
+				_nearestCornerPointID = 0
+
+				for i = 1 to AC_PolygonNodes - 1
+					x1 = AC_PolygonCoords[i][1] + _RefCoord_X
+					y1 = AC_PolygonCoords[i][2] + _RefCoord_Y
+
+					dist = (posX - x1)^2 + (posY - y1)^2
+
+					if dist < _nearestDist then
+						_nearestDist = dist
+						_nearestCornerPointID = i
+					endif
+				next i
+
+				if _nearestCornerPointID then
+					xo = _filletCenterPoint[_nearestCornerPointID][1]
+					yo = _filletCenterPoint[_nearestCornerPointID][2]
+					ro = _filletRadius[_nearestCornerPointID]
+					x1 = xo
+					y1 = yo
+					x2 = posX - _RefCoord_X
+					y2 = posY - _RefCoord_Y
+
+					gosub "circle_line_intersection"
+
+					! searching for nearest intersection point to corner
+					! -------------------------------------------------------------------
+					x1 = AC_PolygonCoords[_nearestCornerPointID][1]
+					y1 = AC_PolygonCoords[_nearestCornerPointID][2]
+			
+					distA = (x1 - xa)^2 + (y1 - ya)^2
+					distB = (x1 - xb)^2 + (y1 - yb)^2
+			
+					if distA < distB then
+						_nearestPx = xa
+						_nearestPy = ya
+					else
+						_nearestPx = xb
+						_nearestPy = yb
+					endif
+
+					nearestPx = _nearestPx + _RefCoord_X
+					nearestPy = _nearestPy + _RefCoord_Y
+				endif
+			endif
+		endif
+
+		! calculation cloud circle chord on the nearest point
+		if (iTypeCloud = CLOUD_BISCUIT | iTypeCloud = CLOUD_PERIODIC | iTypeCloud = CLOUD_RANDOM) then
+			_dist = 0
+			_rad = 0
+			! Distance from act edge to the sectioned circle
+			_distCircle = SQR(( nearestPx - nearestEdgex )^2 + ( nearestPy - nearestEdgey)^2)
+
+			for iCC = 1 to _numCloud[_usedSegment]
+				_dist = _dist + _radCloud[_usedSegment][iCC]*2
+				if _dist > _distCircle then
+					_rad = _radCloud[_usedSegment][iCC]
+					iCC = _numCloud[_usedSegment]
+				endif
+			next iCC
+		
+			xC = abs(_dist - _distCircle)
+			if xC > EPS & _rad > EPS then
+				if xC > _rad then
+					xC = xC -_rad
+				else
+					xC = _rad - xC
+				endif
+				_lengthChord = SQR(_rad^2 - xC^2)
+				nearestPx = nearestPx  - cos((_angleVector[_usedSegment] + 90) MOD 360) * _lengthChord
+				nearestPy = nearestPy  - sin((_angleVector[_usedSegment] + 90) MOD 360) * _lengthChord
+			endif
+		endif
+	endif
+
+	! -----------------------------------------------------------------------------
+	! LINEKIND_TO_POINT - Component: Marker Head Only
+	!	- 	calculate the nearest coordinates of point from the head
+	!		nearestPx, nearestPy
+	! -----------------------------------------------------------------------------
+	if iLineKind = LINEKIND_TO_POINT then
+		nearestPx = RefCoord_X
+		nearestPy = RefCoord_Y
+	endif
+
+	if iLineKind <> LINEKIND_NO then
+	nearestHx = 0 : nearestHy = 0
+	! -----------------------------------------------------------------------------
+	! LINEKIND_TO_x
+	!	- 	calculate the nearest coordinates of head from the cloud polygon
+	!		nearestHx, nearestHy
+	! -----------------------------------------------------------------------------
+		vx = posX - nearestPx
+		vy = posY - nearestPy
+		gosub "check_vector_direction_angle"	! returned angle
+		gosub "set_connection_line_direction_angle"	! returned _angleExternalLine
+
+		if iConnectionLine =  LINE_STRAIGHT then
+			distanceHead_model = 0
+			_angleExternalLine = angle
+		endif
+
+		if 	iShapeHead <> MARKER_HEAD_NONE &\
+			iShapeHead <> MARKER_HEAD_CIRCLE &\
+			iShapeHead <> MARKER_HEAD_LINE then
+ 
+			!----------------------------------------------------------------------
+			! Head origo
+			!----------------------------------------------------------------------
+
+			centerX = distanceHead_model * cos(_angleExternalLine - _totalRotate) + (gs_ref_pos_X + RefCoord_X)
+			centerY = distanceHead_model * sin(_angleExternalLine - _totalRotate) + (gs_ref_pos_Y + RefCoord_Y)
+			gosub "calculate_point_headform"
+
+			if bFeedBackInput then
+				poly2_b	nsp/3, 1 + 2*bFillHead + 4, penFillHead, backpenFillHead,
+				use(nsp)
+			endif
+
+			buffer		= nsp/3
+			nearestDist = 999999	
+			line1X1 = get (1):	line1Y1 = get (1):	dummy = get (1)
+
+			for iHead = 1 to buffer-1
+	
+				line1X2 = get (1):	line1Y2 = get (1):	dummy = get (1)
+
+				if iConnectionLine =  LINE_BREAKPOINT then	
+					line2X1 = posX
+					line2Y1 = posY
+				else
+					line2X1 = nearestPx
+					line2Y1 = nearestPy
+				endif
+
+				line2X2 = centerX
+				line2Y2 = centerY
+	
+				gosub "segment_segment_intersection"
+				! Result: state, cx,cy
+	
+				if state = 3 then
+					dist = (posX - cx)^2 + (posY - cy)^2
+					if dist < nearestDist then
+						nearestHx = cx
+						nearestHy = cy
+						nearestDist = dist
+					endif
+				endif
+	
+				line1X1 = line1X2
+				line1Y1 = line1Y2
+			next iHead
+		else
+			if iShapeHead = MARKER_HEAD_LINE then
+				nearestHx = (distanceHead_model) * cos(_angleExternalLine - _totalRotate) + (gs_ref_pos_X + RefCoord_X)
+				nearestHy = (distanceHead_model) * sin(_angleExternalLine - _totalRotate) + (gs_ref_pos_Y + RefCoord_Y)
+			else	! Circle or None
+				nearestHx = (distanceHead_model - AC_MarkerSize/2) * cos(_angleExternalLine - _totalRotate) + (gs_ref_pos_X + RefCoord_X)
+				nearestHy = (distanceHead_model - AC_MarkerSize/2) * sin(_angleExternalLine - _totalRotate) + (gs_ref_pos_Y + RefCoord_Y)
+			endif
+		endif
+
+	! -----------------------------------------------------------------------------
+	! drawing the marker line
+	! -----------------------------------------------------------------------------
+	
+		if iConnectionLine =  LINE_BREAKPOINT then
+			! Marker Line from Origo to the Cloud
+			! ---------------------------------------------------------------
+			line2 posX, posY, nearestPx, nearestPy
+
+			! Marker Line from Origo to the Head
+			! ---------------------------------------------------------------
+			line2 posX, posY, nearestHx, nearestHy
+		else
+			! Marker Line from Cloud Polygon to the Head
+			! ---------------------------------------------------------------
+			line2 nearestPx, nearestPy, nearestHx, nearestHy
+		endif
+	
+	endif
+endif
+
+! ===================================================================
+! Text Calculations
+! ===================================================================
+
+pen penMarkerText
+define style "markertext_oneRow" AC_TextFont_1, AC_TextSize_1, 5, AC_TextStyle_1
+define style "markertext_1stRow" AC_TextFont_1, AC_TextSize_1, 8, AC_TextStyle_1
+define style "markertext_2ndRow" AC_TextFont_1, AC_TextSize_1, 2, AC_TextStyle_1
+
+style "markertext_oneRow"
+nnn = request("Height_of_style", "markertext_oneRow", text_height)
+
+text_length = max (stw(contentFirstRow), stw(contentSecondRow) * bDivisionLine)
+
+text_length = text_length * PAPER_TO_MODEL
+text_height = text_height * (1 + bDivisionLine) * PAPER_TO_MODEL
+
+! ===================================================================
+! Marker Head
+! ===================================================================
+
+pen penContourHead
+fill typeFillHead
+drawindex 20
+
+nTrans = 0
+usePut = 0
+
+if _hasHead then
+
+
+	! Place of Heads Origo ----------------------------------------------
+	add2 posX, posY
+	nTrans = nTrans + 1
+	if iLineKind <> LINEKIND_NO and iConnectionLine = LINE_BREAKPOINT then
+
+		! Custom Frame Hotspot
+		if (iShapeHead = MARKER_HEAD_RECTANGLE |\
+			iShapeHead = MARKER_HEAD_DIAMOND ) then
+
+			rot2 -_totalRotate
+			add2 distanceHead_model * cos(_angleExternalLine), distanceHead_model * sin(_angleExternalLine)
+			rot2 bVerticalTextPosition * 90
+			hotspot2  0,					0,	unID, widthHeadHalf_m, 1+1024+128,	widthHead_mm : unID = unID + 1
+			hotspot2  -1,					0,	unID, widthHeadHalf_m, 3+1024,		widthHead_mm : unID = unID + 1
+			hotspot2  widthHeadHalf_model,	0,	unID, widthHeadHalf_m, 2+1024,		widthHead_mm : unID = unID + 1
+
+			hotspot2  0,					0,	unID, widthHeadHalf_m, 1+1024+128,	widthHead_mm : unID = unID + 1
+			hotspot2  1,					0,	unID, widthHeadHalf_m, 3+1024,		widthHead_mm : unID = unID + 1
+			hotspot2  -widthHeadHalf_model,	0,	unID, widthHeadHalf_m, 2+1024,		widthHead_mm : unID = unID + 1
+			del 3
+
+		endif
+
+		! Origo Hotspot
+		rot2 _angleExternalLine - _totalRotate
+		hotspot2 0,						0,	unID, distanceHead_m, 1+1024+128,	distanceHead_mm : unID = unID + 1
+		hotspot2 -1,					0,	unID, distanceHead_m, 3+1024,		distanceHead_mm : unID = unID + 1
+		hotspot2 distanceHead_model ,	0,	unID, distanceHead_m, 2+1024,		distanceHead_mm : unID = unID + 1
+		del 1
+
+		centerX = distanceHead_model * cos(_angleExternalLine - _totalRotate)
+		centerY = distanceHead_model * sin(_angleExternalLine - _totalRotate)
+
+		if iShapeHead = MARKER_HEAD_LINE then
+			posAngle = 0
+			if ((_angleExternalLine = 90 | _angleExternalLine = 270) and not(bVerticalTextPosition)) |\
+				((_angleExternalLine = 0 | _angleExternalLine = 180) and bVerticalTextPosition) then
+				posAngle = 90
+			endif
+
+			centerX = centerX + _widthHalfHead[iShapeHead][HEAD_SIZE_SIDE] * cos(_angleExternalLine - _totalRotate - posAngle)
+			centerY = centerY + _widthHalfHead[iShapeHead][HEAD_SIZE_SIDE] * sin(_angleExternalLine - _totalRotate - posAngle)
+		endif
+	else
+		centerX = 0
+		centerY = 0
+	endif
+
+	! Draw the poligon of head from zero (last click) ----------------------------------------------
+	if iShapeHead <> MARKER_HEAD_NONE & iShapeHead <> MARKER_HEAD_CIRCLE & iShapeHead <> MARKER_HEAD_LINE then
+
+		! input centerX, centerY
+		gosub "calculate_point_headform"
+
+		poly2_b	nsp/3, 1 + 2*bFillHead + 4, penFillHead, backpenFillHead,
+			get(nsp)
+
+	else
+		if iShapeHead = MARKER_HEAD_CIRCLE then
+			poly2_b	2, 1 + 2*bFillHead + 4, penFillHead, backpenFillHead,
+				centerX, centerY,		901,
+				_widthHalfHead[MARKER_HEAD_CIRCLE][HEAD_SIZE_SIDE], 360, 	4001
+		endif
+	endif
+
+	! Draw division line from origo ----------------------------------------------
+	add2 centerX, centerY
+	rot2 -_totalRotate
+	nTrans = nTrans + 2
+
+	if bDivisionLine then
+		pen penDivisionLine
+		if bVerticalTextPosition then
+			line2 0, -_widthHalfHead[iShapeHead][HEAD_SIZE_DOWN], 0, _widthHalfHead[iShapeHead][HEAD_SIZE_UP]
+		else
+			line2 -_widthHalfHead[iShapeHead][HEAD_SIZE_SIDE], 0, _widthHalfHead[iShapeHead][HEAD_SIZE_SIDE], 0
+		endif
+	endif
+	
+
+
+	! ===================================================================
+	! Text
+	! ===================================================================
+
+	if bVerticalTextPosition then
+		rot2 90
+		nTrans = nTrans + 1
+	endif
+	
+	if not(bDivisionLine) then
+		pen penMarkerText
+		style "markertext_oneRow"
+		text2 0,0,contentFirstRow
+	else
+		pen penMarkerText
+		style "markertext_1stRow"
+		text2 0,0,contentFirstRow
+
+		pen penMarkerSecondText
+		style "markertext_2ndRow"
+		text2 0,0,contentSecondRow
+
+	endif
+
+	
+	del nTrans
+
+endif
+
+
+if (iMarkerObjectType = MARKER_OBJECT_TYPE_DETAIL		|\
+	iMarkerObjectType = MARKER_OBJECT_TYPE_WORKSHEET)	then
+
+	if _angleViewRot > eps then
+		del 1
+	endif
+endif
+
+
+END
+
+
+! ==============================================================================
+! Segment - Point Projection
+! ------------------------------------------------------------------------------
+! Input variables:
+!	x1,y1, x2,y2:	Line Segment
+!	px,py:			Point
+!
+! Returned variables:
+!	state:			0 = no intersection point
+!					1 = valid intersection point
+!	px, py:			Projected Point
+! ==============================================================================
+
+"segment_point_projection":
+
+	x21 = px
+	y21 = py
+	x22 = px + (y1 - y2)
+	y22 = py - (x1 - x2)
+
+	lliDiv = (x1-x2) * (y21-y22) - (y1-y2) * (x21-x22)
+
+	segLength = ((x1 - x2)^2 + (y1 - y2)^2)
+
+	if abs(lliDiv) > EPS then
+		! Intersection
+
+		temp1 = x1  * y2  - y1  * x2
+		temp2 = x21 * y22 - y21 * x22
+
+		tempx = temp1 * (x21-x22) - (x1-x2) * temp2
+		tempy = temp1 * (y21-y22) - (y1-y2) * temp2
+
+		state = 1
+		px = (tempx / lliDiv)
+		py = (tempy / lliDiv)
+
+		endDist1 = ((px - x1)^2 + (py - y1)^2)
+		endDist2 = ((px - x2)^2 + (py - y2)^2)
+		if endDist1 > segLength | endDist2 > segLength then
+			if endDist1 < endDist2 then
+				px = x1
+				py = y1
+			else
+				px = x2
+				py = y2
+			endif
+		endif
+	else
+		! No Intersection
+		state = 0
+		px = 0
+		py = 0
+	endif
+
+return
+
+! ==============================================================================
+! Segment - Segment intersection
+! ==============================================================================
+! Input:
+!	line1X1:		line1 startpoint X
+!	line1Y1:		line1 startpoint Y
+!	line1X2:		line1 endpoint X
+!	line1Y2:		line1 endpoint Y
+!	line2X1:		line2 startpoint X
+!	line2Y1:		line2 startpoint Y
+!	line2X2:		line2 endpoint X
+!	line2Y2:		line2 endpoint Y
+!
+! Output:
+!	ret:			output status
+!						-1: no intersection, segments is not paralel
+!						 0: no intersection, parallel segments
+!						 1: intersection point lies on S1 segment, but not lies on S2
+!						 2: intersection point lies on S2 segment, but not lies on S1
+!						 3: intersection point lies on both segments
+!	cx:				intersection point X
+!	cy:				intersection point Y
+! ==============================================================================
+
+"segment_segment_intersection":
+	gosub "line_line_intersection"	! Intersection of Line - Line
+
+	if state then
+		state = 0
+
+		if abs(line1X1 - line1X2) < EPS then
+			if (line1Y1-EPS <= cy & cy <= line1Y2+EPS) | (line1Y1+EPS >= cy & cy >= line1Y2-EPS) then state = 1
+		else
+			if (line1X1-EPS <= cx & cx <= line1X2+EPS) | (line1X1+EPS >= cx & cx >= line1X2-EPS) then state = 1
+		endif
+		if abs(line2X1 - line2X2) < EPS then
+			if (line2Y1-EPS <= cy & cy <= line2Y2+EPS) | (line2Y1+EPS >= cy & cy >= line2Y2-EPS) then state = state + 2
+		else
+			if (line2X1-EPS <= cx & cx <= line2X2+EPS) | (line2X1+EPS >= cx & cx >= line2X2-EPS) then state = state + 2
+		endif
+
+		if state = 0 then state = -1
+	endif
+return
+
+! ==============================================================================
+! Line - Line intersection
+! ==============================================================================
+! Input:
+!	line1X1:		line1 startpoint X
+!	line1Y1:		line1 startpoint Y
+!	line1X2:		line1 endpoint X
+!	line1Y2:		line1 endpoint Y
+!	line2X1:		line2 startpoint X
+!	line2Y1:		line2 startpoint Y
+!	line2X2:		line2 endpoint X
+!	line2Y2:		line2 endpoint Y
+!
+! Output:
+!	state:			output status
+!						 0: no intersection, parallel lines
+!						 1: lines are intersects
+!	cx:				intersection point X
+!	cy:				intersection point Y
+! ==============================================================================
+
+"line_line_intersection":
+
+	lliDiv = (line1X1-line1X2) * (line2Y1-line2Y2) - (line1Y1-line1Y2) * (line2X1-line2X2)
+
+	if abs(lliDiv) > EPS then
+		! Intersection
+
+		temp1 = line1X1 * line1Y2 - line1Y1 * line1X2
+		temp2 = line2X1 * line2Y2 - line2Y1 * line2X2
+
+		tempx = temp1 * (line2X1-line2X2) - (line1X1-line1X2) * temp2
+		tempy = temp1 * (line2Y1-line2Y2) - (line1Y1-line1Y2) * temp2
+
+		state = 1
+		cx = (tempx / lliDiv)
+		cy = (tempy / lliDiv)
+	else
+		! No Intersection
+		state = 0
+		cx = 0
+		cy = 0
+	endif
+
+return
+
+! ==============================================================================
+! Circle - Line intersection
+! ------------------------------------------------------------------------------
+! Input variables:
+!	EPS:				epsylon
+!	xo,yo,ro:			circle
+!	x1,y1, x2,y2		line
+!
+! Returned variables:
+!	state:				0 = no intersection point
+!						1 = one intersection point (tangential line)
+!						2 = two intersection points
+!	xa, ya:				intersection point #1
+!	xb, yb:				intersection point #2
+! ==============================================================================
+
+"circle_line_intersection":
+	tempX1 = x1 - xo: tempY1 = y1 - yo
+	tempX2 = x2 - xo: tempY2 = y2 - yo
+
+	if abs(tempX2 - tempX1) < EPS then
+		if abs(ro - tempX1) < EPS then
+			state = 1
+			xa = tempX1
+			ya = 0
+			xb = tempX1
+			yb = 0
+		else
+			state = 2
+			xa = tempX1
+			ya = sqr(ro^2 - tempX1^2)
+			xb = tempX1
+			yb = -sqr(ro^2 - tempX1^2)
+		endif
+	else
+		kf = (tempY2 - tempY1) / (tempX2 - tempX1)
+		ad = 1 + kf^2
+		bd = 2 * tempY1 * kf - 2 * tempX1 * kf^2
+		cd = tempY1^2 - 2 * tempX1 * tempY1 * kf + tempX1^2 * kf^2 - ro^2
+
+		if bd^2 - 4 * ad * cd < 0 then
+			state = 0: xa = 0: ya = 0: xb = 0: yb = 0
+		else
+			xa = (-bd + sqr(bd^2 - 4 * ad * cd)) / (2 * ad)
+			ya = tempY1 + (xa - tempX1) * kf
+			xb = (-bd - sqr(bd^2 - 4 * ad * cd)) / (2 * ad)
+			yb = tempY1 + (xb - tempX1) * kf
+
+			if abs(xa - xb) < EPS then state = 1 else state = 2
+		endif
+	endif
+
+	if state = 2 then
+		da = sqr((tempX1 - xa)^2 + (tempY1 - ya)^2)
+		db = sqr((tempX1 - xb)^2 + (tempY1 - yb)^2)
+
+		if db < da then
+			xxo = xa: yyo = ya
+			xa = xb:  ya = yb
+			xb = xxo: yb = yyo
+		endif
+	endif
+
+	xa = xa + xo: ya = ya + yo
+	xb = xb + xo: yb = yb + yo
+return
+
+! ==============================================================================
+! Segment - Point intersection
+! ==============================================================================
+! Input:
+!	x1:		line1 startpoint X
+!	y1:		line1 startpoint Y
+!	x2:		line1 endpoint X
+!	y2:		line1 endpoint Y
+!	cx
+!	cy
+!
+! Output:
+!	status:			output status
+!						-1: no intersection, segments is not paralel
+!						 0: no intersection, parallel segments
+!						 1: intersection point lies on S1 segment
+! ==============================================================================
+
+"segment_point_status":
+	if state > 0 then
+		state = 0
+
+		if abs(x1 - x2) < EPS then
+			if (y1-EPS <= cy & cy <= y2+EPS) | (y1+EPS >= cy & cy >= y2-EPS) then state = 1
+		else
+			if (x1-EPS <= cx & cx <= x2+EPS) | (x1+EPS >= cx & cx >= x2-EPS) then state = 1
+		endif
+		if state = 0 then state = -1
+	endif
+return
+
+
+! ==============================================================================
+! Marker Line Direction Angle
+! ------------------------------------------------------------------------------
+! Input variables:
+!	angle:				angle of vector
+!	_totalRotate		angle of oriented view
+! Input parameter:
+!	iRotateHead			HEAD_HORIZONTAL - always horizontal
+!						HEAD_ROTATED - automatic calculating could be horizontal and vertical
+! Returned variables:
+!	_angleExternalLine:		marker line direction
+! ==============================================================================
+
+"set_connection_line_direction_angle":
+
+	angle = angle + _totalRotate
+	if angle < -eps then
+		angle = angle + 360
+	else
+		angle = angle MOD 360
+	endif
+
+	if iRotateHead = HEAD_HORIZONTAL then
+		if angle > 270 - EPS | angle <= 90  + EPS then _angleExternalLine = 0
+		if angle > 90 - EPS & angle <= 270 + EPS then _angleExternalLine = 180
+	else
+		if angle > 315 - EPS | angle <= 45  + EPS then _angleExternalLine = 0
+		if angle > 45  + EPS & angle <= 135 - EPS then _angleExternalLine = 90
+		if angle > 135 - EPS & angle <= 225 + EPS then _angleExternalLine = 180
+		if angle > 225 + EPS & angle <= 315 - EPS then _angleExternalLine = 270
+	endif
+
+return
+
+! ==============================================================================
+! Cloud polygon
+! ------------------------------------------------------------------------------
+! Input variables:
+!	AC_PolygonCoords[i][1], AC_PolygonCoords[i][2] :	polygon coords
+!	_lengthVector
+!	radiusCloud_model
+!	numRatioCloud
+!
+! Returned variables:
+!	stack
+! ==============================================================================
+
+"standard_cloudy":
+
+	put AC_PolygonCoords[i][1], AC_PolygonCoords[i][2], 1
+
+	if iTypeCloud = CLOUD_BISCUIT then
+		_numCloud[i] = max(1, INT(_lengthVector[i] / (radiusCloud_model*2)))
+		for j = 1 to _numCloud[i]
+			_radCloud[i][j] = _lengthVector[i] / _numCloud[i] /2
+		next j
+	endif
+
+	if iTypeCloud = CLOUD_PERIODIC then
+		_numCloud[i] = 2
+		_perCloud = (numRatioCloud + 1) / min(1, numRatioCloud)
+		_radCloud[i][1] = (_lengthVector[i] / _perCloud) * (1 / min(1, numRatioCloud)) /2
+		_radCloud[i][2] = (_lengthVector[i] -_radCloud[i][1] * 2) /2
+	endif
+
+	if iTypeCloud = CLOUD_RANDOM then
+		! inicialization
+		_numCloud[i] 		= 1
+		_radCloud[i][1] 	= 1
+
+		! every vector has a own sample depending the distance from origo to draw the random cirlces
+		if i = (AC_PolygonNodes - 1) then
+			seed = _distancePointfromOrigo[1]
+		else
+			seed = _distancePointfromOrigo[i + 1]
+		endif
+		seed = seed + _distancePointfromOrigo[i]
+
+		_length = _lengthVector[i]
+		_minDivison = (minradiusCloud_model + maxradiusCloud_model) * 2
+		_minDiameter = (min(minradiusCloud_model,maxradiusCloud_model)*2)
+		_maxDiameter = (max(minradiusCloud_model,maxradiusCloud_model)*2)
+
+		inum = 1
+		while _length > EPS do
+			! schema for dummy random sample
+			seed = (seed * 214013 + 2531011) MOD (2^32)
+
+			_numCloud[i] = inum
+
+			! manual settings for the last circles
+			if _length < _minDivison + EPS then
+				if _length > _maxDiameter then
+					_radCloud[i][inum] = min(minradiusCloud_model,maxradiusCloud_model)
+					_restDiv = (_length - _radCloud[i][inum] * 2)
+				else
+					_radCloud[i][inum] = _length/2
+					_restDiv = -1
+				endif
+			else
+				! manual settings if the minimum and maximum range are the same
+				if abs(_minDiameter - _maxDiameter) < EPS then
+					_radCloud[i][inum] = _minDiameter/2
+				else
+				! calculating radius with random schema
+					_radCloud[i][inum] = ((seed / 65536) MOD (maxradiusCloud_model - minradiusCloud_model)) + _minDiameter/2
+				endif
+				_restDiv = (_length - _radCloud[i][inum] * 2)
+			endif
+			_length = _restDiv
+
+			inum = inum + 1
+		endwhile
+	endif
+
+	bx = AC_PolygonCoords[i][1]
+	by = AC_PolygonCoords[i][2]
+	dim _radius[]
+	for j = 1 to _numCloud[i]
+		if j = 1 then
+			_radius[i] = _radCloud[i][j]
+		else
+			_radius[i] = (_radCloud[i][j-1] + _radCloud[i][j])
+		endif
+		bx = bx + _radius[i] * cos(_angleVector[i])
+		by = by + _radius[i] * sin(_angleVector[i])
+		put bx, by, 900
+		put 0, 180, 4001
+	next j
+
+
+return
+
+! ==============================================================================================
+"calculate_point_headform" :
+! ----------------------------------------------------------------------------------------------
+! input : 	
+! 	centerX			Head Origo coord x
+! 	centerY			Head Origo coord y
+! 	_totalRotate		angle of oriented view
+! 	AC_MarkerSize		height of the marker head
+!
+! output:
+!	stack filled with head polygon relative coords (from head center)
+! ==============================================================================================
+
+	! Shape Type --------------------------------------------------------
+	if iShapeHead = MARKER_HEAD_CIRCLE then
+
+	endif
+
+	if iShapeHead = MARKER_HEAD_TRIANGLE_UP then
+		numPeak = 3
+		alfa = 90 - _totalRotate
+		usePut = 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_TRIANGLE_DOWN then
+		numPeak = 3
+		alfa = 30 - _totalRotate
+		usePut = 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_RECTANGLE then
+		_vectorRect = SQR(_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE]^2 + _widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_UP]^2)
+		_alphaRect = ATN (_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_UP]/_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE])
+		alfa1 = _alphaRect - _totalRotate
+		alfa2 = 180 - _alphaRect - _totalRotate
+		alfa3 = 180 + _alphaRect - _totalRotate
+		alfa4 = 360 - _alphaRect - _totalRotate
+		put	_vectorRect * cos(alfa1) + centerX,	_vectorRect * sin(alfa1) + centerY,	 1
+		put _vectorRect * cos(alfa2) + centerX,	_vectorRect * sin(alfa2) + centerY,	 1
+		put _vectorRect * cos(alfa3) + centerX,	_vectorRect * sin(alfa3) + centerY,	 1
+		put _vectorRect * cos(alfa4) + centerX,	_vectorRect * sin(alfa4) + centerY,	 1
+		put	_vectorRect * cos(alfa1) + centerX,	_vectorRect * sin(alfa1) + centerY,	 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_PENTAGON_UP then
+		numPeak = 5
+		alfa = 90- _totalRotate
+		usePut = 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_PENTAGON_DOWN then
+		numPeak = 5
+		alfa = 54- _totalRotate
+		usePut = 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_HEXAGON then
+		numPeak = 6
+		alfa = 90 - _totalRotate
+		usePut = 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_HEXAGON_ROTATED then
+		numPeak = 6
+		alfa = 60 - _totalRotate
+		usePut = 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_OCTOGON then
+		numPeak = 8
+		alfa = 67.5 - _totalRotate
+		usePut = 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_OCTOGON_ROTATED then
+		numPeak = 8
+		alfa = 0 - _totalRotate
+		usePut = 1
+	endif
+
+	if iShapeHead = MARKER_HEAD_DIAMOND then
+		alfa = -_totalRotate
+		put	_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE] * cos(alfa) + centerX,	_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE]  * sin(alfa) + centerY,		 1
+		put _widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_UP] * cos(alfa+90) + centerX,	_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_UP] * sin(alfa+90) + centerY,			 1
+		put _widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE] * cos(alfa+180) + centerX, _widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE] * sin(alfa+180) + centerY,		 1
+		put _widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_DOWN] * cos(alfa+270) + centerX,_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_DOWN] * sin((alfa+270)) + centerY,	 1
+		put	_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE] * cos(alfa) + centerX,	_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE]  * sin(alfa) + centerY,		 1
+	endif
+
+
+	if usePut then
+		for i = 1 to numPeak + 1
+			put AC_MarkerSize/2 * cos(alfa) + centerX, AC_MarkerSize/2 * sin(alfa) + centerY, 1
+			alfa = alfa + 360 / numPeak
+		next i
+
+	endif
+
+!		poly2_b	nsp/3, 1 + 2*bFillHead + 4, penFillHead, backpenFillHead,
+!			get(nsp)
+
+return
+
+! ==============================================================================================
+"set_array_widthHalfHead":
+! ----------------------------------------------------------------------------------------------
+! input : 	
+! 	widthHead_model
+! 	AC_MarkerSize		height of the marker head
+!
+! output:
+!	_widthHalfHead temporary array
+! ==============================================================================================
+
+	if _hasHead then
+		_widthHalfHead[MARKER_HEAD_CIRCLE][HEAD_SIZE_SIDE] 	= AC_Markersize/2
+		_widthHalfHead[MARKER_HEAD_CIRCLE][HEAD_SIZE_UP] 	= AC_Markersize/2
+		_widthHalfHead[MARKER_HEAD_CIRCLE][HEAD_SIZE_DOWN] 	= AC_Markersize/2
+	
+		_widthHalfHead[MARKER_HEAD_TRIANGLE_UP][HEAD_SIZE_SIDE] 	= AC_Markersize/2 * tan(30)
+		_widthHalfHead[MARKER_HEAD_TRIANGLE_UP][HEAD_SIZE_UP] 		= AC_Markersize/2
+		_widthHalfHead[MARKER_HEAD_TRIANGLE_UP][HEAD_SIZE_DOWN] 	= AC_Markersize/2 * sin(30)
+	
+		_widthHalfHead[MARKER_HEAD_TRIANGLE_DOWN][HEAD_SIZE_SIDE] 	= AC_Markersize/2 * tan(30)
+		_widthHalfHead[MARKER_HEAD_TRIANGLE_DOWN][HEAD_SIZE_UP] 	= AC_Markersize/2 * sin(30)
+		_widthHalfHead[MARKER_HEAD_TRIANGLE_DOWN][HEAD_SIZE_DOWN] 	= AC_Markersize/2
+	
+		if not(bVerticalTextPosition) then
+			_widthHalfHead[MARKER_HEAD_RECTANGLE][HEAD_SIZE_SIDE] 		= widthHead_model/2
+			_widthHalfHead[MARKER_HEAD_RECTANGLE][HEAD_SIZE_UP] 		= AC_Markersize/2
+			_widthHalfHead[MARKER_HEAD_RECTANGLE][HEAD_SIZE_DOWN] 		= AC_Markersize/2
+		else
+			_widthHalfHead[MARKER_HEAD_RECTANGLE][HEAD_SIZE_SIDE] 		= AC_Markersize/2
+			_widthHalfHead[MARKER_HEAD_RECTANGLE][HEAD_SIZE_UP] 		= widthHead_model/2
+			_widthHalfHead[MARKER_HEAD_RECTANGLE][HEAD_SIZE_DOWN] 		= widthHead_model/2
+		endif
+	
+		_widthHalfHead[MARKER_HEAD_PENTAGON_UP][HEAD_SIZE_SIDE] 	= AC_Markersize/2 * sin(36) + AC_Markersize/2 * cos(36) * tan(18)
+		_widthHalfHead[MARKER_HEAD_PENTAGON_UP][HEAD_SIZE_UP] 		= AC_Markersize/2
+		_widthHalfHead[MARKER_HEAD_PENTAGON_UP][HEAD_SIZE_DOWN] 	= AC_Markersize/2 * cos(36)
+	
+		_widthHalfHead[MARKER_HEAD_PENTAGON_DOWN][HEAD_SIZE_SIDE] 	= AC_Markersize/2 * sin(36) + AC_Markersize/2 * cos(36) * tan(18)
+		_widthHalfHead[MARKER_HEAD_PENTAGON_DOWN][HEAD_SIZE_UP] 	= AC_Markersize/2 * cos(36)
+		_widthHalfHead[MARKER_HEAD_PENTAGON_DOWN][HEAD_SIZE_DOWN] 	= AC_Markersize/2
+	
+		_widthHalfHead[MARKER_HEAD_HEXAGON][HEAD_SIZE_SIDE]			= AC_Markersize/2 * cos(30)
+		_widthHalfHead[MARKER_HEAD_HEXAGON][HEAD_SIZE_UP] 			= AC_Markersize/2
+		_widthHalfHead[MARKER_HEAD_HEXAGON][HEAD_SIZE_DOWN] 		= AC_Markersize/2
+	
+		_widthHalfHead[MARKER_HEAD_HEXAGON_ROTATED][HEAD_SIZE_SIDE] = AC_Markersize/2
+		_widthHalfHead[MARKER_HEAD_HEXAGON_ROTATED][HEAD_SIZE_UP] 	= AC_Markersize/2 * cos(30)
+		_widthHalfHead[MARKER_HEAD_HEXAGON_ROTATED][HEAD_SIZE_DOWN] = AC_Markersize/2 * cos(30)
+	
+		_widthHalfHead[MARKER_HEAD_OCTOGON][HEAD_SIZE_SIDE] 	= AC_Markersize/2 * cos(22.5)
+		_widthHalfHead[MARKER_HEAD_OCTOGON][HEAD_SIZE_UP] 		= AC_Markersize/2 * cos(22.5)
+		_widthHalfHead[MARKER_HEAD_OCTOGON][HEAD_SIZE_DOWN] 	= AC_Markersize/2 * cos(22.5)
+	
+		_widthHalfHead[MARKER_HEAD_OCTOGON_ROTATED][HEAD_SIZE_SIDE] 	= AC_Markersize/2
+		_widthHalfHead[MARKER_HEAD_OCTOGON_ROTATED][HEAD_SIZE_UP] 		= AC_Markersize/2
+		_widthHalfHead[MARKER_HEAD_OCTOGON_ROTATED][HEAD_SIZE_DOWN] 	= AC_Markersize/2
+	
+		if not(bVerticalTextPosition) then
+			_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE] 	= widthHead_model/2
+			_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_UP] 		= AC_Markersize/2
+			_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_DOWN] 	= AC_Markersize/2
+		else
+			_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_SIDE] 	= AC_Markersize/2
+			_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_UP] 		= widthHead_model/2
+			_widthHalfHead[MARKER_HEAD_DIAMOND][HEAD_SIZE_DOWN] 	= widthHead_model/2
+		endif
+	
+		_widthHalfHead[MARKER_HEAD_LINE][HEAD_SIZE_SIDE] 	= widthHead_model/2
+		_widthHalfHead[MARKER_HEAD_LINE][HEAD_SIZE_UP] 		= widthHead_model/2
+		_widthHalfHead[MARKER_HEAD_LINE][HEAD_SIZE_DOWN] 	= widthHead_model/2
+	
+		if not(bVerticalTextPosition) then
+			_widthHalfHead[MARKER_HEAD_NONE][HEAD_SIZE_SIDE] 	= widthHead_model/2
+			_widthHalfHead[MARKER_HEAD_NONE][HEAD_SIZE_UP] 		= widthHead_model/2
+			_widthHalfHead[MARKER_HEAD_NONE][HEAD_SIZE_DOWN] 	= widthHead_model/2
+		else
+			_widthHalfHead[MARKER_HEAD_NONE][HEAD_SIZE_SIDE] 	= widthHead_model/2
+			_widthHalfHead[MARKER_HEAD_NONE][HEAD_SIZE_UP] 		= widthHead_model/2
+			_widthHalfHead[MARKER_HEAD_NONE][HEAD_SIZE_DOWN] 	= widthHead_model/2
+		endif
+	endif
+return
+
+
+! ==============================================================================================
+"draw_boundary_hotspots":
+! ----------------------------------------------------------------------------------------------
+! There are different boundary hotspot behavior between Detail/Worksheet/Change subtypes
+! Change Marker`s boundary hotspots
+!	They are drawn by AC, because of the geometry method circular and options without Head or Cloud.
+! Detail Marker`s and Worksheet Marker`s boundary hotspots
+!	They are drawn by GDL because of an AC bug and temporary getting out the problem.
+!
+! input : 	
+! 	AC_PolygonCoords[][]
+! ==============================================================================================
+
+	if iMarkerObjectType = MARKER_OBJECT_TYPE_DETAIL | iMarkerObjectType = MARKER_OBJECT_TYPE_WORKSHEET then
+		hotspot2 AC_PolygonCoords[i][1], AC_PolygonCoords[i][2], unID :	unID = unID + 1
+	endif
+
+return
+

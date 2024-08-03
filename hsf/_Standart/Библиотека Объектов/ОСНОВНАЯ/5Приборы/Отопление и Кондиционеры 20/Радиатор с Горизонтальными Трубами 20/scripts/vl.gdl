@@ -1,0 +1,245 @@
+
+call "FM_types" parameters all
+
+values{2} "iRadiatorType" RADIATORTYPE_BARS,   stRadiatorTypes[1],
+						  RADIATORTYPE_FLAT,   stRadiatorTypes[2],
+						  RADIATORTYPE_CURVED, stRadiatorTypes[3]
+
+values "ZZYZX" range [0.2, ]
+						  
+if iRadiatorType = RADIATORTYPE_FLAT then
+	lock "bd"
+	hideparameter "bd"
+
+	values "nb" range (0, int(ZZYZX / panelHeight - bGaps * int(ZZYZX / (5 * panelHeight)))]
+else
+	lock "panelHeight"
+	hideparameter "panelHeight"
+	if iRadiatorType = RADIATORTYPE_CURVED then
+		values "nb" range [2, ZZYZX / bd]
+	else
+		values "nb" range (0, ZZYZX / bd]
+	endif
+endif
+
+values "A" range [(bd + panelOverhang) * 2, ]
+			  
+IF GLOB_MODPAR_NAME = "gs_detlevel_3D" OR gs_detlevel_3D_m = -1 THEN
+	gs_detlevel_3D_m = 2	! Detailed
+	IF gs_detlevel_3D = `Откл.` THEN gs_detlevel_3D_m = 0
+	IF gs_detlevel_3D = `Простой` THEN gs_detlevel_3D_m = 1
+	PARAMETERS gs_detlevel_3D_m = gs_detlevel_3D_m
+ELSE
+	IF gs_detlevel_3D_m = 0 THEN gs_detlevel_3D = `Откл.`
+	IF gs_detlevel_3D_m = 1 THEN gs_detlevel_3D = `Простой`
+	IF gs_detlevel_3D_m = 2 THEN gs_detlevel_3D = `Детальный`
+	PARAMETERS gs_detlevel_3D = gs_detlevel_3D
+ENDIF
+
+VALUES "gs_detlevel_3D" `Детальный`,`Простой`,`Откл.`
+VALUES "gs_detlevel_3D_m" 2, 1, 0
+
+values "gs_resol" range [3, )
+
+IF gs_cont_pen=0 THEN PARAMETERS gs_cont_pen=8
+IF gs_fill_pen=0 THEN PARAMETERS gs_fill_pen=91
+
+IF gs_detlevel_3D=`Простой` then lock "gs_resol"
+
+lock "b"
+
+
+! --- start of modify to Shaft
+
+	PUT 1
+
+IF isMEPEnabled THEN
+
+	DIM shape_typ_to_validation[3]
+		shape_typ_to_validation[1] = 0		! Rectangle
+		shape_typ_to_validation[2] = 1		! Circle
+		shape_typ_to_validation[3] = 0		! Oval
+
+					! --- CONNECTIONS --- !
+
+	PARAMETERS MEP_NumberConnections = 2
+
+
+					! --- 1st CONNECTION --- !
+
+	ConID = 1
+	ConName = `Соединение Трубы #1`
+
+	ConDVecX = -1+2*(ConPos_1)
+	ConDVecY = 0
+	ConDVecZ = 0
+
+	ConWVecX = 0
+	ConWVecY = -1+2*(ConPos_1)
+	ConWVecZ = 0
+
+	IF ConWidth_1 < 0.001 THEN
+		ConWidth_1 = 0.001
+		PARAMETERS ConWidth_1 = ConWidth_1
+	ENDIF
+	IF ConWidth_1 > MIN(bd, zzyzx/2) THEN
+		ConWidth_1 = MIN(bd, zzyzx/2)
+		PARAMETERS ConWidth_1 = ConWidth_1
+	ENDIF
+	VALUES "ConWidth_1" RANGE (0, MIN(bd, zzyzx/2)]
+	PARAMETERS ConDepth_1 = ConWidth_1
+	VALUES "ConLength_1" RANGE [0, ]
+
+
+	PARAMETERS ConPosX_1 = A*(ConPos_1)
+	PARAMETERS ConPosY_1 = bd/2
+	if iRadiatorType = RADIATORTYPE_CURVED then
+		parameters ConPosZ_1 = barDistance/2
+	else
+		VALUES "ConPosZ_1" RANGE [ConWidth_1/2, zzyzx-ConWidth_1/2]
+	endif
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_1,
+		ConPosY = ConPosY_1,
+		ConPosZ = ConPosZ_1,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_1,
+		ConNominalDepth = ConNominalDepth_1,
+		ConWidth = ConWidth_1,
+		ConDepth = ConDepth_1,
+		ConLength = ConLength_1,
+		ConWallThickness = ConWallThickness_1,
+		ConConnectorWidth = ConConnectorWidth_1,
+		ConConnectorDepth = ConConnectorDepth_1,
+		ConConnectorWidth2 = ConConnectorWidth2_1,
+		ConToolType = ConToolType_1,
+		ConStatus = ConStatus_1,
+		ConType_1 = ConType_1,
+		ConConnectorType_1 = ConConnectorType_1,
+		ConSystem_1 = ConSystem_1,
+		ui_current_con = ui_current_con,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_1, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+
+					! --- 2nd CONNECTION --- !
+
+	ConID = 2
+	ConName = `Соединение Трубы #2`
+
+	if iRadiatorType = RADIATORTYPE_CURVED & (nb % 2 = 0) then
+		ConDVecX = -1
+	else
+		ConDVecX = 1
+	endif
+	ConDVecY = 0
+	ConDVecZ = 0
+
+	ConWVecX = 0
+	ConWVecY = 1
+	ConWVecZ = 0
+
+	IF ConWidth_2 < 0.001 THEN
+		ConWidth_2 = 0.001
+		PARAMETERS ConWidth_2 = ConWidth_2
+	ENDIF
+	IF ConWidth_2 > MIN(bd, zzyzx/2) THEN
+		ConWidth_2 = MIN(bd, zzyzx/2)
+		PARAMETERS ConWidth_2 = ConWidth_2
+	ENDIF
+	VALUES "ConWidth_2" RANGE (0, MIN(bd, zzyzx/2)]
+	PARAMETERS ConDepth_2 = ConWidth_2
+	VALUES "ConLength_2" RANGE [0, ]
+
+
+	PARAMETERS ConPosY_2 = bd/2
+	if iRadiatorType = RADIATORTYPE_CURVED then
+		if (nb % 2 = 0) then
+			parameters ConPosX_2 = 0
+		else
+			parameters ConPosX_2 = A
+		endif
+		parameters ConPosZ_2 = ZZYZX - barDistance/2
+	else
+		PARAMETERS ConPosX_2 = A
+		VALUES "ConPosZ_2" RANGE [ConWidth_2/2, zzyzx-ConWidth_2/2]
+	endif
+
+	CALL "MEP_m_ConnectionsACL_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_2,
+		ConPosY = ConPosY_2,
+		ConPosZ = ConPosZ_2,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_2,
+		ConNominalDepth = ConNominalDepth_2,
+		ConWidth = ConWidth_2,
+		ConDepth = ConDepth_2,
+		ConLength = ConLength_2,
+		ConWallThickness = ConWallThickness_2,
+		ConConnectorWidth = ConConnectorWidth_2,
+		ConConnectorDepth = ConConnectorDepth_2,
+		ConConnectorWidth2 = ConConnectorWidth2_2,
+		ConToolType = ConToolType_2,
+		ConStatus = ConStatus_2,
+		ConType_2 = ConType_2,
+		ConConnectorType_2 = ConConnectorType_2,
+		ConSystem_2 = ConSystem_2,
+		shape_typ_to_validation = shape_typ_to_validation,
+		MEP_enabled_geometry_mod = 1
+
+	PARAMETERS MEP_ConInfo[ConID][1] = STR(ConToolType_2, 1, 0)
+	PARAMETERS MEP_ConInfo[ConID][2] = ConName
+	PARAMETERS MEP_ConInfo[ConID][3] = "0"
+
+	IF gs_ui_current_page = 2 THEN
+		ac_mep_connectionpage_active = 1
+	ELSE
+		ac_mep_connectionpage_active = 0
+	ENDIF
+	PARAMETERS ac_mep_connectionpage_active = ac_mep_connectionpage_active
+
+	IF SetProgram THEN
+		SetProgram = 0
+		PARAMETERS SetProgram = SetProgram
+	ENDIF
+	PUT 2
+ELSE
+	HIDEPARAMETER "gs_connection", "useSysMat"
+
+	ac_mep_connectionpage_active = 0
+	PARAMETERS ac_mep_connectionpage_active = ac_mep_connectionpage_active
+ENDIF
+
+VALUES "gs_ui_current_page" GET(NSP)
+

@@ -1,0 +1,1327 @@
+
+! Contact person: <SzL, NJ>
+
+! =============================================================================
+
+lod3D = 0										! Don't draw anything
+if (GLOB_VIEW_TYPE = 9 & GLOB_PREVIEW_MODE = 0) then	! in case of Surface IS Calculation
+	lod3D = 2	! Detailed
+else
+	if iDWDet3D = DETLEVEL_DW3D_SIMPLE then lod3D = 1	! Simple
+	if iDWDet3D = DETLEVEL_DW3D_DETAILED then lod3D = 2	! Detailed
+	if iDWDet3D = DETLEVEL_DW3D_CHI_SIMPLE | iDWDet3D = DETLEVEL_DW3D_CHI_DETAILED then
+		if (GLOB_CONTEXT = 4 | GLOB_CONTEXT = 24 | GLOB_CONTEXT = 6) then
+			lod3D = 5								! Chinese
+		else
+			lod3D = 2
+		endif
+	endif
+endif
+
+gs_fillFr		= gs_bFills * gs_fillFr
+gs_penFr_fg		= gs_bFills * gs_penFr_fg
+gs_penFr_bg		= gs_bFills * gs_penFr_bg
+
+gs_fillSash		= gs_bFills * gs_fillSash
+gs_penSash_fg	= gs_bFills * gs_penSash_fg
+gs_penSash_bg	= gs_bFills * gs_penSash_bg
+
+if not(gs_shadow) then shadow off
+
+
+! =============================================================================
+! GS Window Functions
+! =============================================================================
+
+call "GS Window Functions",
+	parameters all	iWindowShape			= iWindowShape,
+					nArchResolution			= gs_numOfSides,	! It means: generate sharp edges
+					gs_numOfSides			= gs_numOfSides,
+					gs_IsCurved				= gs_IsCurved,
+					bParalellInCurvedWalls	= bParalellInCurvedWalls,
+					lod3D					= lod3D,
+					bDisabeMirroring		= bDisabeMirroring,
+	returned_parameters	ac_unit_width,
+						ac_unit_height,
+						gs_frame_ovhg_left_out,
+						gs_frame_ovhg_right_out,
+						gs_frame_ovhg_top_out,
+						gs_frame_ovhg_bottom_out,
+						gs_frame_ovhg_left_in,
+						gs_frame_ovhg_right_in,
+						gs_frame_ovhg_top_in,
+						gs_frame_ovhg_bottom_in,
+						bMirrored,
+						xform11, xform12, xform13, xform14,
+						xform21, xform22, xform23, xform24,
+						xform31, xform32, xform33, xform34,
+
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen,
+						bShowAddHotspots, bShowAddHotspotsForIS, bShowUnitHotspots
+
+
+! =============================================================================
+! Radius calculations
+! =============================================================================
+
+simpleOffset = 0
+if (lod3D = 1 | lod3D = 5) & gs_optype_m_01 <> SASH_FIXED then
+	if gs_optype_m_01 = SASH_VER_PIVOT | gs_optype_m_01 = SASH_VER_PIVOT_M then simpleOffset = gs_sash_width
+endif
+
+Ovhg = max(gs_frame_ovhg_top_out, gs_frame_ovhg_top_in)
+
+if (gs_numOfSides mod 2) = 0 then
+	if (gs_numOfSides mod 4) = 0 then
+		normalRadius = (ac_wallhole_width / 2) / (cos (180 / gs_numOfSides))
+		innerRadius	 = (ac_wallhole_width / 2) / (cos (180 / gs_numOfSides)) - (Ovhg + gs_frame_width + simpleOffset)/ (cos (180 / gs_numOfSides))
+		unitRadius	 = (ac_wallhole_width / 2) / (cos (180 / gs_numOfSides)) - (gs_tolerance_left)/ (cos (180 / gs_numOfSides))
+	else
+		normalRadius = ac_wallhole_width / 2
+		innerRadius	 = ac_wallhole_width / 2 - (Ovhg + gs_frame_width + simpleOffset)/ (cos (180 / gs_numOfSides))
+		unitRadius	 = ac_wallhole_width / 2 - (gs_tolerance_left)/ (cos (180 / gs_numOfSides))
+	endif
+else
+	if gs_numOfSides = 3 then
+		normalRadius = (ac_wallhole_width / 2) / (cos (30))
+		innerRadius  = (ac_wallhole_width / 2) / (cos (30)) - (Ovhg + gs_frame_width + simpleOffset)/(cos (180 / gs_numOfSides))
+		unitRadius	 = (ac_wallhole_width / 2) / (cos (30)) - (gs_tolerance_left)/(cos (180 / gs_numOfSides))
+	else
+		normalRadius = (ac_wallhole_width / 2) / (sin (((gs_numOfSides - 1) * 90) / gs_numOfSides))
+		innerRadius	 = (ac_wallhole_width / 2) / (sin (((gs_numOfSides - 1) * 90) / gs_numOfSides)) - (Ovhg + gs_frame_width + simpleOffset)/(cos (180 / gs_numOfSides))
+		unitRadius	 = (ac_wallhole_width / 2) / (sin (((gs_numOfSides - 1) * 90) / gs_numOfSides)) - (gs_tolerance_left)/(cos (180 / gs_numOfSides))
+	endif
+endif
+
+alpha_rotation = 0
+if (gs_numOfSides mod 2) = 0 then
+	alpha_rotation = 180 / gs_numOfSides
+endif
+
+
+! =============================================================================
+! Block for operator mode
+! =============================================================================
+
+if GLOB_CONTEXT > 40 & GLOB_CONTEXT < 50 then
+	addy normalRadius * cos (180 / gs_numOfSides)
+
+	for jj = 1 to gs_numOfSides
+		put unitRadius * sin (alpha_rotation + (jj-1) * (360 / gs_numOfSides)),
+			unitRadius * cos (alpha_rotation + (jj-1) * (360 / gs_numOfSides)), 15
+	next jj
+
+	prism_ nsp/3, WIDO_FRAME_THICKNESS,
+		get(nsp)
+
+
+	del 1
+	end
+endif
+
+
+if lod3D = 0 then end
+
+xform	xform11, xform12, xform13, xform14,
+		xform21, xform22, xform23, xform24,
+		xform31, xform32, xform33, xform34
+
+muly -1
+addy WIDO_FRAME_THICKNESS
+
+temp = gs_frame_ovhg_left_out
+gs_frame_ovhg_left_out = gs_frame_ovhg_left_in
+gs_frame_ovhg_left_in = temp
+
+temp = gs_frame_ovhg_right_out
+gs_frame_ovhg_right_out = gs_frame_ovhg_right_in
+gs_frame_ovhg_right_in = temp
+
+temp = gs_frame_ovhg_top_in
+gs_frame_ovhg_top_in = gs_frame_ovhg_top_out
+gs_frame_ovhg_top_out = temp
+
+temp = gs_frame_ovhg_bottom_in
+gs_frame_ovhg_bottom_in = gs_frame_ovhg_bottom_out
+gs_frame_ovhg_bottom_out = temp
+
+if ((GLOB_PREVIEW_MODE = 2) | GLOB_CONTEXT = 46) then
+	gs_sill_outside	= 0
+	gs_board_inside	= 0
+	gs_trim_inside	= 0
+	gs_trim_outside	= 0
+endif
+
+if lod3D = 5 then	! Chinese
+	fr_sect_fill_type	= gs_fillShCover
+	fr_sect_fill_fg		= gs_penShCov_fg
+	fr_sect_fill_bg		= gs_penShCov_bg
+else
+	fr_sect_fill_type	= gs_fillFr
+	fr_sect_fill_fg		= gs_penFr_fg
+	fr_sect_fill_bg		= gs_penFr_bg
+endif
+
+
+rotx 90
+
+frame_toler = gs_tolerance_left
+
+
+
+A = ac_unit_width
+B = ac_unit_height
+
+! ==============================================================================
+! Calculation for 3D hotspots and casement
+! ==============================================================================
+
+yy = (gs_frame_width + frame_toler) / cos(bszog / 2)
+xx = yy * cos((180 - int(gs_numOfSides / 2) * bszog) / 2)
+if gs_numOfSides mod 2 = 0 then
+	if gs_numOfSides mod 4 = 2 then
+		hsmid = (a/2 + frame_toler) * (cos(180 / gs_numOfSides))
+	else
+		hsmid = (a/2 + frame_toler)
+	endif
+else
+	hsmid = (a/2 + frame_toler) / cos(90/gs_numOfSides) * (cos(180 / gs_numOfSides))
+endif
+if gs_numOfSides mod 4 = 1 then
+	hsheight = hsmid + (a/2 + frame_toler) * tan(90/gs_numOfSides) - xx * tan(90/gs_numOfSides)
+else
+	hsheight = hsmid - (a/2 + frame_toler) * tan(90/gs_numOfSides) + xx * tan(90/gs_numOfSides)
+endif
+hswidth	= hsmid * tan(180 / gs_numOfSides)
+hswidth2 = (hsmid - frame_toler) * tan(180 / gs_numOfSides)
+
+
+
+! ==============================================================================
+! 3D HOTSPOTs
+! ==============================================================================
+
+addy hsmid - frame_toler
+
+alpha_rotation = 0
+if (gs_numOfSides mod 2) = 0 then
+	alpha_rotation = 360 / gs_numOfSides
+else
+	alpha_rotation = 180 / gs_numOfSides
+endif
+
+rotz 180 - alpha_rotation
+
+
+! =============================================================================
+! Unit Hotspots
+! =============================================================================
+
+if bShowUnitHotspots then
+	unID=100
+
+	for i = 1 to gs_numOfSides
+		if (gs_numOfSides mod 2) <> 0 then
+
+			if	i = 1 then
+				gosub 4000
+			endif
+			if	i = int(gs_numOfSides / 2) + 1 or\
+				i = int(gs_numOfSides / 2) + 2 then
+				gosub 4000
+			endif
+			if i = int(gs_numOfSides / 2) + 1 then
+				if bShowAddHotspotsForIS then
+					hotspot 0, -hsmid + frame_toler, 0,				unID : unID = unID + 1
+					hotspot 0, -hsmid + frame_toler, gs_frame_thk,	unID : unID = unID + 1
+				endif
+			endif
+
+			if ((gs_numOfSides + 1) mod 4) <> 0 then
+				if	i = (gs_numOfSides + 3) / 4 or\
+					i = (gs_numOfSides + 3) / 4 + ((gs_numOfSides + 1) / 2) then
+					gosub 4000
+				endif
+			else
+				if	i = (gs_numOfSides + 5) / 4 or\
+					i = (gs_numOfSides + 5) / 4 + ((gs_numOfSides - 1) / 2) then
+					gosub 4000
+				endif
+			endif
+
+		else
+
+			if	i = 1 or\
+				i = gs_numOfSides or\
+				i = gs_numOfSides / 2 or\
+				i = gs_numOfSides / 2 + 1 then
+				gosub 4000
+			endif
+
+			if (gs_numOfSides mod 4) <> 0 then
+				if	i = (gs_numOfSides + 2) / 4 or\
+					i = (gs_numOfSides + 2) / 4 + gs_numOfSides / 2 then
+					gosub 4000
+				endif
+			else
+				if	i = gs_numOfSides / 4 or\
+					i = gs_numOfSides / 4 + 1 or\
+					i = gs_numOfSides / 4 + gs_numOfSides / 2 or\
+					i = gs_numOfSides / 4 + gs_numOfSides / 2 + 1 then
+					gosub 4000
+				endif
+			endif
+
+		endif
+
+		rotz - 360 / gs_numOfSides
+	next i
+	del gs_numOfSides
+endif
+
+del 2
+
+! --- Frame extension bottom and top in case of trim and sills ---
+
+
+
+! =============================================================================
+! Casing
+! =============================================================================
+
+A = ac_wallhole_width
+B = ac_wallhole_height
+
+if (gs_trim_inside | gs_trim_outside) & lod3D <> 5 then
+
+	addy -gs_tolerance_left
+
+
+	pen gs_frame_pen
+	resol gs_numOfSides
+
+	maskInside1  = 11 + 4 * (gs_trim_offs_in > EPS)
+	maskInside2  = 14 + 1 * (gs_trim_offs_in > EPS)
+	maskOutside1 = 14 + 1 * (gs_trim_offs_out > EPS | abs(WIDO_SILL) < EPS)
+	maskOutside2 = 11 + 4 * (gs_trim_offs_out > EPS)
+
+! Straight Wall ---------------------------------------------------------------
+
+	if abs(WIDO_ORIG_DIST) < EPS & abs(WALL_INCL) < EPS then
+		if not(WIDO_REVEAL_SIDE) then
+			addz WIDO_SILL - WALL_THICKNESS + WIDO_FRAME_THICKNESS    ! Flip
+			mulz -1
+			addz -WALL_THICKNESS
+		else
+			addz -WIDO_SILL
+		endif
+
+		if gs_trim_inside then
+			! Trim oversize handling
+			tr_ov_out = 0
+			tr_ov_in  = gs_trim_width_in
+
+			sect_fill gs_trim_fill_in, gs_trim_pen_bg_in, gs_trim_pen_fg_in, gs_trim_pen_cont
+			material gs_trim_in_mat
+
+			if gs_trim_width_in > 0 then
+				addz WIDO_SILL + WIDO_FRAME_THICKNESS
+
+				addy mag
+				if (gs_numOfSides mod 2) = 0 then
+					if (gs_numOfSides mod 4) = 0 then
+						rotz -180 / gs_numOfSides
+					else
+						rotz 0
+					endif
+				else
+					if (gs_numOfSides mod 4) = 1 then
+						rotz 90 / gs_numOfSides
+					else
+						rotz -90 / gs_numOfSides
+					endif
+				endif
+				prism_ 3,WALL_THICKNESS-WIDO_SILL-WIDO_FRAME_THICKNESS,
+						0,0, 915,
+						r-tr_ov_out,360, 4000 + maskInside1,
+						r-tr_ov_in,360, 4000 + maskInside1
+				del 1
+
+				del 2
+			endif
+
+			if gs_trim_thk_in > 0 then
+				addz WALL_THICKNESS
+				if abs(gs_trim_offs_in)>EPS then
+
+					addy mag
+					if (gs_numOfSides mod 2) = 0 then
+						if (gs_numOfSides mod 4) = 0 then
+							rotz -180 / gs_numOfSides
+						else
+							rotz 0
+						endif
+					else
+						if (gs_numOfSides mod 4) = 1 then
+							rotz 90 / gs_numOfSides
+						else
+							rotz -90 / gs_numOfSides
+						endif
+					endif
+					prism_ 3,gs_trim_thk_in,
+							0,0, 915,
+							r-gs_trim_width_in+gs_trim_offs_in+gs_tw_right_in,360, 4015,
+							r-gs_trim_width_in+gs_trim_offs_in,360, 4015
+					del 2
+				else
+					addy mag
+					if (gs_numOfSides mod 2) = 0 then
+						if (gs_numOfSides mod 4) = 0 then
+							rotz -180 / gs_numOfSides
+						else
+							rotz 0
+						endif
+					else
+						if (gs_numOfSides mod 4) = 1 then
+							rotz 90 / gs_numOfSides
+						else
+							rotz -90 / gs_numOfSides
+						endif
+					endif
+					prism_ 3,gs_trim_thk_in,
+							0,0, 915,
+							r-gs_trim_width_in+gs_tw_right_in,360, 4014,
+							r-gs_trim_width_in,360, 4014
+					del 2
+
+				endif
+				del 1
+			endif
+		endif
+
+		if gs_trim_outside then
+			! Trim oversize handling
+			tr_ov_out = 0
+			tr_ov_in  = gs_trim_width_out
+
+			sect_fill gs_trim_fill_out, gs_trim_pen_bg_out, gs_trim_pen_fg_out, gs_trim_pen_cont
+			material gs_trim_out_mat
+
+
+			if gs_trim_width_out > 0 then
+				addy mag
+				if (gs_numOfSides mod 2) = 0 then
+					if (gs_numOfSides mod 4) = 0 then
+						rotz -180 / gs_numOfSides
+					else
+						rotz 0
+					endif
+				else
+					if (gs_numOfSides mod 4) = 1 then
+						rotz 90 / gs_numOfSides
+					else
+						rotz -90 / gs_numOfSides
+					endif
+				endif
+				prism_ 3, WIDO_SILL,
+						0,0, 915,
+						r-tr_ov_out,360, 4000 + maskOutside1,
+						r-tr_ov_in,360, 4000 + maskOutside1
+				del 2
+			endif
+
+			if gs_trim_thk_out > 0 then
+				addz -gs_trim_thk_out
+				if abs(gs_trim_offs_out)>EPS then
+
+					addy mag
+					if (gs_numOfSides mod 2) = 0 then
+						if (gs_numOfSides mod 4) = 0 then
+							rotz -180 / gs_numOfSides
+						else
+							rotz 0
+						endif
+					else
+						if (gs_numOfSides mod 4) = 1 then
+							rotz 90 / gs_numOfSides
+						else
+							rotz -90 / gs_numOfSides
+						endif
+					endif
+					prism_ 3,gs_trim_thk_out,
+							0,0, 915,
+							r-gs_trim_width_out+gs_trim_offs_out+gs_tw_right_out,360, 4015,
+							r-gs_trim_width_out+gs_trim_offs_out,360, 4015
+					del 2
+				else
+					addy mag
+					if (gs_numOfSides mod 2) = 0 then
+						if (gs_numOfSides mod 4) = 0 then
+							rotz -180 / gs_numOfSides
+						else
+							rotz 0
+						endif
+					else
+						if (gs_numOfSides mod 4) = 1 then
+							rotz 90 / gs_numOfSides
+						else
+							rotz -90 / gs_numOfSides
+						endif
+					endif
+					prism_ 3,gs_trim_thk_out,
+							0,0, 915,
+							r-gs_trim_width_out+gs_tw_right_out,360, 4011,
+							r-gs_trim_width_out,360, 4011
+					del 2
+
+				endif
+				del 1
+			endif
+		endif
+
+		if not(WIDO_REVEAL_SIDE) then
+			del 2
+		endif
+
+		del 1
+	endif
+
+! Inclined Wall ---------------------------------------------------------------
+
+	if abs(WIDO_ORIG_DIST) < EPS & abs(WALL_INCL) > EPS then
+
+		wi = WALL_INCL    !Inclination of the wall surfaces
+
+		if not(WIDO_REVEAL_SIDE) then
+			addz WIDO_SILL-WALL_THICKNESS+WIDO_FRAME_THICKNESS    ! Flip
+			mulz -1
+			addz -WALL_THICKNESS
+		else
+			addz -WIDO_SILL
+		endif
+
+		if gs_trim_inside then
+			! Trim oversize handling
+			tr_ov_out = 0
+			tr_ov_in  = gs_trim_width_in
+
+			sect_fill gs_trim_fill_in, gs_trim_pen_bg_in, gs_trim_pen_fg_in, gs_trim_pen_cont
+			material gs_trim_in_mat
+
+			if not(SYMB_MIRRORED) & abs(SYMB_ROTANGLE-180)<EPS | SYMB_MIRRORED & abs(SYMB_ROTANGLE)<EPS then
+				mulx -1  ! Rotated or mirrored window
+			endif
+
+			if gs_trim_width_in > 0 then
+				rotx 90
+				if wi>0 then
+					cutpolya 4, 1, 0,
+					   -a/2-tr_ov_out-gs_tw_right_in-1,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+gs_tw_right_in+1), 8 + 7 * (gs_trim_offs_in > EPS),
+						a/2+tr_ov_out+gs_tw_right_in+1,  WALL_THICKNESS+tan(wi)*(a/2+tr_ov_out+gs_tw_right_in+1), 8 + 7 * (gs_trim_offs_in > EPS),
+					   -a/2-tr_ov_out-gs_tw_right_in-1,  WALL_THICKNESS+tan(wi)*(a/2+tr_ov_out+gs_tw_right_in+1), 8 + 7 * (gs_trim_offs_in > EPS),
+					   -a/2-tr_ov_out-gs_tw_right_in-1,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+gs_tw_right_in+1), 8 + 7 * (gs_trim_offs_in > EPS)
+				endif
+				if wi<0 then
+					cutpolya 4, 1, 0,
+					   -a/2-tr_ov_out-gs_tw_right_in-1,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+gs_tw_right_in+1), 8 + 7 * (gs_trim_offs_in > EPS),
+						a/2+tr_ov_out+gs_tw_right_in+1,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+gs_tw_right_in+1), 8 + 7 * (gs_trim_offs_in > EPS),
+						a/2+tr_ov_out+gs_tw_right_in+1,  WALL_THICKNESS+tan(wi)*(a/2+tr_ov_out+gs_tw_right_in+1), 8 + 7 * (gs_trim_offs_in > EPS),
+					   -a/2-tr_ov_out-gs_tw_right_in-1,  WALL_THICKNESS-tan(wi)*(a/2+tr_ov_out+gs_tw_right_in+1), 8 + 7 * (gs_trim_offs_in > EPS)
+				endif
+				del 1
+
+				addz WIDO_SILL+WIDO_FRAME_THICKNESS
+				addy mag
+				if (gs_numOfSides mod 2) = 0 then
+					if (gs_numOfSides mod 4) = 0 then
+						rotz -180 / gs_numOfSides
+					else
+						rotz 0
+					endif
+				else
+					if (gs_numOfSides mod 4) = 1 then
+						rotz 90 / gs_numOfSides
+					else
+						rotz -90 / gs_numOfSides
+					endif
+				endif
+				prism_ 3,WALL_THICKNESS-WIDO_SILL-WIDO_FRAME_THICKNESS+abs(tan(wi))*(a/2+gs_trim_thk_in),
+					0,0, 915,
+					r-tr_ov_out,360, 4000 + maskInside1,
+					r-tr_ov_in,360, 4000 + maskInside1
+				del 3
+
+				if abs(wi) > EPS then cutend
+			endif
+
+
+			! mul factor
+			if gs_trim_thk_in > 0 then
+				tmul=((a/2-tr_ov_in)/cos(wi)+tr_ov_out*tan(wi)+gs_tw_right_out)/((a/2-tr_ov_in)+gs_tw_right_out)
+
+				addz WALL_THICKNESS
+				roty -wi
+				mulx 1/cos(wi)
+
+				tmag=tmul*mag
+				tdif=(tmag-mag)
+				if abs(gs_trim_offs_in)>EPS then
+
+					addy mag
+					if (gs_numOfSides mod 2) = 0 then
+						if (gs_numOfSides mod 4) = 0 then
+							rotz -180 / gs_numOfSides
+						else
+							rotz 0
+						endif
+					else
+						if (gs_numOfSides mod 4) = 1 then
+							rotz 90 / gs_numOfSides
+						else
+							rotz -90 / gs_numOfSides
+						endif
+					endif
+					prism_ 3,gs_trim_thk_in,
+						0,0, 915,
+						r-gs_trim_width_in+gs_trim_offs_in+gs_tw_right_in,360, 4015,
+						r-gs_trim_width_in+gs_trim_offs_in,360, 4015
+					del 2
+				else
+					addy mag
+					if (gs_numOfSides mod 2) = 0 then
+						if (gs_numOfSides mod 4) = 0 then
+							rotz -180 / gs_numOfSides
+						else
+							rotz 0
+						endif
+					else
+						if (gs_numOfSides mod 4) = 1 then
+							rotz 90 / gs_numOfSides
+						else
+							rotz -90 / gs_numOfSides
+						endif
+					endif
+					prism_ 3,gs_trim_thk_in,
+						0,0, 915,
+						r-gs_trim_width_in+gs_tw_right_in,360, 4014,
+						r-gs_trim_width_in,360, 4014
+					del 2
+				endif
+				del 3
+			endif
+		endif
+
+		if gs_trim_outside then
+			! Trim oversize handling
+			tr_ov_out = 0
+			tr_ov_in  = gs_trim_width_out
+
+			sect_fill gs_trim_fill_out, gs_trim_pen_bg_out, gs_trim_pen_fg_out, gs_trim_pen_cont
+			material gs_trim_out_mat
+
+			if gs_trim_width_out > 0 then
+				addy mag
+				if (gs_numOfSides mod 2) = 0 then
+					if (gs_numOfSides mod 4) = 0 then
+						rotz -180 / gs_numOfSides
+					else
+						rotz 0
+					endif
+				else
+					if (gs_numOfSides mod 4) = 1 then
+						rotz 90 / gs_numOfSides
+					else
+						rotz -90 / gs_numOfSides
+					endif
+				endif
+				prism_ 3, WIDO_SILL,
+						0,0, 915,
+						r-tr_ov_out,360, 4000 + maskOutside1,
+						r-tr_ov_in,360, 4000 + maskOutside1
+				del 2
+			endif
+
+
+			if gs_trim_thk_out > 0 then
+				addz -gs_trim_thk_out
+				if abs(gs_trim_offs_out)>EPS then
+
+					addy mag
+					if (gs_numOfSides mod 2) = 0 then
+						if (gs_numOfSides mod 4) = 0 then
+							rotz -180 / gs_numOfSides
+						else
+							rotz 0
+						endif
+					else
+						if (gs_numOfSides mod 4) = 1 then
+							rotz 90 / gs_numOfSides
+						else
+							rotz -90 / gs_numOfSides
+						endif
+					endif
+					prism_ 3,gs_trim_thk_out,
+							0,0, 915,
+							r-gs_trim_width_out+gs_trim_offs_out+gs_tw_right_out,360, 4015,
+							r-gs_trim_width_out+gs_trim_offs_out,360, 4015
+					del 2
+				else
+					addy mag
+					if (gs_numOfSides mod 2) = 0 then
+						if (gs_numOfSides mod 4) = 0 then
+							rotz -180 / gs_numOfSides
+						else
+							rotz 0
+						endif
+					else
+						if (gs_numOfSides mod 4) = 1 then
+							rotz 90 / gs_numOfSides
+						else
+							rotz -90 / gs_numOfSides
+						endif
+					endif
+					prism_ 3,gs_trim_thk_out,
+							0,0, 915,
+							r-gs_trim_width_out+gs_tw_right_out,360, 4011,
+							r-gs_trim_width_out,360, 4011
+					del 2
+
+				endif
+				del 1
+			endif
+		endif
+
+		if not(WIDO_REVEAL_SIDE) then
+			del 2
+		endif
+
+		del 1
+	endif
+
+! Curved Wall -----------------------------------------------------------------
+
+	if abs(WIDO_ORIG_DIST) > EPS then
+
+		resol WALL_RESOL
+
+		mulz -1
+		addz -WIDO_FRAME_THICKNESS
+
+		!z axis curved wall calculation at subroutine 1000
+		!off1, off2 etc. special offset values for outside, inside etc. elements "rfur" values
+		!different from element to element!
+
+		if WIDO_ORIG_DIST > 0 exor WIDO_REVEAL_SIDE then
+			maskInside1  = 11 + 4 * (gs_trim_offs_in > EPS)
+			maskInside2  = 14 + 1 * (gs_trim_offs_in > EPS)
+			maskOutside1 = 14 + 1 * (gs_trim_offs_out > EPS)
+			maskOutside2 = 11 + 4 * (gs_trim_offs_out > EPS)
+		else
+			maskInside1  = 14 + 1 * (gs_trim_offs_in > EPS)
+			maskInside2  = 11 + 4 * (gs_trim_offs_in > EPS)
+			maskOutside1 = 11 + 4 * (gs_trim_offs_out > EPS)
+			maskOutside2 = 14 + 1 * (gs_trim_offs_out > EPS)
+		endif
+
+		if gs_trim_inside then
+			sect_fill gs_trim_fill_in, gs_trim_pen_bg_in, gs_trim_pen_fg_in, gs_trim_pen_cont
+			material gs_trim_in_mat
+
+			!1st part
+
+			if gs_trim_thk_in > 0 then
+				off1 = -gs_trim_thk_in
+				off2 = 0
+				off3 = WALL_THICKNESS
+				off4 = -WALL_THICKNESS-gs_trim_thk_in
+				gosub 1000
+
+				!Penetration curve calculation
+				!(Curved wall "Outside" surface and a Cylind with radius of a/2)
+
+				dalpha=(gs_tw_right_in*180)/(pi*rfur)
+				rint=tan(calpha+dalpha)*r0
+				rintr=rint/cos(22.5)
+				irinttw=atn(rintr*cos(67.5)/r0)/180*pi*rfur
+
+				rint=a/2
+				rintr=rint/cos(22.5)
+				irintfr=atn(rintr*cos(67.5)/r0)/180*pi*rfur
+
+				seg=360/gs_numOfSides
+				angoffs=int((180-(360/gs_numOfSides))/2)
+
+				rweit=rfur
+				RTST=toff_r_in
+				for w=-angoffs to 360-angoffs step seg
+					xw=(ti_r)*cos(w)
+					betaw=atn(xw/r0)
+					ibetaw=betaw/180*pi*rweit
+					put xoffset+ibetaw,mag+(ti_r)*sin(w),15
+				next w
+
+				w=-angoffs
+				xw=(ti_r)*cos(w)
+				betaw=atn(xw/r0)
+				ibetaw=betaw/180*pi*rweit
+				put xoffset+ibetaw,mag+(ti_r)*sin(w),-1
+
+				for w=-angoffs to 360-angoffs step seg
+					xw=(rtst)*cos(w)
+					betaw=atn(xw/r0)
+					ibetaw=betaw/180*pi*rweit
+					put xoffset+ibetaw,mag+(rtst)*sin(w),maskInside1
+				next w
+
+				w=-angoffs
+				xw=(rtst)*cos(w)
+				betaw=atn(xw/r0)
+				ibetaw=betaw/180*pi*rweit
+				put xoffset+ibetaw,mag+(rtst)*sin(w),-1
+
+
+				addz k_weitoffset
+				mulz mulstat
+				addz -rfur
+				roty -AC_Hole_Position_Angle
+				addz rfur
+
+				bprism_ gs_trim_in_mat,gs_trim_in_mat,gs_trim_in_mat,
+					nsp/3, gs_trim_thk_in,rfur,
+				get(nsp)
+
+				del 5
+			endif
+
+			!2nd part
+
+			if gs_trim_width_in > 0 then
+				!Cutplanes at frame
+
+				if WIDO_REVEAL_SIDE then
+					cutplane 1,1,0,0
+				else
+					addz WIDO_FRAME_THICKNESS
+					cutplane 1,1,0,1
+					del 1
+				endif
+
+				off1=0
+				off2=-WALL_THICKNESS
+				off3=0
+				off4=-WALL_THICKNESS
+				gosub 1000
+
+
+				!Penetration curve calculation
+				!(Curved wall "Outside" surface and a Cylind with radius of a/2)
+
+				dalpha=(gs_trim_width_in*180)/(pi*rfur)
+				rint=tan(calpha+dalpha)*r0
+				rintr=rint/cos(22.5)
+				irinttth=atn(rintr*cos(67.5)/r0)/180*pi*rfur
+
+				rint=a/2
+				rintr=rint/cos(22.5)
+				irintfr=atn(rintr*cos(67.5)/r0)/180*pi*rfur
+
+				seg=360/gs_numOfSides
+				angoffs=int((180-(360/gs_numOfSides))/2)
+				rweit=rfur
+				RTST=rmac_in
+
+				for w=-angoffs to 360-angoffs step seg
+					xw=(t_r)*cos(w)
+					betaw=atn(xw/r0)
+					ibetaw=betaw/180*pi*rweit
+					put xoffset+ibetaw,mag+(t_r)*sin(w),15
+				next w
+
+				w=-angoffs
+				xw=(t_r)*cos(w)
+				betaw=atn(xw/r0)
+				ibetaw=betaw/180*pi*rweit
+				put xoffset+ibetaw,mag+(t_r)*sin(w),-1
+
+				RTST=t_r - gs_trim_width_in/sin(angoffs)
+
+				for w=-angoffs to 360-angoffs step seg
+					xw=(rtst)*cos(w)
+					betaw=atn(xw/r0)
+					ibetaw=betaw/180*pi*rweit
+					put xoffset+ibetaw,mag+(rtst)*sin(w),maskInside2
+				next w
+
+				w=-angoffs
+				xw=(rtst)*cos(w)
+				betaw=atn(xw/r0)
+				ibetaw=betaw/180*pi*rweit
+				put xoffset+ibetaw,mag+(rtst)*sin(w),-1
+
+				addz k_weitoffset
+				mulz mulstat
+				addz -rfur
+				roty -AC_Hole_Position_Angle
+				addz rfur
+
+				bprism_ gs_trim_in_mat,gs_trim_in_mat,gs_trim_in_mat,
+					nsp/3, WALL_THICKNESS, rfur,
+					get(nsp)
+
+				del 5
+
+				cutend
+			endif
+		endif
+
+		if gs_trim_outside then
+			sect_fill gs_trim_fill_out, gs_trim_pen_bg_out, gs_trim_pen_fg_out, gs_trim_pen_cont
+			material gs_trim_out_mat
+
+			!1st part
+
+			if gs_trim_thk_out > 0 then
+				off1=WALL_THICKNESS
+				off2=-WALL_THICKNESS-gs_trim_thk_out
+				off3=-gs_trim_thk_out
+				off4=0
+				gosub 1000
+
+
+				!Penetration curve calculation
+				!(Curved wall "Outside" surface and a Cylind with radius of a/2)
+
+				dalpha=(gs_tw_right_out*180)/(pi*rfur)
+				rint=tan(calpha+dalpha)*r0
+				rintr=rint/cos(22.5)
+				irinttw=atn(rintr*cos(67.5)/r0)/180*pi*rfur
+
+				rint=a/2
+				rintr=rint/cos(22.5)
+				irintfr=atn(rintr*cos(67.5)/r0)/180*pi*rfur
+
+
+				addz k_weitoffset
+				mulz mulstat
+				addz -rfur
+				roty -AC_Hole_Position_Angle
+				addz rfur
+
+
+				seg=360/gs_numOfSides
+				angoffs=int((180-(360/gs_numOfSides))/2)
+
+				rweit=rfur
+				RTST=toff_r_out
+				for w=-angoffs to 360-angoffs step seg
+					xw=(to_r)*cos(w)
+					betaw=atn(xw/r0)
+					ibetaw=betaw/180*pi*rweit
+					put xoffset+ibetaw,mag+(to_r)*sin(w),15
+				next w
+
+				w=-angoffs
+				xw=(to_r)*cos(w)
+				betaw=atn(xw/r0)
+				ibetaw=betaw/180*pi*rweit
+				put xoffset+ibetaw,mag+(to_r)*sin(w),-1
+
+				for w=-angoffs to 360-angoffs step seg
+					xw=(rtst)*cos(w)
+					betaw=atn(xw/r0)
+					ibetaw=betaw/180*pi*rweit
+					put xoffset+ibetaw,mag+(rtst)*sin(w),maskOutside1
+				next w
+
+				w=-angoffs
+				xw=(rtst)*cos(w)
+				betaw=atn(xw/r0)
+				ibetaw=betaw/180*pi*rweit
+				put xoffset+ibetaw,mag+(rtst)*sin(w),-1
+
+				bprism_  gs_trim_out_mat,gs_trim_out_mat,gs_trim_out_mat,
+					nsp/3, gs_trim_thk_out, rfur,
+					get(nsp)
+
+				del 5
+			endif
+
+
+			!2nd part
+
+			if gs_trim_width_out > 0 then
+				!Cutplanes at frame
+
+				if WIDO_REVEAL_SIDE then
+					addz WIDO_FRAME_THICKNESS
+					cutplane 1,1,0,1
+					del 1
+				else
+					cutplane 1,1,0,0
+				endif
+
+				off1=0
+				off2=-WALL_THICKNESS
+				off3=0
+				off4=-WALL_THICKNESS
+				gosub 1000
+
+				!Penetration curve calculation
+				!(Curved wall "Outside" surface and a Cylind with radius of a/2)
+
+				dalpha=(gs_trim_width_out*180)/(pi*rfur)
+				rint=tan(calpha+dalpha)*r0
+				rintr=rint/cos(22.5)
+				irinttth=atn(rintr*cos(67.5)/r0)/180*pi*rfur
+
+				rint=a/2
+				rintr=rint/cos(22.5)
+				irintfr=atn(rintr*cos(67.5)/r0)/180*pi*rfur
+
+
+				addz k_weitoffset
+				mulz mulstat
+				addz -rfur
+				roty -AC_Hole_Position_Angle
+				addz rfur
+
+				seg=360/gs_numOfSides
+				angoffs=int((180-(360/gs_numOfSides))/2)
+				rweit=rfur
+				RTST=rmac_out
+
+				for w=-angoffs to 360-angoffs step seg
+					xw=(t_r)*cos(w)
+					betaw=atn(xw/r0)
+					ibetaw=betaw/180*pi*rweit
+					put xoffset+ibetaw,mag+(t_r)*sin(w),15
+				next w
+
+				w=-angoffs
+				xw=(t_r)*cos(w)
+				betaw=atn(xw/r0)
+				ibetaw=betaw/180*pi*rweit
+				put xoffset+ibetaw,mag+(t_r)*sin(w),-1
+
+				RTST=t_r - gs_trim_width_out/sin(angoffs)
+
+				for w=-angoffs to 360-angoffs step seg
+					xw=(rtst)*cos(w)
+					betaw=atn(xw/r0)
+					ibetaw=betaw/180*pi*rweit
+					put xoffset+ibetaw,mag+(rtst)*sin(w),maskOutside2
+				next w
+				w=-angoffs
+				xw=(rtst)*cos(w)
+				betaw=atn(xw/r0)
+				ibetaw=betaw/180*pi*rweit
+				put xoffset+ibetaw,mag+(rtst)*sin(w),-1
+
+				bprism_  gs_trim_out_mat,gs_trim_out_mat,gs_trim_out_mat,
+					nsp/3, WALL_THICKNESS, rfur,
+					get(nsp)
+
+				del 5
+
+				cutend
+			endif
+		endif
+
+		del 2
+	endif
+
+	del 1
+
+	body -1
+endif
+
+
+! =============================================================================
+! Draw window frame and sash
+! =============================================================================
+
+A = ac_unit_width
+B = ac_unit_height
+
+if gs_frame_pen_cont < 1 then gs_frame_pen_cont = SYMB_SECT_PEN
+
+if gs_fillFr   < 1 then gs_fillFr   = SYMB_FILL
+if gs_penFr_bg < 1 then gs_penFr_bg = SYMB_FBGD_PEN
+if gs_penFr_fg < 1 then gs_penFr_fg = SYMB_FILL_PEN
+
+
+! =============================================================================
+! Draw Frame
+! =============================================================================
+
+Ovhg = max(gs_frame_ovhg_top_out, gs_frame_ovhg_top_in)
+
+A = ac_unit_width
+B = ac_unit_height
+
+if lod3D = 1 then	! Simple
+	if not(WIDO_REVEAL_SIDE) then
+		frameThk  = gs_frame_thk/2 + gs_glass_thk/2
+		frameThk2 = gs_frame_thk/2 - gs_glass_thk/2
+	else
+		frameThk  = gs_frame_thk/2 - gs_glass_thk/2
+		frameThk2 = gs_frame_thk/2 + gs_glass_thk/2
+	endif
+else
+	frameThk  = gs_frame_thk - gs_rebate_depth
+	frameThk2 = gs_rebate_depth
+endif
+
+if gs_frame_mat = gs_frame_mat2 | frameThk < EPS | frameThk2 < EPS then
+	loopNum = 1
+	if gs_frame_mat = gs_frame_mat2 then
+		frameThk = gs_frame_thk
+	else
+		frameThk = max(frameThk, frameThk2)
+	endif
+	if not(WIDO_REVEAL_SIDE) then
+		frameMatTop		= gs_frame_mat
+		frameMatBottom	= gs_frame_mat2
+	else
+		frameMatTop		= gs_frame_mat2
+		frameMatBottom	= gs_frame_mat
+	endif
+	if WIDO_REVEAL_SIDE then
+		frameMat = gs_frame_mat2
+	else
+		frameMat = gs_frame_mat
+	endif
+	frameMask = 15
+else
+	loopNum = 2
+	if not(WIDO_REVEAL_SIDE) then
+		frameMat  = gs_frame_mat2
+		frameMat2 = gs_frame_mat
+	else
+		frameMat  = gs_frame_mat
+		frameMat2 = gs_frame_mat2
+	endif
+	frameMatTop		= frameMat2
+	frameMatBottom	= frameMat
+
+	frameMask = 11
+	frameMask2 = 14
+endif
+
+alpha_rotation = 0
+if (gs_numOfSides mod 2) = 0 then
+	alpha_rotation = 180 / gs_numOfSides
+endif
+
+pen gs_frame_pen
+sect_fill fr_sect_fill_type, fr_sect_fill_bg, fr_sect_fill_fg, gs_frame_pen_cont
+
+addy -Ovhg + normalRadius * cos (180 / gs_numOfSides)
+
+for i=1 to loopNum
+
+	material frameMat
+
+	for jj = 1 to gs_numOfSides
+		put normalRadius * sin (alpha_rotation + (jj-1) * (360 / gs_numOfSides)), normalRadius * cos (alpha_rotation + (jj-1) * (360 / gs_numOfSides)), frameMask
+	next jj
+	put	normalRadius * sin (alpha_rotation), normalRadius * cos (alpha_rotation), -1
+	for jj = 1 to gs_numOfSides
+		put innerRadius * sin (alpha_rotation + (jj-1) * (360 / gs_numOfSides)), innerRadius * cos (alpha_rotation + (jj-1) * (360 / gs_numOfSides)), frameMask
+	next jj
+	put	innerRadius * sin (alpha_rotation), innerRadius * cos (alpha_rotation), -1
+
+	cprism_ frameMatTop, frameMatBottom, frameMat, nsp/3,frameThk,
+		get(nsp)
+
+	addz frameThk
+	if loopNum > 1 then
+		frameThk = frameThk2
+		frameMatTop		= frameMat2
+		frameMatBottom	= frameMat2
+		frameMat		= frameMat2
+		frameMask = frameMask2
+	endif
+next i
+del loopNum + 1
+
+body -1
+
+
+! =============================================================================
+! Draw Casement
+! =============================================================================
+
+if lod3D = 5 then	! Chinese
+	sh_sect_fill_type	= gs_fillShCover
+	sh_sect_fill_fg		= gs_penShCov_fg
+	sh_sect_fill_bg		= gs_penShCov_bg
+else
+	sh_sect_fill_type	= gs_fillSash
+	sh_sect_fill_fg		= gs_penSash_fg
+	sh_sect_fill_bg		= gs_penSash_bg
+endif
+
+if gs_numOfSides mod 2 = 0 then												! Even num of sides
+	if ( gs_numOfSides mod 4) then
+		div_mod = (cos(bszog/2))
+	else
+		div_mod = 1
+	endif
+
+	aa = sashWidthArray[2][2] + 2 * gs_frame_width + 2 * frame_toler - ((2 * (gs_frame_width + frame_toler)) / div_mod)
+else
+	aa = sashWidthArray[2][2] + 2 * gs_frame_width + 2 * frame_toler - 2 * xx
+endif
+
+add sashPosXArray[2][2], sashPosYArray[2][2], gs_frame_thk
+
+call "Casement_Multiside" parameters	A = aa,
+										B = sashHeightArray[2][2],
+	lod3D							= lod3D,
+	gs_full_edit					= gs_full_edit,
+	gs_rebate_width					= gs_rebate_width,
+	gs_rebate_depth					= gs_rebate_depth,
+	gs_frame_width					= gs_frame_width,
+	gs_frame_thk					= gs_frame_thk,
+	gs_sash_width					= gs_sash_width,
+	gs_sash_thk						= gs_sash_thk,
+	iMullionStyle					= iMullionStyle_01,
+	iMullionPosition				= iMullionPosition,
+	gw								= gw,
+	gth								= gth,
+	gs_glass_thk					= gs_glass_thk,
+	vgn								= vgn_01,
+	hgn								= hgn_01,
+	gs_frame_pen					= gs_sash_pen,
+	gs_glass_pen					= gs_glass_pen,
+	gs_frame_mat					= gs_sash_mat2,
+	gs_frame_mat2					= gs_sash_mat,
+	gs_grill_mat					= gs_grill_mat2,
+	gs_grill_mat2					= gs_grill_mat,
+	gs_glass_mat					= gs_glass_mat,
+	gs_panel_mat					= gs_panel_mat,
+	gs_panel_mat2					= gs_panel_mat2,
+	n								= gs_numOfSides,
+	openingAngle_01					= openingAngle_01,
+	gs_optype_m						= gs_optype_m_01,
+	gs_sash_pen						= gs_sash_pen,
+	bRound							= 0,
+	gs_fillSash						= sh_sect_fill_type,
+	gs_penSash_bg					= sh_sect_fill_bg,
+	gs_penSash_fg					= sh_sect_fill_fg,
+	gs_frame_pen_cont				= gs_frame_pen_cont,
+	bOpeningDirectionInside			= WIDO_REVEAL_SIDE,
+	frame_toler						= 0,
+	gs_cust_panel					= gs_cust_panel_01,
+	multiside_unID					= 1000,
+	bOplines3d						= bOplines3d,
+	opLineType3dIn					= opLineType3dIn,
+	opLineType3dOut					= opLineType3dOut,
+	gs_opline_style_m				= gs_opline_style_m,
+	gs_opLinePen					= gs_opLinePen
+
+del 1
+
+
+! =============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! =============================================================================
+
+1000:
+
+!Curved Wall Calculation
+
+r0=abs(WIDO_ORIG_DIST)
+
+if WIDO_ORIG_DIST<0 then                !Wall is convex from "outside"
+
+	if WIDO_REVEAL_SIDE then                            !Flip is on
+		nframe=WIDO_FRAME_THICKNESS
+		wsill=WIDO_SILL
+		wthickness=WALL_THICKNESS
+
+		mulstat=1
+		rdpi=sqr(a*a/4+(r0+nframe)^2)
+		r=sqr(a*a/4+r0*r0)
+		kdpi=rdpi-r+WIDO_SILL
+		rclo=r+kdpi                         !wall radius_2
+		rfur=rclo-wthickness+off1           !wall radius_1
+		calpha=asn(a/2/r)                   !window half angle
+	else                                     !Flip is off
+		nframe=0
+		wsill=-WIDO_SILL
+		wthickness=-WALL_THICKNESS
+
+		mulstat=1
+		r=sqr(a*a/4+r0*r0)
+		rclo=r+wsill                         !wall radius_2
+		rfur=rclo-wthickness+off2            !wall radius_1
+		calpha=asn(a/2/r)                    !window half angle
+	endif
+
+else                                      !Wall is concave from "outside"
+
+	if WIDO_REVEAL_SIDE then                              !Flip is on
+		nframe=WIDO_FRAME_THICKNESS
+		wsill=WIDO_SILL
+		wthickness=WALL_THICKNESS
+
+		mulstat=-1
+		r0=r0-nframe
+		r=sqr(a*a/4+r0*r0)
+		rfur=r-wsill+off3                    !wall radius_1
+		rclo=rfur+wthickness                 !wall radius_2
+		calpha=asn(a/2/r)                    !window half angle
+	else                                      !Flip is off
+		nframe=WIDO_FRAME_THICKNESS
+		wsill=-WIDO_SILL
+		wthickness=-WALL_THICKNESS
+
+		mulstat=-1
+		rdpi=sqr(a*a/4+r0*r0)
+		r0=r0-nframe
+		r=sqr(a*a/4+r0*r0)
+		kdpi=rdpi-r+WIDO_SILL
+		rfur=r+kdpi+off4                     !wall radius_1
+		rclo=rfur+wthickness                 !wall radius_2
+		calpha=asn(a/2/r)                    !window half angle
+	endif
+
+endif
+
+
+!Additional values
+
+k_weitoffset=rfur*mulstat+WIDO_ORIG_DIST  !gs_window_sill value at window centerpoint
+walpha=2*atn(a/2/r0)                      !Window Opening angle
+xoffset=AC_Hole_Position_Angle/180*pi*rfur                    !Window centerpoint distance from wall origin
+ax=walpha/180*pi*rfur                     !"a" curve lenght (at further radius)
+
+
+!Oversize calculation (independent from "rfur")
+calphar=90+calpha
+
+!right oversize and gs_window_sill angle
+rosr=sqr(r^2+osr^2-2*r*osr*cos(calphar))
+cbetarr=asn(osr*sin(calphar)/rosr)          !Right oversize angle
+
+!left oversize and gs_window_sill angle
+rosl=sqr(r^2+osl^2-2*r*osl*cos(calphar))
+cbetarl=asn(osl*sin(calphar)/rosl)          !Left oversize angle
+
+
+!End of Curved Wall Calculation Phase 1
+
+return
+
+
+4000:
+! ==============================================================================
+! --- Unit Hotspots ---
+! ==============================================================================
+hotspot hswidth2, -hsmid + frame_toler, 0,				unID : unID = unID + 1
+hotspot hswidth2, -hsmid + frame_toler, gs_frame_thk,	unID : unID = unID + 1
+return
+
+

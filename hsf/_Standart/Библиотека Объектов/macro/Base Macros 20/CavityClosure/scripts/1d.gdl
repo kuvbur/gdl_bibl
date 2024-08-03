@@ -1,0 +1,327 @@
+
+! const values for parameter: iCustomCCEditWallSide
+EDITED_WALL_FACE_OUTSIDE = 1
+EDITED_WALL_FACE_INSIDE  = 2
+
+
+! const values for parameter: iCustomCCEditJambSide
+EDITED_JAMB_SIDE_BOTH  = 1
+EDITED_JAMB_SIDE_LEFT  = 2
+EDITED_JAMB_SIDE_RIGHT = 3
+
+
+! const values for parameter: iCustomCCThicknessType
+THICKNESS_TYPE_ORIGINAL = 1
+THICKNESS_TYPE_CUSTOM   = 2
+
+
+! const values for parameter: iCustomCCEditSkin
+EDITED_SKIN_1 = 1
+EDITED_SKIN_2 = 2
+EDITED_SKIN_3 = 3
+EDITED_SKIN_4 = 4
+
+
+! const values for parameter: iCustomCCOrientation
+ORIENTATION_ORIGINAL  = 1
+ORIENTATION_TURNED_IN = 2
+
+EPS = 0.0001
+
+! ==============================================================================
+
+! iWindowShape:
+SHAPE_RECTANGULAR	= 0
+
+! iRevealType:
+REVEAL_EDGE				= 0
+REVEAL_NO				= 1
+REVEAL_POSITIVE			= 2
+REVEAL_NEGATIVE			= 3
+REVEAL_SLANTED			= 4
+REVEAL_SPLAYED			= 5
+REVEAL_HISTORIC			= 6
+REVEAL_DOUBLE			= 7
+REVEAL_DOUBLE_SPLAYED	= 8
+REVEAL_OUTSIDE_SPLAYED	= 9
+
+! iClosureType:
+CLOSURE_NO					= 0
+CLOSURE_TRADITIONAL			= 1
+CLOSURE_PREFABRICATED		= 2
+CLOSURE_CUSTOM				= 3
+CLOSURE_SOLID_WALL			= 4
+CLOSURE_STUD_WALL			= 5
+CLOSURE_STUD_WALL_SIDING	= 6
+CLOSURE_BRICK_VENEER		= 7
+CLOSURE_VARIABLE			= 8
+CLOSURE_PLASTER_REVEAL	 			= 9		! same as CLOSURE_CUSTOM
+CLOSURE_INSULATED_REVEAL			= 10	! same as CLOSURE_CUSTOM
+CLOSURE_INSULATED_FOR_RENOVATION	= 11	! same as CLOSURE_CUSTOM
+CLOSURE_FINISH						= 12	! same as CLOSURE_TRADITIONAL
+CLOSURE_AIR_SPACE					= 13	! same as CLOSURE_PREFABRICATED
+CLOSURE_DUTCH_VARIABLE				= 14
+
+CLOSURE_CUSTOM_PRESETS				= 9		! Common enable bit for the preset Custom Closure types
+											!	CLOSURE_PLASTER_REVEAL
+											!	CLOSURE_INSULATED_REVEAL
+											!	CLOSURE_INSULATED_FOR_RENOVATION
+CLOSURE_TRADITIONAL_PRESETS			= 10	! Common enable bit for the preset Traditional Closure types
+											!	CLOSURE_FINISH
+CLOSURE_PREFABRICATED_PRESETS		= 11	! Common enable bit for the preset Traditional Closure types
+											!	CLOSURE_AIR_SPACE
+
+! gs_custom_cc_array_left and gs_custom_cc_array_right columns:
+CUSTOMCC_BITFIELD	= 1
+CUSTOMCC_THICKNESS	= 2
+CUSTOMCC_OVERHANG	= 3
+CUSTOMCC_PEN		= 4
+
+! lineSections[i][]:
+LINE_BEG_X		= 1
+LINE_BEG_Y		= 2
+LINE_END_X		= 3
+LINE_END_Y		= 4
+LINE_ATTRIBUTES	= 5	! bitfield, look at LINE_ATTRIBUTES_xxx for available values
+LINE_PEN_IDX	= 6
+LINE_LTYPE_IDX	= 7
+LINE_STRUCTURE_SIZE	= 7
+
+LINE_ATTRIBUTES_GDLLINE		= 0			! Draw GDL Line in the section
+LINE_ATTRIBUTES_WALLLINE	= 1			! Draw WallLine in the section
+LINE_ATTRIBUTES_WALLSIDE	= 2			! The section is on the wall side (it is an arc in curved wall)
+LINE_ATTRIBUTES_DRAWCC		= 3			! The section is drawn by CavityClosure macro (otherwise the WallHoleCut macro)
+LINE_ATTRIBUTES_CONTOUR		= 4			! The section is contour or inner line
+LINE_ATTRIBUTES_CONTOUR_CLOSURE	= 5		! The section is contour or inner line of variable or dutch closure
+!!!LINE_ATTRIBUTES_WALLEDGE	= 0			! The section is on the wall edge (always a line)
+
+! iCavityClosureSide:
+CAVITY_SIDE_BOTH	= 1
+CAVITY_SIDE_LEFT	= 2
+CAVITY_SIDE_RIGHT	= 3
+CAVITY_SIDE_NONE	= 4
+
+! iCavityClosureTurnDir:
+CAVITY_TURN_REFERENCE	= 1
+CAVITY_TURN_OPPOSITE	= 2
+
+! ==============================================================================
+
+bInclinedWall	= (abs(WALL_INCL) > EPS)
+curvedWall		= (abs(WIDO_ORIG_DIST) > EPS)
+signCurvedWall	= not(curvedWall) - curvedWall
+
+bRotAngle180	= SYMB_ROTANGLE > EPS
+wallIsLeft		= bRotAngle180 exor WIDO_REVEAL_SIDE
+signWallIsLeft	= wallIsleft - not(wallIsleft)
+
+leftAlfa		= 0
+rightAlfa		= 0
+alfaJamb		= 0
+ArcLengthSillToAngle	= 0
+
+plugOnWindow	= 0
+dirAngle		= 0
+baseSkinRadius	= 0
+slantLength		= 0
+skinTurnThk		= 0
+
+! ==============================================================================
+! Compatibility
+! ==============================================================================
+
+if refWidth < EPS then refWidth = A
+if leftWidth < EPS then leftWidth = A / 2
+if rightWidth < EPS then rightWidth = A / 2
+
+
+! ==============================================================================
+
+gs_bTurnDir = (iCavityClosureTurnDir = CAVITY_TURN_REFERENCE)
+
+
+! ==============================================================================
+! Parameter Restrictions - only for the 2D and 3D scripts
+! ==============================================================================
+
+if GLOB_SCRIPT_TYPE = 2 | GLOB_SCRIPT_TYPE = 3 then
+	if iRevealType = REVEAL_EDGE | iRevealType = REVEAL_NO then
+		gs_reveal_left	= 0
+		gs_reveal_right	= 0
+	endif
+
+	if iRevealType = REVEAL_EDGE | iRevealType = REVEAL_NO | iRevealType = REVEAL_POSITIVE | iRevealType = REVEAL_NEGATIVE then
+		gs_reveal_left_angle  = 0
+		gs_reveal_right_angle = 0
+	endif
+
+	if WIDO_SILL < EPS & (iRevealType = REVEAL_POSITIVE | iRevealType = REVEAL_NEGATIVE) then
+		iRevealType = REVEAL_NO
+	endif
+
+	if iClosureType	= CLOSURE_VARIABLE | iClosureType = CLOSURE_DUTCH_VARIABLE then
+		gs_bJoint = 1
+		gs_showJoint = 1
+		if gs_cc_dutch_thkJoint < EPS then gs_bJoint = 0
+	else
+		if not(gs_bJoint) then gs_thkJoint = 0
+		if gs_thkJoint < EPS then gs_bJoint = 0
+	endif
+
+	if GLOB_SCRIPT_TYPE = 2 & AC_Hole_Display_Option = 5 then	! Overhead All
+		gs_bAutoTurnIn		= 0		! Do not turn plasters in this display mode
+		gs_bOverIn			= 0
+		bDrawObjContourIn	= 1		! Always draw wall contour lines
+
+		gs_bAutoTurnOut		= 0
+		gs_bOverOut			= 0
+		bDrawObjContourOut	= 1
+	endif
+endif
+
+
+! ==============================================================================
+! Calculations for Trapezoid Walls
+! ==============================================================================
+
+if bInclinedWall then
+	bInclDir = SYMB_MIRRORED exor (SYMB_ROTANGLE > EPS)	! (0 / 1)
+	iInclDir = not(bInclDir) - bInclDir					! (1 / -1)
+
+	incH = cos(WALL_INCL)
+	incV = sin(WALL_INCL) * iInclDir
+
+	incHor = tan(WALL_INCL)
+endif
+
+
+! ==============================================================================
+! Calculations for Curved Walls
+! ==============================================================================
+
+if GLOB_SCRIPT_TYPE = 2 | GLOB_SCRIPT_TYPE = 3 then
+	if curvedWall & abs(radSill) > EPS then
+
+		if GLOB_SCRIPT_TYPE <> 2 & GLOB_CONTEXT <> 22 then
+			widoOrigDist = -WIDO_ORIG_DIST
+		else
+			widoOrigDist =  WIDO_ORIG_DIST
+		endif
+
+		tempWOD = abs(widoOrigDist) - (SYMB_ROTANGLE > EPS) * WIDO_FRAME_THICKNESS
+
+		leftAlfa	= atn(leftWidth / tempWOD)
+		rightAlfa	= atn(rightWidth / tempWOD)
+
+		bArchSign = (WIDO_REVEAL_SIDE exor SYMB_ROTANGLE > EPS)
+		iArchSign = bArchSign - not(bArchSign)		! 1 / -1
+
+		rSillLine = radSill - iArchSign * WIDO_SILL	! Radius of the reveal at the Sill depth
+
+		ArcLengthSillToAngle	= 180 / radSill / PI
+	else
+		iArchSign = 0
+	endif
+endif
+
+
+! ==============================================================================
+!
+! ==============================================================================
+
+bSlantedInnerSide	= (iRevealType = REVEAL_SLANTED | iRevealType = REVEAL_SPLAYED | iRevealType = REVEAL_HISTORIC | iRevealType = REVEAL_DOUBLE_SPLAYED)
+bSlantedOuterSide	= (iRevealType = REVEAL_DOUBLE_SPLAYED | iRevealType = REVEAL_OUTSIDE_SPLAYED)
+
+
+! ==============================================================================
+! Cavity Closure
+! ==============================================================================
+
+reorder = (AC_Wall_Direction_Type <> 1 & AC_Wall_Direction_Type <> 3)
+signReorder = not(reorder) - reorder
+
+SKIN_FILL				=  1
+SKIN_THICKNESS			=  2
+SKIN_CONT_PEN			=  3	! Obsolete (old contour pen)
+SKIN_FILL_PEN			=  4
+SKIN_FILL_BACK_PEN		=  5
+SKIN_CORE_STATUS		=  6
+SKIN_UPPER_LINE_PEN		=  7 + 2 * reorder
+SKIN_UPPER_LINE_TYPE	=  8 + 2 * reorder
+SKIN_LOWER_LINE_PEN		=  9 - 2 * reorder
+SKIN_LOWER_LINE_TYPE	= 10 - 2 * reorder
+SKIN_END_FACE_PEN		= 11
+SKIN_FILL_ORIENTATION	= 12	! 0 - global, 1 - local
+SKIN_TYPE				= 13	! 0 - cut, 1 - below cutplane, 2 - above cutplane (all skin types are 0 for simple walls)
+!	For D/W in complex walls on the floor plan this variable contains the data of all cut skins, for wall ends on the floor plan the data of all skins.
+!	For D/W and wall ends in the 3D window contains the data of the skins actually cut by the D/W or wall end
+SKIN_END_LINE_TYPE		= 14
+SKIN_FINISH_STATUS		= 15
+SKIN_FILL_FIT_TO_SKIN	= 16
+SKIN_THICKEN_TRAPEZOID	= 17
+
+
+! Line Property defines:
+LINE_PROPERTY_GENERIC	= 0
+LINE_PROPERTY_INNER		= 1
+LINE_PROPERTY_CONTOUR	= 2
+
+
+! Partial Stucture Display defines:
+STRUCTURE_ENTIRE_STRUCTURE	= 0
+STRUCTURE_CORE_ONLY			= 1
+STRUCTURE_WITHOUT_FINISHES	= 2
+
+
+! ==============================================================================
+
+bCompositeWall		= (WALL_SKINS_NUMBER > 0)
+bFirstSkinAtReveal	= (wallIsLeft exor reorder)
+lastCoreSkin		= 0	! Init
+trapezoidCoreSkin	= 0	! Init
+
+! --- find the last core skin ---
+for i = 1 to WALL_SKINS_NUMBER
+	idx = i: gosub 10	! Get proper index
+
+	if abs(WALL_SKINS_PARAMS[idx][SKIN_CORE_STATUS] - 3) < EPS then
+		lastCoreSkin = i
+	endif
+
+	if abs(WALL_SKINS_PARAMS[idx][SKIN_THICKEN_TRAPEZOID] - 1) < EPS then
+		trapezoidCoreSkin = i
+	endif
+next i
+
+idx = lastCoreSkin: gosub 10	! Get proper index
+lastCoreSkinIdx = idx
+
+idx = trapezoidCoreSkin: gosub 10	! Get proper index
+trapezoidCoreSkinIdx = idx
+
+
+! ==============================================================================
+goto 1:
+! ==============================================================================
+
+
+
+! ==============================================================================
+!		Calculate proper skin index from parameter 'idx'
+! ------------------------------------------------------------------------------
+! Input variables:
+!	idx:	index of current skin
+! Output variables:
+!	idx:	index of skin via 'Composite Structures' dialog
+! ==============================================================================
+
+10:
+	if reorder then
+		idx = WALL_SKINS_NUMBER + 1 - idx
+	endif
+return
+
+! ==============================================================================
+
+1:
+

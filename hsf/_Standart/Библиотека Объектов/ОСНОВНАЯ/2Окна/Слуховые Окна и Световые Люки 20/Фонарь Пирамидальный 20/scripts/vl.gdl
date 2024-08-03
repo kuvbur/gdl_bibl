@@ -1,0 +1,259 @@
+
+! =============================================================================
+! GS Skylight Functions
+! =============================================================================
+
+call "GS Skylight Functions",
+	parameters all	bEnableLining			= bEnableLining,
+					bEnableEdgeTypesUpper	= bEnableEdgeTypesUpper,
+					bEnableEdgeTypesLower	= bEnableEdgeTypesLower,
+					iSkylightType			= 10
+
+ss = ""
+rrr = request("Linear_dimension", "", ss)
+bMetric = 0
+if strstr (ss, "m") > 0 then bMetric = 1
+
+
+if bMetric then
+	values "ac_roofang_slope_mode" `°`,`%`
+else
+	values "ac_roofang_slope_mode" `°`,`%`, `на 12'`,`на 12"`
+endif
+
+!! Pitch Unit setting !!
+
+LENGTH_12_FEET = 12'
+LENGTH_12_INCHES = 12"
+
+if ac_roofang_slope_mode = `°` then
+	gs_roofang_perc	= tan(gs_roofang_deg) * 100
+	gs_roofang_12f	= (gs_roofang_perc / 100) * LENGTH_12_FEET
+	gs_roofang_12i	= (gs_roofang_perc / 100) * LENGTH_12_INCHES
+
+	hideparameter "gs_roofang_perc"
+	hideparameter "gs_roofang_12f"
+	hideparameter "gs_roofang_12i"
+endif
+
+if ac_roofang_slope_mode = `%` then
+	gs_roofang_deg  = atn(gs_roofang_perc / 100)
+	gs_roofang_12f	= (gs_roofang_perc / 100) * LENGTH_12_FEET
+	gs_roofang_12i	= (gs_roofang_perc / 100) * LENGTH_12_INCHES
+
+	hideparameter "gs_roofang_deg"
+	hideparameter "gs_roofang_12f"
+	hideparameter "gs_roofang_12i"
+endif
+
+if ac_roofang_slope_mode = `на 12'` then
+	slope = gs_roofang_12f / LENGTH_12_FEET
+	gs_roofang_deg	= atn(slope)
+	gs_roofang_perc	= slope * 100
+	gs_roofang_12i	= slope * LENGTH_12_INCHES
+
+	hideparameter "gs_roofang_deg"
+	hideparameter "gs_roofang_perc"
+	hideparameter "gs_roofang_12i"
+endif
+
+if ac_roofang_slope_mode = `на 12"` then
+	slope = gs_roofang_12i / LENGTH_12_INCHES
+	gs_roofang_deg	= atn(slope)
+	gs_roofang_perc	= slope * 100
+	gs_roofang_12f	= slope * LENGTH_12_FEET
+
+	hideparameter "gs_roofang_deg"
+	hideparameter "gs_roofang_perc"
+	hideparameter "gs_roofang_12f"
+endif
+
+parameters gs_roofang_deg	= gs_roofang_deg
+parameters gs_roofang_perc	= gs_roofang_perc
+parameters gs_roofang_12f	= gs_roofang_12f
+parameters gs_roofang_12i	= gs_roofang_12i
+
+
+! FM Types --------------------------------------------------------------------
+call "FM_types" parameters all
+
+parameters ZZYZX=dome_height+ac_curb_height+frame_thk
+lock "ZZYZX"
+
+values "A" range [0.1, )
+values "B" range [0.1, )
+values "curb_thk" range (0, min(a/2,b/2))
+
+if not(ac_skylight_debug) then
+	hideparameter "ac_skylight_function"
+	if ac_skylight_function then
+		hideparameter	"ac_roofang",
+						"ac_roofthk",
+						"gs_roof_material",
+						"gs_roofang_deg",
+						"gs_roofang_perc",
+						"gs_roofang_12f",
+						"gs_roofang_12i",
+						"ac_roofang_slope_mode"
+	endif
+endif
+
+
+! ==============================================================================
+! Convert Display Option settings of old library parts
+! ==============================================================================
+
+parameters AC_special_2D_symbol = 0
+hideparameter	"AC_special_2D_symbol",
+				"AC_plane_definition",
+				"AC_symb_display_option",
+				"AC_symb_show_projection_to"
+
+
+! ==============================================================================
+! 2D Display Options
+! ==============================================================================
+
+parameters AC_use_symb_display_option = 1
+
+if AC_symb_display_option = 3 | AC_symb_display_option = 5 then
+	hideparameter "gs_use_3D_view_attributes"
+	lock "gs_use_3D_view_attributes"
+endif
+
+if gs_use_3D_view_attributes then
+	hideparameter "AC_uncut_pen"
+	lock "AC_uncut_pen"
+endif
+
+if AC_symb_display_option = 3 | AC_symb_display_option = 5 then
+	hideparameter "AC_cut_linetype", "AC_uncut_pen"
+	lock "AC_cut_linetype", "AC_uncut_pen"
+endif
+
+if AC_symb_display_option = 1 | AC_symb_display_option = 3 | AC_symb_display_option = 4 then
+	hideparameter "AC_overhead_linetype", "AC_overhead_pen"
+	lock "AC_overhead_linetype", "AC_overhead_pen"
+endif
+
+if AC_symb_display_option = 4 then
+	hideparameter "AC_cut_linetype"
+	lock "AC_cut_linetype"
+endif
+
+if AC_symb_display_option = 5 then
+	hideparameter "gs_fill_type", "gs_fill_pen", "gs_back_pen"
+	lock "gs_fill_type", "gs_fill_pen", "gs_back_pen"
+endif
+
+! Roof Edge Cover ==============================================================
+
+forceChange = 0
+values "gs_edge_cover_thk" range[0,]
+if abs(ac_roofang) < MIN_ROOF_ANGLE | abs(ac_roofang - 180) < MIN_ROOF_ANGLE then
+	values "gs_edge_lower_type" stEdgeTypes[1], stEdgeTypes[2], stEdgeTypes[4]
+	values "gs_edge_upper_type" stEdgeTypes[1], stEdgeTypes[2], stEdgeTypes[4]
+	if gs_edge_lower_type = stEdgeTypes[3] then
+		gs_edge_lower_type = stEdgeTypes[2]
+		forceChange = 1
+	endif
+	if gs_edge_upper_type = stEdgeTypes[3] then
+		gs_edge_upper_type = stEdgeTypes[2]
+		forceChange = 1
+	endif
+else
+	if abs(ac_roofang - 90) < MIN_ROOF_ANGLE then
+		values "gs_edge_lower_type" stEdgeTypes[2], stEdgeTypes[3], stEdgeTypes[4]
+		values "gs_edge_upper_type" stEdgeTypes[2], stEdgeTypes[3], stEdgeTypes[4]
+		if gs_edge_lower_type = stEdgeTypes[1] then
+			gs_edge_lower_type = stEdgeTypes[2]
+			forceChange = 1
+		endif
+		if gs_edge_upper_type = stEdgeTypes[1] then
+			gs_edge_upper_type = stEdgeTypes[2]
+			forceChange = 1
+		endif
+	else
+		values "gs_edge_lower_type" stEdgeTypes
+		values "gs_edge_upper_type" stEdgeTypes
+	endif
+endif
+
+if forceChange | GLOB_MODPAR_NAME = "gs_edge_lower_type" then
+	if gs_edge_lower_type = stEdgeTypes[1] then ac_edge_lower_type = 0
+	if gs_edge_lower_type = stEdgeTypes[2] then ac_edge_lower_type = 1
+	if gs_edge_lower_type = stEdgeTypes[3] then ac_edge_lower_type = 2
+	if gs_edge_lower_type = stEdgeTypes[4] then ac_edge_lower_type = 3
+	parameters ac_edge_lower_type = ac_edge_lower_type
+else
+	idx = max(1, ac_edge_lower_type + 1)
+	if idx > 4 then idx = 1
+	gs_edge_lower_type = stEdgeTypes[idx]
+	parameters gs_edge_lower_type = gs_edge_lower_type
+endif
+
+if forceChange | GLOB_MODPAR_NAME = "gs_edge_upper_type" then
+	if gs_edge_upper_type = stEdgeTypes[1] then ac_edge_upper_type = 0
+	if gs_edge_upper_type = stEdgeTypes[2] then ac_edge_upper_type = 1
+	if gs_edge_upper_type = stEdgeTypes[3] then ac_edge_upper_type = 2
+	if gs_edge_upper_type = stEdgeTypes[4] then ac_edge_upper_type = 3
+	parameters ac_edge_upper_type = ac_edge_upper_type
+else
+	idx = max(1, ac_edge_upper_type + 1)
+	if idx > 4 then idx = 1
+	gs_edge_upper_type = stEdgeTypes[idx]
+	parameters gs_edge_upper_type = gs_edge_upper_type
+endif
+
+if not(gs_egde_cover) then
+!!!					"gs_edge_lower_type",
+!!!					"ac_edge_lower_angle",
+!!!					"gs_edge_upper_type",
+!!!					"ac_edge_upper_angle",
+	hideparameter	"gs_edge_cover_thk",
+
+
+
+
+					"gs_edge_cover_fill_type",
+					"gs_edge_cover_fill_pen_bg",
+					"gs_edge_cover_fill_pen_fg",
+					"gs_edge_mat"
+!!!		"gs_edge_lower_type",
+!!!		"ac_edge_lower_angle",
+!!!		"gs_edge_upper_type",
+!!!		"ac_edge_upper_angle",
+	lock "gs_edge_cover_thk",
+
+
+
+
+		"gs_edge_cover_fill_type",
+		"gs_edge_cover_fill_pen_bg",
+		"gs_edge_cover_fill_pen_fg",
+		"gs_edge_mat"
+endif
+
+if gs_edge_lower_type <> stEdgeTypes[4] then
+	hideparameter"ac_edge_lower_angle"
+	lock "ac_edge_lower_angle"
+endif
+if gs_edge_upper_type <> stEdgeTypes[4] then
+	hideparameter "ac_edge_upper_angle"
+	lock "ac_edge_upper_angle"
+endif
+
+values "ac_edge_upper_angle" range (0, 180)
+values "ac_edge_lower_angle" range (0, 180)
+
+! Roof Hole Cut ================================================================
+
+call "SkylightRect_RoofCutting_macro" parameters A = A, B = B,
+	AC_Custom_3D_Hole	= AC_Custom_3D_Hole
+
+
+! ==============================================================================
+! Force override to parameter list
+! ==============================================================================
+
+parameters bCall3DFrom2DScript = 0

@@ -1,0 +1,167 @@
+
+! MEP Connection
+! Zsolt Feke/2008
+
+
+DIM ShapeType_dim[4]
+	ShapeType_dim[1]=`Прямоугольный`
+	ShapeType_dim[2]=`Окружность`
+	ShapeType_dim[3]=`Овал`
+
+VALUES "ConClass" `Воздуховод`, `Труба`
+
+IF ConClass = `Воздуховод` THEN
+	ConToolType_1 = 1
+	DIM shape_typ_to_validation[3]
+		shape_typ_to_validation[1] = 1		! Rectangle
+		shape_typ_to_validation[2] = 1		! Circle
+		shape_typ_to_validation[3] = 1		! Oval
+ELSE
+	ConToolType_1 = 2
+	DIM shape_typ_to_validation[3]
+		shape_typ_to_validation[1] = 0		! Rectangle
+		shape_typ_to_validation[2] = 1		! Circle
+		shape_typ_to_validation[3] = 0		! Oval
+ENDIF
+PARAMETERS 	ConToolType_1 = ConToolType_1
+
+gs_ui = 1
+
+
+					! --- CONNECTIONS --- !
+
+	MEP_NumberConnections = 1
+
+
+					! --- 1st CONNECTION --- !
+
+	ConID = 1
+
+	ConDVecX = 1
+	ConDVecY = 0
+	ConDVecZ = 0
+
+	ConWVecX = 0
+	ConWVecY = 1
+	ConWVecZ = 0
+
+	IF ConType_1 = ShapeType_dim[1] THEN ConTypeID_1 = 1
+	IF ConType_1 = ShapeType_dim[2] THEN ConTypeID_1 = 2
+	IF ConType_1 = ShapeType_dim[3] THEN ConTypeID_1 = 3
+
+	PARAMETERS ConPosX_1 = 0
+	PARAMETERS ConPosY_1 = 0
+	PARAMETERS ConPosZ_1 = 0
+	VALUES "ConLength_1" RANGE(0, ]
+
+
+	CALL "MEP_m_ConnectionsMEP_4" PARAMETERS SetProgram = SetProgram,
+		gs_Connections = gs_Connections,
+		MEP_NumConnectionData = MEP_NumConnectionData,
+		MEP_StrConnectionData = MEP_StrConnectionData,
+		MEP_NumberConnections = MEP_NumberConnections,
+		gs_AddConnections = gs_AddConnections,
+		ConName = ConName,
+		ConID = ConID,
+		ConPosX = ConPosX_1,
+		ConPosY = ConPosY_1,
+		ConPosZ = ConPosZ_1,
+		ConDVecX = ConDVecX,
+		ConDVecY = ConDVecY,
+		ConDVecZ = ConDVecZ,
+		ConWVecX = ConWVecX,
+		ConWVecY = ConWVecY,
+		ConWVecZ = ConWVecZ,
+
+		ConNominalWidth = ConNominalWidth_1,
+		ConNominalDepth = ConNominalDepth_1,
+		ConWidth = ConWidth_1,
+		ConDepth = ConDepth_1,
+		ConLength = ConLength_1,
+		ConWallThickness = ConWallThickness_1,
+		ConConnectorWidth = ConConnectorWidth_1,
+		ConConnectorDepth = ConConnectorDepth_1,
+		ConConnectorWidth2 = ConConnectorWidth2_1,
+		ConToolType = ConToolType_1,
+		ConStatus = ConStatus_1,
+		ConType_1 = ConType_1,
+		ConConnectorType_1 = ConConnectorType_1,
+		ConSystem_1 = ConSystem_1,
+		gs_ui = gs_ui,
+		MEP_InsShow = MEP_InsShow,
+		MEP_InsThickness = MEP_InsThickness,
+		ui_page_idx = ui_page_idx,
+		shape_typ_to_validation = shape_typ_to_validation, ConConnectorTypeFlange_1 = ConConnectorTypeFlange_1
+
+PARAMETERS MEP_ConInfo[1][1] = STR(ConToolType_1, 1, 0)
+PARAMETERS MEP_ConInfo[1][2] = ConName
+PARAMETERS MEP_ConInfo[1][3] = "0"
+
+
+					!!! +++ Transformational Matrix +++ !!!
+
+DIM tMatrix[3][3]
+
+tMatrix[1][1] = MEP_Position[2][1]
+tMatrix[1][2] = MEP_Position[2][2]
+tMatrix[1][3] = MEP_Position[2][3]
+
+tMatrix[2][1] = MEP_Position[3][1]
+tMatrix[2][2] = MEP_Position[3][2]
+tMatrix[2][3] = MEP_Position[3][3]
+
+tMatrix[3][1] = -MEP_Position[3][2]*MEP_Position[2][3]+MEP_Position[3][3]*MEP_Position[2][2]
+tMatrix[3][2] = -MEP_Position[3][3]*MEP_Position[2][1]+MEP_Position[3][1]*MEP_Position[2][3]
+tMatrix[3][3] = -MEP_Position[3][1]*MEP_Position[2][2]+MEP_Position[3][2]*MEP_Position[2][1]
+
+
+						!!! +++ Input Coordinates +++ !!!
+
+PUT ConPosX_1+ConLength_1, ConPosY_1, ConPosZ_1
+PUT gs_Connections[1][4], gs_Connections[1][5], gs_Connections[1][6]
+PUT gs_Connections[1][7], gs_Connections[1][8], gs_Connections[1][9]
+
+Coordinates = NSP/3
+
+DIM inCoords[40][3]
+
+FOR cnum = 1 TO Coordinates
+	inCoords[cnum][1] = GET(1)
+	inCoords[cnum][2] = GET(1)
+	inCoords[cnum][3] = GET(1)
+NEXT cnum
+
+
+! --- the Matrix Operation, what make the Output-Coordinates
+
+DIM outCoords[40][3]
+
+FOR cnum = 1 TO Coordinates
+	outCoords[cnum][1] = inCoords[cnum][1]*tMatrix[1][1]+inCoords[cnum][2]*tMatrix[2][1]+inCoords[cnum][3]*tMatrix[3][1]
+	outCoords[cnum][2] = inCoords[cnum][1]*tMatrix[1][2]+inCoords[cnum][2]*tMatrix[2][2]+inCoords[cnum][3]*tMatrix[3][2]
+	outCoords[cnum][3] = inCoords[cnum][1]*tMatrix[1][3]+inCoords[cnum][2]*tMatrix[2][3]+inCoords[cnum][3]*tMatrix[3][3]
+NEXT cnum
+
+
+! --- uploading of MEP_NumConnectionData
+
+FOR k = 1 TO MEP_NumberConnections
+	FOR i = 1 TO 9
+		j = 1+INT((i-0.5)/3)
+		ad = 0
+		IF i < 4 THEN ad = MEP_Position[1][i]
+		MEP_NumConnectionData[k][i] = outCoords[j+3*(k-1)][i-3*(j-1)]+ad
+		PARAMETERS MEP_NumConnectionData[k][i] = MEP_NumConnectionData[k][i]
+	NEXT i
+NEXT k
+
+
+						! ---------------------- !
+						! --- axial rotation --- !
+						! ---------------------- !
+
+HIDEPARAMETER "RotationAroundDAxis", "RotationAroundZAxis"
+
+VALUES "RotationAroundWAxis" RANGE[-90, 90]
+
+CALL "MEP_m_axial_rotation" PARAMETERS all

@@ -1,0 +1,236 @@
+
+if gs_gutter_ds_profile_num = 1 then
+	add2 0, - (dis_wall - gs_gutter_dd)
+else
+	add2 0, - (dis_wall - gs_gutter_bb)
+endif
+
+call "m_DSProfiles" parameters 		gs_gutter_ds_profile_num	= gs_gutter_ds_profile_num,
+									gs_gutter_aa				= gs_gutter_aa,
+									gs_gutter_bb				= gs_gutter_bb,
+									gs_gutter_dd				= gs_gutter_dd
+
+pen gs_cont_pen
+line_type gs_line_type
+fill gs_fill_type
+
+! -----------------------------------------------------------------------------
+! Downspout Profile
+! -----------------------------------------------------------------------------
+
+if ABS(gs_gutter_ds_ang) < EPS then				! ang = 0
+	gosub "profile_contour"
+	gosub "flush_buffer"
+else												! ang < 0, negativ
+	if gs_gutter_ds_ang < 0 then
+		gosub "profile_contour"
+		gosub "side_countour"
+		add2 0,-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang)
+		gosub "profile_contour"
+		del 1
+		gosub "flush_buffer"
+	else											! ang > 0, positive
+		gosub "profile_contour"
+		gosub "side_countour"
+		add2 0,-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang)
+		gosub "profile_contour"
+		del 1
+		gosub "flush_buffer"
+	endif
+endif
+
+! -----------------------------------------------------------------------------
+! Downspout 2D HOTSPOTS
+! -----------------------------------------------------------------------------
+unID=gs_unID
+
+if gs_gutter_ds_profile_num=1 then							! round profile
+	if ABS(gs_gutter_ds_ang) < EPS then						! round profile, ang = 0
+		gosub "htsp_round_prof"
+	else													! round profile, ang not= 0
+		if 90 - ABS(gs_gutter_ds_ang) < EPS then
+			mul2 1,COS(89.9999999)
+			if gs_gutter_ds_ang < EPS then 	add2 0,-gs_gutter_ds_lgth*TAN(-89.9999999)
+			if gs_gutter_ds_ang > EPS then 	add2 0,-gs_gutter_ds_lgth*TAN(89.9999999)
+		else
+			mul2 1,COS(gs_gutter_ds_ang)
+			add2 0,-gs_gutter_ds_lgth*TAN(gs_gutter_ds_ang)
+		endif
+
+		gosub "htsp_round_prof"
+		del 2
+	endif
+
+else														! not round profile
+	if ABS(gs_gutter_ds_ang) < EPS then						! not round, ang = 0
+		gosub "htsp_ntround_prof"
+	else													! not round, ang not= 0
+		if 90 - ABS(gs_gutter_ds_ang) < EPS then
+			mul2 1,COS(89.9999999)
+		else
+			mul2 1,COS(gs_gutter_ds_ang)
+		endif
+		gosub "htsp_ntround_prof"
+
+		if 90 - ABS(gs_gutter_ds_ang) < EPS then
+			if gs_gutter_ds_ang < EPS then 	add2 0,-gs_gutter_ds_lgth*TAN(-89.9999999)
+			if gs_gutter_ds_ang > EPS then 	add2 0,-gs_gutter_ds_lgth*TAN(89.9999999)
+		else
+			add2 0,-gs_gutter_ds_lgth*TAN(gs_gutter_ds_ang)
+		endif
+		gosub "htsp_ntround_prof"
+		del 2
+	endif
+endif
+
+del 1
+
+! -----------------------------------------------------------------------------
+! Gutter (displayed only if ang=0)
+! -----------------------------------------------------------------------------
+if gs_gutter_ds_h = 1	then
+
+	! --- DS Hangers 2D, ang = 0 ---
+	if ABS(gs_gutter_ds_ang) < EPS then
+		for i=1 to INT((gs_gutter_ds_lgth - gs_gutter_ds_h_off - sthw)/gs_gutter_ds_h_dist)+1
+			add2 0, -gs_gutter_ds_h_pos[i] * SIN(gs_gutter_ds_ang)
+			call "m_DSHanger" parameters 	gs_gutter_ds_profile_num	= gs_gutter_ds_profile_num,
+											gs_gutter_aa				= gs_gutter_aa,
+											gs_gutter_bb				= gs_gutter_bb,
+											gs_gutter_dd				= gs_gutter_dd,
+											gs_cont_pen					= gs_cont_pen,
+											gs_fill_type				= gs_fill_type,
+											gs_fill_pen					= gs_fill_pen,
+											gs_back_pen					= gs_back_pen,
+											dis_wall 					= dis_wall, gs_gutter_type=gs_gutter_type
+
+			del 1
+		next i
+	endif
+endif
+
+
+END
+! =============================================================================
+!END	!END	!END	!END	!END	!END	!END	!END	!END	!END
+! =============================================================================
+
+! -----------------------------------------------------------------------------
+"profile_contour":	!downspout [perpendicunal/not] projection of profile contour
+! -----------------------------------------------------------------------------
+	if ABS(gs_gutter_ds_ang) < EPS then
+		poly2_b{2} nsp/3, 1+2+4+64,	gs_fill_pen, gs_back_pen,
+			0, 0, 0,
+			use (nsp)
+	else
+		if 90 - ABS(gs_gutter_ds_ang) < EPS then
+			mul2 1, 0.00000001
+		else
+			mul2 1, COS(gs_gutter_ds_ang)
+		endif
+		poly2_b{2} nsp/3, 1+2+4+64,	gs_fill_pen, gs_back_pen,
+			0, 0, 0,
+			use (nsp)
+		del 1
+	endif
+return
+
+! -----------------------------------------------------------------------------
+"side_countour":							!downspout projection of side contour
+! -----------------------------------------------------------------------------
+if not(ABS(gs_gutter_ds_ang) < EPS) then
+		if gs_gutter_ds_profile_num = 1 then	!!round
+			poly2_b{2} 4, 1+2+4+64,	gs_fill_pen, gs_back_pen,
+				0,0,0,
+				gs_gutter_dd,		-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang),		 1,
+				gs_gutter_dd,		 0,												 0,
+				-gs_gutter_dd,		 0,												 1,
+				-gs_gutter_dd,		-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang),		 0
+		else
+			poly2_b{2} 4, 1+2+4+64,	gs_fill_pen, gs_back_pen,
+				0,0,0,
+				gs_gutter_aa,		-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang),		 1,
+				gs_gutter_aa,		 0,												 0,
+				-gs_gutter_aa,		 0,												 1,
+				-gs_gutter_aa,		-gs_gutter_ds_lgth*SIN(gs_gutter_ds_ang),		 0
+		endif
+endif
+return
+
+! -----------------------------------------------------------------------------
+"flush_buffer":														!flush buffer
+! -----------------------------------------------------------------------------
+	for i=1 to nsp
+		temp = get(1)
+	next i
+return
+
+! -----------------------------------------------------------------------------
+"htsp_round_prof":									!round profile 2D hotspots
+! -----------------------------------------------------------------------------
+	HOTSPOT2  0,	0,				unID:	unID=unID+1
+
+	HOTSPOT2  0,	dis_wall,		10001, 	dis_wall, 1+128, 	dis_wall
+	HOTSPOT2  0,	0,				unID, 	dis_wall, 2, 		dis_wall	:	unID=unID+1
+	HOTSPOT2  0,	1 + dis_wall,	10002, 	dis_wall, 3,		dis_wall
+
+	for kk=1 to 4
+		! ---  RADIUS ---
+		HOTSPOT2 0, 0, unID, gs_gutter_dd, 1+128, gs_gutter_dd2 : unID=unID+1
+		HOTSPOT2 -1, 0, unID, gs_gutter_dd, 3, gs_gutter_dd2 : unID=unID+1
+		HOTSPOT2 gs_gutter_dd, 0, unID, gs_gutter_dd, 2, gs_gutter_dd2 : unID=unID+1
+		ROT2 90
+		next kk
+	del 4
+return
+
+! -----------------------------------------------------------------------------
+"htsp_ntround_prof":							!not-round profile 2D hotspots
+! -----------------------------------------------------------------------------
+		HOTSPOT2  0,	 dis_wall,		20003, 	dis_wall, 1+128, 	dis_wall
+		HOTSPOT2  0,	 0,				unID, 	dis_wall, 2, 		dis_wall	:	unID=unID+1
+		HOTSPOT2  0,	 1 + dis_wall,	20004, 	dis_wall, 3, 		dis_wall
+
+		HOTSPOT2  0,	 gs_gutter_bb,	unID:	unID=unID+1
+
+		! ---  WIDTH ---
+		add2 0,gs_gutter_bb
+			HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 -1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+
+			HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 -gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+		del 1
+		add2 0,-gs_gutter_bb
+			HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 -1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+
+			HOTSPOT2 0, 0, unID, gs_gutter_aa, 1+128, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 1, 0, unID, gs_gutter_aa, 3, gs_gutter_aa2 : unID=unID+1
+			HOTSPOT2 -gs_gutter_aa, 0, unID, gs_gutter_aa, 2, gs_gutter_aa2 : unID=unID+1
+		del 1
+
+		! ---  LENGTH ---
+		add2 gs_gutter_aa,0
+			HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, -1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+
+			HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, 1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, -gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+		del 1
+		add2 -gs_gutter_aa,0
+			HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, -1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+
+			HOTSPOT2 0, 0, unID, gs_gutter_bb, 1+128, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, 1, unID, gs_gutter_bb, 3, gs_gutter_bb2 : unID=unID+1
+			HOTSPOT2 0, -gs_gutter_bb,  unID, gs_gutter_bb, 2, gs_gutter_bb2 : unID=unID+1
+		del 1
+
+return

@@ -1,0 +1,1011 @@
+
+pen gs_cont_pen
+fill gs_fill_type
+drawindex 7
+angleViewRot = 0
+if displayText then
+	rrr = REQUEST ("View_Rotangle", "", angleViewRot)
+	define style textstyle	fontType, fontSize * 1000 / GLOB_SCALE, 5, gs_text_style_bold + 2 * gs_text_style_italic + 4 * gs_text_style_underline + 128 * gs_text_style_strike
+	style textstyle
+endif
+
+
+! ------------------------------------------------------------------------------
+! Definitions
+! ------------------------------------------------------------------------------
+refriSymbSize = 0.1
+if iRefrigeratorType = ACC_REFRI_COMPACT then
+	refrigeratorDepth	= refriDefaults[ACC_REFRI_COMPACT]
+	bRefriWallCabinet	= 0
+endif
+bPolyOperations = 0
+if nofRefrigerators > 0 & refrigeratorDepth > counterDepth then bPolyOperations = 1
+
+
+! ------------------------------------------------------------------------------
+! Reference Line
+! ------------------------------------------------------------------------------
+unID = 100
+for i = 1 to nRefPoints[1] - (iLayoutType = LAYOUT_ISLAND)*2
+	hotspot2  0,					refLinePoints_1[i][2],	unID, refLinePoints_1[i][1], 1+128		: unID = unID + 1
+	hotspot2 -1, 					refLinePoints_1[i][2],	unID, refLinePoints_1[i][1], 3			: unID = unID + 1
+	hotspot2 refLinePoints_1[i][1],	refLinePoints_1[i][2],	unID, refLinePoints_1[i][1], 2			: unID = unID + 1
+
+	hotspot2 refLinePoints_1[i][1],	0,					 	unID, refLinePoints_1[i][2], 1+128		: unID = unID + 1
+	hotspot2 refLinePoints_1[i][1], -1,						unID, refLinePoints_1[i][2], 3			: unID = unID + 1
+	hotspot2 refLinePoints_1[i][1],	refLinePoints_1[i][2],	unID, refLinePoints_1[i][2], 2			: unID = unID + 1
+next i
+
+for i = 1 to nRefPoints[2]
+	hotspot2  0,					refLinePoints_2[i][2],	unID, refLinePoints_2[i][1], 1+128		: unID = unID + 1
+	hotspot2 -1, 					refLinePoints_2[i][2],	unID, refLinePoints_2[i][1], 3			: unID = unID + 1
+	hotspot2 refLinePoints_2[i][1],	refLinePoints_2[i][2],	unID, refLinePoints_2[i][1], 2			: unID = unID + 1
+
+	hotspot2 refLinePoints_2[i][1],	0,					 	unID, refLinePoints_2[i][2], 1+128		: unID = unID + 1
+	hotspot2 refLinePoints_2[i][1], -1,						unID, refLinePoints_2[i][2], 3			: unID = unID + 1
+	hotspot2 refLinePoints_2[i][1],	refLinePoints_2[i][2],	unID, refLinePoints_2[i][2], 2			: unID = unID + 1
+next i
+
+for i = 1 to nRefPoints[3]
+	hotspot2  0,					refLinePoints_3[i][2],	unID, refLinePoints_3[i][1], 1+128		: unID = unID + 1
+	hotspot2 -1, 					refLinePoints_3[i][2],	unID, refLinePoints_3[i][1], 3			: unID = unID + 1
+	hotspot2 refLinePoints_3[i][1],	refLinePoints_3[i][2],	unID, refLinePoints_3[i][1], 2			: unID = unID + 1
+
+	hotspot2 refLinePoints_3[i][1],	0,					 	unID, refLinePoints_3[i][2], 1+128		: unID = unID + 1
+	hotspot2 refLinePoints_3[i][1], -1,						unID, refLinePoints_3[i][2], 3			: unID = unID + 1
+	hotspot2 refLinePoints_3[i][1],	refLinePoints_3[i][2],	unID, refLinePoints_3[i][2], 2			: unID = unID + 1
+next i
+
+
+! ------------------------------------------------------------------------------
+! Other Contour Points
+! ------------------------------------------------------------------------------
+unID = 1500
+for i = 1 to vardim1(oppsidePoints)
+	hotspot2 oppsidePoints[i][1], oppsidePoints[i][2], unID		: unID = unID + 1
+next i
+
+
+! ------------------------------------------------------------------------------
+! Counter Fills
+! ------------------------------------------------------------------------------
+if bPolyOperations then
+	ch = INITADDONSCOPE ("PolyOperations", "", "")
+
+	nDestContainer = 1
+	prevSourceContainer	= "mySourceContainer"
+	lastDestContainer	= "myDestinationContainer" + STR(nDestContainer,1,0)
+
+	PREPAREFUNCTION ch, "CreateContainer", prevSourceContainer, ""
+	PREPAREFUNCTION ch, "CreateContainer", lastDestContainer, ""
+
+	PREPAREFUNCTION ch, "SetSourceContainer",		prevSourceContainer, ""
+	PREPAREFUNCTION ch, "SetDestinationContainer",	lastDestContainer, ""
+
+	! Contours
+	for i = 1 to nPoly
+
+		hotline2 contourPoints[i][nContour[i]*2-1], contourPoints[i][nContour[i]*2], contourPoints[i][1], contourPoints[i][2]
+
+		dim vertArr[][]
+		dim contArr[]
+
+		nVertices	= nContour[i]
+		contArr[1]	= nContour[i] + 1
+		nCont		= 1
+
+		for j = nContour[i] to 1 step -1
+			if j < nContour[i] then hotline2 contourPoints[i][j*2-1], contourPoints[i][j*2], contourPoints[i][j*2+1], contourPoints[i][j*2+2]
+
+			vertArr[j][3] = 0.0
+			vertArr[j][1] = contourPoints[i][j*2-1]
+			vertArr[j][2] = contourPoints[i][j*2]
+		next j
+
+		PREPAREFUNCTION ch, "Store", "segmentPoly", nVertices, nCont, vertArr, contArr
+
+		! Refrigerator
+		for r = 1 to nofRefrigerators
+			dim contourNames[]
+			numContour = CALLFUNCTION (ch, "GetSourcePolygons", "", contourNames)
+
+			dim vertArr[4][3]
+			dim contArr[]
+
+			nVertices	= 4
+			contArr[1]	= 5
+			nCont		= 1
+
+			tx1 = cos(elementAngle[isRefri[r]]) * refrigeratorWidth[r]/2
+			ty1 = sin(elementAngle[isRefri[r]]) * refrigeratorWidth[r]/2
+
+			tx2 = sin(elementAngle[isRefri[r]]) * (refrigeratorDepth-counterDepth/2)
+			ty2 = cos(elementAngle[isRefri[r]]) * (refrigeratorDepth-counterDepth/2)
+
+			tx3 = sin(elementAngle[isRefri[r]]) * (-counterDepth/2)
+			ty3 = cos(elementAngle[isRefri[r]]) * (-counterDepth/2)
+
+			vertArr[1][1] = refrigeratorPos[r][1] + tx1 + tx2
+			vertArr[1][2] = refrigeratorPos[r][2] + ty1 - ty2
+			vertArr[1][3] = 0.0
+			vertArr[2][1] = refrigeratorPos[r][1] - tx1 + tx2
+			vertArr[2][2] = refrigeratorPos[r][2] - ty1 - ty2
+			vertArr[2][3] = 0.0
+			vertArr[3][1] = refrigeratorPos[r][1] - tx1 + tx3
+			vertArr[3][2] = refrigeratorPos[r][2] - ty1 - ty3
+			vertArr[3][3] = 0.0
+			vertArr[4][1] = refrigeratorPos[r][1] + tx1 + tx3
+			vertArr[4][2] = refrigeratorPos[r][2] + ty1 - ty3
+			vertArr[4][3] = 0.0
+
+			holeName = "refri"+STR(r,1,0)
+
+			PREPAREFUNCTION ch, "Store", holeName, nVertices, nCont, vertArr, contArr
+
+			dim tempResPolyIDArr[]
+			for nC = 1 TO numContour
+				tempNumPoly = CALLFUNCTION(ch, contourNames[nC] + " - " + holeName, "", tempResPolyIDArr)
+			next nC
+
+			if r < nofRefrigerators then
+				if prevSourceContainer <> "" then
+					PREPAREFUNCTION ch, "DeleteContainer",		prevSourceContainer, ""
+				endif
+				PREPAREFUNCTION ch, "SetSourceContainer",		lastDestContainer, ""
+				prevSourceContainer	= lastDestContainer
+				nDestContainer = nDestContainer + 1
+				lastDestContainer = "myDestinationContainer" + STR(nDestContainer,1,0)
+				PREPAREFUNCTION ch, "CreateContainer",			lastDestContainer, ""
+				PREPAREFUNCTION ch, "SetDestinationContainer",	lastDestContainer, ""
+			endif
+
+		next r
+
+		dim resPolyIDArr[]
+		numPoly = CALLFUNCTION(ch, "GetDestinationPolygons", "", resPolyIDArr)
+		for cP = 1 to numPoly
+			polygonID = resPolyIDArr[cP]
+			mask = 1
+			gosub "getGDLpolygonFromAPI"
+			if nsp > 11 then
+				poly2_b nsp/3, 1+2+4+64, gs_fill_pen, gs_back_pen, get(nsp)
+			else
+				for k = 1 to nsp
+					temp = get(1)
+				next k
+			endif
+		next cP
+
+		PREPAREFUNCTION ch, "EmptyContainer",		prevSourceContainer, ""
+		PREPAREFUNCTION ch, "EmptyContainer",		lastDestContainer, ""
+
+	next i
+
+else
+
+	for i = 1 to nPoly
+		hotline2 contourPoints[i][nContour[i]*2-1], contourPoints[i][nContour[i]*2], contourPoints[i][1], contourPoints[i][2]
+		for j = 1 to nContour[i]
+			put contourPoints[i][j*2-1], contourPoints[i][j*2], 1
+			if j < nContour[i] then hotline2 contourPoints[i][j*2-1], contourPoints[i][j*2], contourPoints[i][j*2+1], contourPoints[i][j*2+2]
+		next j
+		poly2_b nsp/3, 1+2+4+64, gs_fill_pen, gs_back_pen, get(nsp)
+	next i
+
+endif
+
+
+! ------------------------------------------------------------------------------
+! Elements Moveable Hotspots
+! ------------------------------------------------------------------------------
+for i = 1 to nElement
+	n = elementTypes[i][2]
+	unID = 2000 + (elementTypes[i][1]-1) * 1000  +  (n-1) * 100
+
+	if elementTypes[i][1] = SYMBTYPE_TALL then
+		hotspot2  0,				tallCabPos[n][2],	unID, tallCabPos[n][1], 1+128	: unID = unID + 1
+		hotspot2 -1,				tallCabPos[n][2],	unID, tallCabPos[n][1], 3		: unID = unID + 1
+		hotspot2 tallCabPos[n][1],	tallCabPos[n][2],	unID, tallCabPos[n][1], 2		: unID = unID + 1
+
+		hotspot2 tallCabPos[n][1],	 0,					unID, tallCabPos[n][2], 1+128	: unID = unID + 1
+		hotspot2 tallCabPos[n][1],	-1,					unID, tallCabPos[n][2], 3		: unID = unID + 1
+		hotspot2 tallCabPos[n][1],	tallCabPos[n][2],	unID, tallCabPos[n][2], 2		: unID = unID + 1
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_SINK then
+		hotspot2  0,			sinkPos[n][2],	unID, sinkPos[n][1], 1+128		: unID = unID + 1
+		hotspot2 -1,			sinkPos[n][2],	unID, sinkPos[n][1], 3			: unID = unID + 1
+		hotspot2 sinkPos[n][1],	sinkPos[n][2],	unID, sinkPos[n][1], 2			: unID = unID + 1
+
+		hotspot2 sinkPos[n][1],	 0,				unID, sinkPos[n][2], 1+128		: unID = unID + 1
+		hotspot2 sinkPos[n][1],	-1,				unID, sinkPos[n][2], 3			: unID = unID + 1
+		hotspot2 sinkPos[n][1],	sinkPos[n][2],	unID, sinkPos[n][2], 2			: unID = unID + 1
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_COOKTOP then
+		hotspot2  0,				cooktopPos[n][2],	unID, cooktopPos[n][1], 1+128		: unID = unID + 1
+		hotspot2 -1,				cooktopPos[n][2],	unID, cooktopPos[n][1], 3			: unID = unID + 1
+		hotspot2 cooktopPos[n][1],	cooktopPos[n][2],	unID, cooktopPos[n][1], 2			: unID = unID + 1
+
+		hotspot2 cooktopPos[n][1],	 0,					unID, cooktopPos[n][2], 1+128		: unID = unID + 1
+		hotspot2 cooktopPos[n][1],	-1,					unID, cooktopPos[n][2], 3			: unID = unID + 1
+		hotspot2 cooktopPos[n][1],	cooktopPos[n][2],	unID, cooktopPos[n][2], 2			: unID = unID + 1
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_OVEN then
+		hotspot2  0,			ovenPos[n][2],	unID, ovenPos[n][1], 1+128		: unID = unID + 1
+		hotspot2 -1,			ovenPos[n][2],	unID, ovenPos[n][1], 3			: unID = unID + 1
+		hotspot2 ovenPos[n][1],	ovenPos[n][2],	unID, ovenPos[n][1], 2			: unID = unID + 1
+
+		hotspot2 ovenPos[n][1],	 0,				unID, ovenPos[n][2], 1+128		: unID = unID + 1
+		hotspot2 ovenPos[n][1],	-1,				unID, ovenPos[n][2], 3			: unID = unID + 1
+		hotspot2 ovenPos[n][1],	ovenPos[n][2],	unID, ovenPos[n][2], 2			: unID = unID + 1
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_REFRI then
+		hotspot2  0,					refrigeratorPos[n][2],	unID, refrigeratorPos[n][1], 1+128		: unID = unID + 1
+		hotspot2 -1,					refrigeratorPos[n][2],	unID, refrigeratorPos[n][1], 3			: unID = unID + 1
+		hotspot2 refrigeratorPos[n][1],	refrigeratorPos[n][2],	unID, refrigeratorPos[n][1], 2			: unID = unID + 1
+
+		hotspot2 refrigeratorPos[n][1],	 0,						unID, refrigeratorPos[n][2], 1+128		: unID = unID + 1
+		hotspot2 refrigeratorPos[n][1],	-1,						unID, refrigeratorPos[n][2], 3			: unID = unID + 1
+		hotspot2 refrigeratorPos[n][1],	refrigeratorPos[n][2],	unID, refrigeratorPos[n][2], 2			: unID = unID + 1
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_DISHWASH then
+		hotspot2  0,					dishwasherPos[n][2],	unID, dishwasherPos[n][1], 1+128	: unID = unID + 1
+		hotspot2 -1,					dishwasherPos[n][2],	unID, dishwasherPos[n][1], 3		: unID = unID + 1
+		hotspot2 dishwasherPos[n][1],	dishwasherPos[n][2],	unID, dishwasherPos[n][1], 2		: unID = unID + 1
+
+		hotspot2 dishwasherPos[n][1],	 0,						unID, dishwasherPos[n][2], 1+128	: unID = unID + 1
+		hotspot2 dishwasherPos[n][1],	-1,						unID, dishwasherPos[n][2], 3		: unID = unID + 1
+		hotspot2 dishwasherPos[n][1],	dishwasherPos[n][2],	unID, dishwasherPos[n][2], 2		: unID = unID + 1
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_WASH then
+		hotspot2  0,				washerPos[n][2],	unID, washerPos[n][1], 1+128	: unID = unID + 1
+		hotspot2 -1,				washerPos[n][2],	unID, washerPos[n][1], 3		: unID = unID + 1
+		hotspot2 washerPos[n][1],	washerPos[n][2],	unID, washerPos[n][1], 2		: unID = unID + 1
+
+		hotspot2 washerPos[n][1],	 0,					unID, washerPos[n][2], 1+128	: unID = unID + 1
+		hotspot2 washerPos[n][1],	-1,					unID, washerPos[n][2], 3		: unID = unID + 1
+		hotspot2 washerPos[n][1],	washerPos[n][2],	unID, washerPos[n][2], 2		: unID = unID + 1
+	endif
+next i
+
+
+! ------------------------------------------------------------------------------
+! Elements Width Hotspots
+! ------------------------------------------------------------------------------
+
+for i = 1 to nElement
+	n = elementTypes[i][2]
+	unID = 2000 + (elementTypes[i][1]-1) * 1000  +  (n-1) * 100 + 20
+
+	if elementTypes[i][1] = SYMBTYPE_TALL then
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, tallCabinetWidth2[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][1]+cos(elementAngle[i]),	elementWidth[i][2]+sin(elementAngle[i]),unID, tallCabinetWidth2[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, tallCabinetWidth2[n], 2		: unID = unID + 1
+
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, tallCabinetWidth[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][3]-cos(elementAngle[i]),	elementWidth[i][4]-sin(elementAngle[i]),unID, tallCabinetWidth[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, tallCabinetWidth[n], 2		: unID = unID + 1
+
+		unID = unID + 6
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_SINK then
+		if iSinkType <> ACC_SINK_ROUND then
+			hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, sinkWidth2[n], 1+128	: unID = unID + 1
+			hotspot2 elementWidth[i][1]+cos(elementAngle[i]),	elementWidth[i][2]+sin(elementAngle[i]),unID, sinkWidth2[n], 3		: unID = unID + 1
+			hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, sinkWidth2[n], 2		: unID = unID + 1
+
+			hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, sinkWidth[n], 1+128	: unID = unID + 1
+			hotspot2 elementWidth[i][3]-cos(elementAngle[i]),	elementWidth[i][4]-sin(elementAngle[i]),unID, sinkWidth[n], 3		: unID = unID + 1
+			hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, sinkWidth[n], 2		: unID = unID + 1
+
+			unID = unID + 6
+		else
+			hotspot2 elementPos[i][1],							elementPos[i][2],						unID, sinkWidthHalf, 1+128			: unID = unID + 1
+			hotspot2 elementPos[i][1]+cos(elementAngle[i]),		elementPos[i][2]+sin(elementAngle[i]),	unID, sinkWidthHalf, 3				: unID = unID + 1
+			hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, sinkWidthHalf, 2, sinkWidth[n]	: unID = unID + 1
+
+			hotspot2 elementPos[i][1],							elementPos[i][2],						unID, sinkWidthHalf, 1+128			: unID = unID + 1
+			hotspot2 elementPos[i][1]-cos(elementAngle[i]),		elementPos[i][2]-sin(elementAngle[i]),	unID, sinkWidthHalf, 3				: unID = unID + 1
+			hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, sinkWidthHalf, 2, sinkWidth[n]	: unID = unID + 1
+
+			unID = unID + 6
+		endif
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_COOKTOP then
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, cooktopWidth2[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][1]+cos(elementAngle[i]),	elementWidth[i][2]+sin(elementAngle[i]),unID, cooktopWidth2[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, cooktopWidth2[n], 2		: unID = unID + 1
+
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, cooktopWidth[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][3]-cos(elementAngle[i]),	elementWidth[i][4]-sin(elementAngle[i]),unID, cooktopWidth[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, cooktopWidth[n], 2		: unID = unID + 1
+
+		if bHood & bShowOverhead then
+			hotspot2 hoodWidthPos[n][1],						hoodWidthPos[n][2],						unID, hoodWidth2[n], 1+128			: unID = unID + 1
+			hotspot2 hoodWidthPos[n][1]-cos(elementAngle[i]),	hoodWidthPos[n][2]-sin(elementAngle[i]),unID, hoodWidth2[n], 3				: unID = unID + 1
+			hotspot2 hoodWidthPos[n][3],						hoodWidthPos[n][4],						unID, hoodWidth2[n], 2, hoodWidth[n]	: unID = unID + 1
+
+			hotspot2 hoodWidthPos[n][1],						hoodWidthPos[n][2],						unID, hoodWidth2[n], 1+128			: unID = unID + 1
+			hotspot2 hoodWidthPos[n][1]+cos(elementAngle[i]),	hoodWidthPos[n][2]+sin(elementAngle[i]),unID, hoodWidth2[n], 3				: unID = unID + 1
+			hotspot2 hoodWidthPos[n][5],						hoodWidthPos[n][6],						unID, hoodWidth2[n], 2, hoodWidth[n]	: unID = unID + 1
+		else
+			unID = unID + 6
+		endif
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_OVEN then
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, ovenWidth2[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][1]+cos(elementAngle[i]),	elementWidth[i][2]+sin(elementAngle[i]),unID, ovenWidth2[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, ovenWidth2[n], 2		: unID = unID + 1
+
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, ovenWidth[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][3]-cos(elementAngle[i]),	elementWidth[i][4]-sin(elementAngle[i]),unID, ovenWidth[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, ovenWidth[n], 2		: unID = unID + 1
+
+		unID = unID + 6
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_REFRI then
+		tx1 = sin(elementAngle[i]) * (refrigeratorDepth-counterDepth/2)
+		ty1 = cos(elementAngle[i]) * (refrigeratorDepth-counterDepth/2)
+
+		tx2 = sin(elementAngle[i]) * refrigeratorDepth
+		ty2 = cos(elementAngle[i]) * refrigeratorDepth
+
+		tx3 = sin(elementAngle[i]) * (counterDepth/2)
+		ty3 = cos(elementAngle[i]) * (counterDepth/2)
+
+		hotspot2 elementWidth[i][1]+tx1,						elementWidth[i][2]-ty1,						unID, refrigeratorWidth2[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][1]+tx1+cos(elementAngle[i]),	elementWidth[i][2]-ty1+sin(elementAngle[i]),unID, refrigeratorWidth2[n], 3	: unID = unID + 1
+		hotspot2 elementWidth[i][3]+tx1,						elementWidth[i][4]-ty1,						unID, refrigeratorWidth2[n], 2	: unID = unID + 1
+
+		hotspot2 elementWidth[i][3]+tx1,						elementWidth[i][4]-ty1,						unID, refrigeratorWidth[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][3]+tx1-cos(elementAngle[i]),	elementWidth[i][4]-ty1-sin(elementAngle[i]),unID, refrigeratorWidth[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][1]+tx1,						elementWidth[i][2]-ty1,						unID, refrigeratorWidth[n], 2		: unID = unID + 1
+
+		hotspot2 elementWidth[i][1]-tx3,						elementWidth[i][2]+ty3,						unID, refrigeratorDepth, 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][1]-tx3,						elementWidth[i][2]+ty3,						unID, refrigeratorDepth, 3		: unID = unID + 1
+		hotspot2 elementWidth[i][1]-tx3+tx2,					elementWidth[i][2]+ty3-ty2,					unID, refrigeratorDepth, 2		: unID = unID + 1
+
+		hotspot2 elementWidth[i][3]-tx3,						elementWidth[i][4]+ty3,						unID, refrigeratorDepth, 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][3]-tx3,						elementWidth[i][4]+ty3,						unID, refrigeratorDepth, 3		: unID = unID + 1
+		hotspot2 elementWidth[i][3]-tx3+tx2,					elementWidth[i][4]+ty3-ty2,					unID, refrigeratorDepth, 2		: unID = unID + 1
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_DISHWASH then
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, dishwasherWidth2[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][1]+cos(elementAngle[i]),	elementWidth[i][2]+sin(elementAngle[i]),unID, dishwasherWidth2[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, dishwasherWidth2[n], 2		: unID = unID + 1
+
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, dishwasherWidth[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][3]-cos(elementAngle[i]),	elementWidth[i][4]-sin(elementAngle[i]),unID, dishwasherWidth[n], 3			: unID = unID + 1
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, dishwasherWidth[n], 2			: unID = unID + 1
+
+		unID = unID + 6
+	endif
+
+	if elementTypes[i][1] = SYMBTYPE_WASH then
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, washerWidth2[n], 1+128	: unID = unID + 1
+		hotspot2 elementWidth[i][1]+cos(elementAngle[i]),	elementWidth[i][2]+sin(elementAngle[i]),unID, washerWidth2[n], 3		: unID = unID + 1
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, washerWidth2[n], 2		: unID = unID + 1
+
+		hotspot2 elementWidth[i][3],						elementWidth[i][4],						unID, washerWidth[n], 1+128		: unID = unID + 1
+		hotspot2 elementWidth[i][3]-cos(elementAngle[i]),	elementWidth[i][4]-sin(elementAngle[i]),unID, washerWidth[n], 3			: unID = unID + 1
+		hotspot2 elementWidth[i][1],						elementWidth[i][2],						unID, washerWidth[n], 2			: unID = unID + 1
+
+		unID = unID + 6
+	endif
+next i
+
+
+! ------------------------------------------------------------------------------
+! Symbols
+! ------------------------------------------------------------------------------
+for i = 1 to nElement
+	add2 elementXY[i][1], elementXY[i][2]
+	rot2 elementAngle[i]
+	widthSymbol		= counterDepth
+	lengthSymbol	= elementSizes[i]
+	symbolType		= elementTypes[i][1]
+	nSymbol			= elementTypes[i][2]
+	unID			= 2000 + (elementTypes[i][1]-1) * 1000  +  (elementTypes[i][2]-1) * 100 + 70
+	gosub "drawSymbol"
+	del 2
+next i
+
+
+! ------------------------------------------------------------------------------
+! Wall Cabinet
+! ------------------------------------------------------------------------------
+if bShowOverhead then
+	line_type overheadLine
+
+	for i = 1 to nWallCabinet
+		unID = 15000 + (i-1) * 100
+
+		hotspot2  0,						wallCabinetPos_1[i][2],	unID, wallCabinetPos_1[i][1], 1+128	: unID = unID + 1
+		hotspot2 -1,						wallCabinetPos_1[i][2],	unID, wallCabinetPos_1[i][1], 3		: unID = unID + 1
+		hotspot2  wallCabinetPos_1[i][1],	wallCabinetPos_1[i][2],	unID, wallCabinetPos_1[i][1], 2		: unID = unID + 1
+
+		hotspot2  wallCabinetPos_1[i][1], 	0,						unID, wallCabinetPos_1[i][2], 1+128	: unID = unID + 1
+		hotspot2  wallCabinetPos_1[i][1],	-1,						unID, wallCabinetPos_1[i][2], 3		: unID = unID + 1
+		hotspot2  wallCabinetPos_1[i][1], 	wallCabinetPos_1[i][2],	unID, wallCabinetPos_1[i][2], 2		: unID = unID + 1
+
+		hotspot2  0,						wallCabinetPos_2[i][2],	unID, wallCabinetPos_2[i][1], 1+128	: unID = unID + 1
+		hotspot2 -1,					 	wallCabinetPos_2[i][2],	unID, wallCabinetPos_2[i][1], 3		: unID = unID + 1
+		hotspot2  wallCabinetPos_2[i][1],	wallCabinetPos_2[i][2],	unID, wallCabinetPos_2[i][1], 2		: unID = unID + 1
+
+		hotspot2  wallCabinetPos_2[i][1], 	0,						unID, wallCabinetPos_2[i][2], 1+128	: unID = unID + 1
+		hotspot2  wallCabinetPos_2[i][1],	-1,						unID, wallCabinetPos_2[i][2], 3		: unID = unID + 1
+		hotspot2  wallCabinetPos_2[i][1],	wallCabinetPos_2[i][2],	unID, wallCabinetPos_2[i][2], 2		: unID = unID + 1
+
+		for j = 1 to nWallContour[i] - 1
+			hotline2 wallCoords1[i][j*2-1], wallCoords1[i][j*2], wallCoords1[i][j*2+1], wallCoords1[i][j*2+2]
+			hotline2 wallCoords2[i][j*2-1], wallCoords2[i][j*2], wallCoords2[i][j*2+1], wallCoords2[i][j*2+2]
+		next j
+	next i
+
+
+	if nofCooktops > 0 | nofRefrigerators > 0 | nTallCabinet > 0 then
+		if not(bPolyOperations) then
+			ch = INITADDONSCOPE ("PolyOperations", "", "")
+
+			nDestContainer = 1
+			prevSourceContainer	= "mySourceContainer"
+			lastDestContainer	= "myDestinationContainer" + STR(nDestContainer,1,0)
+
+			PREPAREFUNCTION ch, "CreateContainer", prevSourceContainer, ""
+			PREPAREFUNCTION ch, "CreateContainer", lastDestContainer, ""
+
+			PREPAREFUNCTION ch, "SetSourceContainer",		prevSourceContainer, ""
+			PREPAREFUNCTION ch, "SetDestinationContainer",	lastDestContainer, ""
+
+			bPolyOperations = 1
+		endif
+
+		!!Wall Cabinet Contours
+		for i = 1 to nWallCabinet
+			for j = 1 to nWallContour[i] - 1
+				put wallCoords1[i][j*2-1], wallCoords1[i][j*2]
+			next j
+
+			put wallCoords1[i][nWallContour[i]*2-1], wallCoords1[i][nWallContour[i]*2]
+
+			for j = nWallContour[i] to 1 step -1
+				put wallCoords2[i][j*2-1], wallCoords2[i][j*2]
+			next j
+
+			dim vertArr[][]
+			dim contArr[]
+
+			nVertices	= nsp/2
+			contArr[1]	= nsp/2 + 1
+			nCont		= 1
+
+			for j = nVertices to 1 step -1
+				vertArr[j][3] = 0.0
+				vertArr[j][1] = get(1)
+				vertArr[j][2] = get(1)
+			next j
+
+			PREPAREFUNCTION ch, "Store", "wallcabPoly"+STR(i,1,0), nVertices, nCont, vertArr, contArr
+		next i
+
+
+		!!Element Holes
+		nHole = 0
+		for r = 1 to nElement
+			if	elementTypes[r][1] = SYMBTYPE_TALL | \
+				(elementTypes[r][1] = SYMBTYPE_COOKTOP & bHood & iHoodType <> ACC_HOOD_BUILTIN ) | \
+				(elementTypes[r][1] = SYMBTYPE_REFRI & refrigeratorHeigth > (counterHeigth + wallCabinetClearence )) then
+
+				dim contourNames[]
+				numContour = CALLFUNCTION (ch, "GetSourcePolygons", "", contourNames)
+
+				dim vertArr[4][3]
+				dim contArr[]
+
+				nVertices	= 4
+				contArr[1]	= 5
+				nCont		= 1
+
+				widthSymbol		= counterDepth/2
+				if elementTypes[r][1] = SYMBTYPE_COOKTOP & bHood then
+					lengthSymbol	= hoodWidth[elementTypes[r][2]]/ 2
+				else
+					lengthSymbol	= elementSizes[r] / 2
+				endif
+
+				tx1 = cos(elementAngle[r]) * lengthSymbol
+				ty1 = sin(elementAngle[r]) * lengthSymbol
+
+				tx2 = sin(elementAngle[r]) * (widthSymbol+EPS)
+				ty2 = cos(elementAngle[r]) * (widthSymbol+EPS)
+
+				tx3 = sin(elementAngle[r]) * (-widthSymbol-EPS)
+				ty3 = cos(elementAngle[r]) * (-widthSymbol-EPS)
+
+				vertArr[1][1] = elementXY[r][1] + tx1 + tx2
+				vertArr[1][2] = elementXY[r][2] + ty1 - ty2
+				vertArr[1][3] = 0.0
+				vertArr[2][1] = elementXY[r][1] - tx1 + tx2
+				vertArr[2][2] = elementXY[r][2] - ty1 - ty2
+				vertArr[2][3] = 0.0
+				vertArr[3][1] = elementXY[r][1] - tx1 + tx3
+				vertArr[3][2] = elementXY[r][2] - ty1 - ty3
+				vertArr[3][3] = 0.0
+				vertArr[4][1] = elementXY[r][1] + tx1 + tx3
+				vertArr[4][2] = elementXY[r][2] + ty1 - ty3
+				vertArr[4][3] = 0.0
+
+				nHole = nHole + 1
+				holeName = "holes"+STR(nHole,1,0)
+
+				PREPAREFUNCTION ch, "Store", holeName, nVertices, nCont, vertArr, contArr
+
+				dim tempResPolyIDArr[]
+				for nC = 1 TO numContour
+					tempNumPoly = CALLFUNCTION(ch, contourNames[nC] + " - " + holeName, "", tempResPolyIDArr)
+				next nC
+
+				if prevSourceContainer <> "" then
+					PREPAREFUNCTION ch, "DeleteContainer",		prevSourceContainer, ""
+				endif
+				PREPAREFUNCTION ch, "SetSourceContainer",		lastDestContainer, ""
+				prevSourceContainer	= lastDestContainer
+				nDestContainer = nDestContainer + 1
+				lastDestContainer = "myDestinationContainer" + STR(nDestContainer,1,0)
+				PREPAREFUNCTION ch, "CreateContainer",			lastDestContainer, ""
+				PREPAREFUNCTION ch, "SetDestinationContainer",	lastDestContainer, ""
+			endif
+		next r
+
+		PREPAREFUNCTION ch, "DeleteContainer",			lastDestContainer, ""
+		PREPAREFUNCTION ch, "SetDestinationContainer",	prevSourceContainer, ""
+		lastDestContainer	= prevSourceContainer
+		prevSourceContainer	= "wallCabinets"
+		PREPAREFUNCTION ch, "CreateContainer",			prevSourceContainer, ""
+		PREPAREFUNCTION ch, "SetSourceContainer",		prevSourceContainer, ""
+
+		dim resPolyIDArr[]
+		numPoly = CALLFUNCTION(ch, "GetDestinationPolygons", "", resPolyIDArr)
+		for cP = 1 to numPoly
+			polygonID = resPolyIDArr[cP]
+			mask = 1
+			gosub "getGDLpolygonFromAPI"
+			if nsp > 11 then
+				poly2_b nsp/3, 1+4, gs_fill_pen, gs_back_pen, get(nsp)
+			else
+				for k = 1 to nsp
+					temp = get(1)
+				next k
+			endif
+		next cP
+
+	else
+		for i = 1 to nWallCabinet
+			for j = 1 to nWallContour[i] - 1
+				put wallCoords1[i][j*2-1], wallCoords1[i][j*2], 1
+			next j
+
+			put wallCoords1[i][nWallContour[i]*2-1], wallCoords1[i][nWallContour[i]*2], 1
+
+			for j = nWallContour[i] to 1 step -1
+				put wallCoords2[i][j*2-1], wallCoords2[i][j*2], 1
+			next j
+
+			poly2_b nsp/3, 1+4, gs_fill_pen, gs_back_pen, get(nsp)
+		next i
+	endif
+endif
+
+
+
+! ------------------------------------------------------------------------------
+! Minimal Space
+! ------------------------------------------------------------------------------
+reqBMinSpace = 0
+call "fa_minimalspace" parameters all MSType = 0, unID = 10000,
+						returned_parameters reqBMinSpace,
+											MSFillType,
+											MSFillPen,
+											MSFillBackPen,
+											MSContLineType,
+											MSContLinePen
+
+if reqBMinSpace <> 0 then
+	if not(bPolyOperations) then
+		ch = INITADDONSCOPE ("PolyOperations", "", "")
+
+		nDestContainer = 1
+		prevSourceContainer	= "mySourceContainer"
+		lastDestContainer	= "myDestinationContainer" + STR(nDestContainer,1,0)
+
+		PREPAREFUNCTION ch, "CreateContainer", prevSourceContainer, ""
+		PREPAREFUNCTION ch, "CreateContainer", lastDestContainer, ""
+
+		PREPAREFUNCTION ch, "SetSourceContainer",		prevSourceContainer, ""
+		PREPAREFUNCTION ch, "SetDestinationContainer",	lastDestContainer, ""
+
+		bPolyOperations = 1
+	endif
+
+	PREPAREFUNCTION ch, "EmptyContainer", prevSourceContainer, ""
+	PREPAREFUNCTION ch, "EmptyContainer", lastDestContainer, ""
+
+	drawindex 1
+	fill MSFillType
+	pen MSContLinePen
+	line_type MSContLineType
+
+	dim tempOffset[][2]
+	offsetSize = counterDepth + MSFront
+	gosub "polyLineOffset"
+	dim MSPoints[][2]
+	MSPoints = tempOffset
+
+	unID = 10000
+	gosub "fillMinSpace"
+endif
+
+
+if bPolyOperations then CLOSEADDONSCOPE ch
+
+! ==============================================================================
+!
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+!
+! ==============================================================================
+
+! ------------------------------------------------------------------------------
+! Draw Symbol
+! ------------------------------------------------------------------------------
+"drawSymbol":
+! ------------------------------------------------------------------------------
+
+	drawindex 10
+
+	if symbolType = SYMBTYPE_TALL then
+		gosub "drawFill"
+		line2 -lengthSymbol/2, -widthSymbol/2,  lengthSymbol/2,  widthSymbol/2
+		line2  lengthSymbol/2, -widthSymbol/2, -lengthSymbol/2,  widthSymbol/2
+	endif
+
+	if symbolType = SYMBTYPE_SINK then
+		hotline2 -lengthSymbol/2, -widthSymbol/2, -lengthSymbol/2, widthSymbol/2
+		hotline2  lengthSymbol/2, -widthSymbol/2,  lengthSymbol/2, widthSymbol/2
+		if iSinkType = ACC_SINK_ROUND then
+			lengthSymbol = min (lengthSymbol, widthSymbol)
+			add2 -lengthSymbol/2*(1-2*bMirroredSink), -widthSymbol/2
+			sinkMinus = 0
+		else
+			if counterDepth < minSinkCounter then
+				sinkOffsetY	= 0
+				sinkMinus	= 0
+			else
+				sinkOffsetY = 0.07
+				sinkMinus	= 0.1
+			endif
+			add2 -lengthSymbol/2*(1-2*bMirroredSink), -widthSymbol/2 + sinkOffsetY
+		endif
+		mul2 1-2*bMirroredSink, 1
+		call "fa_sinktyp"  parameters	a	= lengthSymbol,
+										b	= widthSymbol-sinkMinus,
+						gs_sink_type_m		= gs_sink_type_m,
+						SinkSymbol_m		= 1,
+						bMovableDrain		= 0,
+						sunder				= 0,
+						TapSymbol_m			= 0,
+						gs_cont_pen			= gs_cont_pen,
+						gs_fill_type		= gs_fill_type,
+						gs_fill_pen			= gs_fill_pen,
+						gs_back_pen			= gs_back_pen,
+						gs_tap_type_m		= 0,
+						tapOffset			= 0,
+						bShowHotspots		= 0
+		del 2
+	endif
+
+	if symbolType = SYMBTYPE_COOKTOP then
+		hotline2 -lengthSymbol/2, -widthSymbol/2, -lengthSymbol/2, widthSymbol/2
+		hotline2  lengthSymbol/2, -widthSymbol/2,  lengthSymbol/2, widthSymbol/2
+		add2 0, widthSymbol/2
+		call "fa_CooktopType" parameters	a	= lengthSymbol,
+											aa	= lengthSymbol,
+											b	= widthSymbol,
+											bb	= widthSymbol - 0.1,
+							gs_symbol_type_m	= 1,
+							CooktopType_m		= CooktopType_m,
+							gs_hotspotUnIdBegin = unID,
+							b2DSymbol			= 0,
+							gs_cont_pen			= gs_cont_pen,
+							gs_fill_type		= gs_fill_type,
+							gs_fill_pen			= gs_fill_pen,
+							gs_back_pen			= gs_back_pen,
+							bShowHotspots		= 0
+		del 1
+
+		if bShowOverhead & bHood then
+			line_type overheadLine
+			hoodSizeX = hoodWidth[nSymbol]/2
+			hoodSizeY = 0.85 * counterDepth
+			hoodChimneyX	= 0.14
+			hoodChimneyY1	= counterDepth/2 - 0.15
+			hoodChimneyY2	= counterDepth/2
+			hoodOffsetY		= 0.05
+
+			if iHoodType = ACC_HOOD_WALL |  iHoodType = ACC_HOOD_HANGING then
+				line2  hoodSizeX,	counterDepth/2 - hoodSizeY,	 hoodSizeX,	counterDepth/2
+				line2  hoodSizeX,	counterDepth/2 - hoodSizeY,	-hoodSizeX,	counterDepth/2 - hoodSizeY
+				line2 -hoodSizeX,	counterDepth/2 - hoodSizeY,	-hoodSizeX,	counterDepth/2
+
+				hotline2  hoodSizeX,	counterDepth/2 - hoodSizeY,	 hoodSizeX,	counterDepth/2
+				hotline2  hoodSizeX,	counterDepth/2 - hoodSizeY,	-hoodSizeX,	counterDepth/2 - hoodSizeY
+				hotline2 -hoodSizeX,	counterDepth/2 - hoodSizeY,	-hoodSizeX,	counterDepth/2
+
+				if iHoodType = ACC_HOOD_HANGING then
+					rect2 -hoodChimneyX,	-0.125+hoodOffsetY, hoodChimneyX,	 0.125+hoodOffsetY
+				else
+					line2  hoodChimneyX,	hoodChimneyY1,	 hoodChimneyX,	hoodChimneyY2
+					line2  hoodChimneyX,	hoodChimneyY1,	-hoodChimneyX,	hoodChimneyY1
+					line2 -hoodChimneyX,	hoodChimneyY1,	-hoodChimneyX,	hoodChimneyY2
+
+					line2  hoodSizeX,	counterDepth/2 - hoodSizeY,  hoodChimneyX,	hoodChimneyY1
+					line2 -hoodSizeX,	counterDepth/2 - hoodSizeY, -hoodChimneyX,	hoodChimneyY1
+				endif
+			else
+				rect2 -hoodSizeX, counterDepth/2, hoodSizeX, counterDepth/2 - hoodSizeY
+				line2 -hoodSizeX, counterDepth/2 - wallCabinetDepth, hoodSizeX, counterDepth/2 - wallCabinetDepth
+			endif
+
+			line_type SYMB_LINETYPE
+		endif
+	endif
+
+	if symbolType = SYMBTYPE_OVEN then
+		gosub "drawFill"
+		if iOvenSymbType = SYMBTYPE_TEXT then
+			symbolText = ovenText
+			gosub "drawText"
+		else
+			if LibraryLangCode = "GER" then		!different german symbol
+				circle2 0, widthSymbol * 0.1, refriSymbSize/2
+				line2 -lengthSymbol/2, -widthSymbol * 0.3, lengthSymbol/2, -widthSymbol * 0.3
+			else
+				add2 -lengthSymbol/2, -widthSymbol/2
+				line2 lengthSymbol, 0, 2/5*lengthSymbol, widthSymbol/2
+				line2 2/5*lengthSymbol, widthSymbol/2, 3/5*lengthSymbol, widthSymbol/2
+				line2 3/5*lengthSymbol, widthSymbol/2, 0, widthSymbol
+				del 1
+			endif
+		endif
+	endif
+
+	if symbolType = SYMBTYPE_REFRI then
+		if bRefriWallCabinet & bShowOverhead then
+			line_type overheadLine
+			widthSymbol = counterDepth
+			poly2_b 4, 1+4, gs_fill_pen, gs_back_pen,
+				-lengthSymbol/2, -widthSymbol/2, 1,
+				 lengthSymbol/2, -widthSymbol/2, 1,
+				 lengthSymbol/2,  widthSymbol/2, 1,
+				-lengthSymbol/2,  widthSymbol/2, 1
+
+			line_type SYMB_LINETYPE
+		endif
+
+		widthSymbol = refrigeratorDepth
+		add2 0, -widthSymbol/2 + counterDepth/2
+		hotline2 -lengthSymbol/2, -widthSymbol/2, -lengthSymbol/2,  widthSymbol/2
+		hotline2  lengthSymbol/2, -widthSymbol/2,  lengthSymbol/2,  widthSymbol/2
+		hotline2 -lengthSymbol/2, -widthSymbol/2,  lengthSymbol/2, -widthSymbol/2
+		hotline2 -lengthSymbol/2,  widthSymbol/2,  lengthSymbol/2,  widthSymbol/2
+
+		drawindex 8
+		poly2_b 4, 1+2+4+64, gs_fill_pen, gs_back_pen,
+			-lengthSymbol/2, -widthSymbol/2, 1,
+			 lengthSymbol/2, -widthSymbol/2, 1,
+			 lengthSymbol/2,  widthSymbol/2, 1,
+			-lengthSymbol/2,  widthSymbol/2, 1
+
+		if iRefriSymbType = SYMBTYPE_TEXT then
+			symbolText = refriText
+			gosub "drawText"
+		else
+			if iRefrigeratorType <> ACC_REFRI_COMPACT then
+				for k = 1 to 4
+					rot2 (k-1)* 45
+					line2 -refriSymbSize, 0, refriSymbSize, 0
+					del 1
+				next k
+			endif
+		endif
+
+		del 1
+	endif
+
+	if symbolType = SYMBTYPE_DISHWASH then
+		gosub "drawFill"
+		if iDishwasherSymbType = SYMBTYPE_TEXT then
+			symbolText = dishwasherText
+			gosub "drawText"
+		else
+			aorb = min(lengthSymbol, widthSymbol)
+
+			circle2 0, 0, aorb/2.7
+			line2 aorb/2.7*1.414213/2, aorb/2.7*1.414213/2, lengthSymbol/2, widthSymbol/2
+			line2 -aorb/2.7*1.414213/2, aorb/2.7*1.414213/2, -lengthSymbol/2, widthSymbol/2
+			line2 aorb/2.7*1.414213/2, -aorb/2.7*1.414213/2, lengthSymbol/2, -widthSymbol/2
+			line2 -aorb/2.7*1.414213/2, -aorb/2.7*1.414213/2, -lengthSymbol/2, -widthSymbol/2
+		endif
+	endif
+
+	if symbolType = SYMBTYPE_WASH then
+		gosub "drawFill"
+		if iWasherSymbType = SYMBTYPE_TEXT then
+			symbolText = washerText
+			gosub "drawText"
+		else
+			aorb = min(lengthSymbol, widthSymbol)
+
+			circle2 0, 0, aorb/2.7
+		endif
+	endif
+return
+
+
+! ------------------------------------------------------------------------------
+"drawFill":
+! ------------------------------------------------------------------------------
+
+	hotline2 -lengthSymbol/2, -widthSymbol/2, -lengthSymbol/2, widthSymbol/2
+	hotline2  lengthSymbol/2, -widthSymbol/2,  lengthSymbol/2, widthSymbol/2
+
+	drawindex 8
+	poly2_b 4, 1+2+4+64, gs_fill_pen, gs_back_pen,
+		-lengthSymbol/2, -widthSymbol/2, 1,
+		 lengthSymbol/2, -widthSymbol/2, 1,
+		 lengthSymbol/2,  widthSymbol/2, 1,
+		-lengthSymbol/2,  widthSymbol/2, 1
+
+	drawindex 10
+return
+
+
+! ------------------------------------------------------------------------------
+"drawText":
+! ------------------------------------------------------------------------------
+
+	pen penText
+	nTrans = 0
+	totalRotate = (SYMB_ROTANGLE + angleViewRot + elementAngle[i]) MOD 360
+	if typeTextRotation_m = 2 then				! Readable
+		rot2 180 * (totalRotate > (gs_readable_angle + eps) & totalRotate < (gs_readable_angle + 180 + eps))	! 1/0
+		nTrans = nTrans + 1
+	else
+		if typeTextRotation_m = 1 then							! Horizontal
+			totalRotate = (SYMB_ROTANGLE + angleViewRot) MOD 360
+			rot2 totalRotate * (SYMB_MIRRORED - not(SYMB_MIRRORED))	- elementAngle[i]	! 1/-1
+			nTrans = nTrans + 1
+		endif
+	endif
+	text2 0, 0, symbolText
+	del nTrans
+	pen gs_cont_pen
+return
+
+
+! ==============================================================================
+! Fill Minimal Space Polygon Contour
+! ------------------------------------------------------------------------------
+! Input variables:
+!	startRef:		actual start point number
+! Returned variable:
+!	stack:
+! ==============================================================================
+"fillMinSpace":
+
+	nMinSpace = 0
+	for i = 1 to nTotalRefPoint -1
+		if bIsLine[i] then
+
+			dim contourNames[]
+			numContour = CALLFUNCTION (ch, "GetSourcePolygons", "", contourNames)
+
+			dim inhEdgeInfos[4]
+			dim vertArr[4][3]
+			dim contArr[]
+
+			defaultInhEdgeInfo	= 0
+			nVertices			= 4
+			contArr[1]			= 5
+			nCont				= 1
+
+			vertArr[1][1] = oppsidePoints[i][1]
+			vertArr[1][2] = oppsidePoints[i][2]
+			vertArr[1][3] = 0.0
+			vertArr[2][1] = oppsidePoints[i+1][1]
+			vertArr[2][2] = oppsidePoints[i+1][2]
+			vertArr[2][3] = 0.0
+			vertArr[3][1] = MSPoints[i+1][1]
+			vertArr[3][2] = MSPoints[i+1][2]
+			vertArr[3][3] = 0.0
+			vertArr[4][1] = MSPoints[i][1]
+			vertArr[4][2] = MSPoints[i][2]
+			vertArr[4][3] = 0.0
+
+			inhEdgeInfos[1] = 0
+			inhEdgeInfos[2] = 0
+			inhEdgeInfos[3] = 0
+			inhEdgeInfos[4] = 1
+
+			nMinSpace = nMinSpace + 1
+			minSpaceName = "minSpace"+STR(nMinSpace,1,0)
+
+			PREPAREFUNCTION ch, "Store", minSpaceName, nVertices, nCont, vertArr, contArr, defaultInhEdgeInfo, inhEdgeInfos
+
+			if numContour > 0 then
+			dim tempResPolyIDArr[]
+				for nC = 1 TO numContour
+					tempNumPoly = CALLFUNCTION(ch, contourNames[nC] + " + " + minSpaceName, "", tempResPolyIDArr)
+					if tempNumPoly > 1 & nC < numContour then
+						PREPAREFUNCTION ch, "Dispose", tempResPolyIDArr[tempNumPoly], lastDestContainer
+					endif
+				next nC
+
+				if prevSourceContainer <> "" then
+					PREPAREFUNCTION ch, "DeleteContainer",		prevSourceContainer, ""
+				endif
+				PREPAREFUNCTION ch, "SetSourceContainer",		lastDestContainer, ""
+				prevSourceContainer	= lastDestContainer
+				nDestContainer = nDestContainer + 1
+				lastDestContainer = "myDestinationContainer" + STR(nDestContainer,1,0)
+				PREPAREFUNCTION ch, "CreateContainer",			lastDestContainer, ""
+				PREPAREFUNCTION ch, "SetDestinationContainer",	lastDestContainer, ""
+			endif
+		endif
+	next i
+
+	PREPAREFUNCTION ch, "DeleteContainer",			lastDestContainer, ""
+	PREPAREFUNCTION ch, "SetDestinationContainer",	prevSourceContainer, ""
+	lastDestContainer	= prevSourceContainer
+	prevSourceContainer	= "minSpaceces"
+	PREPAREFUNCTION ch, "CreateContainer",			prevSourceContainer, ""
+	PREPAREFUNCTION ch, "SetSourceContainer",		prevSourceContainer, ""
+
+	dim resPolyIDArr[]
+	numPoly = CALLFUNCTION(ch, "GetDestinationPolygons", "", resPolyIDArr)
+	for cP = 1 to numPoly
+		polygonID = resPolyIDArr[cP]
+		mask = 1
+		gosub "getGDLpolygonFromAPI"
+		if nsp > 8 then
+			poly2_b nsp/3, 1+2+4+64, MSFillPen, MSFillBackPen, use(nsp)
+
+			nspNum = nsp
+			for k = 1 to nspNum / 3
+				hpX = get(1)
+				hpY = get(1)
+				hpS = get(1)
+				hotspot2 hpX,hpY, unID	: unID = unID + 1
+			next k
+			for k = 1 to nsp
+				temp = get(1)
+			next k
+		else
+			for k = 1 to nsp
+				temp = get(1)
+			next k
+		endif
+	next cP
+
+return
+
+

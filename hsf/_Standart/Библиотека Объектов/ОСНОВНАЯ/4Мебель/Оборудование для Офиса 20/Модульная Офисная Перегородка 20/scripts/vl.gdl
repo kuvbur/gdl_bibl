@@ -1,0 +1,307 @@
+
+call "FM_types" parameters all
+
+hideparameter all "A", "B", "ZZYZX"
+
+minDist = 0.05
+minDistModul = minDist + frameWidth * bFrame
+
+values "b" range (0, )
+values "modulWidth" range [2*bFrame*frameWidth+minDist, ]
+values "a" range [modulWidth, ]
+values "nScreen" range [1, ]
+
+
+! ------------------------------------------------------------------------------
+! Length
+! ------------------------------------------------------------------------------
+if GLOB_MODPAR_NAME = "A" then
+	nScreen = int(A / modulWidth)
+	A = modulWidth * nScreen
+	parameters nScreen = nScreen, A = A
+else
+	A = modulWidth *  nScreen
+	parameters A = A
+endif
+
+
+! ------------------------------------------------------------------------------
+! Joint
+! ------------------------------------------------------------------------------
+!values "angleLeft" range (0, 360)
+!values "angleRight" range (0, 360)
+if angleLeft < EPS then
+	angleLeft = 1
+	parameters angleLeft = angleLeft
+endif
+if angleLeft > 360-EPS then
+	angleLeft = 359
+	parameters angleLeft = angleLeft
+endif
+if angleRight < EPS then
+	angleRight = 1
+	parameters angleRight = angleRight
+endif
+if angleRight > 360-EPS then
+	angleRight = 359
+	parameters angleRight = angleRight
+endif
+if not (bJointR) then
+	hideparameter "angleRight", "bToeR"
+	lock "angleRight", "bToeR"
+endif
+if not (bJointL) then
+	hideparameter "angleLeft", "bToeL"
+	lock "angleLeft", "bToeL"
+endif
+
+if iToe = 1 | iToe = 5 | iToe = 6 then
+	hideparameter "bToeL", "bToeR"
+	lock "bToeL", "bToeR"
+endif
+
+if GLOB_MODPAR_NAME = "angleLeftEnd" then
+	angleLeft = angleLeftEnd*2
+	parameters angleLeft = angleLeft
+else
+	angleLeftEnd = angleLeft/2
+	parameters angleLeftEnd = angleLeftEnd
+endif
+values "angleLeftEnd" range(0,180)
+
+if GLOB_MODPAR_NAME = "angleRightEnd" then
+	angleRight = angleRightEnd*2
+	parameters angleRight = angleRight
+else
+	angleRightEnd = angleRight/2
+	parameters angleRightEnd = angleRightEnd
+endif
+values "angleRightEnd" range(0,180)
+
+
+! ------------------------------------------------------------------------------
+! Modules
+! -------------------------------------------------------------------------------
+if not(bFrame) then
+	hideparameter "frameWidth"
+	lock "frameWidth"
+endif
+if nModul < 4 then
+	hideparameter "moduleHeight4", "moduleMat4"
+	lock "moduleHeight4", "moduleMat4"
+endif
+if nModul < 3 then
+	hideparameter "moduleHeight3", "moduleMat3"
+	lock "moduleHeight3", "moduleMat3"
+endif
+if nModul < 2 then
+	hideparameter "moduleHeight2", "moduleMat2"
+	lock "moduleHeight2", "moduleMat2"
+endif
+
+
+! ------------------------------------------------------------------------------
+! 3D Representation
+! ------------------------------------------------------------------------------
+values{2} "gs_detlevel_3D_m" 	2, stDetlevel3D[1], 
+								1, stDetlevel3D[2],
+								0, stDetlevel3D[3]
+
+if gs_detlevel_3D_m < 2 then
+	hideparameter "gs_resol", "gs_shadow"
+	lock "gs_resol", "gs_shadow"
+endif
+
+if gs_detlevel_3D_m = 0 then
+	hideparameter "gs_shadow"
+	lock "gs_shadow"
+endif
+
+values "gs_resol" range [3, )
+if gs_resol < 3 then parameters gs_resol = 3
+
+
+! ------------------------------------------------------------------------------
+! 2D Representation
+! ------------------------------------------------------------------------------
+values{2} "gs_detlevel_2D_m" 	2, stDetlevel2D[1],
+								1, stDetlevel2D[2]
+
+if gs_cont_pen=0 then parameters gs_cont_pen=2
+if gs_fill_pen=0 then parameters gs_fill_pen=91
+
+
+! ------------------------------------------------------------------------------
+! Toe
+! ------------------------------------------------------------------------------
+if bBase then
+	values "toeStyle" stToeStyle
+	values "iToe" 1, 2, 3, 4, 5, 6
+	if GLOB_MODPAR_NAME = "toeStyle" then
+		iToe = 1
+		for i = 1 to vardim1(stToeStyle)
+			if toeStyle = stToeStyle[i] then	iToe = i
+		next i
+		parameters iToe = iToe
+	else
+		iToe = max(min(iToe,6),1)
+		parameters toeStyle = stToeStyle[iToe]
+	endif
+
+	if iToe = 6 then							! Suspended
+		hideparameter "toe_mat", "wheelMat"
+		lock "toe_mat", "wheelMat"
+		values "toeHeight" range [0, )
+	else
+		if iToe = 1 then values "toeHeight" range [0.01, 0.01]
+		if iToe = 2 or iToe = 3 then values "toeHeight" range (0.005, )
+		if iToe = 4 then values "toeHeight" range (0.07, )
+		if iToe = 5 then values "toeHeight" range (0, )
+
+		if iToe <> 4 then						! Wheel
+			hideparameter "wheelMat"
+			lock  "wheelMat"
+			if iToe = 1 then					! Block
+				hideparameter "toeHeight"
+				lock "toeHeight"
+			endif
+		endif
+	endif
+else
+	hideparameter	"toeStyle", "iToe", "toe_mat", "toeHeight", "wheelMat"
+	lock 			"toeStyle", "iToe", "toe_mat", "toeHeight", "wheelMat"
+endif
+
+
+! ------------------------------------------------------------------------------
+! Height
+! ------------------------------------------------------------------------------
+if bUniform then
+	values "moduleHeight1" range [minDistModul, )
+	values "moduleHeight2" range [minDistModul, )
+	values "moduleHeight3" range [minDistModul, )
+	values "moduleHeight4" range [minDistModul, )
+
+	if GLOB_MODPAR_NAME = "ZZYZX" or GLOB_MODPAR_NAME = "screenHeight" then
+
+		if GLOB_MODPAR_NAME = "ZZYZX" then
+			screenHeight = ZZYZX - _actToeHeight
+			if ZZYZX < frameWidth*bFrame + _actToeHeight + nModul*minDistModul then
+				nModul = min(4, int((ZZYZX-frameWidth*bFrame-_actToeHeight)/minDistModul))
+				parameters nModul = nModul
+				gosub "allocationModuleHeight"
+			else
+				gosub "allocationModuleHeight"
+			endif
+			parameters screenHeight = screenHeight
+		endif
+
+		if GLOB_MODPAR_NAME = "screenHeight" then
+			ZZYZX = screenHeight + _actToeHeight
+			if  screenHeight < frameWidth*bFrame + nModul*minDistModul then
+				nModul = min(4, int((screenHeight-frameWidth*bFrame)/minDistModul))
+				parameters nModul = nModul
+				gosub "allocationModuleHeight"
+			else
+				gosub "allocationModuleHeight"
+			endif
+			parameters ZZYZX = ZZYZX
+		endif
+
+	else
+		gosub "allocationModuleHeight"
+		tempModulNumber = nModul
+		ZZYZX = screenHeight + _actToeHeight
+		parameters ZZYZX = ZZYZX, tempModulNumber = tempModulNumber
+	endif
+
+	lock  "moduleHeight1", "moduleHeight2", "moduleHeight3", "moduleHeight4"
+
+else
+
+	min_screen = 0
+	if nModul> 1 then min_screen = min_screen + moduleHeight2
+	if nModul> 2 then min_screen = min_screen + moduleHeight3
+	if nModul> 3 then min_screen = min_screen + moduleHeight4
+
+	if GLOB_MODPAR_NAME = "screenHeight" or GLOB_MODPAR_NAME = "ZZYZX" or GLOB_MODPAR_NAME = "nModul" then
+
+		if GLOB_MODPAR_NAME = "ZZYZX" then
+			screenHeight = ZZYZX - _actToeHeight
+			if ZZYZX < frameWidth*bFrame + _actToeHeight + minDistModul + min_screen then
+				nModul = min(tempModulNumber-1, int((screenHeight-frameWidth*bFrame)/minDistModul))
+				parameters nModul = nModul
+				gosub "allocationModuleHeight"
+			else
+				moduleHeight1 = ZZYZX - _actToeHeight - min_screen - frameWidth*bFrame
+				parameters moduleHeight1 = moduleHeight1
+			endif
+			parameters screenHeight = screenHeight
+		endif
+
+		if GLOB_MODPAR_NAME = "screenHeight" then
+			ZZYZX = screenHeight + _actToeHeight
+			if  screenHeight < frameWidth*bFrame + minDistModul + min_screen then
+				nModul = min(tempModulNumber-1, int((screenHeight-frameWidth*bFrame)/minDistModul))
+				parameters nModul = nModul
+				gosub "allocationModuleHeight"
+			else
+				moduleHeight1 = screenHeight - min_screen - frameWidth*bFrame
+				parameters moduleHeight1 = moduleHeight1
+			endif
+			parameters ZZYZX = ZZYZX
+		endif
+
+		if GLOB_MODPAR_NAME = "nModul" then
+			gosub "allocationModuleHeight"
+		endif
+
+	else
+		moduleHeight1 = screenHeight - min_screen - frameWidth*bFrame
+		tempModulNumber = nModul
+		ZZYZX = screenHeight + _actToeHeight
+		parameters ZZYZX = ZZYZX, tempModulNumber = tempModulNumber, moduleHeight1 = moduleHeight1
+	endif
+
+	min_screen = 0
+	if nModul> 1 then min_screen = min_screen + moduleHeight2
+	if nModul> 2 then min_screen = min_screen + moduleHeight3
+	if nModul> 3 then min_screen = min_screen + moduleHeight4
+
+	values "moduleHeight1" range [minDistModul, ]
+	values "moduleHeight2" range [minDistModul, screenHeight - min_screen - frameWidth*bFrame - minDistModul + moduleHeight2]
+	values "moduleHeight3" range [minDistModul, screenHeight - min_screen - frameWidth*bFrame - minDistModul + moduleHeight3]
+	values "moduleHeight4" range [minDistModul, screenHeight - min_screen - frameWidth*bFrame - minDistModul + moduleHeight4]
+
+	lock  "moduleHeight1"
+endif
+
+values "nModul"  range [1, min(4, int((ZZYZX-frameWidth*bFrame-_actToeHeight)/minDistModul))]
+values "screenHeight" range [frameWidth*bFrame+minDistModul, )
+values "ZZYZX" range [_actToeHeight+frameWidth*bFrame+minDistModul, )
+
+dim moduleHeight[4]
+minFrameHeight = screenHeight
+moduleHeight[1] = moduleHeight1
+if nModul > 1 then moduleHeight[2] = moduleHeight2
+if nModul > 2 then moduleHeight[3] = moduleHeight3
+if nModul > 3 then moduleHeight[4] = moduleHeight4
+for i = 1 to nModul
+	minFrameHeight = min (minFrameHeight, (moduleHeight[i]-minDist))
+next i
+
+values "frameWidth" range [0, min ((modulWidth-minDist)/2, minFrameHeight, (screenHeight-minDist*nModul)/(nModul+1))]
+
+
+END
+
+! ======================================================================
+! SubRoutines
+! ======================================================================
+"allocationModuleHeight":
+	moduleHeight1 = (screenHeight - frameWidth*bFrame) / nModul
+	moduleHeight2 = moduleHeight1
+	moduleHeight3 = moduleHeight1
+	moduleHeight4 = moduleHeight1
+	parameters moduleHeight1 = moduleHeight1, moduleHeight2 = moduleHeight2, moduleHeight3 = moduleHeight3, moduleHeight4 = moduleHeight4
+return

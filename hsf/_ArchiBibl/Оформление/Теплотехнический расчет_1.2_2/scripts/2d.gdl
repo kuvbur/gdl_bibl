@@ -1,0 +1,264 @@
+DEFINE STYLE st LABEL_FONT_NAME, LABEL_TEXT_SIZE, 4, LABEL_FONT_STYLE
+DEFINE STYLE st2 LABEL_FONT_NAME, LABEL_TEXT_SIZE, 4, LABEL_FONT_STYLE+4
+DEFINE STYLE st1 LABEL_FONT_NAME, LABEL_TEXT_SIZE/2, 5, LABEL_FONT_STYLE
+style st
+mypen=LABEL_TEXT_PEN
+hs=LABEL_TEXT_SIZE*LABEL_TEXT_LEADING/10/2
+hh=LABEL_TEXT_SIZE*LABEL_TEXT_LEADING/10
+
+!=======================================================================
+!   Расчет Сопротивления теплопередачи конструкции
+!=======================================================================
+
+!============== Запись физических свойств материала и штриховки сечения в массив ==============
+
+for i=1 to nnLayers
+	DIM xxx[]
+	n=REQUEST{2} ("Building_Material_info", LName[i], "gs_bmat_physical_properties", xxx) 
+	PUT xxx[1]
+	LTeplo[i]=GET (1)
+	DIM yyy[]
+	n=REQUEST{2} ("Building_Material_info", LName[i], "gs_bmat_cutFill_properties", yyy) 
+	PUT yyy[1]
+	LFill[i]=GET (1)
+next i
+
+for i=1 to nnLayers
+	Ltermsopr=LThick[i]/LTeplo[i]   !  Термическое сопротивление слоя
+	termsopr=termsopr+Ltermsopr   ! Термическое сопротивление конструкции 
+next i
+
+Soprtepl=1/kto+1/ktv+termsopr      !Сопротивление теплопередачи
+
+tolshina=(LThick[nnn]/(LThick[nnn]/LTeplo[nnn]))*(Rreq-(soprtepl-(LThick[nnn]/LTeplo[nnn]))) !Толщина утеплителя
+
+Tint=tempvnutr-((tempvnutr-temper5d92)/(soprtepl*Ktv))*(1/ktv)   !Температура внутренней поверхности
+
+DIM Ltemp[]
+for i=nnLayers to 1 step -1
+	Ltermsopr=LThick[i]/LTeplo[i]   !  Термическое сопротивление слоя
+	termsoprx=termsoprx+Ltermsopr   ! Термическое сопротивление конструкции 
+	Ltemp[i]= tempvnutr-((tempvnutr-temper5d92)/Soprtepl)*(1/ktv+termsoprx)  !Температура поверхности слоев
+next i
+
+!=======================================================================
+!                                  Маркер
+!=======================================================================
+if marker="Расчет" then GOSUB "raschet"
+if marker="Отчет" then GOSUB "otchet"
+END
+
+! ==============================Расчет=============================
+
+'raschet':
+
+if ppp=1 then
+	text2 0,  hs, Rtreb0
+	text2 stw (Rtreb0)/10,  hs, Rreq
+endif
+if ppp1=1 then
+	if soprtepl<Rreq then pen mypen1
+		text2 0,-hs, Rfact0
+		text2 stw (Rfact0)/10,  -hs, soprtepl
+endif
+
+if rrr=0 then
+else
+	un=10
+		hotspot2 -stw (" ")/5, 	-hh*(2),	un, nnn, 1+128: un=un+1
+		hotspot2 -stw (" ")/5,	-hh*(2-nnn),	un, nnn, 3: un=un+1
+		hotspot2 -stw (" ")/5,-hh*(2+nnn),	un, nnn, 2: un=un+1
+	circle2 -stw (" ")/5, -hh*(2+nnn), 0.1
+
+	for i=1 to nnLayers
+		if i=nnn then 
+			pen mypen1
+			text2 0, -hh*(2+i), i
+			text2 stw ("   ")/10, -hh*(2+i), LName[i]+" - "
+			text2 (stw ("   ")+stw(LName[i]+" - "))/10, -hh*(2+i), tolshina*1000
+		else 
+			pen mypen
+			text2 0, -hh*(2+i), i
+			text2 stw ("   ")/10, -hh*(2+i), LName[i]+" - "
+			text2 (stw ("   ")+stw(LName[i]+" - "))/10, -hh*(2+i), LThick[i]*1000
+		endif
+	next i
+endif
+
+RETURN
+
+! =========================== Отчет==========================
+
+'otchet':
+aa=LABEL_TEXT_SIZE/3
+
+text2 0,  0,       "РЕЗУЛЬТАТЫ РАСЧЕТА"
+
+line2 0,-hh/2,1+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,-hh/2
+
+text2 0,  -hh*2,   "Теплотехнический расчет ограждающих конструкций выполнен"
+text2 0,  -hh*3,   "для здания "
+text2 stw("для здания ")/10,  -hh*3, PROJECTNAME
+text2 0,  -hh*4,   "в городе "
+text2 stw("в городе ")/10,  -hh*4, town+", "+region
+
+text2 0,  -hh*6,   "Тип здания - "        +TipP
+text2 0,  -hh*7,   "Тип конструкций - "   +TipK
+
+if tipP="Производственные здания" then
+if teplo>0 then text2 stw("Тип здания - "+TipP)/10,  -hh*6,   " со значительными избытками тепла (более 23Вт/м)"
+endif
+
+if LABEL_FONT_STYLE>3 then
+else
+	style st2
+endif
+
+text2 0,  -hh*9,   "Условия эксплуатации ограждения"
+style st
+text2 aa,  -hh*10,   "Температура наружнего воздуха °С  "
+text2 aa,  -hh*11,   "Температура внутреннего воздуха °С  "
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,    -hh*10,   temper5d98
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,    -hh*11,   tempvnutr
+
+
+text2 aa,  -hh*12,   "Средняя температура отопительного периода °С  "
+text2 aa,  -hh*13,   "Продолжительность отопительного периода  "
+
+if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then 
+	text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*12,   temp10
+	text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*13,   prod10
+else
+	text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*12,   temp8
+	text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*13,   prod8
+endif
+
+text2 aa,  -hh*14,   "Влажностный режим помещения - "+rejim +" (    %)"
+text2 aa+stw("Влажностный режим помещения -   "+rejim)/10,  -hh*14,   vlajnost
+
+text2 0,                                                 -hh*16, "Градусо-сутки отопительного периода  "
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*16,  GSOP
+text2 0,                                                 -hh*17,  "Требуемое сопротивление теплопередачи,(м2×°С/Вт) "
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,            -hh*17,  R0treb
+
+
+text2 0,  -hh*19,  "Приведенное сопротивление теплопередачи (м2×°С/Вт)"
+
+text2 aa,  -hh*20,   "для стен  "
+text2 aa,  -hh*21,   "для перекрытий и покрытий над проездами  "
+text2 aa,  -hh*22,   "для перекрытий чердачных над неотапливаемыми подпольями и подв.  "
+text2 aa,  -hh*23,   "для окон балконных дверей, витрин и витражей  "
+text2 aa,  -hh*24,    "для зенитных фонарей  "
+
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*20,  R0priv1
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*21,  R0priv2
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*22,  R0priv3
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*23,  R0priv4
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10,  -hh*24,  R0priv5
+
+
+if LABEL_FONT_STYLE>3 then
+else
+	style st2
+endif
+
+text2 0,  -hh*(28+nnLayers),   "Расчетные характеристики конструкции"
+style st
+text2 aa,                                                                             -hh*(29+nnLayers),  "Сопротивление теплопередачи,(м2×°С/Вт) "
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10, -hh*(29+nnLayers),  Soprtepl
+text2 aa,                                                                             -hh*(30+nnLayers),  "Суммарное термическое сопротивление,(м2×°С/Вт) "
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10, -hh*(30+nnLayers),  Termsopr
+text2 aa,                                                                             -hh*(31+nnLayers),  "Температура внутренней поверхности,°С  "
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10, -hh*(31+nnLayers),  Tint
+text2 aa,                                                                             -hh*(32+nnLayers),  "Температура точки росы,°С  "
+text2 aa+stw("для перекрытий чердачных над неотапливаемыми подпольями и подв.  ")/10, -hh*(32+nnLayers),  temprosi
+
+if rrr>0 then
+	if LABEL_FONT_STYLE>3 then
+	else
+		style st2
+	endif
+	text2 0,  -hh*(34+nnLayers),   "Требуется произвести расчет толщины   -го слоя ("+LName[nnn]+")"
+	text2 stw("Требуется произвести расчет толщины ")/10,  -hh*(34+nnLayers),  nnn
+	style st
+	text2 aa,  -hh*(35+nnLayers),   "Требуемая толщина слоя, мм - "
+	text2 aa+stw("Требуемая толщина слоя, мм - ")/10,  -hh*(35+nnLayers),  tolshina*1000
+else
+endif
+
+!==================  Сечение ===========
+!-----------------------------------------------
+style st
+a=aa           
+mashtab=LABEL_TEXT_SIZE       
+b=nnThick*mashtab+2.5*a
+len=nnLayers*hh       ! Размер сечения по оси Y
+
+! ======Выноска слоев======
+for i=1 to nnLayers
+	text2 b,             -hh*(25.5+i), NLayer[i]
+	text2 b+stw(" ")/10,     -hh*(25.5+i), "  "+LName[i]+" - "
+	text2 b+stw(LName[i]+"       ")/10, -hh*(25.5+i), LThick[i]*1000
+!	text2 b+10, -hh*(25.5+i), LTemp[i]
+!======	Схема сечения======
+	fill Lfill[i]
+	poly2 4, 7, 
+	a,        -hh*26,
+	a,        -hh*26-len,
+	LThick[i]*mashtab+a, -hh*26-len,
+	LThick[i]*mashtab+a, -hh*26
+
+	a=a+LThick[i]*mashtab
+next i
+
+!====== Линия точки росы===========
+a=aa
+pen mypen1
+xrosi=a+(temprosi-LTemp[1])*(nnThick*mashtab/(Tint-LTemp[1]))
+line2  xrosi, -hh*25.5  ,xrosi, -hh*26.5-len
+
+!======= Линии перепадов температур===========
+pen mypen2
+style st1
+
+nachalo=-hh*26
+
+if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then 
+	shag=len/((tempvnutr-temp10)*2)
+	else
+	shag=len/((tempvnutr-temp8)*2)
+	endif
+	
+	text2 a-stw("        ")/10,                -(tempvnutr-LTemp[1])*shag+nachalo,  LTemp[1]
+	text2 a+nnThick*mashtab+stw("        ")/10,-(tempvnutr-Tint)*shag+nachalo,      Tint
+	text2 xrosi,                               -hh*26.5-len-hs,                     temprosi
+	
+	line2	a+(nnThick-LThick[nnLayers])*mashtab, -(tempvnutr-LTemp[nnLayers])*shag+nachalo, a+nnThick*mashtab,   -(tempvnutr-Tint)*shag+nachalo
+	
+	for j=1 to nnLayers-1
+		line2	a,                                -(tempvnutr-LTemp[j])*shag+nachalo,        a+LThick[j]*mashtab, -(tempvnutr-LTemp[j+1])*shag+nachalo
+		a=a+LThick[j]*mashtab
+next j
+
+!======== Знаки (+) и (-) ========
+pen mypen
+rc=hs
+a=aa
+b=nnThick*mashtab+2*a
+
+circle2 a/2, nachalo-len/2, rc
+line2 a/2-rc/2, nachalo-len/2  ,a/2+rc/2, nachalo-len/2 
+
+circle2 b-a/2, nachalo-len/2, rc
+
+line2 b-a/2-rc/2, nachalo-len/2  ,b-a/2+rc/2, nachalo-len/2 
+line2 b-a/2, nachalo-len/2-rc/2  ,b-a/2, nachalo-len/2+rc/2 
+
+RETURN
+
+
+
+
+
+
+

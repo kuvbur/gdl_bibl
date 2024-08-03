@@ -1,0 +1,532 @@
+
+! ==============================================================================
+! fa_basin_builtin
+! ==============================================================================
+
+unID = basinbuiltin_unID
+
+if not(gs_shadow) then SHADOW OFF
+
+pen gs_cont_pen
+if gs_detlevel_3D_m = OFF_3D then end basinbuiltin_unID
+if (GLOB_CONTEXT>20 & GLOB_CONTEXT<40) | gs_detlevel_3D_m = SIMPLE_3D then gs_resol = 6
+resol gs_resol
+
+d = 0
+if side_vis_m = 1 then
+	if bSideSplashL & not(bSideSplashR) then d = 1
+	if not(bSideSplashL) & bSideSplashR then d = 2
+	if bSideSplashL & bSideSplashR then d = 3
+endif
+if side_vis_m = 2 then
+	if bSideSplashR then d = 3 else d = 1
+endif
+if side_vis_m = 3 then
+	if bSideSplashL then d = 3 else d = 2
+endif
+if side_vis_m = 4 then d = 3
+
+
+! ==============================================================================
+! Sink Streching/ 3D Hotspot Editing
+! ==============================================================================
+
+if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+	ADD temp_aa,temp_bb,0
+	HOTSPOT 0,         0, 0, unID,sink_dist,1+128 : unID=unID+1
+	HOTSPOT sink_dist, 0, 0, unID,sink_dist,2     : unID=unID+1
+	HOTSPOT -1,        0, 0, unID,sink_dist,3     : unID=unID+1
+	DEL 1
+else
+	for hi = 1 to nSink
+		add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing), B/2, 0
+		hotspot 0,       		yBasinPos, 0, unID, sinkPos[hi][1], 1+128 : unID=unID+1
+		hotspot sinkPos[hi][1],	yBasinPos, 0, unID, sinkPos[hi][1], 2 : unID=unID+1
+		hotspot -1,      		yBasinPos, 0, unID, sinkPos[hi][1], 3 : unID=unID+1
+
+		hotspot sinkPos[hi][1], 0, 			0, unID, yBasinPos, 1+128 : unID=unID+1
+		hotspot sinkPos[hi][1], yBasinPos,	0, unID, yBasinPos, 2 : unID=unID+1
+		hotspot sinkPos[hi][1], -1, 		0, unID, yBasinPos, 3 : unID=unID+1
+		del 1
+	next hi
+endif
+
+
+! ==============================================================================
+! Table Top
+! ==============================================================================
+
+material count_mat
+
+add A/2, B/2, -count_th
+for hi = 1 to nSink
+	if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+		add sink_dist-a/2+temp_aa, -b/2 + temp_bb, 0
+	else
+		add -A/2 + sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], yBasinPos, 0
+	endif
+	if gs_sink_type_m <> BASIN_BUILTIN_RECT then
+		muly sink_depth / sink_width
+		cutpolya 2, 1, 0,
+			0, 0, 900 + 7 + 64,
+			sink_width/2, 360, 4001 + 7
+		del 1
+	else
+		cutpolya 5, 1, 0,
+			-sink_width/2, -sink_depth/2, 7,
+			 sink_width/2, -sink_depth/2, 7,
+			 sink_width/2,  sink_depth/2, 7,
+			-sink_width/2,  sink_depth/2, 7,
+			-sink_width/2, -sink_depth/2, -1
+	endif
+	del 1
+next hi
+if gs_detlevel_3D_m = SIMPLE_3D | (gs_detlevel_3D_m = DETAILED_3D & gs_count_type_m = COUNTERTYPE_RECT) | gs_detlevel_3D_m = DRAFT_3D then
+	rr = 0
+	cprism_ count_mat, count_mat, count_mat, 4, count_th,
+		-a/2, -b/2, 13+2*((d=1) OR (d>2)),
+		a/2, -b/2, 8+7*(d>1),
+		a/2, b/2, 13+2*(d>1),
+		-a/2, b/2, 8+7*((d=1) OR (d>2))
+	body -1
+endif
+if gs_count_type_m = COUNTERTYPE_ROUNDED & gs_detlevel_3D_m = DETAILED_3D then
+	add -A/2, -B/2, 0
+	gosub 6000
+	gosub 2000
+	del 1
+endif
+for hi = 1 to nSink
+	cutend
+next hi
+del 1
+
+
+! ==============================================================================
+! Backsplash & Sidesplash
+! ==============================================================================
+
+if bBackSplash & bs_h > 0 & not(dob_face) & gs_detlevel_3D_m <> DRAFT_3D then
+	add A/2, B/2, 0
+	cprism_ bs_mat, bs_mat, bs_mat, 5, bs_h,
+		-a/2, b/2-backSplashThk, 13+2*((d=1) OR (d>2)),
+		a/2, b/2-backSplashThk, 8+7*(d>1),
+		a/2, b/2, 13+2*(d>1),
+		-a/2, b/2, 8+7*((d=1) OR (d>2)),
+		-a/2, b/2-backSplashThk, -1
+	body -1
+	del 1
+endif
+if bSideSplashL & bs_h > 0 & gs_detlevel_3D_m <> DRAFT_3D then
+	cprism_ bs_mat, bs_mat, bs_mat, 5, bs_h,
+		0, rr, 15,
+		backSplashThk, rr, 15,
+		backSplashThk, B - rr * dob_face - backSplashThk * bBackSplash, 15,
+		0, B - rr * dob_face - backSplashThk * bBackSplash, 15,
+		0, rr, -1
+	body -1
+endif
+if bSideSplashR & bs_h > 0 & gs_detlevel_3D_m <> DRAFT_3D then
+	cprism_ bs_mat, bs_mat, bs_mat, 5, bs_h,
+		A, rr, 15,
+		A - backSplashThk, rr, 15,
+		A - backSplashThk, B - rr * dob_face - backSplashThk * bBackSplash, 15,
+		A, B - rr * dob_face - backSplashThk * bBackSplash, 15,
+		A, rr, -1
+	body -1
+endif
+
+
+! ==============================================================================
+! Front Face Panel
+! ==============================================================================
+
+if bFrontFacePanel & frontFacePanelHeight > 0 & gs_detlevel_3D_m <> DRAFT_3D then
+	add A/2, B/2, -count_th - frontFacePanelHeight
+	cprism_ matFrontPanel, matFrontPanel, matFrontPanel, 5, frontFacePanelHeight,
+		-a/2, -b/2 + frontFacePanelOvg, 13+2*((d=1) OR (d>2)),
+		a/2, -b/2 + frontFacePanelOvg, 8+7*(d>1),
+		a/2, -b/2 + count_th + frontFacePanelOvg, 13+2*(d>1),
+		-a/2, -b/2 + count_th + frontFacePanelOvg, 8+7*((d=1) OR (d>2)),
+		-a/2, -b/2 + frontFacePanelOvg, -1
+	body -1
+	del 1
+endif
+
+! ==============================================================================
+! Sink Frame
+! ==============================================================================
+
+sinkWidthMod = sink_width - 0.002 * not(bUnderMounted)
+sinkDepthMod = sink_depth - 0.002 * not(bUnderMounted)
+if gs_detlevel_3D_m = SIMPLE_3D then
+	material gs_sink_mat
+	for hi = 1 to nSink
+	if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+		add sink_dist + temp_aa, temp_bb, -count_th * bUnderMounted
+	else
+		add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B/2 + yBasinPos, -count_th * bUnderMounted
+	endif
+	if gs_sink_type_m <> BASIN_BUILTIN_RECT then
+		muly sink_depth / sink_width
+		if not(bUnderMounted) then
+			prism_ 3, 0.005,
+				0, 0, 979,
+				sink_width/2 + 0.02, 360, 4078,
+				sink_width/2-0.001, 360, 4079
+			body -1
+		endif
+		extrude 2, 0, 0, -count_th-bs_h, 1+4+16,
+				0, 0, 901,
+				sinkWidthMod/2, 360, 4001
+		del 1
+	else
+		if not(bUnderMounted) then
+			prism_ 5 + 5, 0.005,
+				-sink_width/2 - 0.02, -sink_depth/2 - 0.02, 15,
+				sink_width/2 + 0.02, -sink_depth/2 - 0.02, 15,
+				sink_width/2 + 0.02, sink_depth/2 + 0.02, 15,
+				-sink_width/2 - 0.02, sink_depth/2 + 0.02, 15,
+				-sink_width/2 - 0.02, -sink_depth/2 - 0.02, -1,
+
+				-sinkWidthMod/2, -sinkDepthMod/2, 14,
+				sinkWidthMod/2, -sinkDepthMod/2, 14,
+				sinkWidthMod/2, sinkDepthMod/2, 14,
+				-sinkWidthMod/2, sinkDepthMod/2, 14,
+				-sinkWidthMod/2, -sinkDepthMod/2, -1
+			body -1
+		endif
+		extrude 5, 0, 0, -count_th-bs_h, 1+4+16,
+			-sinkWidthMod/2, -sinkDepthMod/2, 0,
+			sinkWidthMod/2, -sinkDepthMod/2, 0,
+			sinkWidthMod/2, sinkDepthMod/2, 0,
+			-sinkWidthMod/2, sinkDepthMod/2, 0,
+			-sinkWidthMod/2, -sinkDepthMod/2, -1
+	endif
+	del 1
+	next hi
+endif
+if gs_detlevel_3D_m = DETAILED_3D then
+	material gs_sink_mat
+	orig_sink_width = sinkWidthMod
+	angsink  = 360/gs_resol
+
+	for hi = 1 to nSink
+	if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+		add sink_dist + temp_aa, temp_bb, -count_th * bUnderMounted
+	else
+		add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B/2 + yBasinPos, -count_th * bUnderMounted
+	endif
+	if gs_sink_type_m <> BASIN_BUILTIN_RECT then
+		material gs_sink_mat
+		mulz -1
+		muly sink_depth / sinkWidthMod
+
+		if not(bUnderMounted) then
+			addz -0.005
+			prism_ 3, 0.005,
+				0, 0, 979,
+				sinkWidthMod/2 + 0.02, 360, 4075,
+				sinkWidthMod/2, 360, 4079
+			body -1
+			del 1
+		endif
+
+		for jj= 1 to 3
+			if jj = 1 then
+				mul_akt = 0.9
+				hgh_akt = 0.052
+			endif
+			if jj = 2 then
+				mul_akt = 0.79
+				hgh_akt = 0.052
+			endif
+			if jj = 3 then
+				mul_akt = 0.63
+				hgh_akt = 0.026
+			endif
+
+			for kk=0 to gs_resol-1
+				put sinkWidthMod/2 * sin(kk*angsink), sinkWidthMod/2 * cos(kk*angsink), 1
+			next kk
+
+			sink_width_muled = sinkWidthMod/2 * mul_akt
+			for kk=0 to gs_resol-1
+				put sink_width_muled * sin(kk*angsink), sink_width_muled * cos(kk*angsink) + (sinkWidthMod/2 - sink_width_muled), hgh_akt
+			next kk
+
+			ruled gs_resol, 4,
+				get(nsp)
+
+			add 0,(sinkWidthMod/2 - sink_width_muled), hgh_akt
+			sinkWidthMod = sink_width_muled * 2
+		next jj
+
+		hgh_akt = 0.007
+		for kk=0 to gs_resol-1
+			put sinkWidthMod/2 * sin(kk*angsink), sinkWidthMod/2 * cos(kk*angsink) * sink_depth / orig_sink_width, 1
+		next kk
+
+		for kk=0 to gs_resol-1
+			put 0.03 * sin(kk*angsink), 0.03 * cos(kk*angsink), hgh_akt
+		next kk
+
+		muly orig_sink_width / sink_depth
+		ruled gs_resol, 4+32,
+			get(nsp)
+		del 1
+
+		material gs_drain_mat
+		addz hgh_akt
+		muly orig_sink_width / sink_depth
+		extrude 2, 0, 0, 0.005, 2+4+16+32,
+			0, 0, 901,
+			0.03, 360, 4001
+		del 2
+
+		del 5
+
+		sinkWidthMod = sink_width - 0.002
+	else
+		material gs_sink_mat
+		if not(bUnderMounted) then
+			prism_ 5 + 5, 0.005,
+				-sinkWidthMod/2 - 0.02, -sinkDepthMod/2 - 0.02, 15,
+				sinkWidthMod/2 + 0.02, -sinkDepthMod/2 - 0.02, 15,
+				sinkWidthMod/2 + 0.02, sinkDepthMod/2 + 0.02, 15,
+				-sinkWidthMod/2 - 0.02, sinkDepthMod/2 + 0.02, 15,
+				-sinkWidthMod/2 - 0.02, -sinkDepthMod/2 - 0.02, -1,
+
+				-sinkWidthMod/2, -sinkDepthMod/2, 15,
+				sinkWidthMod/2, -sinkDepthMod/2, 15,
+				sinkWidthMod/2, sinkDepthMod/2, 14,
+				-sinkWidthMod/2, sinkDepthMod/2, 15,
+				-sinkWidthMod/2, -sinkDepthMod/2, -1
+			body -1
+		endif
+
+		add 0,(sinkDepthMod/2 - sinkDepthMod/2 * (0.9 * 0.79 * 0.63)), 0
+		cutpolya 2, 1, 0,
+				0, 0, 900 + 7,
+				0.03, 360, 4015
+		del 1
+
+		add -sinkWidthMod/2, -sinkDepthMod / 2, 0
+		zzyzx = 0
+		minHeight = zzyzx - 0.1
+		halfWidth = sinkWidthMod/2
+		maxRadius = (halfWidth^2 + 0.1^2) / (2 * 0.1)
+
+		for i = 1 to gs_resol + 1
+			put zzyzx
+		next i
+
+		actualX = 0
+		RRR = 2 * maxRadius
+		actualMinHeight = zzyzx - (RRR - sqr (RRR^2 - halfWidth^2))
+		for i = 1 to gs_resol + 1
+			put actualMinHeight + (RRR) - sqr (RRR^2 - (halfWidth - actualX)^2)
+			actualX = actualX + (2 * halfWidth) / gs_resol
+		next i
+
+		actualX = 0
+		RRR = 1.1 * maxRadius
+		actualMinHeight = zzyzx - (RRR - sqr (RRR^2 - halfWidth^2))
+		for i = 1 to gs_resol + 1
+			put actualMinHeight + (RRR) - sqr (RRR^2 - (halfWidth - actualX)^2)
+			actualX = actualX + (2 * halfWidth) / gs_resol
+		next i
+
+		for j = 1 to 3
+			actualX = 0
+			for i = 1 to gs_resol + 1
+				put minHeight + maxRadius - sqr (maxRadius^2 - (halfWidth - actualX)^2)
+				actualX = actualX + (2 * halfWidth) / gs_resol
+			next i
+		next j
+
+		mesh 2 * halfWidth, sinkDepthMod, gs_resol + 1, 6, 4 + 16*0,
+			get (nsp)
+
+		del 1
+		cutend
+
+		material gs_tap_mat
+		actualX = 0
+		for i = 1 to gs_resol + 1
+			put (2 * halfWidth) / (gs_resol + 1*0) * (i - 1) - halfWidth, minHeight + maxRadius - sqr (maxRadius^2 - (halfWidth - actualX)^2), 7 + 64
+			actualX = actualX + (2 * halfWidth) / gs_resol
+		next i
+		rotx 90
+		cutpolya nsp/3, 1, 0,
+			get(nsp)
+		del 1
+
+		material gs_drain_mat
+		add 0,(sinkDepthMod/2 - sinkDepthMod/2 * (0.9 * 0.79 * 0.63)), -0.105
+		extrude 2, 0, 0, 0.05, 1 + 4 + 16 + 32,
+			0, 0, 901,
+			0.03, 360, 4001
+		del 1
+
+		cutend
+	endif
+	del 1
+	next hi
+endif
+
+
+! ==============================================================================
+! Taps
+! ==============================================================================
+
+if gs_detlevel_3D_m <> DRAFT_3D and gs_tap_type_m <> 0 then
+	for hi = 1 to nSink
+		if bWallMountedTap then
+			if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+				add sink_dist + temp_aa, B, tapHeight - h_top
+				bEnableTapEdit = 1
+			else
+				add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B, tapHeight - h_top
+				hotspot 0,       		0,	tapPos[hi][3], unID, tapPos[hi][1], 1+128 : unID=unID+1
+				hotspot tapPos[hi][1],	0,	tapPos[hi][3], unID, tapPos[hi][1], 2 : unID=unID+1
+				hotspot -1,      		0,	tapPos[hi][3], unID, tapPos[hi][1], 3 : unID=unID+1
+
+				hotspot tapPos[hi][1], 0, 0, 				unID, tapPos[hi][3], 1+128 : unID=unID+1
+				hotspot tapPos[hi][1], 0, tapPos[hi][3],	unID, tapPos[hi][3], 2 : unID=unID+1
+				hotspot tapPos[hi][1], 0, -1, 				unID, tapPos[hi][3], 3 : unID=unID+1
+				del 1
+
+				add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1] + tapPos[hi][1], B, tapHeight - h_top + tapPos[hi][3]
+				bEnableTapedit = 0
+			endif
+
+			call "tapType_m" parameters all bShower 			= 0,
+											bEnableTapEdit		= bEnableTapEdit,
+											bSinkTap			= 0,
+											useOldSimpleTaps	= 0
+
+			del 1
+		else
+			if iBasinType = BASIN_BUILTIN | iBasinType = BASIN_CABINET then
+				add sink_dist + temp_aa, temp_bb + 0.23 + yBasinPos, 0
+				bEnableTapEdit = 1
+			else
+				add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1], B/2 + sink_depth/2 + 0.04 + yBasinPos, 0
+				hotspot 0,       		tapPos[hi][2], 0, unID, tapPos[hi][1], 1+128 : unID=unID+1
+				hotspot tapPos[hi][1],	tapPos[hi][2], 0, unID, tapPos[hi][1], 2 : unID=unID+1
+				hotspot -1,      		tapPos[hi][2], 0, unID, tapPos[hi][1], 3 : unID=unID+1
+
+				hotspot tapPos[hi][1], 0, 				0, unID, tapPos[hi][2], 1+128 : unID=unID+1
+				hotspot tapPos[hi][1], tapPos[hi][2],	0, unID, tapPos[hi][2], 2 : unID=unID+1
+				hotspot tapPos[hi][1], -1, 			0, unID, tapPos[hi][2], 3 : unID=unID+1
+				del 1
+
+				add sinkDistL + sink_width/2 + (hi - 1) * (sink_width + sinkSpacing) + sinkPos[hi][1] + tapPos[hi][1], B/2 + sink_depth/2 + 0.04 + yBasinPos + tapPos[hi][2], 0
+				bEnableTapedit = 0
+			endif
+
+			call "tapType_m" parameters all bShower 			= 0,
+											bEnableTapEdit		= bEnableTapEdit,
+											bSinkTap			= 0,
+											useOldSimpleTaps	= 0,
+											GS_HotspotUnIDBegin = 10000 + hi - 1
+
+			del 1
+		endif
+	next hi
+endif
+
+basinbuiltin_unID = unID
+end basinbuiltin_unID
+
+
+! ==============================================================================
+! Countertop
+! ==============================================================================
+
+2000:
+
+vert 0, 0, 0
+vert 1, 0, 0
+vert 0, 1, 0
+vert 0, 0, 1
+
+coor 2, -1, -2, -3, -4
+
+base
+
+body -1
+
+return
+
+
+6000:
+
+rr=min (count_th*4/5, 0.02)
+
+d = 0
+if side_vis_m = 1 then
+	if bSideSplashL & not(bSideSplashR) then d = 1
+	if not(bSideSplashL) & bSideSplashR then d = 2
+	if bSideSplashL & bSideSplashR then d = 3
+endif
+if side_vis_m = 2 then
+	if bSideSplashR then d = 3 else d = 1
+endif
+if side_vis_m = 3 then
+	if bSideSplashL then d = 3 else d = 2
+endif
+if side_vis_m = 4 then d = 3
+
+maskk = 8
+if side_vis_m = 1 then
+	if bSideSplashL & not(bSideSplashR) then maskk = 9
+	if not(bSideSplashL) & bSideSplashR then maskk = 12
+	if bSideSplashL & bSideSplashR then maskk = 13
+endif
+if side_vis_m = 2 then
+	if bSideSplashR then d = 13 else maskk = 9
+endif
+if side_vis_m = 3 then
+	if bSideSplashL then d = 13 else maskk = 12
+endif
+if side_vis_m = 4 then maskk = 13
+
+rotz 90
+rotx 90
+if dob_face = 0 then
+	prism_ 9, a,
+		0, 0, 15,
+		0, 0.0001, maskk,
+		0, count_th-rr, 64+maskk,
+		0, 10, 800,
+		rr, count_th-rr, 900,
+		rr, count_th, 3000+maskk,
+		b, count_th, maskk,
+		b, 0, maskk,
+		0, 0, -1
+	body -1
+else
+	prism_ 14, a,
+		0, 0, 15,
+		0, 0.0001, maskk,
+		0, count_th-rr, 64+maskk,
+		0, 10, 800,
+
+		rr, count_th-rr, 900,
+		rr, count_th, 3000+maskk,
+		b-rr, count_th, 64+maskk,
+		b-rr+10, count_th, 800,
+		b-rr, count_th-rr, 900,
+		b, count_th-rr, 3000+maskk,
+		b, count_th-rr, 64+maskk,
+
+		b, 0.0001, maskk,
+		b, 0, maskk,
+		0, 0, -1
+	body -1
+endif
+del 2
+
+return

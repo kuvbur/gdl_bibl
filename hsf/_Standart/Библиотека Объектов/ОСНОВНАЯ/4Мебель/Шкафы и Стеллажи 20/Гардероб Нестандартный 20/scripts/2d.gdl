@@ -1,0 +1,266 @@
+
+unID = 1
+pen gs_cont_pen
+fill gs_fill_type
+drawindex 20
+
+if iFunctions = INTERIOR_NONE | iFunctions = INTERIOR_SHELVES |\
+ 	iSymbolStyle = 2 |\ 
+ 	iSymbolStyle = 3 |\ 
+ 	iSymbolStyle = 4 |\ 
+	iSymbolStyle = 5 then		! Do not draw Hanger Symbol in case of symbols drawn in the cabinet
+	bHangers = 0
+endif
+hangerStartX = 0.05
+
+! ======================================================================
+! HOTSPOTS
+! ======================================================================
+if iCabinetForm = SHAPE_SQUARE then
+	CALL "Resize_A_B_ZZYZX" Parameters ALL
+	hotspot2  A/2, B, unID				: unID=unID+1
+	hotspot2  A/2, B/2, unID			: unID=unID+1
+else
+	hotspot2  0, B, unID, A, 1+256		: unID=unID+1
+	hotspot2 -1, B, unID, A, 3			: unID=unID+1
+	hotspot2  A, B, unID, A, 2			: unID=unID+1
+
+	hotspot2  0,  0, unID, B, 1+256		: unID=unID+1
+	hotspot2  0, -1, unID, B, 3			: unID=unID+1
+	hotspot2  0,  B, unID, B, 2			: unID=unID+1
+
+	hotspot2  0,  0, unID, sideDepth1, 1+128		: unID=unID+1
+	hotspot2 -1,  0, unID, sideDepth1, 3			: unID=unID+1
+	hotspot2  sideDepth1,  0, unID, sideDepth1, 2	: unID=unID+1
+
+	hotspot2  A,  B, unID, sideDepth2, 1+128		: unID=unID+1
+	hotspot2  A,  B+1, unID, sideDepth2, 3			: unID=unID+1
+	hotspot2  A,  B-sideDepth2, unID, sideDepth2, 2	: unID=unID+1
+
+	if iCabinetForm = SHAPE_CORNER_L then
+		!hotspot2  sideDepth1,  B-sideDepth2, unID	: unID=unID+1
+
+		hotspot2  0,  B-sideDepth2, unID, sideDepth1, 1+128			: unID=unID+1
+		hotspot2 -1,  B-sideDepth2, unID, sideDepth1, 3				: unID=unID+1
+		hotspot2  sideDepth1,  B-sideDepth2, unID, sideDepth1, 2	: unID=unID+1
+
+		hotspot2  sideDepth1,  B, unID, sideDepth2, 1+128			: unID=unID+1
+		hotspot2  sideDepth1,  B+1, unID, sideDepth2, 3				: unID=unID+1
+		hotspot2  sideDepth1,  B-sideDepth2, unID, sideDepth2, 2	: unID=unID+1
+	endif
+endif
+
+
+! ======================================================================
+! BODY
+! ======================================================================
+if iCabinetForm = SHAPE_SQUARE then
+
+	call "cabSymbolType" parameters all 	bSeparateCabinets 	= 1,
+											nDoor 				= nDoor,
+											doorThickness		= doorThickness,
+											openingAngle2D		= openingAngle2D
+	! ----- Hangers -----
+	if bHangers then
+		if iFunctions = INTERIOR_HANGER then
+			line2 0,b/2,a,b/2
+			hangerLength = a
+			hangerWidth = b
+			add2 0,(b-doorThickness)/2
+			gosub "hangers"
+			del 1
+		endif
+
+		if iFunctions = INTERIOR_COMBINED then
+			if nDoor >= 3 then
+				insideA = (A/nDoor)*(nDoor-2)
+			else
+				insideA = A/2
+				line2 a/2,0,a/2,b
+			endif
+
+			line2 insideA,b/2,A,b/2
+			line2 insideA,0,insideA,b
+			add2 insideA,(b-doorThickness)/2
+			hangerLength = a-insideA
+			hangerWidth = b
+			gosub "hangers"
+			del 1
+		endif
+	endif
+else
+	! ----- Base Polygon -----
+	put 0, 0, 1
+	put 0, B, 1
+	put A, B, 1
+	put A, B-sideDepth2, 1
+	if iCabinetForm = SHAPE_CORNER_L then put sideDepth1, B-sideDepth2, 1
+	put sideDepth1, 0, 1
+	put 0, 0, -1
+
+	poly2_b nsp/3, 1+2+64,gs_fill_pen,gs_back_pen,
+		get(nsp)
+
+	if iCabinetForm = SHAPE_CORNER_C then
+		if abs(sideDepth1-A)< EPS or abs(sideDepth2-B) < EPS then
+			beta2d = 90
+		else
+			beta2d = atn((B-sideDepth2)/(A-sideDepth1))
+		endif
+	endif
+
+	if 	iSymbolStyle = 6 |\								! Draw Door Thickness
+		iSymbolStyle = 7 |\
+		iSymbolStyle = 8 then
+
+		if iCabinetForm = SHAPE_CORNER_L then
+			line2 sideDepth1-doorThickness, 0, sideDepth1-doorThickness, B-sideDepth2+doorThickness
+			line2 sideDepth1-doorThickness, B-sideDepth2+doorThickness, A, B-sideDepth2+doorThickness
+		else
+			line2 sideDepth1-doorThickness/sin(beta2d), 0, A, B-sideDepth2+doorThickness/cos(beta2d)
+		endif
+	endif
+
+	if iCabinetForm = SHAPE_CORNER_C & nDoor = 2 then	! Draw Door Number
+		if 	iSymbolStyle = 7 |\
+			iSymbolStyle = 8 then
+			add2 sideDepth1 + (A-sideDepth1)/2, B-sideDepth2 - (B-sideDepth2)/2
+			rot2 beta2d + 90
+			line2 0, 0, doorThickness, 0
+			del 2
+		endif
+	endif
+
+	if iSymbolStyle = 8 | iSymbolStyle = 9 then			! Draw Door Open
+		if iCabinetForm = SHAPE_CORNER_L then
+			add2 A, B-sideDepth2
+			rot2 openingAngle2D
+			line2 0,0, -A+sideDepth1, 0
+			line2 -A+sideDepth1, 0, -A+sideDepth1, -B+sideDepth2
+			del 2
+			line2 sideDepth1, 0, A-(A-sideDepth1)*cos(openingAngle2D)+(B-sideDepth2)*sin(openingAngle2D), B-sideDepth2-(A-sideDepth1)*sin(openingAngle2D)-(B-sideDepth2)*cos(openingAngle2D)
+		else
+			if iCabinetForm = SHAPE_CORNER_C & nDoor = 2 then
+				doorSize2D = (sqr((B-sideDepth2)**2 + (A-sideDepth1)**2)) / 2
+				arc2 sideDepth1, 0, doorSize2D, beta2d-openingAngle2D, beta2d
+				add2 sideDepth1, 0
+				rot2 beta2d-openingAngle2D
+				line2 0, 0, doorSize2D, 0
+				del 1
+				add2 (A-sideDepth1), (B-sideDepth2)
+				arc2 0, 0, doorSize2D,  180+beta2d,  180+beta2d+openingAngle2D
+				rot2 beta2d+180+openingAngle2D
+				line2 0, 0, doorSize2D, 0
+				del 3
+			else
+				doorSize2D = sqr((B-sideDepth2)**2 + (A-sideDepth1)**2)
+				arc2 sideDepth1, 0, doorSize2D, beta2d-openingAngle2D, beta2d
+				add2 sideDepth1, 0
+				rot2 beta2d-openingAngle2D
+				line2 0, 0, doorSize2D, 0
+				del 2
+			endif
+		endif
+	endif
+
+	! ----- Hangers -----
+	if bHangers then
+		line2 sideDepth1/2, 0, sideDepth1/2, B-sideDepth2+sideDepth2/2
+		line2 sideDepth1/2, B-sideDepth2+sideDepth2/2, A, B-sideDepth2+sideDepth2/2
+
+		add2 sideDepth1/2-hangerStartX, B-sideDepth2+sideDepth2/2
+		hangerLength = A-sideDepth1/2+hangerStartX
+		hangerWidth = sideDepth2
+		gosub "hangers"
+		del 1
+
+		add2 sideDepth1/2, 0
+		rot2 90
+		hangerLength = B-sideDepth2+hangerStartX
+		hangerWidth = sideDepth1
+		gosub "hangers"
+		del 2
+
+	endif
+endif
+
+
+! ======================================================================
+! Minimal Space
+! ======================================================================
+if MSFront> EPS then
+	reqBMinSpace = 0
+	drawindex 10
+	success = LIBRARYGLOBAL ("LibraryGlobals13", "showBMinSpace", reqBMinSpace)
+	if success > 0 and reqBMinSpace then
+		if iCabinetForm = SHAPE_SQUARE then
+			call "fa_minimalspace" parameters all 	MSType 	= 1,
+													unID 	= 3000
+		else
+			if iCabinetForm = SHAPE_CORNER_L then
+				call "fa_minimalspace" parameters all 	MSType 	= 30,
+														unID 	= 3000,
+														diff = sideDepth2,
+														diff2 = sideDepth1,
+														dob_face_type = 1
+			else
+				call "fa_minimalspace" parameters all 	MSType 	= 0,
+														unID 	= 3000,
+									returned_parameters reqBMinSpace,
+														MSFillType,
+														MSFillPen,
+														MSFillBackPen,
+														MSContLineType,
+														MSContLinePen
+			endif
+		endif
+	endif
+	if reqBMinSpace <> 0 and iCabinetForm <> SHAPE_SQUARE and iCabinetForm <> SHAPE_CORNER_L then
+		fill MSFillType
+		line_type MSContLineType
+		pen MSContLinePen
+		unID = 3050
+
+		if abs(sideDepth1-a)< EPS or abs(sideDepth2-b) < EPS then
+			alpha = 90
+		else
+			alpha = atn((b-sideDepth2)/(a-sideDepth1))
+		endif
+
+		poly2_b 5, 2+4+64,MSFillPen,MSFillBackPen,
+				sideDepth1,      0,      1,
+				a,      b-sideDepth2,      1,
+				a+MSFront*sin(alpha), b-sideDepth2-MSFront*cos(alpha),    1,
+				sideDepth1+MSFront*sin(alpha),      -MSFront*cos(alpha),    1,
+				sideDepth1,      0,      1
+
+		hotspot2  sideDepth1+MSFront*sin(alpha), -MSFront*cos(alpha),	unID : unID = unID + 1
+		hotspot2  a+MSFront*sin(alpha), b-sideDepth2-MSFront*cos(alpha),	unID : unID = unID + 1
+
+		line2 sideDepth1, 0, sideDepth1+MSFront*sin(alpha),-MSFront*cos(alpha)
+		line2 sideDepth1+MSFront*sin(alpha),  -MSFront*cos(alpha), a+MSFront*sin(alpha), b-sideDepth2-MSFront*cos(alpha)
+		line2 a, b-sideDepth2, a+MSFront*sin(alpha), b-sideDepth2-MSFront*cos(alpha)
+	endif
+endif
+
+END
+
+! ======================================================================
+! SubRoutines
+! ======================================================================
+
+"hangers":
+	hangerDistance = 0.1
+	add2 hangerDistance+hangerStartX, 0
+	hn = hangerLength - hangerDistance -hangerStartX
+	cn=int(hn/hangerDistance)
+	tempHangerWidth = hangerWidth/2 - 0.05 - doorThickness
+	for ii=1 TO cn
+		ff=rnd(.2)
+		rot2 ff*100
+		line2 -doorThickness, -tempHangerWidth, doorThickness, tempHangerWidth
+		del 1
+		add2 hangerDistance, 0
+	next ii
+	del cn+1
+return

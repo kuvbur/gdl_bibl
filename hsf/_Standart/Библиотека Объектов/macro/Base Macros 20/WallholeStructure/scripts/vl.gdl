@@ -1,0 +1,979 @@
+
+
+! =============================================================================
+! 3D Based 2D Symbol Support
+! =============================================================================
+
+if AC_Hole_Display_Option = 3 then
+	parameters AC_WallContours = 0
+else
+	parameters AC_WallContours = 1
+endif
+
+if not(AC_HoleSideMaterial) then
+	lock "AC_HoleMaterialCurved"
+endif
+
+! =============================================================================
+! UI Support
+! =============================================================================
+
+if GLOB_UI_BUTTON_ID = 1 then parameters gs_ui_sub_tabpage_closure = 2
+if GLOB_UI_BUTTON_ID = 2 then parameters gs_ui_sub_tabpage_closure = 1
+
+
+! =============================================================================
+! Wall Contour Lines
+! =============================================================================
+
+values "gs_wcont_line" stWallContourLine
+values "iWallContourLine" WALL_CONTOUR_OFF, WALL_CONTOUR_INSIDE, WALL_CONTOUR_OUTSIDE, WALL_CONTOUR_BOTHSIDES
+
+if GLOB_MODPAR_NAME = "gs_wcont_line" then
+	iWallContourLine = WALL_CONTOUR_OFF
+	for i = 2 to vardim1(stWallContourLine)
+		if gs_wcont_line = stWallContourLine[i] then
+			iWallContourLine = i
+			i = vardim1(stWallContourLine)
+		endif
+	next i
+	parameters iWallContourLine = iWallContourLine
+else
+	gs_wcont_line = stWallContourLine[min(max(1,iWallContourLine),vardim1(stWallContourLine))]
+	parameters gs_wcont_line = gs_wcont_line
+endif
+
+
+!if not(bForceShowWContParamsOutside) & (iWallContourLine = WALL_CONTOUR_OFF | iWallContourLine = WALL_CONTOUR_INSIDE) then
+!	hideparameter "gs_wcont_line_out"
+!	lock "gs_wcont_line_out"
+!	if bEnableWallContourHiddenLine then
+!		hideparameter "gs_wcont_hidden_line_out"
+!		lock "gs_wcont_hidden_line_out"
+!	endif
+!endif
+!if not(bForceShowWContParamsInside) & (iWallContourLine = WALL_CONTOUR_OFF | iWallContourLine = WALL_CONTOUR_OUTSIDE) then
+!	hideparameter "gs_wcont_line_in"
+!	lock "gs_wcont_line_in"
+!	if bEnableWallContourHiddenLine then
+!		hideparameter "gs_wcont_hidden_line_in"
+!		lock "gs_wcont_hidden_line_in"
+!	endif
+!endif
+
+!if not(bForceShowWContParamsOutside | bForceShowWContParamsInside) then
+!	if bTShapedOpening then
+!		if iWallContourLine = WALL_CONTOUR_OFF & iWallContourLineSl = WALL_CONTOUR_OFF then
+!			hideparameter "gs_wcont_line_pen"
+!			lock "gs_wcont_line_pen"
+!		endif
+!	else
+!		if iWallContourLine = WALL_CONTOUR_OFF then
+!			hideparameter "gs_wcont_line_pen"
+!			lock "gs_wcont_line_pen"
+!		endif
+!	endif
+!endif
+
+if bTShapedOpening then
+	values "gs_wcont_line_sl" stWallContourLine
+	values "iWallContourLineSl" WALL_CONTOUR_OFF, WALL_CONTOUR_INSIDE, WALL_CONTOUR_OUTSIDE, WALL_CONTOUR_BOTHSIDES
+
+	if GLOB_MODPAR_NAME = "gs_wcont_line_sl" then
+		iWallContourLineSl = WALL_CONTOUR_OFF
+		for i = 2 to vardim1(stWallContourLine)
+			if gs_wcont_line_sl = stWallContourLine[i] then
+				iWallContourLineSl = i
+				i = vardim1(stWallContourLine)
+			endif
+		next i
+		parameters iWallContourLineSl = iWallContourLineSl
+	else
+		gs_wcont_line_sl = stWallContourLine[min(max(1,iWallContourLineSl),vardim1(stWallContourLine))]
+		parameters gs_wcont_line_sl = gs_wcont_line_sl
+	endif
+
+!	if not(bForceShowWContParamsOutside) & (iWallContourLineSl = WALL_CONTOUR_OFF | iWallContourLineSl = WALL_CONTOUR_INSIDE) then
+!		hideparameter "gs_wcont_line_sl_out"
+!		lock "gs_wcont_line_sl_out"
+!		if bEnableWallContourHiddenLine then
+!			hideparameter "gs_wcont_hidden_line_sl_out"
+!			lock "gs_wcont_hidden_line_sl_out"
+!		endif
+!	endif
+!	if not(bForceShowWContParamsInside) & (iWallContourLineSl = WALL_CONTOUR_OFF | iWallContourLineSl = WALL_CONTOUR_OUTSIDE) then
+!		hideparameter "gs_wcont_line_sl_in"
+!		lock "gs_wcont_line_sl_in"
+!		if bEnableWallContourHiddenLine then
+!			hideparameter "gs_wcont_hidden_line_sl_in"
+!			lock "gs_wcont_hidden_line_sl_in"
+!		endif
+!	endif
+!	if not(bForceShowWContParamsOutside | bForceShowWContParamsInside) & iWallContourLineSl = WALL_CONTOUR_OFF then
+!		hideparameter "gs_wcont_line_pen_sl"
+!		lock "gs_wcont_line_pen_sl"
+!	endif
+endif
+
+
+! =============================================================================
+! Reveal and Closure
+! =============================================================================
+
+bDisablePrefabClosure		= ((iRevealType = REVEAL_SLANTED & curvedWall)| iRevealType = REVEAL_SPLAYED | iRevealType = REVEAL_HISTORIC | iRevealType = REVEAL_DOUBLE_SPLAYED | iRevealType = REVEAL_OUTSIDE_SPLAYED)
+bDisableTradClosure			= (iRevealType = REVEAL_SPLAYED | iRevealType = REVEAL_HISTORIC | iRevealType = REVEAL_DOUBLE_SPLAYED | iRevealType = REVEAL_OUTSIDE_SPLAYED)
+bDisableTradDutchClosure	= (bDisableTradDutchClosure | iRevealType = REVEAL_SLANTED | iRevealType = REVEAL_SPLAYED | iRevealType = REVEAL_HISTORIC | iRevealType = REVEAL_DOUBLE_SPLAYED | iRevealType = REVEAL_OUTSIDE_SPLAYED)
+bCustomReveal				= (iRevealType = REVEAL_DOUBLE)
+
+bDefaultElem	= (GLOB_INTGUID = "" | GLOB_INTGUID = "{00000000-0000-0000-0000-000000000000}")
+bCompositeWall	= (WALL_SKINS_NUMBER > 0)
+if not(bDefaultElem) then
+	isCoreSkin = 0
+	for i = 1 to WALL_SKINS_NUMBER
+		if abs(WALL_SKINS_PARAMS[i][SKIN_CORE_STATUS] - 3) < EPS then
+			isCoreSkin = 1
+			i = WALL_SKINS_NUMBER
+		endif
+	next i
+	if not(isCoreSkin) then
+		bDisablePrefabClosure	= 1
+		if iClosureType = CLOSURE_PREFABRICATED | iClosureType = CLOSURE_AIR_SPACE then
+			gs_closure_type_int	= 1	! No Closure
+			gs_closure_type		= stClosureTypes[1]	! No Closure
+			parameters gs_closure_type_int = gs_closure_type_int
+			parameters gs_closure_type = gs_closure_type
+		endif
+	endif
+endif
+
+if bittest(gs_ClosureTypeEnable, CLOSURE_NO) & not(bDefaultElem) & not(bCompositeWall) then
+	gs_closure_type_int	= 1	! No Closure
+	gs_closure_type		= stClosureTypes[1]	! No Closure
+	parameters gs_closure_type_int = gs_closure_type_int
+	parameters gs_closure_type = gs_closure_type
+endif
+
+bHaveClosureForThisReveal	= not((bDisablePrefabClosure	| bCustomReveal) & (iClosureType = CLOSURE_PREFABRICATED | iClosureType = CLOSURE_AIR_SPACE)) & \
+							  not((bDisableTradDutchClosure	| bCustomReveal) & (iClosureType = CLOSURE_VARIABLE | iClosureType = CLOSURE_DUTCH_VARIABLE)) & \
+							  not((bDisableTradClosure		| bCustomReveal) & (iClosureType = CLOSURE_TRADITIONAL | iClosureType = CLOSURE_FINISH))
+
+if (GLOB_MODPAR_NAME = "gs_reveal_type_new" | GLOB_MODPAR_NAME = "gs_reveal_type_int") & not(bHaveClosureForThisReveal) then
+	gs_closure_type_int	= 1	! No Closure
+	gs_closure_type		= stClosureTypes[1]	! No Closure
+	parameters gs_closure_type_int = gs_closure_type_int
+	parameters gs_closure_type = gs_closure_type
+	parameters gs_closure_auto_changed = 1
+endif
+if GLOB_MODPAR_NAME = "" & GLOB_UI_BUTTON_ID = 0 then
+	parameters gs_closure_auto_changed = 0
+endif
+
+if bDisablePrefabClosure | bCustomReveal then
+	gs_ClosureTypeEnable = bitset(gs_ClosureTypeEnable, CLOSURE_PREFABRICATED, 0)
+	gs_ClosureTypeEnable = bitset(gs_ClosureTypeEnable, CLOSURE_PREFABRICATED_PRESETS, 0)
+endif
+if bDisableTradDutchClosure | bCustomReveal then
+	gs_ClosureTypeEnable = bitset(gs_ClosureTypeEnable, CLOSURE_VARIABLE, 0)
+	gs_ClosureTypeEnable = bitset(gs_ClosureTypeEnable, CLOSURE_DUTCH_VARIABLE, 0)
+endif
+if bDisableTradClosure | bCustomReveal then
+	gs_ClosureTypeEnable = bitset(gs_ClosureTypeEnable, CLOSURE_TRADITIONAL, 0)
+	gs_ClosureTypeEnable = bitset(gs_ClosureTypeEnable, CLOSURE_TRADITIONAL_PRESETS, 0)
+endif
+
+if iClosureType = CLOSURE_STUD_WALL then
+	gs_RevealTypeEnable = 2^REVEAL_EDGE
+	parameters gs_reveal_type_int = REVEAL_EDGE + 1
+	parameters gs_reveal_type_new = stRevealTypes[REVEAL_EDGE + 1]
+endif
+if iClosureType = CLOSURE_STUD_WALL_SIDING | iClosureType = CLOSURE_BRICK_VENEER then
+	gs_RevealTypeEnable = 2^REVEAL_NEGATIVE
+	parameters gs_reveal_type_int = REVEAL_NEGATIVE + 1
+	parameters gs_reveal_type_new = stRevealTypes[REVEAL_NEGATIVE + 1]
+endif
+
+
+! =============================================================================
+! Reveal Types
+! =============================================================================
+
+dim iRevealTypeValueMask[]
+dim sRevealTypeValueMask[]
+
+j = 1
+bFoundSelectedReveal = 0
+for i=1 to vardim1(stRevealTypes)
+	if bittest(gs_RevealTypeEnable, i - 1) then
+		iRevealTypeValueMask[j] = i
+		sRevealTypeValueMask[j] = stRevealTypes[i]
+		j = j + 1
+
+		if gs_reveal_type_int = i then
+			bFoundSelectedReveal = 1
+		endif
+	endif
+next i
+
+if vardim1(iRevealTypeValueMask) > 0 then
+	if not(bFoundSelectedReveal) then
+		! Fallback to No Reveal
+		if bittest(gs_RevealTypeEnable, 1) then
+			gs_reveal_type_int = REVEAL_NO + 1
+		else
+			gs_reveal_type_int = REVEAL_EDGE + 1
+		endif
+		parameters gs_reveal_type_int = gs_reveal_type_int
+	endif
+	values "gs_reveal_type_int" iRevealTypeValueMask
+	values "gs_reveal_type_new" sRevealTypeValueMask
+endif
+
+if GLOB_MODPAR_NAME = "gs_reveal_type_new" then
+	gs_reveal_type_int = 1
+	for i=2 to vardim1(stRevealTypes)
+		if gs_reveal_type_new = stRevealTypes[i] then
+			gs_reveal_type_int = i
+			i = vardim1(stRevealTypes)
+		endif
+	next i
+	parameters gs_reveal_type_int = gs_reveal_type_int
+else
+	gs_reveal_type_int = min(max(1, gs_reveal_type_int), vardim1(stRevealTypes))
+	gs_reveal_type_new = stRevealTypes[gs_reveal_type_int]
+	parameters	gs_reveal_type_new	= gs_reveal_type_new,
+				gs_reveal_type_int	= gs_reveal_type_int
+endif
+
+
+! =============================================================================
+! Custom/Double Reveal Types
+! =============================================================================
+
+dim iSillRevealTypeValueMask[]
+dim sSillRevealTypeValueMask[]
+
+if iRevealType = REVEAL_DOUBLE then
+	j = 1
+	iSillRevealTypeValueMask[j] = 2
+	sSillRevealTypeValueMask[j] = stRevealTypes[2]: j = j + 1
+	if bittest(gs_RevealTypeEnable, REVEAL_POSITIVE) then
+		iSillRevealTypeValueMask[j]   = 3
+		sSillRevealTypeValueMask[j] = stRevealTypes[3]
+		j = j + 1
+	endif
+	if bittest(gs_RevealTypeEnable, REVEAL_NEGATIVE) then
+		iSillRevealTypeValueMask[j]    = 4
+		sSillRevealTypeValueMask[j] = stRevealTypes[4]
+		j = j + 1
+	endif
+endif
+if vardim1(iSillRevealTypeValueMask) > 0 then
+	values "gs_reveal_doubleOuterTypeInt" iSillRevealTypeValueMask
+	values "gs_reveal_type"	              sSillRevealTypeValueMask
+	if vardim1(iSillRevealTypeValueMask) = 1 then
+		lock "gs_reveal_type"
+	endif
+else
+	lock "gs_reveal_type"
+	hideparameter "gs_reveal_type"
+endif
+
+dim iBoardRevealTypeValueMask[]
+dim sBoardRevealTypeValueMask[]
+if iRevealType = REVEAL_DOUBLE then
+	j = 1
+	iBoardRevealTypeValueMask[j] = 2
+	sBoardRevealTypeValueMask[j] = stRevealTypes[2]: j = j + 1
+	if bittest(gs_RevealTypeEnable, REVEAL_POSITIVE) then
+		iBoardRevealTypeValueMask[j] = 3
+		sBoardRevealTypeValueMask[j] = stRevealTypes[3]
+		j = j + 1
+	endif
+	if bittest(gs_RevealTypeEnable, REVEAL_NEGATIVE) then
+		iBoardRevealTypeValueMask[j] = 4
+		sBoardRevealTypeValueMask[j] = stRevealTypes[4]
+		j = j + 1
+	endif
+endif
+if vardim1(iBoardRevealTypeValueMask) > 0 then
+	values "gs_reveal_doubleInnerTypeInt" iBoardRevealTypeValueMask
+	values "gs_reveal_double_innerType"   sBoardRevealTypeValueMask
+	if vardim1(iBoardRevealTypeValueMask) = 1 then
+		lock "gs_reveal_double_innerType"
+	endif
+else
+	lock "gs_reveal_double_innerType"
+	hideparameter "gs_reveal_double_innerType"
+endif
+
+if GLOB_MODPAR_NAME = "gs_reveal_type" then
+	gs_reveal_doubleOuterTypeInt = 2				! No Reveal
+	if gs_reveal_type = stRevealTypes[3] then gs_reveal_doubleOuterTypeInt = 3	! "Reveal"
+	if gs_reveal_type = stRevealTypes[4] then gs_reveal_doubleOuterTypeInt = 4	! "Negative Reveal"
+	parameters gs_reveal_doubleOuterTypeInt = gs_reveal_doubleOuterTypeInt
+else
+	gs_reveal_type = stRevealTypes[min(max(2,gs_reveal_doubleOuterTypeInt),4)]
+	parameters gs_reveal_type = gs_reveal_type
+endif
+
+if GLOB_MODPAR_NAME = "gs_reveal_double_innerType" then
+	gs_reveal_doubleInnerTypeInt = 2				! No Reveal
+	if gs_reveal_double_innerType = stRevealTypes[3] then gs_reveal_doubleInnerTypeInt = 3	! "Reveal"
+	if gs_reveal_double_innerType = stRevealTypes[4] then gs_reveal_doubleInnerTypeInt = 4	! "Negative Reveal"
+	parameters gs_reveal_doubleInnerTypeInt = gs_reveal_doubleInnerTypeInt
+else
+	gs_reveal_double_innerType = stRevealTypes[min(max(2,gs_reveal_doubleInnerTypeInt),4)]
+	parameters gs_reveal_double_innerType = gs_reveal_double_innerType
+endif
+
+
+! =============================================================================
+! Bottom Reveal Types
+! =============================================================================
+
+if iRevealType = REVEAL_NO | iRevealType = REVEAL_POSITIVE | iRevealType = REVEAL_NEGATIVE | \
+	iRevealType = REVEAL_SLANTED | iRevealType = REVEAL_HISTORIC | iRevealType = REVEAL_DOUBLE then
+
+	if _bForceUniformBottomReveal then
+		values "gs_reveal_type_bottom" stRevealTypesBottom[1]
+		values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM
+		parameters gs_reveal_type_bottom_int = REVEAL_BOTTOM_UNIFORM
+	else
+		if iRevealType = REVEAL_SLANTED | iRevealType = REVEAL_HISTORIC then
+			values "gs_reveal_type_bottom" stRevealTypesBottom
+			values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM, REVEAL_BOTTOM_NO, REVEAL_BOTTOM_POSITIVE, REVEAL_BOTTOM_NEGATIVE
+		else
+			if (iRevealType = REVEAL_NO & gs_reveal_type_bottom_int = REVEAL_BOTTOM_NO) | \
+				(iRevealType = REVEAL_POSITIVE & gs_reveal_type_bottom_int = REVEAL_BOTTOM_POSITIVE) | \
+				(iRevealType = REVEAL_NEGATIVE & gs_reveal_type_bottom_int = REVEAL_BOTTOM_NEGATIVE) then
+	
+				gs_reveal_type_bottom_int = REVEAL_BOTTOM_UNIFORM
+				gs_reveal_type_bottom = stRevealTypesBottom[1]
+				parameters gs_reveal_type_bottom_int = gs_reveal_type_bottom_int, gs_reveal_type_bottom = gs_reveal_type_bottom
+			endif
+
+			if iRevealType = REVEAL_DOUBLE then
+				if	(iSillRevealType = REVEAL_NO and iBoardRevealType = REVEAL_NO) then
+					values "gs_reveal_type_bottom" stRevealTypesBottom[1], stRevealTypesBottom[3], stRevealTypesBottom[4]
+					values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM, REVEAL_BOTTOM_POSITIVE, REVEAL_BOTTOM_NEGATIVE
+				else
+					if (iSillRevealType = REVEAL_NEGATIVE and iBoardRevealType = REVEAL_NO) then
+						values "gs_reveal_type_bottom" stRevealTypesBottom[1], stRevealTypesBottom[2], stRevealTypesBottom[3]
+						values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM, REVEAL_BOTTOM_NO, REVEAL_BOTTOM_POSITIVE
+					else
+						if (iSillRevealType = REVEAL_POSITIVE and iBoardRevealType = REVEAL_NO) then
+							values "gs_reveal_type_bottom" stRevealTypesBottom[1], stRevealTypesBottom[2], stRevealTypesBottom[4]
+							values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM, REVEAL_BOTTOM_NO, REVEAL_BOTTOM_NEGATIVE
+						else
+							values "gs_reveal_type_bottom" stRevealTypesBottom
+							values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM, REVEAL_BOTTOM_NO, REVEAL_BOTTOM_POSITIVE, REVEAL_BOTTOM_NEGATIVE
+						endif
+					endif
+				endif
+			endif
+
+			if iRevealType = REVEAL_NO then
+				values "gs_reveal_type_bottom" stRevealTypesBottom[1], stRevealTypesBottom[3], stRevealTypesBottom[4]
+				values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM, REVEAL_BOTTOM_POSITIVE, REVEAL_BOTTOM_NEGATIVE
+			else
+				if iRevealType = REVEAL_POSITIVE then
+					values "gs_reveal_type_bottom" stRevealTypesBottom[1], stRevealTypesBottom[2], stRevealTypesBottom[4]
+					values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM, REVEAL_BOTTOM_NO, REVEAL_BOTTOM_NEGATIVE
+				else ! negative reveal
+					values "gs_reveal_type_bottom" stRevealTypesBottom[1], stRevealTypesBottom[2], stRevealTypesBottom[3]
+					values "gs_reveal_type_bottom_int" REVEAL_BOTTOM_UNIFORM, REVEAL_BOTTOM_NO, REVEAL_BOTTOM_POSITIVE
+				endif
+			endif
+		endif
+	endif
+else
+	lock "gs_reveal_type_bottom", "gs_reveal_type_bottom_int"
+	hideparameter "gs_reveal_type_bottom"
+endif
+
+if GLOB_MODPAR_NAME = "gs_reveal_type_bottom" then
+	gs_reveal_type_bottom_int = 1
+	for i=2 to vardim1(stRevealTypesBottom)
+		if gs_reveal_type_bottom = stRevealTypesBottom[i] then
+			gs_reveal_type_bottom_int = i
+			i = vardim1(stRevealTypesBottom)
+		endif
+	next i
+	parameters gs_reveal_type_bottom_int = gs_reveal_type_bottom_int
+else
+	gs_reveal_type_bottom_int = min(max(1, gs_reveal_type_bottom_int), vardim1(stRevealTypesBottom))
+	gs_reveal_type_bottom = stRevealTypesBottom[gs_reveal_type_bottom_int]
+	parameters	gs_reveal_type_bottom		= gs_reveal_type_bottom,
+				gs_reveal_type_bottom_int	= gs_reveal_type_bottom_int
+endif
+
+
+! --- Set no reveal as default on reveal type change --------------------------
+
+if GLOB_MODPAR_NAME = "gs_reveal_type_new" | GLOB_MODPAR_NAME = "gs_reveal_type_int" then
+	gs_reveal_type_bottom_int = REVEAL_BOTTOM_NO
+	gs_reveal_type_bottom = stRevealTypesBottom[2]
+	parameters gs_reveal_type_bottom_int = gs_reveal_type_bottom_int, gs_reveal_type_bottom = gs_reveal_type_bottom
+endif
+
+
+! =============================================================================
+! Closure Types
+! =============================================================================
+
+dim sClosureTypeValueMask[]
+dim iClosureTypeValueMask[]
+
+j = 1
+if bittest(gs_ClosureTypeEnable, CLOSURE_NO)				then: iClosureTypeValueMask[j] = CLOSURE_NO + 1:				sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_NO + 1]:					j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_TRADITIONAL)		then: iClosureTypeValueMask[j] = CLOSURE_TRADITIONAL + 1:		sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_TRADITIONAL + 1]:			j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_PREFABRICATED)		then: iClosureTypeValueMask[j] = CLOSURE_PREFABRICATED + 1:		sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_PREFABRICATED + 1]:		j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_VARIABLE)			then: iClosureTypeValueMask[j] = CLOSURE_VARIABLE + 1:			sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_VARIABLE + 1]:	j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_DUTCH_VARIABLE)	then: iClosureTypeValueMask[j] = CLOSURE_DUTCH_VARIABLE + 1:	sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_DUTCH_VARIABLE + 1]:		j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_SOLID_WALL)		then: iClosureTypeValueMask[j] = CLOSURE_SOLID_WALL + 1:		sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_SOLID_WALL + 1]:			j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_STUD_WALL)			then: iClosureTypeValueMask[j] = CLOSURE_STUD_WALL + 1:			sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_STUD_WALL + 1]:			j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_STUD_WALL_SIDING)	then: iClosureTypeValueMask[j] = CLOSURE_STUD_WALL_SIDING + 1:	sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_STUD_WALL_SIDING + 1]:	j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_BRICK_VENEER)		then: iClosureTypeValueMask[j] = CLOSURE_BRICK_VENEER + 1:		sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_BRICK_VENEER + 1]:		j = j + 1: endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_CUSTOM_PRESETS)	then
+	iClosureTypeValueMask[j] = CLOSURE_PLASTER_REVEAL + 1
+	sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_PLASTER_REVEAL + 1]
+	j = j + 1
+	iClosureTypeValueMask[j] = CLOSURE_INSULATED_REVEAL + 1
+	sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_INSULATED_REVEAL + 1]
+	j = j + 1
+	iClosureTypeValueMask[j] = CLOSURE_INSULATED_FOR_RENOVATION + 1
+	sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_INSULATED_FOR_RENOVATION + 1]
+	j = j + 1
+endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_TRADITIONAL_PRESETS)	then
+	iClosureTypeValueMask[j] = CLOSURE_FINISH + 1
+	sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_FINISH + 1]
+	j = j + 1
+endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_PREFABRICATED_PRESETS)	then
+	iClosureTypeValueMask[j] = CLOSURE_AIR_SPACE + 1
+	sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_AIR_SPACE + 1]
+	j = j + 1
+endif
+if bittest(gs_ClosureTypeEnable, CLOSURE_CUSTOM)			then: iClosureTypeValueMask[j] = CLOSURE_CUSTOM + 1:			sClosureTypeValueMask[j] = stClosureTypes[CLOSURE_CUSTOM + 1]:				j = j + 1: endif
+
+if vardim1(iClosureTypeValueMask) > 0 then
+	values "gs_closure_type_int" iClosureTypeValueMask
+	values "gs_closure_type"	 sClosureTypeValueMask
+endif
+
+
+! =============================================================================
+! Sill Depth
+! =============================================================================
+
+![#COMPATIBILITY] - START
+if gs_wido_sill < -9998 then
+	gs_wido_sill = AC_wido_sill
+	parameters gs_wido_sill = AC_wido_sill
+endif
+![#COMPATIBILITY] - END
+
+if defaultSillDepth > EPS & gs_wido_sill < EPS & (GLOB_MODPAR_NAME = "gs_reveal_type_new" | GLOB_MODPAR_NAME = "gs_reveal_type_int") & gs_reveal_type_int <> 1 then	! <> No Reveal - Edge
+	gs_wido_sill = defaultSillDepth
+	ac_wido_sill = defaultSillDepth
+	parameters	gs_wido_sill = defaultSillDepth,
+				ac_wido_sill = defaultSillDepth
+endif
+
+! in old versions may be differnet namings of "AC_wido_sill" parameter
+_convertedModParamName = strtolower(GLOB_MODPAR_NAME)
+bForceChangeSillDepth = not(GLOB_MODPAR_NAME = "AC_wido_sill" | _convertedModParamName = "ac_wido_sill" | GLOB_MODPAR_NAME = "gs_wido_sill") & (abs(AC_wido_sill - gs_wido_sill) > EPS) & (ac_revealAnchorPos = REVEAL_TO_WALL_CORE)
+
+if iRevealType = REVEAL_EDGE then
+
+	if not(bittest(gs_RevealTypeEnable, 1)) then
+		lock "AC_wido_sill"
+	endif
+
+	if ((GLOB_MODPAR_NAME = "AC_wido_sill" | _convertedModParamName = "ac_wido_sill") & abs(AC_wido_sill) > EPS) | bForceChangeSillDepth then
+		gs_wido_sill		= AC_wido_sill
+		gs_reveal_type_int	= REVEAL_NO + 1
+		gs_reveal_type_new	= stRevealTypes[REVEAL_NO + 1]
+		parameters	gs_wido_sill		= AC_wido_sill,
+					gs_reveal_type_int	= REVEAL_NO + 1
+					gs_reveal_type_new	= stRevealTypes[REVEAL_NO + 1]
+		iRevealType = REVEAL_NO
+	else
+		AC_wido_sill = 0
+		gs_wido_sill = 0
+		parameters	AC_wido_sill = 0,
+					gs_wido_sill = 0
+		if gs_RevealTypeEnable = 1 then lock "AC_wido_sill"
+		lock "gs_wido_sill"
+		hideparameter "gs_wido_sill"
+	endif
+else
+	if  (iRevealType = REVEAL_NO | iRevealType = REVEAL_POSITIVE | iRevealType = REVEAL_NEGATIVE) & \
+		(GLOB_MODPAR_NAME = "AC_wido_sill" | _convertedModParamName = "ac_wido_sill") & \
+		 abs(AC_wido_sill) < EPS then
+
+		gs_wido_sill		= 0
+		gs_reveal_type_int	= REVEAL_EDGE + 1
+		gs_reveal_type_new	= stRevealTypes[REVEAL_EDGE + 1]
+		parameters	gs_wido_sill		= 0,
+					gs_reveal_type_int	= REVEAL_EDGE + 1
+					gs_reveal_type_new	= stRevealTypes[REVEAL_EDGE + 1]
+		iRevealType = REVEAL_EDGE
+!		lock "gs_wido_sill", "AC_wido_sill"
+!		hideparameter "gs_wido_sill"
+	else
+		if GLOB_MODPAR_NAME = "AC_wido_sill" | _convertedModParamName = "ac_wido_sill" | bForceChangeSillDepth then
+			gs_wido_sill = AC_wido_sill
+			parameters gs_wido_sill = AC_wido_sill
+		else
+			AC_wido_sill = gs_wido_sill
+			parameters AC_wido_sill = gs_wido_sill
+			if abs(gs_wido_sill) < EPS & \
+				not(iRevealType = REVEAL_SLANTED | \
+					iRevealType = REVEAL_SPLAYED | \
+					iRevealType = REVEAL_HISTORIC | \
+					(iRevealType = REVEAL_DOUBLE & iBoardRevealType <> REVEAL_NO) | \
+					iRevealType = REVEAL_DOUBLE_SPLAYED) then
+				gs_wido_sill		= 0
+				gs_reveal_type_int	= REVEAL_EDGE + 1
+				gs_reveal_type_new	= stRevealTypes[REVEAL_EDGE + 1]
+				parameters	gs_wido_sill		= 0,
+							gs_reveal_type_int	= REVEAL_EDGE + 1
+							gs_reveal_type_new	= stRevealTypes[REVEAL_EDGE + 1]
+				iRevealType = REVEAL_EDGE
+			endif
+		endif
+	endif
+endif
+
+
+! =============================================================================
+! Corner Window Parameters
+! =============================================================================
+
+if not(ac_cw_debug) & bCornerWindow then
+	if not(ac_cw_function) then
+		hideparameter "ac_corner_window"
+	else
+		hideparameter "ac_corner_angle", "ac_diff_con_wall_thk", "ac_con_wall_thk"
+	endif
+	if not(ac_cw_debug) then hideparameter "ac_cw_function"
+endif
+
+
+! =============================================================================
+! Reveal Points Indexes
+! =============================================================================
+
+idxSillStartRevealLeft		= iRevealPointsIdx[1]
+idxSillEndRevealLeft		= iRevealPointsIdx[2]
+idxBoardStartRevealLeft		= iRevealPointsIdx[5]
+idxBoardEndRevealLeft		= iRevealPointsIdx[6]
+idxSillStartRevealRight		= iRevealPointsIdx[11]
+idxSillEndRevealRight		= iRevealPointsIdx[12]
+idxBoardStartRevealRight	= iRevealPointsIdx[15]
+idxBoardEndRevealRight		= iRevealPointsIdx[16]
+
+
+! =============================================================================
+! Wallhole Oversize Calculations
+! =============================================================================
+
+
+hideparameter "ac_details"
+
+if AC_Hole_Display_Option <> 3 then
+
+	if curvedWall then
+		WOD = abs(WIDO_ORIG_DIST) + WIDO_REVEAL_SIDE * WIDO_FRAME_THICKNESS
+
+		xMax = 0
+		for i=idxSillStartRevealLeft to idxSillEndRevealLeft
+			px = leftWallholeRevealPnts[i][1]
+			py = leftWallholeRevealPnts[i][2]
+			xMax = max(xMax, -(WOD * px) / (WOD - py))
+		next i
+		for i=idxBoardStartRevealLeft to idxBoardEndRevealLeft
+			px = leftWallholeRevealPnts[i][1]
+			py = leftWallholeRevealPnts[i][2]
+			xMax = max(xMax, -(WOD * px) / (WOD - py))
+		next i
+		ac_left_oversize	= xMax - A/2 - gs_left_oversize
+
+		xMax = 0
+		for i=idxSillStartRevealRight to idxSillEndRevealRight
+			px = rightWallholeRevealPnts[i][1]
+			py = rightWallholeRevealPnts[i][2]
+			xMax = max(xMax, (WOD * px) / (WOD - py))
+		next i
+		for i=idxBoardStartRevealRight to idxBoardEndRevealRight
+			px = rightWallholeRevealPnts[i][1]
+			py = rightWallholeRevealPnts[i][2]
+			xMax = max(xMax, (WOD * px) / (WOD - py))
+		next i
+		ac_right_oversize	= xMax - A/2 - gs_right_oversize
+	else
+		ac_left_oversize	= max(-leftWallholeRevealPnts[idxSillStartRevealLeft][1], -leftWallholeRevealPnts[idxBoardEndRevealLeft][1]) - A/2 - gs_left_oversize
+		ac_right_oversize	= max(rightWallholeRevealPnts[idxSillStartRevealRight][1], rightWallholeRevealPnts[idxBoardEndRevealRight][1]) - A/2 - gs_right_oversize
+	endif
+	ac_upper_oversize	= openingHeight - B - gs_upper_oversize
+	ac_lower_oversize	= -gs_lower_oversize
+else
+	if gs_wallhole_nominal then
+		ac_left_oversize	= 0
+		ac_right_oversize	= 0
+		ac_upper_oversize	=  elevationOffset
+		ac_lower_oversize	= -elevationOffset
+	endif
+	if gs_reveal_nominal then
+		if bCornerWindow then
+			if bUseRevealDParams then
+				ac_left_oversize = (ac_wallhole_width - ac_reveal_width) / 2 - (gs_reveal_left - gs_reveal_right) / 2 + revealDLeft
+			else
+				ac_left_oversize = (ac_wallhole_width - ac_reveal_width) / 2 - (gs_reveal_left - gs_reveal_right) / 2 + gs_reveal_left
+			endif
+		else
+			ac_left_oversize = (ac_wallhole_width - ac_reveal_width) / 2
+		endif
+		ac_right_oversize	= (ac_wallhole_width - ac_reveal_width) / 2
+		ac_upper_oversize	=  elevationOffset + ac_wallhole_height - ac_reveal_height
+		ac_lower_oversize	= -elevationOffset
+	endif
+	if gs_unit_nominal then
+		if bCornerWindow then
+			ac_left_oversize	= gs_tolerance_left
+		else
+			ac_left_oversize	= (gs_tolerance_left + gs_tolerance_right) / 2
+		endif
+		ac_right_oversize	= (gs_tolerance_left + gs_tolerance_right) / 2
+		ac_upper_oversize	=  elevationOffset + gs_tolerance_upper + gs_tolerance_lower + includeBoxHeight + includeVentilationHeight
+		ac_lower_oversize	= -elevationOffset
+	endif
+	if gs_egress_nominal then
+		ac_left_oversize	= (unitDLeft + unitDRight) / 2 + (gs_tolerance_left + gs_tolerance_right) / 2
+		ac_right_oversize	= (unitDLeft + unitDRight) / 2 + (gs_tolerance_left + gs_tolerance_right) / 2
+		ac_upper_oversize	=  elevationOffset + unitDUpper + unitDLower + gs_tolerance_upper + gs_tolerance_lower + includeBoxHeight + includeVentilationHeight
+		ac_lower_oversize	= -elevationOffset
+	endif
+	if gs_leaf_nominal then
+		ac_left_oversize	= -leafDLeft  - (leafDRight - leafDLeft)/2 + (unitDLeft + unitDRight) / 2 + (gs_tolerance_left + gs_tolerance_right) / 2
+		ac_right_oversize	= -leafDRight + (leafDRight - leafDLeft)/2 + (unitDLeft + unitDRight) / 2 + (gs_tolerance_left + gs_tolerance_right) / 2
+		ac_upper_oversize	=  elevationOffset - leafDUpper + unitDUpper + unitDLower + gs_tolerance_upper + gs_tolerance_lower + includeBoxHeight + includeVentilationHeight
+		ac_lower_oversize	= -elevationOffset - leafDLower
+	endif
+	if gs_baurichtmass_nominal then
+		ac_left_oversize	= -(gs_baurichtmass_outer_left - gs_baurichtmass_outer_right) / 2
+		ac_right_oversize	=  (gs_baurichtmass_outer_left - gs_baurichtmass_outer_right) / 2
+		ac_upper_oversize	=  elevationOffset + gs_baurichtmass_outer_lower
+		ac_lower_oversize	= -elevationOffset - gs_baurichtmass_outer_lower
+	endif
+endif
+
+if bRightCornerFunction & abs(rightCornerAngle) > EPS then
+	rx = 1 / tan(rightCornerAngle / 2)
+	beta = atn((rightConnWallThk * sin(rightCornerAngle)) / (WALL_THICKNESS + rightConnWallThk * cos(rightCornerAngle)))
+
+	if rightCornerAngle > 180 then
+		ac_right_oversize = max (0, WALL_THICKNESS / tan(360 - rightCornerAngle + beta) + WIDO_SILL / tan(rightCornerAngle / 2)) - gs_right_oversize
+	else
+		ac_right_oversize = (WIDO_FRAME_THICKNESS + WIDO_SILL) * rx + max (0, WALL_THICKNESS * tan(rightCornerAngle - beta - 90)) - gs_right_oversize
+	endif
+	if not(bCornerWindow) then
+		ac_right_oversize = ac_right_oversize + gs_reveal_nominal * (gs_reveal_left + gs_reveal_right)/2 + gs_unit_nominal * (gs_tolerance_left + gs_tolerance_right)/2
+	endif
+endif
+
+if bLeftCornerFunction & abs(leftCornerAngle) > EPS then
+	lx = 1 / tan(leftCornerAngle / 2)
+	beta = atn((leftConnWallThk * sin(leftCornerAngle)) / (WALL_THICKNESS + leftConnWallThk * cos(leftCornerAngle)))
+
+	if leftCornerAngle > 180 then
+		ac_left_oversize = max (0, WALL_THICKNESS / tan(360 - leftCornerAngle + beta) + WIDO_SILL / tan(leftCornerAngle / 2))
+	else
+		ac_left_oversize = (WIDO_FRAME_THICKNESS + WIDO_SILL) * lx + max (0, WALL_THICKNESS * tan(leftCornerAngle - beta - 90))
+	endif
+	if not(bCornerWindow) then
+		ac_left_oversize = ac_left_oversize + gs_reveal_nominal * (gs_reveal_left + gs_reveal_right)/2 + gs_unit_nominal * (gs_tolerance_left + gs_tolerance_right)/2
+	else
+		ac_left_oversize = ac_left_oversize + gs_reveal_nominal * (gs_reveal_left + gs_reveal_right) + gs_unit_nominal * (gs_tolerance_left + gs_tolerance_right)
+	endif
+endif
+
+parameters 	ac_left_oversize	= ac_left_oversize,
+			ac_right_oversize	= ac_right_oversize,
+			ac_upper_oversize	= ac_upper_oversize,
+			ac_lower_oversize	= ac_lower_oversize
+
+
+! =============================================================================
+! Masonry Arch Parameter Logic
+! =============================================================================
+
+if bEnableMasonryArch then
+	call "MasonryArch" parameters gs_macro_version = 12,
+		isCurtainWallOpeningSWE			= isCurtainWallOpeningSWE,
+		A								= ac_reveal_width,
+		refWidth						= refWidth,
+		leftWidth						= leftWidth,
+		rightWidth						= rightWidth,
+		iWindowShape					= iWindowShape,
+		openingArchHeight				= openingArchHeight,
+		bMasonryArch					= bMasonryArch,
+		gs_masonry_arch_int				= gs_masonry_arch_int,
+		gs_masonry_arch_structure		= gs_masonry_arch_structure,
+		gs_masonry_arch_structure_int	= gs_masonry_arch_structure_int,
+		gs_stack_top					= gs_stack_top,
+		gs_stack_left					= gs_stack_left,
+		gs_stack_right					= gs_stack_right,
+	! --- Distance between Arch and Window ---
+		gs_AutomaticArchHeight			= gs_AutomaticArchHeight,
+		gs_NicheBelowArch				= gs_NicheBelowArch,
+		gs_MasonryArch_height			= gs_MasonryArch_height,
+		gs_masonry_arch_rise			= gs_masonry_arch_rise,
+	! --- Frame Parameter
+		gs_frame_style_m				= gs_frame_style_m,
+	! --- Reveal Parameters
+		iRevealType						= iRevealType,
+		gs_wido_sill					= gs_wido_sill,
+		gs_reveal_top					= gs_reveal_top,
+		gs_reveal_left					= gs_reveal_left,
+		gs_reveal_right					= gs_reveal_right,
+		gs_reveal_top_angle				= gs_reveal_top_angle,
+		gs_reveal_outer_jamb_depth		= gs_reveal_outer_jamb_depth,
+	! --- String Resource ---
+		stMasonryArchTypes				= stMasonryArchTypes,
+		stMasonryArchStructure			= stMasonryArchStructure
+endif
+
+! This is necessary here to hide/lock these parameters also in those doors/windows who do not use masonry arch
+if not(bEnableCustomMatNicheTop) then
+	if bEnableMasonryArch  then
+		lock			"bCustomMatNicheTop",
+						"matNicheTop"
+	
+		hideparameter	"bCustomMatNicheTop",
+						"matNicheTop"
+	endif
+else
+	if not(bCustomMatNicheTop) then
+		lock			"matNicheTop"
+
+		hideparameter	"matNicheTop"
+	endif
+endif
+
+
+! =============================================================================
+! Ornamental Window Moldings Parameter Logic
+! =============================================================================
+
+if bEnableFaschen then
+	call "Faschen" parameters gs_macro_version = 12,
+		A = A,
+		B = B,
+		gs_faschen_t 			= gs_faschen_t,
+		iFaschenTyp				= iFaschenTyp,
+		gs_faschen_type 		= gs_faschen_type,
+		gs_faschen_left			= gs_faschen_left,
+		gs_faschen_right		= gs_faschen_right,
+		gs_faschen_top			= gs_faschen_top,
+		gs_faschen_bottom		= gs_faschen_bottom,
+		gs_faschen_R 			= gs_faschen_R,
+		gs_faschen_L 			= gs_faschen_L,
+		gs_faschen_R_height 	= gs_faschen_R_height,
+		gs_faschen_L_height 	= gs_faschen_L_height,
+		gs_faschen_brick_mat	= gs_faschen_brick_mat,
+		gs_faschen_mort_mat		= gs_faschen_mort_mat,
+		gs_faschen_plaster_mat	= gs_faschen_plaster_mat,
+		iRevealType				= iRevealType,
+		gs_reveal_left			= gs_reveal_left,
+		gs_reveal_right			= gs_reveal_right,
+		gs_reveal_top			= gs_reveal_top,
+		gs_reveal_bottom		= gs_reveal_bottom
+endif
+
+! =============================================================================
+! Turn Plaster Parameter Logic
+! =============================================================================
+
+call "TurnPlaster" parameters gs_macro_version = 12,
+	bEnablePlasterLeftIn	= bEnablePlasterLeftIn,
+	bEnablePlasterLeftOut	= bEnablePlasterLeftOut,
+	bEnablePlasterRightIn	= bEnablePlasterRightIn,
+	bEnablePlasterRightOut	= bEnablePlasterRightOut,
+	bEnablePlasterTopIn		= bEnablePlasterTopIn,
+	bEnablePlasterTopOut	= bEnablePlasterTopOut,
+	bEnablePlasterBottomIn	= bEnablePlasterBottomIn,
+	bEnablePlasterBottomOut	= bEnablePlasterBottomOut,
+	gs_useWallFinishSkin	= gs_useWallFinishSkin,
+	gs_bAutoTurnIn			= gs_bAutoTurnIn,
+	gs_bOverIn				= gs_bOverIn,
+	gs_bAutoTurnOut			= gs_bAutoTurnOut,
+	gs_bOverOut				= gs_bOverOut,
+	gs_turn_plaster_dim_2D	= gs_turn_plaster_dim_2D
+
+
+! =============================================================================
+! Cavity Closure Parameter Logic
+! =============================================================================
+
+bCavityCloserLeft	= (not(gs_stack_left)  & ((iCavityClosureSide = CAVITY_SIDE_BOTH | iCavityClosureSide = CAVITY_SIDE_LEFT) |\
+						iClosureType = CLOSURE_CUSTOM |\
+						iClosureType = CLOSURE_PLASTER_REVEAL |\
+						iClosureType = CLOSURE_INSULATED_REVEAL |\
+						iClosureType = CLOSURE_INSULATED_FOR_RENOVATION))
+bCavityCloserRight	= (not(gs_stack_right) & ((iCavityClosureSide = CAVITY_SIDE_BOTH | iCavityClosureSide = CAVITY_SIDE_RIGHT) |\
+						iClosureType = CLOSURE_CUSTOM |\
+						iClosureType = CLOSURE_PLASTER_REVEAL |\
+						iClosureType = CLOSURE_INSULATED_REVEAL |\
+						iClosureType = CLOSURE_INSULATED_FOR_RENOVATION))
+
+call "CavityClosure" parameters gs_macro_version = 12,
+	iWindowShape			= iWindowShape,
+! --- Ganging
+	gs_stack_left			= gs_stack_left,
+	gs_stack_right			= gs_stack_right,
+	gs_stack_top			= gs_stack_top,
+	gs_stack_bottom			= gs_stack_bottom,
+! --- Corner Window
+	bLeftCornerFunction			= bLeftCornerFunction,
+	bRightCornerFunction		= bRightCornerFunction,
+! --- Cavity Closure ---
+	gs_ClosureTypeEnable	= gs_ClosureTypeEnable,
+	gs_useWallFinishSkin	= gs_useWallFinishSkin,
+	gs_cavity_side			= gs_cavity_side,
+	iCavityClosureSide		= iCavityClosureSide,
+	gs_bAutoTurnIn			= gs_bAutoTurnIn,
+	gs_bAutoTurnOut			= gs_bAutoTurnOut,
+	gs_bOverIn				= gs_bOverIn,
+	gs_bOverOut				= gs_bOverOut,
+	gs_maxPlasterThk		= gs_maxPlasterThk,
+	gs_closure_type			= gs_closure_type,
+	gs_closure_type_int		= gs_closure_type_int,
+	iClosureType			= iClosureType,
+	bCavityCloserLeft		= bCavityCloserLeft,
+	bCavityCloserRight		= bCavityCloserRight,
+	gs_nTurnDir				= gs_nTurnDir,
+	iCavityClosureTurnDir	= iCavityClosureTurnDir,
+	gs_nTurn				= gs_nTurn,
+	gs_bJoint				= gs_bJoint,
+! --- Variable Closure (Spouwlat) ---
+	gs_cc_dutch_ShowLeft			= gs_cc_dutch_ShowLeft,
+	gs_cc_dutch_ShowRight			= gs_cc_dutch_ShowRight,
+	gs_cc_dutch_ShowTop				= gs_cc_dutch_ShowTop,
+	gs_cc_dutch_ShowBottom			= gs_cc_dutch_ShowBottom,
+	gs_cc_dutch_ClosureToSkin		= gs_cc_dutch_ClosureToSkin,
+	gs_cc_dutch_ClosureToSide_str	= gs_cc_dutch_ClosureToSide_str,
+	gs_cc_dutch_ClosureToSide		= gs_cc_dutch_ClosureToSide,
+	gs_cc_dutch_GapAtOutsideSkin	= gs_cc_dutch_GapAtOutsideSkin,
+	gs_cc_dutch_TurnToClosure		= gs_cc_dutch_TurnToClosure,
+	gs_cc_dutch_matJointCustom		= gs_cc_dutch_matJointCustom,
+	gs_cc_dutch_matJoint			= gs_cc_dutch_matJoint,
+! --- Custom Cavity Closure ---
+	gs_custom_cc_turn_in		= gs_custom_cc_turn_in,
+	iCustomCCThicknessType = iCustomCCThicknessType,
+	iCustomCCOrientation = iCustomCCOrientation,
+	gs_custom_cc_separator		= gs_custom_cc_separator,
+	iCustomCCEditJambSide = iCustomCCEditJambSide,
+	iCustomCCEditWallSide = iCustomCCEditWallSide,
+	iCustomCCEditSkin = iCustomCCEditSkin,
+	gs_custom_cc_array_left		= gs_custom_cc_array_left,
+	gs_custom_cc_array_right	= gs_custom_cc_array_right,
+	gs_custom_cc_thickness		= gs_custom_cc_thickness,
+	gs_custom_cc_overhang		= gs_custom_cc_overhang,
+	gs_custom_cc_separator_pen	= gs_custom_cc_separator_pen,
+	gs_custom_cc_last_sel_side	= gs_custom_cc_last_sel_side,
+	gs_custom_cc_plaster		= gs_custom_cc_plaster,
+	gs_turn_plaster_show_3D		= gs_turn_plaster_show_3D,
+! --- String Resource ---
+	stClosureTypes					= stClosureTypes,
+	stCavityClosureSide				= stCavityClosureSide,
+	stCavityClosureTurnDir			= stCavityClosureTurnDir,
+	stDutchClosureToSide			= stDutchClosureToSide,
+	stCavityClosureEditedJambSide	= stCavityClosureEditedJambSide,
+	stCavityClosureEditedWallSide	= stCavityClosureEditedWallSide,
+	stCavityClosureEditedSkinNumber	= stCavityClosureEditedSkinNumber,
+	stCavityClosureTurnInThickness	= stCavityClosureTurnInThickness,
+	stCavityClosureHatchOrientation	= stCavityClosureHatchOrientation
+
+
+! =============================================================================
+! Do Wallhole Cut Parameter Logic
+! =============================================================================
+
+call "WallholeCut" parameters gs_macro_version = 12,
+	AC_WallType						= AC_WallType,
+	ac_wall_crosssection_type		= ac_wall_crosssection_type,
+	bEnableParapetInset				= bEnableParapetInset,
+	bEnableMountingFrameForReveal	= bEnableMountingFrameForReveal,
+	leftWidth						= leftWidth,
+	rightWidth						= rightWidth,
+	bForceUniformBottomReveal		= _bForceUniformBottomReveal,
+	gs_RevealTypeEnable				= gs_RevealTypeEnable,
+	gs_reveal_type_new				= gs_reveal_type_new,
+	gs_reveal_type_int				= gs_reveal_type_int,
+	gs_reveal_type_bottom			= gs_reveal_type_bottom,
+	gs_reveal_type_bottom_int		= gs_reveal_type_bottom_int,
+	iRevealType						= iRevealType,
+	iSillRevealType					= iSillRevealType,
+	iBoardRevealType				= iBoardRevealType,
+	gs_reveal_type					= gs_reveal_type,
+	gs_reveal_doubleOuterTypeInt	= gs_reveal_doubleOuterTypeInt,
+	gs_reveal_double_innerType		= gs_reveal_double_innerType,
+	gs_reveal_doubleInnerTypeInt	= gs_reveal_doubleInnerTypeInt,
+!!!	AC_wido_sill 					= AC_wido_sill,
+	gs_parapet_wall_inset			= gs_parapet_wall_inset,
+	gs_parapet_width				= gs_parapet_width,
+	gs_parapet_height				= gs_parapet_height,
+	gs_parapet_2D					= gs_parapet_2D,
+	gs_parapet_line					= gs_parapet_line,
+	gs_reveal_uniform				= gs_reveal_uniform,
+	gs_reveal_left					= gs_reveal_left,
+	gs_reveal_right					= gs_reveal_right,
+	gs_reveal_top					= gs_reveal_top,
+	gs_reveal_bottom				= gs_reveal_bottom,
+	gs_reveal_left_angle			= gs_reveal_left_angle,
+	gs_reveal_right_angle			= gs_reveal_right_angle,
+	gs_reveal_top_angle				= gs_reveal_top_angle,
+	gs_reveal_bottom_angle			= gs_reveal_bottom_angle,
+	gs_reveal_outerLeft_angle		= gs_reveal_outerLeft_angle,
+	gs_reveal_outerRight_angle		= gs_reveal_outerRight_angle,
+	gs_reveal_outerTop_angle		= gs_reveal_outerTop_angle,
+	gs_reveal_outerBottom_angle		= gs_reveal_outerBottom_angle,
+	gs_reveal_outer_jamb_depth		= gs_reveal_outer_jamb_depth,
+	gs_reveal_angle_edit_by			= gs_reveal_angle_edit_by,
+	gs_reveal_angle_edit_by_int 	= gs_reveal_angle_edit_by_int,
+	gs_reveal_innerLeft_width		= gs_reveal_innerLeft_width,
+	gs_reveal_innerRight_width		= gs_reveal_innerRight_width,
+	gs_reveal_innerTop_width		= gs_reveal_innerTop_width,
+	gs_reveal_innerBottom_width 	= gs_reveal_innerBottom_width,
+	gs_reveal_outerLeft_width		= gs_reveal_outerLeft_width,
+	gs_reveal_outerRight_width		= gs_reveal_outerRight_width,
+	gs_reveal_outerTop_width		= gs_reveal_outerTop_width,
+	gs_reveal_outerBottom_width 	= gs_reveal_outerBottom_width,
+	gs_mountingFrame				= gs_mountingFrame,
+	gs_mountingFrame_width_left 	= gs_mountingFrame_width_left,
+	gs_mountingFrame_width_right	= gs_mountingFrame_width_right,
+	gs_mountingFrame_width_top		= gs_mountingFrame_width_top,
+	gs_mountingFrame_width_bottom	= gs_mountingFrame_width_bottom,
+	gs_head_symbol					= gs_head_symbol,
+	gs_head_symbol_line				= gs_head_symbol_line,
+	gs_head_symbol_pen				= gs_head_symbol_pen,
+	iWindowShape					= iWindowShape,
+	isWindow						= isWindow,
+	stRevealTypes					= stRevealTypes,
+	stRevealTypesBottom				= stRevealTypesBottom,
+	stRevealAngleEditBy				= stRevealAngleEditBy,
+	iClosureType					= iClosureType,
+! --- Sidelight
+	gs_sidelight_parapet_hgt_left	= gs_sidelight_parapet_hgt_left,
+	gs_sidelight_parapet_hgt_right	= gs_sidelight_parapet_hgt_right,
+! --- Threshold CHE
+	bDoorCHE						= bDoorCHE
+
+! =============================================================================
+end
+! =============================================================================
+
+

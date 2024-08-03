@@ -1,0 +1,943 @@
+lock "GSOP", "R0priv1", "R0priv2", "R0priv3", "R0priv4", "R0priv5", "R0priv", "Rreq", "Kto", "Ktv", "kn", "perepad", "temprosi", "R0treb", "rejim"     !, "TipK"
+
+values "marker",
+"Расчет",
+"Отчет"
+
+!==============================================================
+!              Изменяем размерность массивов
+!==============================================================
+
+if GLOB_MODPAR_NAME="nnLayers" then
+  if nnLayers>0  and (vardim1(nLayer)<nnLayers) then
+    parameters nLayer[nnLayers]=0
+  endif
+
+  if nnLayers>0  and (vardim1(LName)<nnLayers) then
+    parameters LName[nnLayers]=0
+  endif
+
+  if nnLayers>0  and (vardim1(LThick)<nnLayers) then
+    parameters LThick[nnLayers]=0
+  endif
+  if nnLayers>0  and (vardim1(LTeplo)<nnLayers) then
+    parameters LTeplo[nnLayers]=0
+  endif
+
+  if nnLayers>0  and (vardim1(LPar)<nnLayers) then
+    parameters LPar[nnLayers]=0
+  endif
+endif
+
+!==============================================================
+!                  Наполняем массивы
+!==============================================================
+
+if GLOB_ELEM_TYPE=5 then  
+	for i=1 to WALL_SKINS_NUMBER
+		parameters nnLayers=WALL_SKINS_NUMBER
+		parameters nLayer[i]=i
+		parameters LName[i]=WALL_SKINS_BMAT_NAMES [i][1]
+		parameters LThick[i]=WALL_SKINS_PARAMS [i][2]
+		parameters nnThick=WALL_THICKNESS
+	next i
+endif
+if GLOB_ELEM_TYPE=7 then  
+	for i=1 to SLAB_SKINS_NUMBER
+		parameters nnLayers=SLAB_SKINS_NUMBER
+		parameters nLayer[i]=i
+		parameters LName[i]=SLAB_SKINS_BMAT_NAMES [i][1]
+		parameters LThick[i]=SLAB_SKINS_PARAMS [i][2]
+		parameters nnThick=SLAB_THICKNESS
+	next i
+endif
+if GLOB_ELEM_TYPE=8 or GLOB_ELEM_TYPE=18 then  
+	for i=1 to SHELLBASE_SKINS_NUMBER
+		parameters nnLayers=SHELLBASE_SKINS_NUMBER
+		parameters nLayer[i]=i
+		parameters LName[i]=SHELLBASE_SKINS_BMAT_NAMES [i][1]
+		parameters LThick[i]=SHELLBASE_SKINS_PARAMS [i][2]
+		parameters nnThick=SHELLBASE_THICKNESS
+	next i
+endif
+
+!values "Paropron",
+!	"Пенополиуретан   80",
+!	"Минплита(камен.)  2",
+!	"Керамзит   0", 
+!	"Рубероид   ∞",
+!	"Железобетон  20000",
+!	"Штукатурка цем. песчаная   373",
+!	"Штукатурка известковая  142",
+!	"Кирпичная кладка обыкн. глиняный 18",
+!	"Кирпичная кладка силикатный 18",
+!	"Кирпичная кладка керам. пустотный 13",
+!	"Стена брусчатая, бревенчатая    39",
+!	"Фанера  2900",
+!	"Стекло оконное  ∞",
+!	"Сухая штукатурка  20",
+!	"Обои бумажные  20"
+
+
+!====================================================
+!!!!!!!!!!!Данные для расчета по СП 50,13330,2012
+!====================================================
+
+!!!-----------------------------------------------------------------------Тип помещения по табл 3
+values "tipP",
+	"Жилые здания, гостинницы и общежития",
+	"Лечебно-профилактические и детские учреждения, школы, интернаты",
+	"Общественные и административно-бытовые здания",
+	"Производственные здания"
+
+if tipP="Производственные здания" then
+else lock "teplo"
+
+!!------------------------------------------------------------------------Типы конструкций
+
+if GLOB_ELEM_TYPE=5 then parameters tipK="Стены"
+if GLOB_ELEM_TYPE=7 then parameters tipK="Перекрытия"
+if GLOB_ELEM_TYPE=8 or GLOB_ELEM_TYPE=18 then parameters tipK="Покрытие в том числе вентилируемое"
+
+values "tipK",
+	"Стены",         !!!!параметр "zazor" для стен с зазором
+	"Перекрытия", 
+	"Покрытие в том числе вентилируемое"    !!!!параметр "rebra" для покрытий с ребрами
+
+values "tipPer",
+	"над подвалом",
+	"над проездом",
+	"над подпольем",
+	"над холодным этажем",
+	"чердачное"
+values "tipPer1",
+	"неотапливаемым без световых проемов выше уровня земли",
+	"неотапливаемым со световыми проемами в стенах",
+	"холодным сообщающимся с наружным воздухом"
+values "tipPer2",
+	"неотапливаемым ниже уровня земли",
+	"холодным без стенок",
+	"холодным со стенами"
+values "tipPer3",
+	"с кровлей из рулонных мат-ов",
+	"с кровлей из штучных мат-ов"
+
+if tipK="Стены" then 
+	lock "tipPer", "tipPer1", "tipPer2", "tipPer3"
+else lock "zazor"
+if tipK="Покрытие в том числе вентилируемое" then
+	lock "tipPer", "tipPer1", "tipPer2", "tipPer3"
+else lock "rebra"
+if tipper="над подвалом" then lock "tipPer2", "tipPer3"
+if tipper="над подпольем" then lock "tipPer1", "tipPer3"
+if tipper="чердачное" then lock "tipPer1", "tipPer2"
+if tipper="над проездом" then lock "tipPer1", "tipPer2", "tipPer3"
+if tipper="над холодным этажем" then lock "tipPer1", "tipPer2", "tipPer3"
+
+
+!!!!----------------------------------------------------------Таблица 5 - Определение влажностного режима помещений 
+
+values "rejim",
+	"Сухой",
+	"Нормальный",
+	"Влажный или мокрый"
+
+values "vlajnost",
+	40,45,50,55,60,65,70,75,80,85,90,95
+
+if tempvnutr<12 then
+	if vlajnost<60 then parameters rejim="Сухой"
+	if vlajnost>60 then 
+		if vlajnost<75 then parameters rejim="Нормальный"
+	endif
+	if vlajnost>75 then parameters rejim="Влажный или мокрый"
+endif
+if tempvnutr>12 and tempvnutr<24 then
+	if vlajnost<50 then parameters rejim="Сухой"
+	if vlajnost>50 then 
+		if vlajnost<60 then parameters rejim="Нормальный"
+	endif
+	if vlajnost>60 then parameters rejim="Влажный или мокрый"
+endif
+if tempvnutr>24 then
+	if vlajnost<40 then parameters rejim="Сухой"
+	if vlajnost>40 then 
+		if vlajnost<50 then parameters rejim="Нормальный"
+	endif
+	if vlajnost>50 then parameters rejim="Влажный или мокрый"
+endif
+
+!!!------------------------------------------------------------Таблица 2 - Условия эксплуатации ограждающих конструкций
+
+values "zona",
+	"Сухая",
+	"Нормальная",
+	"Влажная"
+
+if rejim="Сухой" and zona="Сухая" then parameters usloviya="А"
+if rejim="Сухой" and zona="Нормальная" then parameters usloviya="А"
+if rejim="Сухой" and zona="Влажная" then parameters usloviya="Б"
+if rejim="Нормальный" and zona="Сухая" then parameters usloviya="А"
+if rejim="Нормальный" and zona="Нормальная" then parameters usloviya="Б"
+if rejim="Нормальный" and zona="Влажная" then parameters usloviya="Б"
+if rejim="Влажный или мокрый" then parameters usloviya="Б"
+
+lock "usloviya"
+
+!!!!! ---------------------------------Температура точки росы по СП 23-101-2004
+if vlajnost=40 then 
+	if tempvnutr=	-5	then parameters temprosi=	-15.3
+	if tempvnutr=	-4	then parameters temprosi=	-14.4
+	if tempvnutr=	-3	then parameters temprosi=	-13.42
+	if tempvnutr=	-2	then parameters temprosi=	-12.58
+	if tempvnutr=	-1	then parameters temprosi=	-11.61
+	if tempvnutr=	0	then parameters temprosi=	-10.65
+	if tempvnutr=	1	then parameters temprosi=	-9.85
+	if tempvnutr=	2	then parameters temprosi=	-9.07
+	if tempvnutr=	3	then parameters temprosi=	-8.22
+	if tempvnutr=	4	then parameters temprosi=	-7.45
+	if tempvnutr=	5	then parameters temprosi=	-6.66
+	if tempvnutr=	6	then parameters temprosi=	-5.81
+	if tempvnutr=	7	then parameters temprosi=	-5.01
+	if tempvnutr=	8	then parameters temprosi=	-4.21
+	if tempvnutr=	9	then parameters temprosi=	-3.41
+	if tempvnutr=	10	then parameters temprosi=	-2.62
+	if tempvnutr=	11	then parameters temprosi=	-1.83
+	if tempvnutr=	12	then parameters temprosi=	-1.04
+	if tempvnutr=	13	then parameters temprosi=	-0.25
+	if tempvnutr=	14	then parameters temprosi=	0.63
+	if tempvnutr=	15	then parameters temprosi=	1.51
+	if tempvnutr=	16	then parameters temprosi=	2.41
+	if tempvnutr=	17	then parameters temprosi=	3.31
+	if tempvnutr=	18	then parameters temprosi=	4.2
+	if tempvnutr=	19	then parameters temprosi=	5.09
+	if tempvnutr=	20	then parameters temprosi=	6
+	if tempvnutr=	21	then parameters temprosi=	6.9
+	if tempvnutr=	22	then parameters temprosi=	7.69
+	if tempvnutr=	23	then parameters temprosi=	8.68
+	if tempvnutr=	24	then parameters temprosi=	9.57
+	if tempvnutr=	25	then parameters temprosi=	10.46
+	if tempvnutr=	26	then parameters temprosi=	11.35
+	if tempvnutr=	27	then parameters temprosi=	12.24
+	if tempvnutr=	28	then parameters temprosi=	13.13
+	if tempvnutr=	29	then parameters temprosi=	14.02
+	if tempvnutr=	30	then parameters temprosi=	14.92
+	if tempvnutr=	31	then parameters temprosi=	15.82
+	if tempvnutr=	32	then parameters temprosi=	16.71
+	if tempvnutr=	33	then parameters temprosi=	17.6
+	if tempvnutr=	34	then parameters temprosi=	18.49
+	if tempvnutr=	35	then parameters temprosi=	19.38
+endif
+
+if vlajnost=45 then 
+	if tempvnutr=	-5	then parameters temprosi=	-14.04
+	if tempvnutr=	-4	then parameters temprosi=	-13.1
+	if tempvnutr=	-3	then parameters temprosi=	-12.16
+	if tempvnutr=	-2	then parameters temprosi=	-11.22
+	if tempvnutr=	-1	then parameters temprosi=	-10.28
+	if tempvnutr=	0	then parameters temprosi=	-9.34
+	if tempvnutr=	1	then parameters temprosi=	-8.52
+	if tempvnutr=	2	then parameters temprosi=	-7.72
+	if tempvnutr=	3	then parameters temprosi=	-6.88
+	if tempvnutr=	4	then parameters temprosi=	-6.07
+	if tempvnutr=	5	then parameters temprosi=	-5.26
+	if tempvnutr=	6	then parameters temprosi=	-4.45
+	if tempvnutr=	7	then parameters temprosi=	-3.64
+	if tempvnutr=	8	then parameters temprosi=	-2.83
+	if tempvnutr=	9	then parameters temprosi=	-2.02
+	if tempvnutr=	10	then parameters temprosi=	-1.22
+	if tempvnutr=	11	then parameters temprosi=	-0.42
+	if tempvnutr=	12	then parameters temprosi=	0.44
+	if tempvnutr=	13	then parameters temprosi=	1.35
+	if tempvnutr=	14	then parameters temprosi=	2.26
+	if tempvnutr=	15	then parameters temprosi=	3.17
+	if tempvnutr=	16	then parameters temprosi=	4.08
+	if tempvnutr=	17	then parameters temprosi=	4.99
+	if tempvnutr=	18	then parameters temprosi=	5.9
+	if tempvnutr=	19	then parameters temprosi=	6.81
+	if tempvnutr=	20	then parameters temprosi=	7.72
+	if tempvnutr=	21	then parameters temprosi=	8.62
+	if tempvnutr=	22	then parameters temprosi=	9.52
+	if tempvnutr=	23	then parameters temprosi=	10.43
+	if tempvnutr=	24	then parameters temprosi=	11.34
+	if tempvnutr=	25	then parameters temprosi=	12.75
+	if tempvnutr=	26	then parameters temprosi=	13.15
+	if tempvnutr=	27	then parameters temprosi=	14.05
+	if tempvnutr=	28	then parameters temprosi=	14.95
+	if tempvnutr=	29	then parameters temprosi=	15.86
+	if tempvnutr=	30	then parameters temprosi=	16.77
+	if tempvnutr=	31	then parameters temprosi=	17.68
+	if tempvnutr=	32	then parameters temprosi=	18.58
+	if tempvnutr=	33	then parameters temprosi=	19.48
+	if tempvnutr=	34	then parameters temprosi=	20.38
+	if tempvnutr=	35	then parameters temprosi=	21.28
+endif
+if vlajnost=50 then 
+	if tempvnutr=	-5	then parameters temprosi=	-12.9
+	if tempvnutr=	-4	then parameters temprosi=	-11.93
+	if tempvnutr=	-3	then parameters temprosi=	-10.98
+	if tempvnutr=	-2	then parameters temprosi=	-10.04
+	if tempvnutr=	-1	then parameters temprosi=	-9.1
+	if tempvnutr=	0	then parameters temprosi=	-8.16
+	if tempvnutr=	1	then parameters temprosi=	-7.32
+	if tempvnutr=	2	then parameters temprosi=	-6.52
+	if tempvnutr=	3	then parameters temprosi=	-5.66
+	if tempvnutr=	4	then parameters temprosi=	-4.84
+	if tempvnutr=	5	then parameters temprosi=	-4.03
+	if tempvnutr=	6	then parameters temprosi=	-3.22
+	if tempvnutr=	7	then parameters temprosi=	-2.39
+	if tempvnutr=	8	then parameters temprosi=	-1.56
+	if tempvnutr=	9	then parameters temprosi=	-0.78
+	if tempvnutr=	10	then parameters temprosi=	0.08
+	if tempvnutr=	11	then parameters temprosi=	0.98
+	if tempvnutr=	12	then parameters temprosi=	1.9
+	if tempvnutr=	13	then parameters temprosi=	2.82
+	if tempvnutr=	14	then parameters temprosi=	3.76
+	if tempvnutr=	15	then parameters temprosi=	4.68
+	if tempvnutr=	16	then parameters temprosi=	5.6
+	if tempvnutr=	17	then parameters temprosi=	6.52
+	if tempvnutr=	18	then parameters temprosi=	7.44
+	if tempvnutr=	19	then parameters temprosi=	8.36
+	if tempvnutr=	20	then parameters temprosi=	9.28
+	if tempvnutr=	21	then parameters temprosi=	10.2
+	if tempvnutr=	22	then parameters temprosi=	11.12
+	if tempvnutr=	23	then parameters temprosi=	12.03
+	if tempvnutr=	24	then parameters temprosi=	12.94
+	if tempvnutr=	25	then parameters temprosi=	13.86
+	if tempvnutr=	26	then parameters temprosi=	14.78
+	if tempvnutr=	27	then parameters temprosi=	15.7
+	if tempvnutr=	28	then parameters temprosi=	16.61
+	if tempvnutr=	29	then parameters temprosi=	17.52
+	if tempvnutr=	30	then parameters temprosi=	18.44
+	if tempvnutr=	31	then parameters temprosi=	19.36
+	if tempvnutr=	32	then parameters temprosi=	20.27
+	if tempvnutr=	33	then parameters temprosi=	21.18
+	if tempvnutr=	34	then parameters temprosi=	22.1
+	if tempvnutr=	35	then parameters temprosi=	23.02
+endif
+if vlajnost=55 then 	
+	if tempvnutr=	-5	then parameters temprosi=	-11.84
+	if tempvnutr=	-4	then parameters temprosi=	-10.84
+	if tempvnutr=	-3	then parameters temprosi=	-9.91
+	if tempvnutr=	-2	then parameters temprosi=	-8.98
+	if tempvnutr=	-1	then parameters temprosi=	-7.98
+	if tempvnutr=	0	then parameters temprosi=	-7.05
+	if tempvnutr=	1	then parameters temprosi=	-6.22
+	if tempvnutr=	2	then parameters temprosi=	-5.39
+	if tempvnutr=	3	then parameters temprosi=	-4.53
+	if tempvnutr=	4	then parameters temprosi=	-3.74
+	if tempvnutr=	5	then parameters temprosi=	-2.91
+	if tempvnutr=	6	then parameters temprosi=	-2.08
+	if tempvnutr=	7	then parameters temprosi=	-1.25
+	if tempvnutr=	8	then parameters temprosi=	-0.42
+	if tempvnutr=	9	then parameters temprosi=	0.46
+	if tempvnutr=	10	then parameters temprosi=	1.39
+	if tempvnutr=	11	then parameters temprosi=	1.32
+	if tempvnutr=	12	then parameters temprosi=	3.25
+	if tempvnutr=	13	then parameters temprosi=	4.18
+	if tempvnutr=	14	then parameters temprosi=	5.11
+	if tempvnutr=	15	then parameters temprosi=	6.04
+	if tempvnutr=	16	then parameters temprosi=	6.97
+	if tempvnutr=	17	then parameters temprosi=	7.9
+	if tempvnutr=	18	then parameters temprosi=	8.83
+	if tempvnutr=	19	then parameters temprosi=	9.76
+	if tempvnutr=	20	then parameters temprosi=	10.69
+	if tempvnutr=	21	then parameters temprosi=	11.62
+	if tempvnutr=	22	then parameters temprosi=	12.56
+	if tempvnutr=	23	then parameters temprosi=	13.48
+	if tempvnutr=	24	then parameters temprosi=	14.41
+	if tempvnutr=	25	then parameters temprosi=	15.34
+	if tempvnutr=	26	then parameters temprosi=	16.27
+	if tempvnutr=	27	then parameters temprosi=	17.19
+	if tempvnutr=	28	then parameters temprosi=	18.11
+	if tempvnutr=	29	then parameters temprosi=	19.04
+	if tempvnutr=	30	then parameters temprosi=	19.97
+	if tempvnutr=	31	then parameters temprosi=	20.9
+	if tempvnutr=	32	then parameters temprosi=	21.83
+	if tempvnutr=	33	then parameters temprosi=	22.76
+	if tempvnutr=	34	then parameters temprosi=	23.68
+	if tempvnutr=	35	then parameters temprosi=	24.6
+endif
+if vlajnost=60 then 
+	if tempvnutr=	-5	then parameters temprosi=	-10.83
+	if tempvnutr=	-4	then parameters temprosi=	-9.89
+	if tempvnutr=	-3	then parameters temprosi=	-8.95
+	if tempvnutr=	-2	then parameters temprosi=	-7.95
+	if tempvnutr=	-1	then parameters temprosi=	-7
+	if tempvnutr=	0	then parameters temprosi=	-6.06
+	if tempvnutr=	1	then parameters temprosi=	-5.21
+	if tempvnutr=	2	then parameters temprosi=	-4.38
+	if tempvnutr=	3	then parameters temprosi=	-3.52
+	if tempvnutr=	4	then parameters temprosi=	-2.7
+	if tempvnutr=	5	then parameters temprosi=	-1.87
+	if tempvnutr=	6	then parameters temprosi=	-1.04
+	if tempvnutr=	7	then parameters temprosi=	-0.21
+	if tempvnutr=	8	then parameters temprosi=	-0.72
+	if tempvnutr=	9	then parameters temprosi=	1.66
+	if tempvnutr=	10	then parameters temprosi=	2.6
+	if tempvnutr=	11	then parameters temprosi=	3.54
+	if tempvnutr=	12	then parameters temprosi=	4.48
+	if tempvnutr=	13	then parameters temprosi=	5.42
+	if tempvnutr=	14	then parameters temprosi=	6.36
+	if tempvnutr=	15	then parameters temprosi=	7.3
+	if tempvnutr=	16	then parameters temprosi=	8.24
+	if tempvnutr=	17	then parameters temprosi=	9.18
+	if tempvnutr=	18	then parameters temprosi=	10.12
+	if tempvnutr=	19	then parameters temprosi=	11.06
+	if tempvnutr=	20	then parameters temprosi=	12
+	if tempvnutr=	21	then parameters temprosi=	12.94
+	if tempvnutr=	22	then parameters temprosi=	13.88
+	if tempvnutr=	23	then parameters temprosi=	14.82
+	if tempvnutr=	24	then parameters temprosi=	15.76
+	if tempvnutr=	25	then parameters temprosi=	16.7
+	if tempvnutr=	26	then parameters temprosi=	17.64
+	if tempvnutr=	27	then parameters temprosi=	18.57
+	if tempvnutr=	28	then parameters temprosi=	19.5
+	if tempvnutr=	29	then parameters temprosi=	20.44
+	if tempvnutr=	30	then parameters temprosi=	21.38
+	if tempvnutr=	31	then parameters temprosi=	22.32
+	if tempvnutr=	32	then parameters temprosi=	23.26
+	if tempvnutr=	33	then parameters temprosi=	24.2
+	if tempvnutr=	34	then parameters temprosi=	25.14
+	if tempvnutr=	35	then parameters temprosi=	26.08
+endif
+if vlajnost=65 then 
+	if tempvnutr=	-5	then parameters temprosi=	-9.96
+	if tempvnutr=	-4	then parameters temprosi=	-8.99
+	if tempvnutr=	-3	then parameters temprosi=	-7.99
+	if tempvnutr=	-2	then parameters temprosi=	-7.04
+	if tempvnutr=	-1	then parameters temprosi=	-6.09
+	if tempvnutr=	0	then parameters temprosi=	-5.14
+	if tempvnutr=	1	then parameters temprosi=	-4.26
+	if tempvnutr=	2	then parameters temprosi=	-3.44
+	if tempvnutr=	3	then parameters temprosi=	-2.57
+	if tempvnutr=	4	then parameters temprosi=	-1.75
+	if tempvnutr=	5	then parameters temprosi=	-0.92
+	if tempvnutr=	6	then parameters temprosi=	-0.08
+	if tempvnutr=	7	then parameters temprosi=	0.87
+	if tempvnutr=	8	then parameters temprosi=	1.82 
+	if tempvnutr=	9	then parameters temprosi=	2.77
+	if tempvnutr=	10	then parameters temprosi=	3.72
+	if tempvnutr=	11	then parameters temprosi=	4.68
+	if tempvnutr=	12	then parameters temprosi=	5.63
+	if tempvnutr=	13	then parameters temprosi=	6.58
+	if tempvnutr=	14	then parameters temprosi=	7.53
+	if tempvnutr=	15	then parameters temprosi=	8.48
+	if tempvnutr=	16	then parameters temprosi=	9.43
+	if tempvnutr=	17	then parameters temprosi=	10.37
+	if tempvnutr=	18	then parameters temprosi=	11.32
+	if tempvnutr=	19	then parameters temprosi=	12.27
+	if tempvnutr=	20	then parameters temprosi=	13.22
+	if tempvnutr=	21	then parameters temprosi=	14.17
+	if tempvnutr=	22	then parameters temprosi=	15.12
+	if tempvnutr=	23	then parameters temprosi=	16.07
+	if tempvnutr=	24	then parameters temprosi=	17.02
+	if tempvnutr=	25	then parameters temprosi=	17.97
+	if tempvnutr=	26	then parameters temprosi=	18.95
+	if tempvnutr=	27	then parameters temprosi=	19.87
+	if tempvnutr=	28	then parameters temprosi=	20.81
+	if tempvnutr=	29	then parameters temprosi=	21.75
+	if tempvnutr=	30	then parameters temprosi=	22.69
+	if tempvnutr=	31	then parameters temprosi=	23.64
+	if tempvnutr=	32	then parameters temprosi=	24.59
+	if tempvnutr=	33	then parameters temprosi=	25.54
+	if tempvnutr=	34	then parameters temprosi=	26.49
+	if tempvnutr=	35	then parameters temprosi=	27.64
+endif
+if vlajnost=70 then 
+	if tempvnutr=	-5	then parameters temprosi=	-9.11
+	if tempvnutr=	-4	then parameters temprosi=	-8.11
+	if tempvnutr=	-3	then parameters temprosi=	-7.16
+	if tempvnutr=	-2	then parameters temprosi=	-6.21
+	if tempvnutr=	-1	then parameters temprosi=	-5.21
+	if tempvnutr=	0	then parameters temprosi=	-4.26
+	if tempvnutr=	1	then parameters temprosi=	-3.4
+	if tempvnutr=	2	then parameters temprosi=	-2.56
+	if tempvnutr=	3	then parameters temprosi=	-1.69
+	if tempvnutr=	4	then parameters temprosi=	-0.87
+	if tempvnutr=	5	then parameters temprosi=	-0.01
+	if tempvnutr=	6	then parameters temprosi=	0.94
+	if tempvnutr=	7	then parameters temprosi=	1.9
+	if tempvnutr=	8	then parameters temprosi=	2.86
+	if tempvnutr=	9	then parameters temprosi=	3.82
+	if tempvnutr=	10	then parameters temprosi=	4.78
+	if tempvnutr=	11	then parameters temprosi=	5.74
+	if tempvnutr=	12	then parameters temprosi=	6.7
+	if tempvnutr=	13	then parameters temprosi=	7.66
+	if tempvnutr=	14	then parameters temprosi=	8.62
+	if tempvnutr=	15	then parameters temprosi=	9.58
+	if tempvnutr=	16	then parameters temprosi=	10.54
+	if tempvnutr=	17	then parameters temprosi=	11.5
+	if tempvnutr=	18	then parameters temprosi=	12.46
+	if tempvnutr=	19	then parameters temprosi=	13.42
+	if tempvnutr=	20	then parameters temprosi=	14.38
+	if tempvnutr=	21	then parameters temprosi=	15.33
+	if tempvnutr=	22	then parameters temprosi=	16.28
+	if tempvnutr=	23	then parameters temprosi=	17.23
+	if tempvnutr=	24	then parameters temprosi=	18.19
+	if tempvnutr=	25	then parameters temprosi=	19.15
+	if tempvnutr=	26	then parameters temprosi=	20.11
+	if tempvnutr=	27	then parameters temprosi=	21.06
+	if tempvnutr=	28	then parameters temprosi=	22.01
+	if tempvnutr=	29	then parameters temprosi=	22.96
+	if tempvnutr=	30	then parameters temprosi=	23.92
+	if tempvnutr=	31	then parameters temprosi=	24.88
+	if tempvnutr=	32	then parameters temprosi=	25.83
+	if tempvnutr=	33	then parameters temprosi=	26.78
+	if tempvnutr=	34	then parameters temprosi=	27.74
+	if tempvnutr=	35	then parameters temprosi=	28.7
+endif
+if vlajnost=75 then 
+	if tempvnutr=	-5	then parameters temprosi=	-8.31
+	if tempvnutr=	-4	then parameters temprosi=	-7.34
+	if tempvnutr=	-3	then parameters temprosi=	-6.37
+	if tempvnutr=	-2	then parameters temprosi=	-5.4
+	if tempvnutr=	-1	then parameters temprosi=	-4.43
+	if tempvnutr=	0	then parameters temprosi=	-3.46
+	if tempvnutr=	1	then parameters temprosi=	-2.58
+	if tempvnutr=	2	then parameters temprosi=	-1.74
+	if tempvnutr=	3	then parameters temprosi=	-0.88
+	if tempvnutr=	4	then parameters temprosi=	-0.01
+	if tempvnutr=	5	then parameters temprosi=	0.94
+	if tempvnutr=	6	then parameters temprosi=	1.89
+	if tempvnutr=	7	then parameters temprosi=	2.85
+	if tempvnutr=	8	then parameters temprosi=	3.85
+	if tempvnutr=	9	then parameters temprosi=	4.81
+	if tempvnutr=	10	then parameters temprosi=	5.77
+	if tempvnutr=	11	then parameters temprosi=	6.74
+	if tempvnutr=	12	then parameters temprosi=	7.71
+	if tempvnutr=	13	then parameters temprosi=	8.68
+	if tempvnutr=	14	then parameters temprosi=	9.64
+	if tempvnutr=	15	then parameters temprosi=	10.6
+	if tempvnutr=	16	then parameters temprosi=	11.57
+	if tempvnutr=	17	then parameters temprosi=	12.54
+	if tempvnutr=	18	then parameters temprosi=	13.51
+	if tempvnutr=	19	then parameters temprosi=	14.48
+	if tempvnutr=	20	then parameters temprosi=	15.44
+	if tempvnutr=	21	then parameters temprosi=	16.4
+	if tempvnutr=	22	then parameters temprosi=	17.37
+	if tempvnutr=	23	then parameters temprosi=	18.34
+	if tempvnutr=	24	then parameters temprosi=	19.3
+	if tempvnutr=	25	then parameters temprosi=	20.26
+	if tempvnutr=	26	then parameters temprosi=	21.22
+	if tempvnutr=	27	then parameters temprosi=	22.18
+	if tempvnutr=	28	then parameters temprosi=	23.14
+	if tempvnutr=	29	then parameters temprosi=	24.11
+	if tempvnutr=	30	then parameters temprosi=	25.08
+	if tempvnutr=	31	then parameters temprosi=	26.04
+	if tempvnutr=	32	then parameters temprosi=	27
+	if tempvnutr=	33	then parameters temprosi=	27.97
+	if tempvnutr=	34	then parameters temprosi=	28.94
+	if tempvnutr=	35	then parameters temprosi=	29.91
+endif
+if vlajnost=80 then 
+	if tempvnutr=	-5	then parameters temprosi=	-7.62
+	if tempvnutr=	-4	then parameters temprosi=	-6.62
+	if tempvnutr=	-3	then parameters temprosi=	-5.62
+	if tempvnutr=	-2	then parameters temprosi=	-4.62
+	if tempvnutr=	-1	then parameters temprosi=	-3.66
+	if tempvnutr=	0	then parameters temprosi=	-2.7
+	if tempvnutr=	1	then parameters temprosi=	-1.82
+	if tempvnutr=	2	then parameters temprosi=	-0.97
+	if tempvnutr=	3	then parameters temprosi=	-0.08
+	if tempvnutr=	4	then parameters temprosi=	0.87
+	if tempvnutr=	5	then parameters temprosi=	1.83
+	if tempvnutr=	6	then parameters temprosi=	2.8
+	if tempvnutr=	7	then parameters temprosi=	3.77
+	if tempvnutr=	8	then parameters temprosi=	4.77
+	if tempvnutr=	9	then parameters temprosi=	5.74
+	if tempvnutr=	10	then parameters temprosi=	6.71
+	if tempvnutr=	11	then parameters temprosi=	7.68
+	if tempvnutr=	12	then parameters temprosi=	8.65
+	if tempvnutr=	13	then parameters temprosi=	9.62
+	if tempvnutr=	14	then parameters temprosi=	10.59
+	if tempvnutr=	15	then parameters temprosi=	11.59
+	if tempvnutr=	16	then parameters temprosi=	12.56
+	if tempvnutr=	17	then parameters temprosi=	13.53
+	if tempvnutr=	18	then parameters temprosi=	14.5
+	if tempvnutr=	19	then parameters temprosi=	15.47
+	if tempvnutr=	20	then parameters temprosi=	16.44
+	if tempvnutr=	21	then parameters temprosi=	17.41
+	if tempvnutr=	22	then parameters temprosi=	18.38
+	if tempvnutr=	23	then parameters temprosi=	19.38
+	if tempvnutr=	24	then parameters temprosi=	20.35
+	if tempvnutr=	25	then parameters temprosi=	21.32
+	if tempvnutr=	26	then parameters temprosi=	22.29
+	if tempvnutr=	27	then parameters temprosi=	23.26
+	if tempvnutr=	28	then parameters temprosi=	24.23
+	if tempvnutr=	29	then parameters temprosi=	25.2
+	if tempvnutr=	30	then parameters temprosi=	26.17
+	if tempvnutr=	31	then parameters temprosi=	27.14
+	if tempvnutr=	32	then parameters temprosi=	28.11
+	if tempvnutr=	33	then parameters temprosi=	29.08
+	if tempvnutr=	34	then parameters temprosi=	30.05
+	if tempvnutr=	35	then parameters temprosi=	31.02
+endif
+if vlajnost=85 then 
+	if tempvnutr=	-5	then parameters temprosi=	-6.89
+	if tempvnutr=	-4	then parameters temprosi=	-5.89
+	if tempvnutr=	-3	then parameters temprosi=	-4.9
+	if tempvnutr=	-2	then parameters temprosi=	-3.9
+	if tempvnutr=	-1	then parameters temprosi=	-2.94
+	if tempvnutr=	0	then parameters temprosi=	-1.96
+	if tempvnutr=	1	then parameters temprosi=	-1.08
+	if tempvnutr=	2	then parameters temprosi=	-0.24
+	if tempvnutr=	3	then parameters temprosi=	0.74
+	if tempvnutr=	4	then parameters temprosi=	1.72
+	if tempvnutr=	5	then parameters temprosi=	2.68
+	if tempvnutr=	6	then parameters temprosi=	3.68
+	if tempvnutr=	7	then parameters temprosi=	4.66
+	if tempvnutr=	8	then parameters temprosi=	5.64
+	if tempvnutr=	9	then parameters temprosi=	6.62
+	if tempvnutr=	10	then parameters temprosi=	7.6
+	if tempvnutr=	11	then parameters temprosi=	8.58
+	if tempvnutr=	12	then parameters temprosi=	9.56
+	if tempvnutr=	13	then parameters temprosi=	10.54
+	if tempvnutr=	14	then parameters temprosi=	11.52
+	if tempvnutr=	15	then parameters temprosi=	12.5
+	if tempvnutr=	16	then parameters temprosi=	13.48
+	if tempvnutr=	17	then parameters temprosi=	14.46
+	if tempvnutr=	18	then parameters temprosi=	15.44
+	if tempvnutr=	19	then parameters temprosi=	16.42
+	if tempvnutr=	20	then parameters temprosi=	17.4
+	if tempvnutr=	21	then parameters temprosi=	18.38
+	if tempvnutr=	22	then parameters temprosi=	19.36
+	if tempvnutr=	23	then parameters temprosi=	20.34
+	if tempvnutr=	24	then parameters temprosi=	21.32
+	if tempvnutr=	25	then parameters temprosi=	22.3
+	if tempvnutr=	26	then parameters temprosi=	23.28
+	if tempvnutr=	27	then parameters temprosi=	24.26
+	if tempvnutr=	28	then parameters temprosi=	25.24
+	if tempvnutr=	29	then parameters temprosi=	26.22
+	if tempvnutr=	30	then parameters temprosi=	27.2
+	if tempvnutr=	31	then parameters temprosi=	28.08
+	if tempvnutr=	32	then parameters temprosi=	29.16
+	if tempvnutr=	33	then parameters temprosi=	30.14
+	if tempvnutr=	34	then parameters temprosi=	31.12
+	if tempvnutr=	35	then parameters temprosi=	32.1
+endif
+if vlajnost=90 then 
+	if tempvnutr=	-5	then parameters temprosi=	-6.24
+	if tempvnutr=	-4	then parameters temprosi=	-5.24
+	if tempvnutr=	-3	then parameters temprosi=	-4.24
+	if tempvnutr=	-2	then parameters temprosi=	-3.34
+	if tempvnutr=	-1	then parameters temprosi=	-2.34
+	if tempvnutr=	0	then parameters temprosi=	-1.34
+	if tempvnutr=	1	then parameters temprosi=	-0.41
+	if tempvnutr=	2	then parameters temprosi=	0.52
+	if tempvnutr=	3	then parameters temprosi=	1.52
+	if tempvnutr=	4	then parameters temprosi=	2.5
+	if tempvnutr=	5	then parameters temprosi=	3.49
+	if tempvnutr=	6	then parameters temprosi=	4.48
+	if tempvnutr=	7	then parameters temprosi=	5.47
+	if tempvnutr=	8	then parameters temprosi=	6.46
+	if tempvnutr=	9	then parameters temprosi=	7.45
+	if tempvnutr=	10	then parameters temprosi=	8.44
+	if tempvnutr=	11	then parameters temprosi=	9.43
+	if tempvnutr=	12	then parameters temprosi=	10.42
+	if tempvnutr=	13	then parameters temprosi=	11.41
+	if tempvnutr=	14	then parameters temprosi=	12.4
+	if tempvnutr=	15	then parameters temprosi=	13.38
+	if tempvnutr=	16	then parameters temprosi=	14.36
+	if tempvnutr=	17	then parameters temprosi=	15.36
+	if tempvnutr=	18	then parameters temprosi=	16.34
+	if tempvnutr=	19	then parameters temprosi=	17.32
+	if tempvnutr=	20	then parameters temprosi=	18.32
+	if tempvnutr=	21	then parameters temprosi=	19.3
+	if tempvnutr=	22	then parameters temprosi=	20.3
+	if tempvnutr=	23	then parameters temprosi=	21.28
+	if tempvnutr=	24	then parameters temprosi=	22.26
+	if tempvnutr=	25	then parameters temprosi=	23.24
+	if tempvnutr=	26	then parameters temprosi=	24.22
+	if tempvnutr=	27	then parameters temprosi=	25.22
+	if tempvnutr=	28	then parameters temprosi=	26.2
+	if tempvnutr=	29	then parameters temprosi=	27.2
+	if tempvnutr=	30	then parameters temprosi=	28.18
+	if tempvnutr=	31	then parameters temprosi=	29.16
+	if tempvnutr=	32	then parameters temprosi=	30.16
+	if tempvnutr=	33	then parameters temprosi=	31.14
+	if tempvnutr=	34	then parameters temprosi=	32.12
+	if tempvnutr=	35	then parameters temprosi=	33.12
+endif
+if vlajnost=95 then 
+	if tempvnutr=	-5	then parameters temprosi=	-5.6
+	if tempvnutr=	-4	then parameters temprosi=	-4.6
+	if tempvnutr=	-3	then parameters temprosi=	-3.6
+	if tempvnutr=	-2	then parameters temprosi=	-2.6
+	if tempvnutr=	-1	then parameters temprosi=	-1.6
+	if tempvnutr=	0	then parameters temprosi=	-0.62
+	if tempvnutr=	1	then parameters temprosi=	0.31
+	if tempvnutr=	2	then parameters temprosi=	1.29
+	if tempvnutr=	3	then parameters temprosi=	2.29
+	if tempvnutr=	4	then parameters temprosi=	3.26
+	if tempvnutr=	5	then parameters temprosi=	4.26
+	if tempvnutr=	6	then parameters temprosi=	5.25
+	if tempvnutr=	7	then parameters temprosi=	6.25
+	if tempvnutr=	8	then parameters temprosi=	7.24
+	if tempvnutr=	9	then parameters temprosi=	8.24
+	if tempvnutr=	10	then parameters temprosi=	9.23
+	if tempvnutr=	11	then parameters temprosi=	10.23
+	if tempvnutr=	12	then parameters temprosi=	11.22
+	if tempvnutr=	13	then parameters temprosi=	12.21
+	if tempvnutr=	14	then parameters temprosi=	13.21
+	if tempvnutr=	15	then parameters temprosi=	14.21
+	if tempvnutr=	16	then parameters temprosi=	15.2
+	if tempvnutr=	17	then parameters temprosi=	16.19
+	if tempvnutr=	18	then parameters temprosi=	17.19
+	if tempvnutr=	19	then parameters temprosi=	18.19
+	if tempvnutr=	20	then parameters temprosi=	19.18
+	if tempvnutr=	21	then parameters temprosi=	20.18
+	if tempvnutr=	22	then parameters temprosi=	21.6
+	if tempvnutr=	23	then parameters temprosi=	22.15
+	if tempvnutr=	24	then parameters temprosi=	23.15
+	if tempvnutr=	25	then parameters temprosi=	24.14
+	if tempvnutr=	26	then parameters temprosi=	25.14
+	if tempvnutr=	27	then parameters temprosi=	26.13
+	if tempvnutr=	28	then parameters temprosi=	27.12
+	if tempvnutr=	29	then parameters temprosi=	28.12
+	if tempvnutr=	30	then parameters temprosi=	29.11
+	if tempvnutr=	31	then parameters temprosi=	30.1
+	if tempvnutr=	32	then parameters temprosi=	31.19
+	if tempvnutr=	33	then parameters temprosi=	32.19
+	if tempvnutr=	34	then parameters temprosi=	33.08
+	if tempvnutr=	35	then parameters temprosi=	34.08
+endif
+
+!!!!------------------------------------------------Таблица 6 - Коэффициенты теплоотдачи наружной поверхности ограждающей конструкции
+
+if tipK="Стены" then
+	if zazor=0 then parameters Kto=23
+	if zazor>0 then parameters Kto=12
+endif
+if tipK="Покрытие в том числе вентилируемое" then parameters Kto=23
+if tipK="Перекрытия" then 
+	if tipPer="над проездом" then parameters Kto=23
+	if tipPer="над холодным этажем" then parameters Kto=17
+	if tipPer="чердачное" then parameters Kto=12
+	if tipPer="над подвалом" then 
+		if tipper1="неотапливаемым без световых проемов выше уровня земли" then parameters Kto=6
+		if tipper1="неотапливаемым со световыми проемами в стенах" then parameters Kto=12
+		if tipper1="холодным сообщающимся с наружным воздухом" then parameters Kto=17
+	endif
+	if tipPer="над подпольем" then 
+		if tipper2="неотапливаемым ниже уровня земли" then parameters Kto=6
+		if tipper2="холодным без стенок" then parameters Kto=23
+		if tipper2="холодным со стенами" then parameters Kto=17
+	endif
+endif
+
+!!!!-----------------------------------------------Таблица 2 - Значение нормируемого перепада t
+
+if tipK="Стены" then
+	if tipP="Жилые здания, гостинницы и общежития" then parameters perepad=4.0
+	if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then parameters perepad=4.0
+	if tipP="Общественные и административно-бытовые здания" then 
+		if rejim="Влажный или мокрый" then parameters perepad=tempvnutr-temprosi
+		if rejim="Сухой" then parameters perepad=4.5
+		if rejim="Нормальный" then parameters perepad=4.5
+		endif
+	if tipP="Производственные здания" then 
+		if rejim="Влажный или мокрый" then parameters perepad=(tempvnutr-temprosi)
+		if rejim="Сухой" then
+ 			if (tempvnutr-temprosi)>7 then parameters perepad=7
+			else parameters perepad=(tempvnutr-temprosi)
+		if rejim="Нормальный" then
+ 			if (tempvnutr-temprosi)>7 then parameters perepad=7
+			else parameters perepad=(tempvnutr-temprosi)
+		endif 
+endif
+if tipK="Покрытие в том числе вентилируемое" then
+	if tipP="Жилые здания, гостинницы и общежития" then parameters perepad=3.0
+	if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then parameters perepad=3.0
+	if tipP="Общественные и административно-бытовые здания" then 
+		if rejim="Влажный или мокрый" then parameters perepad=(tempvnutr-temprosi)*0.8
+		if rejim="Сухой" then parameters perepad=4.0
+		if rejim="Нормальный" then parameters perepad=4.0
+		endif
+	if tipP="Производственные здания" then 
+		if rejim="Влажный или мокрый" then parameters perepad=(tempvnutr-temprosi)*0.8
+		if rejim="Сухой" then 
+			if (tempvnutr-temprosi)*0.8>6 then parameters perepad=6
+			else parameters perepad=(tempvnutr-temprosi)*0.8
+		if rejim="Нормальный" then 
+			if (tempvnutr-temprosi)*0.8>6 then parameters perepad=6
+			else parameters perepad=(tempvnutr-temprosi)*0.8
+		endif 
+endif
+if tipK="Перекрытия" then
+	if tipPer="чердачное" then
+		if tipP="Жилые здания, гостинницы и общежития" then parameters perepad=3.0
+		if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then parameters perepad=3.0
+		if tipP="Общественные и административно-бытовые здания" then 
+			if rejim="Влажный или мокрый" then parameters perepad=(tempvnutr-temprosi)*0.8
+			if rejim="Сухой" then parameters perepad=4.0
+			if rejim="Нормальный" then parameters perepad=4.0
+			endif
+		if tipP="Производственные здания" then 
+			if rejim="Влажный или мокрый" then parameters perepad=(tempvnutr-temprosi)*0.8
+			if rejim="Сухой" then 
+				if (tempvnutr-temprosi)*0.8>6 then parameters perepad=6
+				else parameters perepad=(tempvnutr-temprosi)*0.8
+			if rejim="Нормальный" then
+				if (tempvnutr-temprosi)*0.8>6 then parameters perepad=6
+				else parameters perepad=(tempvnutr-temprosi)*0.8
+			endif
+	else
+		if tipP="Жилые здания, гостинницы и общежития" then parameters perepad=2.0
+		if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then parameters perepad=2.0
+		if tipP="Общественные и административно-бытовые здания" then parameters perepad=2.5
+		if tipP="Производственные здания" then parameters perepad=2.5
+	endif
+endif
+if tipP="Производственные здания" and teplo>0 then parameters perepad=12
+
+!!!!-----------------------------------------------Таблица 3 - Коэффициент n
+
+if tipK="Стены" then parameters kn=1
+if tipK="Покрытие в том числе вентилируемое" then parameters kn=1
+if tipK="Перекрытия" then 
+	if tipPer="над проездом" then parameters kn=1
+	if tipPer="над холодным этажем" then parameters kn=0.9
+	if tipPer="чердачное" then
+		if tipper3="с кровлей из рулонных мат-ов" then parameters kn=0.9
+		if tipper3="с кровлей из штучных мат-ов" then parameters kn=1
+	endif
+	if tipPer="над подвалом" then 
+		if tipper1="неотапливаемым без световых проемов выше уровня земли" then parameters kn=0.6
+		if tipper1="неотапливаемым со световыми проемами в стенах" then parameters kn=0.75
+		if tipper1="холодным сообщающимся с наружным воздухом" then parameters kn=0.9
+	endif
+	if tipPer="над подпольем" then 
+		if tipper2="неотапливаемым ниже уровня земли" then parameters kn=0.4
+		if tipper2="холодным без стенок" then parameters kn=1
+		if tipper2="холодным со стенами" then parameters kn=0.9
+	endif
+endif
+
+!!!!-----------------------------------------------Таблица 4 - Коэффициенты теплоотдачи внутренней поверхности ограждающей конструкции
+
+if tipK="Покрытие в том числе вентилируемое" then 
+	if rebra=0 then parameters Ktv=8.7
+	if rebra>0 then parameters Ktv=7.6
+else parameters Ktv=8.7
+
+!!!!!----------------------------------------------------------------------------------------ГСОП!!!
+
+if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then 
+	parameters GSOP=(tempvnutr-temp10)*prod10
+else parameters GSOP=(tempvnutr-temp8)*prod8
+
+!!!!-----------------------------------------------Таблица 1 - Приведенное сопротивление теплопередачи ограждающих конструкций
+
+if tipP="Жилые здания, гостинницы и общежития" then
+	parameters R0priv1=GSOP*0.00035+1.4
+	parameters R0priv2=GSOP*0.0005+2.2
+	parameters R0priv3=GSOP*0.00045+1.9
+	parameters R0priv5=GSOP*0.000025+0.25
+		if GSOP<6000 then parameters R0priv4=GSOP*0.000075+0.15
+		if GSOP>6000 then 
+			if GSOP<8000 then parameters R0priv4=GSOP*0.00005+0.3
+			endif
+		if GSOP>8000 then parameters R0priv4=GSOP*0.000025+0.5
+endif
+if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then
+	parameters R0priv1=GSOP*0.00035+1.4
+	parameters R0priv2=GSOP*0.0005+2.2
+	parameters R0priv3=GSOP*0.00045+1.9
+	parameters R0priv5=GSOP*0.000025+0.25
+		if GSOP<6000 then parameters R0priv4=GSOP*0.000075+0.15
+		if GSOP>6000 then 
+			if GSOP<8000 then parameters R0priv4=GSOP*0.00005+0.3
+			endif
+		if GSOP>8000 then parameters R0priv4=GSOP*0.000025+0.5
+endif
+if tipP="Общественные и административно-бытовые здания" then
+	parameters R0priv1=GSOP*0.0003+1.2
+	parameters R0priv2=GSOP*0.0004+1.6
+	parameters R0priv3=GSOP*0.00035+1.3
+	parameters R0priv4=GSOP*0.00005+0.2
+	parameters R0priv5=GSOP*0.000025+0.25
+endif
+if tipP="Производственные здания" then
+	if rejim="Влажный или мокрый" then 
+		parameters R0priv1=GSOP*0.0003+1.2
+		parameters R0priv2=GSOP*0.0004+1.6
+		parameters R0priv3=GSOP*0.00035+1.3
+		parameters R0priv4=GSOP*0.00005+0.2
+		parameters R0priv5=GSOP*0.000025+0.25
+	else
+		parameters R0priv1=GSOP*0.0002+1.0
+		parameters R0priv2=GSOP*0.00025+1.5
+		parameters R0priv3=GSOP*0.0002+1.0
+		parameters R0priv4=GSOP*0.000025+0.2
+		parameters R0priv5=GSOP*0.000025+0.15
+	endif
+endif
+
+if tipP="Жилые здания, гостинницы и общежития" then
+	if tipK="Стены" then parameters R0priv=GSOP*0.00035+1.4
+	if tipK="Покрытие в том числе вентилируемое" then parameters R0priv=GSOP*0.0005+2.2
+	if tipK="Перекрытия" then  
+		if tipper="над проездом" then parameters R0priv=GSOP*0.0005+2.2
+		if tipper="над подпольем" then parameters R0priv=GSOP*0.00045+1.9
+		if tipper="над подвалом" then parameters R0priv=GSOP*0.00045+1.9
+		if tipper="над холодным этажем" then parameters R0priv=GSOP*0.00045+1.9
+		if tipper="чердачное" then parameters R0priv=GSOP*0.00045+1.9
+		endif
+	endif
+if tipP="Лечебно-профилактические и детские учреждения, школы, интернаты" then
+	if tipK="Стены" then parameters R0priv=GSOP*0.00035+1.4
+	if tipK="Покрытие в том числе вентилируемое" then parameters R0priv2=GSOP*0.0005+2.2
+	if tipK="Перекрытия" then 
+		if tipper="над проездом" then parameters R0priv=GSOP*0.0005+2.2
+		if tipper="над подпольем" then parameters R0priv=GSOP*0.00045+1.9
+		if tipper="над подвалом" then parameters R0priv=GSOP*0.00045+1.9
+		if tipper="над холодным этажем" then parameters R0priv=GSOP*0.00045+1.9
+		if tipper="чердачное" then parameters R0priv=GSOP*0.00045+1.9
+		endif
+	endif
+if tipP="Общественные и административно-бытовые здания" then
+	if tipK="Стены" then parameters R0priv=GSOP*0.0003+1.2
+	if tipK="Покрытие в том числе вентилируемое" then parameters R0priv=GSOP*0.0004+1.6
+	if tipK="Перекрытия" then 
+		if tipper="над проездом" then parameters R0priv=GSOP*0.0004+1.6
+		if tipper="над подпольем" then parameters R0priv=GSOP*0.00035+1.3
+		if tipper="над подвалом" then parameters R0priv=GSOP*0.00035+1.3
+		if tipper="над холодным этажем" then parameters R0priv=GSOP*0.00035+1.3
+		if tipper="чердачное" then parameters R0priv=GSOP*0.00035+1.3
+		endif
+	endif
+if tipP="Производственные здания" then
+	if rejim="Влажный или мокрый" then 
+		if tipK="Стены" then parameters R0priv=GSOP*0.0003+1.2
+		if tipK="Покрытие в том числе вентилируемое" then parameters R0priv=GSOP*0.0004+1.6
+		if tipK="Перекрытия" then 
+			if tipper="над проездом" then parameters R0priv=GSOP*0.0004+1.6
+			if tipper="над подпольем" then parameters R0priv=GSOP*0.00035+1.3
+			if tipper="над подвалом" then parameters R0priv=GSOP*0.00035+1.3
+			if tipper="над холодным этажем" then parameters R0priv=GSOP*0.00035+1.3
+			if tipper="чердачное" then parameters R0priv=GSOP*0.00035+1.3
+			endif
+	else
+		if tipK="Стены" then parameters R0priv=GSOP*0.0002+1.0
+		if tipK="Покрытие в том числе вентилируемое" then parameters R0priv=GSOP*0.00025+1.5
+		if tipK="Перекрытия" then 
+			if tipper="над проездом" then parameters R0priv=GSOP*0.00025+1.5
+			if tipper="над подпольем" then parameters R0priv=GSOP*0.0002+1.0
+			if tipper="над подвалом" then parameters R0priv=GSOP*0.0002+1.0
+			if tipper="над холодным этажем" then parameters R0priv=GSOP*0.0002+1.0
+			if tipper="чердачное" then parameters R0priv=GSOP*0.0002+1.0
+			endif
+		endif
+endif
+!================================================================================
+!!!!Расчет требуемого сопротивление теплопередачи ограждающих конструкций
+!================================================================================
+
+parameters R0treb=(kn*(tempvnutr-temper5d98))/(perepad*ktv)
+
+parameters Rreq=max(R0priv, R0treb)
+
+VALUES "nnn" range[1,nnLayers]
+
+

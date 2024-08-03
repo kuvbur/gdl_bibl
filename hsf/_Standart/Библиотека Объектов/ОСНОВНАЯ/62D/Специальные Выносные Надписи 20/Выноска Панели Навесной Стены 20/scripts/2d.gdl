@@ -1,0 +1,813 @@
+
+PAPER_TO_MODEL = GLOB_SCALE / 1000	! Convert paper size to model size
+
+if not(_isEnabledContent) then
+	! - Offered Tools: CWPanel
+	call "label_placeholder" parameters bitAvailableTool 	= 32768,
+										filltypeBackground 	= AC_MarkerFill
+	end
+endif
+
+if gs_hide_marker then end
+
+!==================================================================================
+! Label Positioning
+!==================================================================================
+if LABEL_CUSTOM_ARROW then
+	add2 	LABEL_POSITION [2][1]	+	LABEL_POSITION [3][1],
+			LABEL_POSITION [2][2]	+	LABEL_POSITION [3][2]
+else
+	add2 0, 0
+endif
+
+if bFollowProjectNorth then
+	angleCWHorizont	= CWPANEL_HORIZONTAL_DIRECTION
+else
+	angleCWHorizont	= (CWPANEL_HORIZONTAL_DIRECTION + GLOB_NORTH_DIR - 90 + 360) MOD 360
+endif
+if angleCWHorizont < eps then angleCWHorizont = 360 + angleCWHorizont
+
+
+rot2 angleCWHorizont
+
+! ==============================================================================
+! Initializations
+! ==============================================================================
+
+AC_MarkerSize		= AC_MarkerSize * PAPER_TO_MODEL
+
+_headDistModel			= headDistMm		* PAPER_TO_MODEL
+_footLengthModel		= footLengthMm		* PAPER_TO_MODEL
+_markerOffsetModel		= markerOffsetMm	* PAPER_TO_MODEL
+_whDistModel			= whDistMm			* PAPER_TO_MODEL
+_sillDistModel			= sillDistMm		* PAPER_TO_MODEL
+_sillOffsetModel		= sillOffsetMm		* PAPER_TO_MODEL
+_fireDistModel			= fireDistMm		* PAPER_TO_MODEL
+_fireOffsetModel		= fireOffsetMm		* PAPER_TO_MODEL
+_acousticDistModel		= acousticDistMm	* PAPER_TO_MODEL
+_acousticOffsetModel	= acousticOffsetMm	* PAPER_TO_MODEL
+
+textAngle = angleCWHorizont
+
+unID = 1
+
+note1	= ""
+note2	= ""
+
+! --- Oriented View ------------------------------------------------------------
+
+if AC_Readable then
+	rrr = REQUEST ("View_Rotangle", "", angleViewRot)
+endif
+totalRotate = (LABEL_ROTANGLE + angleCWHorizont + angleViewRot) MOD 360
+
+textAngle = totalRotate
+
+! ==============================================================================
+! 2D Degradation
+! ==============================================================================
+
+if GLOB_CONTEXT < 20 then
+	bShowSillHeight		= 1
+	bShowWidthHeight	= 1
+	bShowID				= 1
+	bShowDrawing		= 1
+	bShowFire			= 1
+	bShowAcoustic		= 1
+else
+	! feedback mode
+	bShowSillHeight		= 0
+	bShowWidthHeight	= 0
+	bShowID				= 0
+	bShowDrawing		= 0
+	bShowFire			= 0
+	bShowAcoustic		= 0
+endif
+
+
+! ==============================================================================
+! Positioning on left or right side
+! ==============================================================================
+
+if AC_SameSide then
+	rot2 180
+	add2 0, CWPANEL_THICKNESS
+	textAngle = textAngle + 180
+	if textAngle >= 360 then
+		textAngle = textAngle - 360
+	endif
+endif
+
+
+! ==============================================================================
+! Drawing Lines
+! ==============================================================================
+
+pen LABEL_TEXT_PEN
+
+if AC_ID_On | AC_WidHei_On | GS_Center_Line then
+	hotspot2  _markerOffsetModel,_headDistModel, unID : unID = unID + 1
+	hotspot2 _markerOffsetModel,	-CWPANEL_THICKNESS - _footLengthModel,	unID : unID = unID + 1
+endIf
+
+define style  "mtext1style"  AC_TextFont_1, AC_TextSize_1, 7, AC_TextStyle_1
+define style  "mtext2style"  AC_TextFont_2, AC_TextSize_2, 7, AC_TextStyle_2
+define style  "mtext3style"  AC_TextFont_3, AC_TextSize_3, 7, AC_TextStyle_3
+define style  "mtext4style"  AC_TextFont_4, AC_TextSize_4, 7, AC_TextStyle_4
+define style  "mtext5style"  AC_TextFont_5, AC_TextSize_5, 7, AC_TextStyle_5
+define style  "mtext6style"  AC_TextFont_6, AC_TextSize_6, 7, AC_TextStyle_6
+
+! ==============================================================================
+! Show ID
+! ==============================================================================
+
+style mtext1style
+define style  "extraStyle" AC_TextFont_1, 2/3*AC_TextSize_1, 7, AC_TextStyle_1
+pen AC_TextPen_1
+
+
+if GS_iCustomText_1 <> CTXT_CUSTOMTEXT then
+	dim _MasterID[]
+	result = REQUEST("Full_ID_of_parent", "", _MasterID)
+	AC_MarkerText_1 = ""
+	if result then
+		if GS_iCustomText_1 = CTXT_IDNUMBER then
+			AC_MarkerText_1 = _MasterID[vardim1(_MasterID)]
+		else
+			for i = 1 to vardim1 (_MasterID)
+				AC_MarkerText_1 = AC_MarkerText_1 + _MasterID[i]
+			next i
+		endif
+	endif
+endif
+
+frame_width = stw("  " + AC_MarkerText_1 + "  ") * PAPER_TO_MODEL
+
+if bShowDrawing & iMarkerShape <> SHAPE_NONE then
+	drawindex 20
+	pen gs_cont_pen
+
+	if GS_MarkerFill then fill AC_MarkerFill
+
+! Circle - Head Shape
+! ----------------------------------------------------------------------
+	if iMarkerShape = SHAPE_CIRCLE then
+
+		if gs_markertext_fit = 0 then
+			dx1 = AC_MarkerSize/2
+		else
+			dx1 = frame_width/2
+		endif
+
+		poly2_b	2, 1+2+4, gs_fill_pen, gs_back_pen,
+				_markerOffsetModel, _headDistModel,901,
+				dx1,360,4001
+
+		if GS_Center_Line then
+			pen LABEL_TEXT_PEN
+			line2 _markerOffsetModel, _headDistModel-dx1, _markerOffsetModel, -CWPANEL_THICKNESS - _footLengthModel
+		endif
+
+	else
+
+! Oval - Head Shape
+! ----------------------------------------------------------------------
+
+		if iMarkerShape = SHAPE_OVAL then
+
+			dx1 = frame_width/2
+
+			poly2_b	7, 1+2+4, gs_fill_pen, gs_back_pen,
+				_markerOffsetModel-dx1+AC_MarkerSize/2, _headDistModel+AC_MarkerSize/2, 1,
+				_markerOffsetModel+dx1-AC_MarkerSize/2, _headDistModel+AC_MarkerSize/2, 1,
+				_markerOffsetModel+dx1-AC_MarkerSize/2, _headDistModel, 901,
+				_markerOffsetModel+dx1-AC_MarkerSize/2, _headDistModel-AC_MarkerSize/2, 3001,
+				_markerOffsetModel-dx1+AC_MarkerSize/2, _headDistModel-AC_MarkerSize/2, 1,
+				_markerOffsetModel-1000, _headDistModel-AC_MarkerSize/2, 801,
+				_markerOffsetModel-dx1+AC_MarkerSize/2, _headDistModel+AC_MarkerSize/2, 1001
+
+			if GS_Center_Line then
+				pen LABEL_TEXT_PEN
+				line2 _markerOffsetModel, _headDistModel-AC_MarkerSize/2, _markerOffsetModel, -CWPANEL_THICKNESS - _footLengthModel
+			endif
+
+			goto 100
+
+		endif
+
+! Fragment - Head Shape
+! ----------------------------------------------------------------------
+
+		if iMarkerShape = SHAPE_FRAGMENT then
+
+			poly2_b	4, 1+2+4, gs_fill_pen, gs_back_pen,
+				_markerOffsetModel-frame_width/2, _headDistModel-AC_MarkerSize/2, 1,
+				_markerOffsetModel-frame_width/2, _headDistModel+AC_MarkerSize/2, 1,
+				_markerOffsetModel+frame_width/2, _headDistModel+AC_MarkerSize/2, 1,
+				_markerOffsetModel+frame_width/2, _headDistModel-AC_MarkerSize/2, 1
+
+			if GS_Center_Line then
+				pen LABEL_TEXT_PEN
+				line2 _markerOffsetModel, _headDistModel-AC_MarkerSize/2, _markerOffsetModel, -CWPANEL_THICKNESS - _footLengthModel
+			endif
+
+		else
+
+! Triangle - Head Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_TRIANGLE then
+				num = 3
+				if not(gs_marker_rotation) then
+					alfa		= 30
+					text_offset	= 0
+				else
+					alfa		= 90
+					text_offset	= 1
+				endif
+			endif
+
+! Rectangle - Head Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_RECT then
+				num = 4
+				if not(gs_marker_rotation) then
+					alfa		= 0
+					text_offset	= 0
+				else
+					alfa		= 45
+					text_offset	= 1
+				endif
+			endif
+
+! Pentagon - Head Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_PENTAGON then
+				num = 5
+				if not(gs_marker_rotation) then
+					alfa		= 54
+					text_offset	= 0
+				else
+					alfa		= 90
+					text_offset	= 1
+				endif
+			endif
+
+! Hexagon - Head Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_HEXAGON then
+				num = 6
+				if not(gs_marker_rotation) then
+					alfa		= 90
+					text_offset	= 0
+				else
+					alfa		= 60
+					text_offset	= 1
+				endif
+			endif
+
+! Octagon - Head Shape
+! ----------------------------------------------------------------------
+
+			if iMarkerShape = SHAPE_OCTAGON then
+				num = 8
+				if not(gs_marker_rotation) then
+					alfa		= 0
+					text_offset	= 0
+				else
+					alfa		= 67.5
+					text_offset	= 1
+				endif
+			endif
+
+			if GS_Center_Line then
+				pen LABEL_TEXT_PEN
+				if not(gs_marker_rotation) then
+					line2 _markerOffsetModel, _headDistModel-AC_MarkerSize/2, _markerOffsetModel, -CWPANEL_THICKNESS - _footLengthModel
+				else
+					line2 _markerOffsetModel, _headDistModel-AC_MarkerSize/2*sin(90-360/(2*num)), _markerOffsetModel, -CWPANEL_THICKNESS - _footLengthModel
+				endif
+			endif
+
+			for i=1 to num
+				put _markerOffsetModel+AC_MarkerSize/2*cos(alfa), _headDistModel+AC_MarkerSize/2*sin(alfa), 1
+				alfa = alfa + 360 / num
+			next i
+
+			pen gs_cont_pen
+			poly2_b	num, 1+2+4, gs_fill_pen, gs_back_pen,
+					get(nsp)
+		endif
+	endif
+else
+	if bShowDrawing & GS_Center_Line then
+		drawindex 10
+		pen LABEL_TEXT_PEN
+
+		rrr= REQUEST("Height_of_style",mtext1style,style_hght)
+
+		if iMarkerDir = 2 then
+			line2	_markerOffsetModel,  _headDistModel - frame_width/2,
+					_markerOffsetModel, -AC_WALL_THICKNESS - _footLengthModel
+		else
+			line2	_markerOffsetModel,  _headDistModel-(style_hght / 1000 * GLOB_SCALE)/2,
+					_markerOffsetModel, -CWPANEL_THICKNESS - _footLengthModel
+		endif
+	endif
+endif
+
+100:
+
+
+! ==============================================================================
+! Show ID
+! ==============================================================================
+
+pen AC_TextPen_1
+w_id = stw(AC_MarkerText_1)
+
+if bShowID & AC_ID_On then
+	add2 _markerOffsetModel,0
+
+	posX	 = -w_id/2
+	posY	 = _headDistModel / PAPER_TO_MODEL - AC_TextSize_1 / 2
+	note1	 = AC_MarkerText_1
+	note2	 = ""
+	style2	 = "extraStyle"
+	notesize = AC_TextSize_1
+	angle	 = textAngle
+	enabled	 = AC_Readable
+
+	gosub 2000	! Print text considering readability
+
+	del 1
+endif
+
+
+! ==============================================================================
+! Show Sill Height
+! ==============================================================================
+
+style mtext4style
+define style  "extraStyle4" AC_TextFont_4, 2/3*AC_TextSize_4, 7, AC_TextStyle_4
+pen AC_TextPen_4
+
+run = 0
+
+main	= ""
+frac	= ""
+extra	= ""
+
+if GS_iCustomText_4 = CTXT_MEASUREDVALUE then
+	pa = GLOB_ELEVATION + GLOB_HSTORY_ELEV - GLOB_CSTORY_ELEV
+
+	W_Size = str{2}("", pa, extra)
+	AC_MarkerText_4 = AC_SillPrefix + " " + W_Size
+endif
+
+w_para  = stw(AC_MarkerText_4)
+w_extra = stw(extra) * 2/3
+
+if AC_Sill_On then
+	add2 _markerOffsetModel,0
+	hotspot2 _sillOffsetModel,	-CWPANEL_THICKNESS - _sillDistModel,	unID : unID = unID + 1
+
+	add2 _sillOffsetModel, 0
+
+	if bShowSillHeight then
+		posX	 = -(w_para + w_extra) / 2
+		posY	 = (-_sillDistModel - CWPANEL_THICKNESS) / PAPER_TO_MODEL
+		note1	 = AC_MarkerText_4
+		note2	 = extra
+		style2	 = "extraStyle4"
+		notesize = AC_TextSize_4
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		iMarkerDir = 1
+
+		gosub 2000	! Print text considering readability
+	endif
+
+	del 2
+endif
+
+
+! ==============================================================================
+! Show Fire Rating
+! ==============================================================================
+
+style mtext5style
+define style  "extraStyle5" AC_TextFont_5, 2/3*AC_TextSize_5, 7, AC_TextStyle_5
+pen AC_TextPen_5
+
+run = 0
+
+main	= ""
+frac	= ""
+extra	= ""
+
+if GS_iCustomText_5 = CTXT_MEASUREDVALUE then
+	firerating_text = AC_FirePrefix + firerating
+else
+	firerating_text = AC_MarkerText_5
+endif
+
+w_fire  = stw(firerating_text)
+w_extra = stw(extra) * 2/3
+
+if AC_show_firerating then
+	add2 _markerOffsetModel, 0
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2 _fireOffsetModel,	 0,				unID,	_fireDistModel, 1+128,	fireDistMm	: unID = unID + 1
+		hotspot2 _fireOffsetModel,	-1,				unID,	_fireDistModel, 3,		fireDistMm	: unID = unID + 1
+		hotspot2 _fireOffsetModel,	 _fireDistModel,	unID,	_fireDistModel, 2,		fireDistMm	: unID = unID + 1
+
+		hotspot2  0,				_fireDistModel,	unID,	_fireOffsetModel, 1+128,	fireOffsetMm	: unID = unID + 1
+		hotspot2 -1,				_fireDistModel,	unID,	_fireOffsetModel, 3,		fireOffsetMm	: unID = unID + 1
+		hotspot2  _fireOffsetModel,	_fireDistModel,	unID,	_fireOffsetModel, 2,		fireOffsetMm	: unID = unID + 1
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2 _fireOffsetModel,	 0,				unID,	_fireDistModel, 1+128,	fireDistCm	: unID = unID + 1
+		hotspot2 _fireOffsetModel,	-1,				unID,	_fireDistModel, 3,		fireDistCm	: unID = unID + 1
+		hotspot2 _fireOffsetModel,	 _fireDistModel,	unID,	_fireDistModel, 2,		fireDistCm	: unID = unID + 1
+
+		hotspot2  0,				_fireDistModel,	unID,	_fireOffsetModel, 1+128,	fireOffsetCm	: unID = unID + 1
+		hotspot2 -1,				_fireDistModel,	unID,	_fireOffsetModel, 3,		fireOffsetCm	: unID = unID + 1
+		hotspot2  _fireOffsetModel,	_fireDistModel,	unID,	_fireOffsetModel, 2,		fireOffsetCm	: unID = unID + 1
+	endif
+
+	if iMarkerSizeUnit = 3 then
+		hotspot2 _fireOffsetModel,	 0,				unID,	_fireDistModel, 1+128,	fireDistPoint	: unID = unID + 1
+		hotspot2 _fireOffsetModel,	-1,				unID,	_fireDistModel, 3,		fireDistPoint	: unID = unID + 1
+		hotspot2 _fireOffsetModel,	 _fireDistModel,	unID,	_fireDistModel, 2,		fireDistPoint	: unID = unID + 1
+
+		hotspot2  0,				_fireDistModel,	unID,	_fireOffsetModel, 1+128,	fireOffsetPoint	: unID = unID + 1
+		hotspot2 -1,				_fireDistModel,	unID,	_fireOffsetModel, 3,		fireOffsetPoint	: unID = unID + 1
+		hotspot2  _fireOffsetModel,	_fireDistModel,	unID,	_fireOffsetModel, 2,		fireOffsetPoint	: unID = unID + 1
+	endif
+
+	add2 _fireOffsetModel, 0
+
+	if bShowFire then
+		posX	 = 0
+		posY	 = _fireDistModel / PAPER_TO_MODEL
+		note1	 = firerating_text
+		note2	 = extra
+		style2	 = "extraStyle5"
+		notesize = AC_TextSize_5
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		iMarkerDir = 1
+
+		gosub 2000	! Print text considering readability
+	endif
+
+	del 2
+endif
+
+
+
+! ==============================================================================
+! Show Acoustic Rating
+! ==============================================================================
+
+style mtext6style
+define style  "extraStyle6" AC_TextFont_6, 2/3*AC_TextSize_6, 7, AC_TextStyle_6
+pen AC_TextPen_6
+
+run = 0
+
+main	= ""
+frac	= ""
+extra	= ""
+
+if GS_iCustomText_6 = CTXT_MEASUREDVALUE then
+	acousticrating_text = AC_AcousticPrefix + acousticrating
+else
+	acousticrating_text = AC_MarkerText_6
+endif
+
+w_acoustic  = stw(acousticrating_text)
+w_extra = stw(extra) * 2/3
+
+if AC_show_acousticrating then
+	add2 _markerOffsetModel, 0
+
+	if iMarkerSizeUnit = 1 then
+		hotspot2 _acousticOffsetModel,	 0,					unID,	_acousticDistModel, 1+128,	acousticDistMm	: unID = unID + 1
+		hotspot2 _acousticOffsetModel,	-1,					unID,	_acousticDistModel, 3,		acousticDistMm	: unID = unID + 1
+		hotspot2 _acousticOffsetModel,	 _acousticDistModel,	unID,	_acousticDistModel, 2,		acousticDistMm	: unID = unID + 1
+
+		hotspot2  0,					_acousticDistModel,	unID,	_acousticOffsetModel, 1+128,	acousticOffsetMm	: unID = unID + 1
+		hotspot2 -1,					_acousticDistModel,	unID,	_acousticOffsetModel, 3,		acousticOffsetMm	: unID = unID + 1
+		hotspot2  _acousticOffsetModel,	_acousticDistModel,	unID,	_acousticOffsetModel, 2,		acousticOffsetMm	: unID = unID + 1
+	endif
+	if iMarkerSizeUnit = 2 then
+		hotspot2 _acousticOffsetModel,	 0,					unID,	_acousticDistModel, 1+128,	acousticDistCm	: unID = unID + 1
+		hotspot2 _acousticOffsetModel,	-1,					unID,	_acousticDistModel, 3,		acousticDistCm	: unID = unID + 1
+		hotspot2 _acousticOffsetModel,	 _acousticDistModel,	unID,	_acousticDistModel, 2,		acousticDistCm	: unID = unID + 1
+
+		hotspot2  0,					_acousticDistModel,	unID,	_acousticOffsetModel, 1+128,	acousticOffsetCm	: unID = unID + 1
+		hotspot2 -1,					_acousticDistModel,	unID,	_acousticOffsetModel, 3,		acousticOffsetCm	: unID = unID + 1
+		hotspot2  _acousticOffsetModel,	_acousticDistModel,	unID,	_acousticOffsetModel, 2,		acousticOffsetCm	: unID = unID + 1
+	endif
+	if iMarkerSizeUnit = 3 then
+		hotspot2 _acousticOffsetModel,	 0,					unID,	_acousticDistModel, 1+128,	acousticDistPoint	: unID = unID + 1
+		hotspot2 _acousticOffsetModel,	-1,					unID,	_acousticDistModel, 3,		acousticDistPoint	: unID = unID + 1
+		hotspot2 _acousticOffsetModel,	 _acousticDistModel,	unID,	_acousticDistModel, 2,		acousticDistPoint	: unID = unID + 1
+
+		hotspot2  0,					_acousticDistModel,	unID,	_acousticOffsetModel, 1+128,	acousticOffsetPoint	: unID = unID + 1
+		hotspot2 -1,					_acousticDistModel,	unID,	_acousticOffsetModel, 3,		acousticOffsetPoint	: unID = unID + 1
+		hotspot2  _acousticOffsetModel,	_acousticDistModel,	unID,	_acousticOffsetModel, 2,		acousticOffsetPoint	: unID = unID + 1
+	endif
+
+
+	add2 _acousticOffsetModel, 0
+
+	if bShowAcoustic then
+		posX	 = 0
+		posY	 = _acousticDistModel / PAPER_TO_MODEL
+		note1	 = Acousticrating_text
+		note2	 = extra
+		style2	 = "extraStyle5"
+		notesize = AC_TextSize_6
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		iMarkerDir = 1
+
+		gosub 2000	! Print text considering readability
+	endif
+
+	del 2
+endif
+
+
+! ==============================================================================
+! Show Width/Height
+! ==============================================================================
+
+style mtext4style
+
+rot2 90
+
+textAngle = textAngle + 90
+if textAngle >= 360 then
+	textAngle = textAngle - 360
+endif
+
+frasmall = 0
+widhei_form = ""
+rrr = request("Window_Door_Dimension", "", widhei_form)
+frasmall = strstr(widhei_form, "*10")
+
+extra	= ""
+extraH	= ""
+
+if GS_iCustomText_2 = CTXT_MEASUREDVALUE then
+
+	if gs_dimension_select_int = DIM_LEAF then
+		W_Size = str{2} (widhei_form, leafwidth, extra)
+	else
+		if gs_dimension_select_int = DIM_UNIT then
+			W_Size = str{2} (widhei_form, unitwidth, extra)
+		else
+			if gs_dimension_select_int = DIM_EGRESS then
+				W_Size = str{2} (widhei_form, egresswidth, extra)
+			else
+				W_Size = str{2} (widhei_form, revealwidth, extra)
+			endif
+		endif
+	endif
+
+	if not(frasmall) then
+		AC_MarkerText_2 = W_Size
+	else
+		gosub 1000
+
+		AC_MarkerText_2 = main
+		extra = frac
+	endif
+endif
+
+if GS_iCustomText_3 = CTXT_MEASUREDVALUE then
+
+	if gs_dimension_select_int = DIM_LEAF then
+		W_Size = str{2} (widhei_form, leafheight, extraH)
+	else
+		if gs_dimension_select_int = DIM_UNIT then
+			W_Size = str{2} (widhei_form, unitheight, extraH)
+		else
+			if gs_dimension_select_int = DIM_EGRESS then
+				W_Size = str{2} (widhei_form, egressheight, extraH)
+			else
+				W_Size = str{2} (widhei_form, revealheight, extraH)
+			endif
+		endif
+	endif
+
+	if not(frasmall) then
+		AC_MarkerText_3 = W_Size
+	else
+		gosub 1000
+
+		AC_MarkerText_3 = main
+		extraH = frac
+	endif
+endif
+
+w_wid = stw (AC_MarkerText_2)
+w_hei = stw (AC_MarkerText_3)
+w_extra = stw (extra) * 2/3
+w_extraH = stw (extraH) * 2/3
+
+if AC_WidHei_On then
+	add2 0,-_markerOffsetModel
+	hotspot2  _whDistModel,	0, unID	: unID = unID + 1
+
+	if bShowWidthHeight then
+		if textAngle > (gs_readable_angle + eps) & textAngle < (gs_readable_angle + 180 + eps) & AC_Readable then
+			! (AC_MarkerText_2, AC_MarkerText_3 csere is kell)
+
+			s1	 = AC_MarkerText_3
+			s2	 = AC_MarkerText_2
+			st	 = 1
+			est	 = "extraStyle2"
+			est2 = "extraStyle3"
+			len1 = w_hei + w_extraH
+			len2 = w_wid + w_extra
+			ext1 = extraH
+			ext2 = extra
+		else
+			s1	 = AC_MarkerText_2
+			s2	 = AC_MarkerText_3
+			st	 = 0
+			est	 = "extraStyle3"
+			est2 = "extraStyle2"
+			len1 = w_wid + w_extra
+			len2 = w_hei + w_extraH
+			ext1 = extra
+			ext2 = extraH
+		endif
+
+		define style  "extraStyle2" AC_TextFont_2, 2/3*AC_TextSize_2, 7, AC_TextStyle_2
+		define style  "extraStyle3" AC_TextFont_3, 2/3*AC_TextSize_3, 7, AC_TextStyle_3
+
+		if st then
+			style mtext3style
+			pen AC_TextPen_3
+			AC_TextSize_1 = AC_TextSize_3
+		else
+			style mtext2style
+			pen AC_TextPen_2
+			AC_TextSize_1 = AC_TextSize_2
+		endif
+
+		posX	 = _whDistModel / PAPER_TO_MODEL - len1
+		posY	 = AC_TextSize_1 / 2
+		note1	 = s1
+		note2	 = ext1
+		style2	 = est
+		notesize = AC_TextSize_1
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		iMarkerDir = 1
+
+		gosub 2000	! Print text considering readability
+
+		if st then
+			style mtext2style
+			pen AC_TextPen_2
+			AC_TextSize_1 = AC_TextSize_2
+		else
+			style mtext3style
+			pen AC_TextPen_3
+			AC_TextSize_1 = AC_TextSize_3
+		endif
+
+		posX	 = _whDistModel / PAPER_TO_MODEL - len2
+		posY	 = -1.5 * AC_TextSize_1
+		note1	 = s2
+		note2	 = ext2
+		style2	 = est2
+		notesize = AC_TextSize_1
+		angle	 = textAngle
+		enabled	 = AC_Readable
+		iMarkerDir = 1
+
+		gosub 2000	! Print text considering readability
+	endif
+
+	del 1
+endif
+
+
+end
+
+
+! ==============================================================================
+! Fractions in Small Type
+! ==============================================================================
+
+1000:
+	slash = strstr(W_Size, "/")
+	slen  = strlen(W_Size)
+
+	main = ""
+	frac = ""
+
+	if not(slash) then	! No Fractions
+		main = W_Size
+	else				! Fractions
+		if slash > 2 then
+			main = strsub(W_Size, 1, slash - 3)
+			frac = strsub(W_Size, slash - 2, slen)
+
+			if strstr(frac," ") | strstr(frac,"-") then
+				temp = frac
+				frac = ""
+				frac = strsub(temp, 2, strlen(temp))
+			endif
+
+			fine = strsub(main, strlen(main), strlen(main))
+
+			if fine = " " | fine = "-" then
+				temp = main
+				main = ""
+				main = strsub(temp, 1, strlen(temp) - 1)
+			endif
+		else
+			frac = W_Size
+		endif
+	endif
+
+	run = run + 1
+return
+
+
+
+! ==============================================================================
+! Print text considering readability
+! ==============================================================================
+! works for Reference Point 1 only! (top left corner)
+! optional extra text in 2/3 size, elevated to 1/3 hight
+!
+! posX:		text position X
+! posY:		text position Y
+! note1:	text
+! note2:	extra text
+! style2:	style of extra
+! angle:	text angle
+! enabled:	may rotate
+! ==============================================================================
+
+2000:
+	rrr = request("Height_of_style", style2, sy2, descent, leading)
+	sy	= 3/2 * sy2
+	dl2	= descent + leading
+	dl	= 3/2 * dl2
+
+	sx1	= stw (note1)
+	sx2	= stw (note2)
+
+	mul2 PAPER_TO_MODEL, PAPER_TO_MODEL
+	numTrans = 1
+
+
+	add2 0, posY + notesize / 2
+	numTrans  = numTrans + 1
+
+	if iMarkerDir = 1 then rotdir_angle = 0
+	if iMarkerDir = 2 then	rotdir_angle = 90
+	if iMarkerDir = 3 then	rotdir_angle = -textAngle
+	if iMarkerDir = 4 then rotdir_angle = -textAngle + 90
+
+	rot2 rotdir_angle
+	numTrans  = numTrans + 1
+
+	if (angle > (gs_readable_angle + eps) & angle < (gs_readable_angle + 180 + eps) & enabled & iMarkerDir = 1)  | \
+		(angle > (gs_readable_angle - 90 + eps) & angle < (gs_readable_angle + 180 - 90 + eps) & enabled & iMarkerDir = 2) then
+		add2 posX + sx1 + 2/3 * sx2, notesize/2	! top right corner
+		rot2 180
+		numTrans = numTrans + 2
+	else
+		add2 posX, - notesize/2							! bottom left corner
+		numTrans  = numTrans + 1
+	endif
+
+
+	if GLOB_CONTEXT < 20 then
+		text2 0, -dl, note1
+
+		style style2
+		text2 sx1, notesize/3 - dl2, note2
+	else
+		rect2 0,-dl, sx1 + sx2,notesize
+	endif
+
+	del numTrans
+return
+

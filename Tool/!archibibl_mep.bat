@@ -32,6 +32,8 @@ python "%tool_dir%\hsf2text.py"
 
 TIMEOUT /T 1
 
+python "%tool_dir%\build_lcf.py"
+
 cd ..
 cd ..
 

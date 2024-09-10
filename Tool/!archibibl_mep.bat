@@ -20,6 +20,7 @@ RD /S /Q  "%hsf_3_dir%"
 MD "%hsf_1_dir%"
 MD "%hsf_3_dir%"
 cd "%hsf_dir%"
+
 "%converter%"   l2hsf -l CYR "%gdl_1_dir%" "%hsf_1_dir%" >"%tool_dir%\_ArchiBibl_hsf_log.txt"
 "%converter%"   l2hsf -l CYR "%gdl_3_dir%" "%hsf_3_dir%" >"%tool_dir%\_MEP_hsf_log.txt"
 

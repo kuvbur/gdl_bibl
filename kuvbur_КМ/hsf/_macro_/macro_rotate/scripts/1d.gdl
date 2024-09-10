@@ -1,3 +1,4 @@
+
 !!!Вызов с параметром-массивом
 !!!dim coord_arr[][3]
 !!!dim coord_arr_out[][3]
@@ -20,10 +21,11 @@ ADD_Z = 8 		!!Перенос вдоль Z
 
 MUL_X = 9 		!!Масштаб вдоль X
 MUL_Y = 10 		!!Масштаб вдоль Y
-MUL_Z = 100 		!!Масштаб вдоль Z
+MUL_Z = 100 	!!Масштаб вдоль Z
 
 ix = 1 : iy = 2 : iz = 3
 EPS = 0.0001
+
 dim rot_arr[3][3]
 dim _arr_start[1][3]
 	_arr_start[1][ix] = 0
@@ -37,10 +39,12 @@ flag_skip = 1 !При нулевых значениях углов просто 
 
 if bDict then
 	coord.error = "-"
+	coord.skip = 0
 	if not(haskey(coord.in)) then goto "m_end"
 	if vardim1(coord.in)<1 then goto "m_end"
 	if haskey(coord.ang) then ang = coord.ang
 	if haskey(coord.ladd) then ladd = coord.ladd
+	if haskey(coord.axis) then axis = coord.axis
 	if haskey(coord.loc.axis) then axis = coord.loc.axis
 	if haskey(coord.loc.ang_pl) then ang_pl = coord.loc.ang_pl
 	if haskey(coord.loc.ang_axis) then axis = coord.loc.ang_axis
@@ -69,29 +73,36 @@ else
 	_arr = coord_arr
 	_arr_start = start_coord
 endif
-if abs(k)<EPS then k=1
 
-!!Перенос
+if abs(k)<EPS then k=1 !Коэффицент масштабирования не может быть равен нулю
+
+!!Масштаб
 if axis=MUL_X or axis=MUL_Y or axis=MUL_Z then
-	flag_skip = 0
-	for i = 1 to vardim1(_arr)
-		if axis=MUL_X then _arr[i][ix] = _arr[i][ix] * k
-		if axis=MUL_Y then _arr[i][iy] = _arr[i][iy] * k
-		if axis=MUL_Z then _arr[i][iz] = _arr[i][iz] * k
-	next i
+	if abs(k-1)<EPS then
+		flag_skip = 1
+	else
+		flag_skip = 0
+		for i = 1 to vardim1(_arr)
+			if axis=MUL_X then _arr[i][ix] = _arr[i][ix] * k
+			if axis=MUL_Y then _arr[i][iy] = _arr[i][iy] * k
+			if axis=MUL_Z then _arr[i][iz] = _arr[i][iz] * k
+		next i
+	endif
 	goto "m_end"
 endif
 
-
-
 !!Перенос
 if axis=ADD_X or axis=ADD_Y or axis=ADD_Z then
-	flag_skip = 0
-	for i = 1 to vardim1(_arr)
-		if axis=ADD_X then _arr[i][ix] = _arr[i][ix] + ladd
-		if axis=ADD_Y then _arr[i][iy] = _arr[i][iy] + ladd
-		if axis=ADD_Z then _arr[i][iz] = _arr[i][iz] + ladd
-	next i
+	if abs(ladd)<EPS then
+		flag_skip = 1
+	else
+		flag_skip = 0
+		for i = 1 to vardim1(_arr)
+			if axis=ADD_X then _arr[i][ix] = _arr[i][ix] + ladd
+			if axis=ADD_Y then _arr[i][iy] = _arr[i][iy] + ladd
+			if axis=ADD_Z then _arr[i][iz] = _arr[i][iz] + ladd
+		next i
+	endif
 	goto "m_end"
 endif
 
@@ -122,11 +133,13 @@ if axis=ROT_TO_LOC then
 endif
 
 if abs(ang)<EPS then
+	flag_skip = 1
 	goto "m_end"
 else
 	flag_skip = 0
+	gosub "rot_one_axis"
 endif
-gosub "rot_one_axis"
+
 goto "m_end"
 
 "rot_one_axis":
@@ -178,8 +191,10 @@ return
 if bDict then
 	if haskey(coord.out) then _d = REMOVEKEY (coord.out)
 	if flag_skip then
+		coord.skip = 1
 		if haskey(coord.in) then coord.out = coord.in
 	else
+		coord.skip = 0
 		for i=1 to vardim1(_t)
 			coord.out[i].x = _arr[i][ix]
 			coord.out[i].y = _arr[i][iy]

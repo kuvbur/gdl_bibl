@@ -13,15 +13,15 @@ set "lcf_2=%lcf_dir%\standart24.lcf"
 RD /S /Q  "%hsf_2_dir%"
 MD "%hsf_2_dir%"
 cd "%hsf_dir%"
-"%converter%"   l2hsf -compatibility 25 "%gdl_2_dir%" "%hsf_2_dir%" >"%tool_dir%\_Standart_hsf_log.txt"
+"%converter%"   l2hsf -compatibility 25 "%gdl_2_dir%" "%hsf_2_dir%" >"%tool_dir%\log\_Standart_hsf_log.txt"
 
-"%converter%" createcontainer "%lcf_2%" -compress 9 "%gdl_2_dir%">"%tool_dir%\_Standart_lcf_log.txt"
+"%converter%" createcontainer "%lcf_2%" -compress 9 "%gdl_2_dir%">"%tool_dir%\log\_Standart_lcf_log.txt"
 
 TIMEOUT /T 5
 
 cd ..
 cd ..
 
-ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF24" /E>"%tool_dir%\_copy_log.txt"
-ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF24" /E>"%tool_dir%\_copy_log.txt"
-ROBOCOPY "%lcf_dir%" "%cd%\LCF24" standart24.lcf /E>"%tool_dir%\_copy_log.txt"
+ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF24" /E>"%tool_dir%\log\_copy_log.txt"
+ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF24" /E>"%tool_dir%\log\_copy_log.txt"
+ROBOCOPY "%lcf_dir%" "%cd%\LCF24" standart24.lcf /E>"%tool_dir%\log\_copy_log.txt"

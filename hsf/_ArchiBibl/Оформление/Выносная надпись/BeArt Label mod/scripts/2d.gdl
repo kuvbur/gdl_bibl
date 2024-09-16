@@ -182,6 +182,7 @@ If STRSTR(gs_style,"5") then gs_style_m=5
 If STRSTR(gs_style,"6") then gs_style_m=6
 If STRSTR(gs_style,"7") then gs_style_m=7
 If STRSTR(gs_style,"8") then gs_style_m=8
+If STRSTR(gs_style,"9") then gs_style_m=9
 anchor=5
 If _LABEL_CUSTOM_ARROW Then
 	anchor=5
@@ -245,6 +246,7 @@ pol=0
 n_sloi=0
 dim strih[] : strih[1] = 0
 dim bmatm[] : bmatm[1] = ""
+dim bmatinx[] : bmatinx[1] = 0
 dim tolsh[] : tolsh[1] = 0
 if GLOB_ELEM_TYPE = 1 and param_name = "Откл" then
 	if (strstr(name,"Пол") <> 0 or strstr(name,"Потолок") <> 0 or strstr(name,"Лестница ЖБ") <> 0) then
@@ -291,44 +293,85 @@ SkiN=WALL_SKINS_NUMBER*(GLOB_ELEM_TYPE=5)+\
 	SLAB_SKINS_NUMBER*(GLOB_ELEM_TYPE=7)+\
 	ROOF_SKINS_NUMBER*(GLOB_ELEM_TYPE=8)
 !!!<---------------- Вытаскиваем данные из свойств -----------
-property = 0
-if strlen(property_layer)>0 and SkiN<EPS then
-	_stPropertyID = property_layer : gosub "getPropertyValue"
-	if strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and STRSTR(_stPropertyValue, "m[")>0 and STRSTR(_stPropertyValue, "]")>0 then
-		onestring = ""	
-		_onestring = ""
-		char_start = ""
-		char_end = ""
-		string_delim = "@"
-		n_sloi=0
-		for i=1 to max_ins
-			if STRSTR(_stPropertyValue, "m[")>0 then
-				if STRSTR(_stPropertyValue, string_delim)>0 then
-					var = _stPropertyValue : char_start = "" : char_end = string_delim : gosub "get_substring" : onestring = var
-				else
-					onestring = _stPropertyValue
-				endif
-				_onestring = onestring
-				var = onestring : char_start = "m[" : char_end = "]" : gosub "get_substring"
-				material_txt = var
-				in_str = onestring : find_str = char_start+var+char_end : replace_str = "" : gosub "str_replace" : onestring = out_str
-				var = onestring : char_start = "t[" : char_end = "]" : gosub "get_substring"
-				gosub "tonum"
-				th = 0 : if rez>EPS then th = var_num/1000
-				_stPropertyValue = STRSUB(_stPropertyValue,strlen(_onestring)+2, strlen(_stPropertyValue))
-				if STRLEN(material_txt)>0 then
-					property = 1
- 					vin = 0
-					n_sloi=n_sloi+1
-					strih[n_sloi] = -1
-					bmatm[n_sloi] = material_txt
-					tolsh[n_sloi] = th
-				endif
-			else
-				i = max_ins
-			endif
-		next i
+property = 0 : _stPropertyValue = ""
+if strlen(property_layer)>0 and (SkiN<EPS or property_layer_force) then
+	if property_layer_name <> "Из списка ниже" and strlen(property_layer_name)>0 then
+		call "macro_get_param" parameters mgp_in_str="%"+property_layer_name+"%",
+											mgp_prim1=par_prim1,
+											mgp_prim2=par_prim2,
+											mgp_prim3=par_prim3,
+											mgp_prim4=par_prim4,
+											mgp_prim5=par_prim5,
+											mgp_qty=n_str_px*_LABEL_CUSTOM_ARROW,
+											mgp_ld=ld, mgp_ignore_id=ignore_id, RETURNED_PARAMETERS mgp_out_str
+		if strlen(mgp_out_str)>1 then
+			_stPropertyValue = mgp_out_str	
+		else
+			_stPropertyID = property_layer : gosub "getPropertyValue"	
+		endif
+	else
+		_stPropertyID = property_layer : gosub "getPropertyValue"	
 	endif
+endif
+
+if not(strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyValue, "m[")>0 or STRSTR(_stPropertyValue, "b[")>0) and STRSTR(_stPropertyValue, "]")>0) then
+	if GLOB_ELEM_TYPE = 1 and param_name = "Откл" then
+		label_layers_out = ""
+		nd1 = request("Assoclp_parvalue", "label_layers", namind1, type1, flag1, dim11, dim21, label_layers_out)
+		if STRSTR(label_layers_out, "b[")>0 then
+			_stPropertyValue = label_layers_out
+		else
+			nd1 = request("Assoclp_parvalue", "label_layers_out", namind1, type1, flag1, dim11, dim21, label_layers_out)
+			if STRSTR(label_layers_out, "b[")>0 then
+				_stPropertyValue = label_layers_out
+			else
+				nd1 = request("Assoclp_parvalue", "label_layers_in", namind1, type1, flag1, dim11, dim21, label_layers_out)
+			endif
+		endif
+	endif
+endif
+
+if strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyValue, "m[")>0 or STRSTR(_stPropertyValue, "b[")>0) and STRSTR(_stPropertyValue, "]")>0 then
+	onestring = ""	
+	_onestring = ""
+	char_start = ""
+	char_end = ""
+	string_delim = "@"
+	n_sloi=0
+	bmat_delim = "m["
+	if STRSTR(_stPropertyValue, "b[")>0 then bmat_delim = "b["
+	for i=1 to max_ins
+		if STRSTR(_stPropertyValue, "m[")>0 or STRSTR(_stPropertyValue, "b[")>0 then
+			if STRSTR(_stPropertyValue, string_delim)>0 then
+				var = _stPropertyValue : char_start = "" : char_end = string_delim : gosub "get_substring" : onestring = var
+			else
+				onestring = _stPropertyValue
+			endif
+			_onestring = onestring
+			var = onestring : char_start = bmat_delim : char_end = "]" : gosub "get_substring"
+			material_txt = var
+			in_str = onestring : find_str = char_start+var+char_end : replace_str = "" : gosub "str_replace" : onestring = out_str
+			var = onestring : char_start = "t[" : char_end = "]" : gosub "get_substring"
+			gosub "tonum"
+			th = 0 : if rez>EPS then th = var_num/1000
+			_stPropertyValue = STRSUB(_stPropertyValue,strlen(_onestring)+2, strlen(_stPropertyValue))
+			if STRLEN(material_txt)>0 then
+				property = 1
+				vin = 0
+				n_sloi=n_sloi+1
+				strih[n_sloi] = -1
+				bmatm[n_sloi] = material_txt
+				bmatinx[n_sloi] = 0
+				if bmat_delim = "b[" then
+					bmatinx_int = 0 : rez_1 = SPLIT(material_txt,"%n",bmatinx_int)
+					if rez_1*bmatinx_int>EPS then bmatinx[n_sloi] = bmatinx_int
+				endif
+				tolsh[n_sloi] = th
+			endif
+		else
+			i = max_ins
+		endif
+	next i
 endif
 !!>---------------- Вытаскиваем данные из свойств -----------
 
@@ -494,17 +537,41 @@ if not(vin) then
 			dob_th = 0
 			dob_txt = ""
 			matName = "-"
+			fill_from_mat = 0
 			flag_ch = 0
 			if SkiN=0 then
 				SkinPar=WALL_FILL*(GLOB_ELEM_TYPE=5)+SLAB_FILL*(GLOB_ELEM_TYPE=7)+\
 						ROOF_FILL*(GLOB_ELEM_TYPE=8)+(GLOB_ELEM_TYPE=18)*SHELLBASE_FILL+(GLOB_ELEM_TYPE=9)*FILL_FILL
 				skinThk =WALL_THICKNESS+SLAB_THICKNESS+ROOF_THICKNESS+SHELLBASE_THICKNESS
 				matName = SHELLBASE_BMAT_NAME+FILL_BMAT_NAME+SLAB_BMAT_NAME+WALL_BMAT_NAME+ROOF_BMAT_NAME+bmatm[1]
+				if property=1 then
+					skinThk = tolsh[1]
+					if bmatinx[1]>EPS then
+						matName_ = ""
+						n = request("Name_of_building_material", bmatinx[i-flag_ins_bef], matName_)
+						if strlen(matName_)>0 then
+							fill_from_mat = 1
+							matName = matName_
+							n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_cutFill_properties", bmat_Fill_prop)
+							SkinPar = bmat_Fill_prop 
+						endif
+					endif
+				endif
 			else
 				if property=1 and flag_ch = 0 then
 					SkinPar = strih[i-flag_ins_bef]
 					skinThk = tolsh[i-flag_ins_bef]
 					matName = bmatm[i-flag_ins_bef]
+					if bmatinx[i-flag_ins_bef]>EPS then
+						matName_ = ""
+						n = request("Name_of_building_material", bmatinx[i-flag_ins_bef], matName_)
+						if strlen(matName_)>0 then
+							fill_from_mat = 1
+							matName = matName_
+							n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_cutFill_properties", bmat_Fill_prop)
+							SkinPar = bmat_Fill_prop 
+						endif
+					endif
 					isShow = 1
 					flag_ch = 1
 				endif
@@ -560,6 +627,7 @@ if not(vin) then
 			else
 				skin_Fill = matName
 			endif
+
 			out_var_n[1] = bmat_id 
 			out_var_n[2] = bmat_surf 
 			out_var_n[3] = bmat_desc 
@@ -1227,17 +1295,31 @@ return
 	AngleT=AngleT-90
 	rot2  AngleT
 	PEN _LABEL_ARROWHEAD_PEN
-	If gs_style_m=7 then
-		if not(total_thk) or zast_mun then 
+	If gs_style_m=7 or gs_style_m=9 then
+		if total_thk<EPS or zast_mun then 
 			HOTSPOT2 sizeArrow, zast/2, unID,  PosArrow,  1+128   : unID=unID+1
 			HOTSPOT2 sizeArrow, PosArrow+zast/2, unID,  PosArrow,  2    : unID=unID+1
 			HOTSPOT2 sizeArrow, -1, unID,  PosArrow,  3    : unID=unID+1
 		else
 			PosArrow=total_thk
-			HOTSPOT2 sizeArrow, PosArrow+zast/2
+			if gs_style_m=9 then
+				HOTSPOT2 sizeArrow/2, PosArrow+zast/2
+			else
+				HOTSPOT2 sizeArrow, PosArrow+zast/2
+			endif
 		endif
-		HOTSPOT2 sizeArrow, zast/2
-		if not(napd) then line2 sizeArrow,0, sizeArrow, PosArrow+zast
+
+		if gs_style_m=9 then
+			HOTSPOT2 sizeArrow/2, zast/2
+			if not(napd) then POLY2  4, 1+2+4, -sizeArrow/2, 0, 
+					  -sizeArrow/2, PosArrow+zast,
+					  sizeArrow/2, PosArrow+zast,
+						sizeArrow/2, 0
+		else
+			HOTSPOT2 sizeArrow, zast/2
+			if not(napd) then line2 sizeArrow,0, sizeArrow, PosArrow+zast
+		endif
+
 	endif
 	If gs_style_m=1 or gs_style_m=2 then
 		if not(napd) then POLY2  3, 1+j3/2+j3,

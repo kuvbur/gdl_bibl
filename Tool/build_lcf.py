@@ -168,26 +168,31 @@ def PrepareDirectories(configData: dict, gdl_root: pathlib.WindowsPath):
         # Путь к hsf версии для Git (декодированного)
         configData['HSF_GIT'][lcfName] = prepfolder(lcf_root / f'hsf')
         for version in configData["VersionList"]:
-            # Путь к версии пакета
-            buildFolder = lcf_root / version
-            if not buildFolder.exists():
-                buildFolder.mkdir(parents=True)
-            # Путь к hsf версии пакета
-            xml_folder = prepfolder(buildFolder / f'xml')
-            # Путь к макросам
-            macro_folder = prepfolder(xml_folder / '_macro_')
-            # Путь к gsm
-            gsm_folder = prepfolder(buildFolder / 'gsm')
-            lcf_name = lcfName+version+'.lcf'
-            # Словарь с папками
-            configData['LCF'][lcfName][version] = {}
-            configData['LCF'][lcfName][version]['XML_TEMP'] = xml_folder
-            configData['LCF'][lcfName][version]['MACRO'] = macro_folder
-            configData['LCF'][lcfName][version]['GSM'] = gsm_folder
-            configData['LCF'][lcfName][version]['LCF'] = buildFolder / lcf_name
-            configData['LCF'][lcfName][version]['XML_ROOT'] = configData['XML_ROOT'][version]
-            configData['LCF'][lcfName][version]['DEVKIT'] = configData['TOOL'] / \
-                f'LP_XMLConverter{version}'/'WIN'/'LP_XMLConverter.EXE'
+            is_skip = False
+            if "SkipVersion" in configData['Package'][lcfName]:
+                if version in configData['Package'][lcfName]["SkipVersion"]:
+                    is_skip = True
+            if not is_skip:
+                # Путь к версии пакета
+                buildFolder = lcf_root / version
+                if not buildFolder.exists():
+                    buildFolder.mkdir(parents=True)
+                # Путь к hsf версии пакета
+                xml_folder = prepfolder(buildFolder / f'xml')
+                # Путь к макросам
+                macro_folder = prepfolder(xml_folder / '_macro_')
+                # Путь к gsm
+                gsm_folder = prepfolder(buildFolder / 'gsm')
+                lcf_name = lcfName+version+'.lcf'
+                # Словарь с папками
+                configData['LCF'][lcfName][version] = {}
+                configData['LCF'][lcfName][version]['XML_TEMP'] = xml_folder
+                configData['LCF'][lcfName][version]['MACRO'] = macro_folder
+                configData['LCF'][lcfName][version]['GSM'] = gsm_folder
+                configData['LCF'][lcfName][version]['LCF'] = buildFolder / lcf_name
+                configData['LCF'][lcfName][version]['XML_ROOT'] = configData['XML_ROOT'][version]
+                configData['LCF'][lcfName][version]['DEVKIT'] = configData['TOOL'] / \
+                    f'LP_XMLConverter{version}'/'WIN'/'LP_XMLConverter.EXE'
 
 
 def GetGUID(filename: pathlib.WindowsPath) -> str:
@@ -457,28 +462,33 @@ def run(configPath: pathlib.WindowsPath, gdl_root: pathlib.WindowsPath):
             if len(include_dict) < 1:
                 print(f'Не найден список файлов для {XML_ROOT}')
             for lcfName in configData["Package"]:
-                folders = configData['LCF'][lcfName][version]
-                config = configData["Package"][lcfName]
-                if "Ignore" not in config:
-                    config["Ignore"] = []
-                copied_file = CopyXML(config, folders, xml_dict)
-                if len(include_dict) > 0:
-                    copied_file = CopyIncludeFolder(
-                        folders, include_dict, copied_file, lcfName)
-                copied_file = CopyUsedFile(folders, copied_file)
-                for i in range(50):  # Пока не надоест)
-                    copied_file, is_all = CopyMacro(
-                        config, folders, xml_dict, copied_file)
-                    if is_all:
-                        break
-                if CreateGSM(folders):
-                    CreateLCF(folders)
-                    if not any(configData['HSF_GIT'][lcfName].iterdir()):
-                        ConvertGDL2HSF(configData, lcfName, version)
-                        DecodeGDL(configData['HSF_GIT']
-                                  [lcfName], "utf-8-sig", "utf-8")
-                shutil.rmtree(folders['XML_TEMP'], ignore_errors=False,
-                              onerror=handleRemoveReadonly)
+                is_skip = False
+                if "SkipVersion" in configData['Package'][lcfName]:
+                    if version in configData['Package'][lcfName]["SkipVersion"]:
+                        is_skip = True
+                if not is_skip:
+                    folders = configData['LCF'][lcfName][version]
+                    config = configData["Package"][lcfName]
+                    if "Ignore" not in config:
+                        config["Ignore"] = []
+                    copied_file = CopyXML(config, folders, xml_dict)
+                    if len(include_dict) > 0:
+                        copied_file = CopyIncludeFolder(
+                            folders, include_dict, copied_file, lcfName)
+                    copied_file = CopyUsedFile(folders, copied_file)
+                    for i in range(50):  # Пока не надоест)
+                        copied_file, is_all = CopyMacro(
+                            config, folders, xml_dict, copied_file)
+                        if is_all:
+                            break
+                    if CreateGSM(folders):
+                        CreateLCF(folders)
+                        if not any(configData['HSF_GIT'][lcfName].iterdir()):
+                            ConvertGDL2HSF(configData, lcfName, version)
+                            DecodeGDL(configData['HSF_GIT']
+                                      [lcfName], "utf-8-sig", "utf-8")
+                    shutil.rmtree(folders['XML_TEMP'], ignore_errors=False,
+                                  onerror=handleRemoveReadonly)
     for v, f in configData['XML_ROOT'].items():
         if f.exists():
             shutil.rmtree(f, ignore_errors=False,

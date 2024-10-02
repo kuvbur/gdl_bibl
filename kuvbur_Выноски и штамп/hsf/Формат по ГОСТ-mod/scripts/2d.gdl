@@ -12,7 +12,7 @@ DEFINE STYLE "текст20-4"  fontType, r205, 4, r205type
 DEFINE STYLE "текст50-5"  fontType, r505, 5, r505type
 
 DEFINE STYLE{2} "текст18-5-2" fontType, r184*100, r184type
-
+DEFINE STYLE "date" fontType, 0.5, 7, 0
 n = REQUEST ("HomeDB_info", "", homeDBIntId, homeDBUserId, homeDBName, homeContext)
 if homeContext<>5 then
 	is_num = 0
@@ -80,16 +80,6 @@ if not(_bEmptyLayoutRevHistory) & _bEmptyLayoutChHistory then
 			LayoutchangeHistory[1][_ichangeCol] = ""
 		endif
 	next _ichangeCol
-endif
-
-
-ch1 = 1 : has_sign = 1
-ch1 = OPEN ("TEXT", "Подпись", "SEPARATOR = ';', MODE = RO, LIBRARY")
-if ch1>0 then 
-	has_sign = 1
-else
-	print "Подпись не найдена - "+surname
-	has_sign = 0
 endif
 
 if not(_bEmptyLayoutRevHistory) then
@@ -831,6 +821,16 @@ IF type_table <> 99 and type_table > 4 THEN
 endif
 
 gosub "fill_in"
+ch1 = 1 : has_sign = 1
+if tis_autosign then
+	ch1 = OPEN ("TEXT", "Подпись", "SEPARATOR = ';', MODE = RO, LIBRARY")
+	if ch1>0 then 
+		has_sign = 1
+	else
+		print "Подпись не найдена"
+		has_sign = 0
+	endif
+endif
 
 if _bERROR then
 	pen_small = pen_error
@@ -856,7 +856,7 @@ if type_table = 10 then
 endif
 
 IF type_table = 99 THEN 
-	inx_1 = 0 : inx_2 = 0  : inx_3 = 0   : inx_4 = 0 : inx_n = 0 
+	inx_1 = 0 : inx_2 = 0  : inx_3 = 0   : inx_4 = 0 : inx_n = 0 : inx_last = vardim1(change_info)
 	for kk = 1 to vardim1(position_info)
 		if strstr(position_info[kk][1], "контр", 1)>0 and strlen(position_info[kk][2])>5 and inx_n=0 then inx_n=kk
 		if strstr(position_info[kk][1], table_99_izmvn, 1)>0 and strlen(table_99_izmvn)>1 and strlen(position_info[kk][2])>5 and inx_1=0 then inx_1=kk
@@ -864,13 +864,7 @@ IF type_table = 99 THEN
 		if strstr(position_info[kk][1], table_99_gip, 1)>0 and strlen(table_99_gip)>1 and strlen(position_info[kk][2])>5 and inx_3=0 then inx_3=kk
 		if strstr(position_info[kk][1], table_99_utv, 1)>0 and strlen(table_99_utv)>1 and strlen(position_info[kk][2])>5 and inx_4=0 then inx_4=kk
 	next kk
-	for kk = 1 to vardim1(change_info)
-		if strstr(change_info[kk][1], "контр", 1)>0 and strlen(change_info[kk][5])>5 and inx_n=0 then inx_n=-kk
-		if strstr(change_info[kk][1], table_99_izmvn, 1)>0 and strlen(table_99_izmvn)>1 and strlen(change_info[kk][4])>5 and inx_1=0 then inx_1=-kk
-		if strstr(change_info[kk][1], table_99_sost, 1)>0 and strlen(table_99_sost)>1 and strlen(change_info[kk][4])>5 and inx_2=0 then inx_2=-kk
-		if strstr(change_info[kk][1], table_99_gip, 1)>0 and strlen(table_99_gip)>1 and strlen(change_info[kk][4])>5 and inx_3=0 then inx_3=-kk
-		if strstr(change_info[kk][1], table_99_utv, 1)>0 and strlen(table_99_utv)>1 and strlen(change_info[kk][4])>5 and inx_4=0 then inx_4=-kk
-	next kk
+
 	if table_99_izmvn = "Кто вносил изм" then inx_1 = -vardim1(change_info)
 	if table_99_sost = "Кто вносил изм" then inx_2 = -vardim1(change_info)
 	if table_99_gip = "Кто вносил изм" then inx_3 = -vardim1(change_info)
@@ -883,6 +877,31 @@ IF type_table = 99 THEN
 		else
 			agreed_info[1][2] = change_info[abs(inx_n)][4]
 		endif
+	endif
+	if vardim1(change_info)>0 then
+		if table_99_info_1 = "№ изм" then
+			str_info_1 = change_info[vardim1(change_info)][1]
+		endif
+		if table_99_info_1 = "№ док" then
+			str_info_1 = change_info[vardim1(change_info)][3]
+		endif
+		if table_99_info_1 = "№ изм-год" then
+			if strlen(change_info[vardim1(change_info)][5])>0 then
+				year = change_info[vardim1(change_info)][5]
+				pos = STRSTR (year, ".")-1
+				year=STRSUB(year,pos+2,STRLEN(year))
+				if STRSTR (year, ".")>0 then
+					pos = STRSTR (year, ".")-1
+					year=STRSUB(year,pos+2,STRLEN(year))
+				endif
+				if STRLEN(year)>2 then year=STRSUB(year,STRLEN(year)-1,STRLEN(year))
+				str_info_1 = change_info[vardim1(change_info)][1] + "-" + year
+			else
+				str_info_1 = change_info[vardim1(change_info)][1]
+			endif
+		endif
+	else
+		str_info_1 = table_99_info_1
 	endif
 endif
 
@@ -902,7 +921,7 @@ IF type_table = 10 THEN gosub "table_type_10"
 del top
 END
 
-"table_type_5":
+"table_type_5": !"Регистрация изм (титул)"
 	pen SYMB_VIEW_PEN
 	lsh = 6
 	hsh = max (2, tn_change*0.5+0.5)
@@ -956,8 +975,8 @@ return
 	hotspot2 0, 5.5+(tn_change-4)*0.5*(tn_change>4)
 	hotspot2 0, 5.5
 	hotspot2 18.5,5.5
-	hotspot2 1.7, 0
-	hotspot2 1.7, 5.5+(tn_change-4)*0.5*(tn_change>4)
+	hotspot2 1.7+0.3*gost_razm, 0
+	hotspot2 1.7+0.3*gost_razm, 5.5+(tn_change-4)*0.5*(tn_change>4)
 	hotspot2 4, 0
 	hotspot2 4, 5.5+(tn_change-4)*0.5*(tn_change>4)
 	hotspot2 5.5, 0
@@ -984,7 +1003,7 @@ return
 	pen pen_osn
 	LINE2  0, 0, 0, 5.5+(tn_change-4)*0.5*(tn_change>4)
 	LINE2  0, 5.5 ,18.5,5.5
-	LINE2  1.7, 0, 1.7, 5.5+(tn_change-4)*0.5*(tn_change>4)
+	LINE2  1.7+0.3*gost_razm, 0, 1.7+0.3*gost_razm, 5.5+(tn_change-4)*0.5*(tn_change>4)
 	LINE2  4, 0, 4, 5.5+(tn_change-4)*0.5*(tn_change>4)
 	LINE2  5.5, 0, 5.5, 5.5+(tn_change-4)*0.5*(tn_change>4)
 	LINE2  6.5, 0, 6.5, 5.5+(tn_change-4)*0.5*(tn_change>4)
@@ -1017,14 +1036,15 @@ RETURN
 "table_type_2":
 	pen SYMB_VIEW_PEN
 	ADD2 hsh-19, 0.5
+	hsh = 5.5
+	if tn_change>4 then hsh = 5.5 + (tn_change-4)*0.5
 	pen pen_osn
-	LINE2  0, 0, 0, 5.5
-	LINE2  0, 5.5 ,18.5,5.5
-	LINE2  1.7, 0, 1.7, 5.5
-	LINE2  4, 0, 4, 5.5
-	LINE2  5.5, 0, 5.5, 5.5
-	LINE2  6.5, 0, 6.5, 5.5
-	pen pen_small
+	LINE2  0, 0, 0, hsh
+	LINE2  6.5, 5.5 ,18.5,5.5
+	LINE2  1.7+0.3*gost_razm, 0, 1.7+0.3*gost_razm, hsh
+	LINE2  4, 0, 4, hsh
+	LINE2  5.5, 0, 5.5, hsh
+	LINE2  6.5, 0, 6.5, hsh
 	LINE2  6.5, 1.5, 18.5, 1.5
 	LINE2  6.5, 4, 18.5, 4
 	LINE2  13.5, 3.5, 18.5, 3.5
@@ -1033,6 +1053,10 @@ RETURN
 	LINE2  15, 2, 15, 4
 	LINE2  16.5, 2, 16.5, 4
 	LINE2  15.5, 1.5, 15.5, 2
+
+	LINE2  0, 3, 6.5, 3
+	LINE2  0, 3.5, 6.5, 3.5
+	pen pen_small
 	SET STYLE "текст20-5"
 	PEN pen_text
 	TEXT2  14.25, 3.75, "Стадия"
@@ -1057,24 +1081,24 @@ RETURN
 "table_type_3":
 	pen SYMB_VIEW_PEN
 	ADD2 hsh-19, 0.5
-	LINE2  0, 0, 0, 4
-	LINE2  0, 4 ,18.5,4
-	LINE2  1.7, 0, 1.7, 4
-	LINE2  4, 0, 4, 4
-	LINE2  5.5, 0, 5.5, 4
-	LINE2  6.5, 0, 6.5, 4
-	LINE2  13.5, 0, 13.5, 2.5
+	pen pen_osn
+	hsh = 4
+	if tn_change>2 then hsh = 4 + (tn_change-2)*0.5
+	LINE2  0, 0, 0, hsh
+	LINE2  6.5, 4 ,18.5,4
+	LINE2  1.7+0.3*gost_razm, 0, 1.7+0.3*gost_razm, hsh
+	LINE2  4, 0, 4, hsh
+	LINE2  5.5, 0, 5.5, hsh
+	LINE2  6.5, 0, 6.5, hsh
 	LINE2  15, 1.5, 15, 2.5
 	LINE2  16.5, 1.5, 16.5, 2.5
-	LINE2  0, 0.5, 6.5, .5
-	LINE2  0, 1, 6.5, 1
-	LINE2  0, 1.5, 6.5, 1.5
+	LINE2  13.5, 0, 13.5, 2.5
+	LINE2  0, 2.5, 6.5, 2.5
+	LINE2  0, 3, 6.5, 3
 	LINE2  13.5, 1.5, 18.5, 1.5
-	LINE2  0, 2, 6.5, 2
 	LINE2  0, 2.5, 18.5, 2.5
 	LINE2  13.5, 2, 18.5, 2
-	LINE2  0, 3, 6.5, 3
-	LINE2  0, 3.5, 6.5, 3.5
+	pen pen_small
 	SET STYLE "текст20-5"
 	PEN  pen_text
 	TEXT2  14.25, 2.25, "Стадия"
@@ -1088,7 +1112,7 @@ RETURN
 	SET STYLE "текст25-5"
 	TEXT2  10,1.25,naen_sheet
 	add2 0, -0.5
-	upper_bound = 4
+	upper_bound = 4.5
 	start_change = 3
 	gosub "position"
 	del 1
@@ -1097,6 +1121,7 @@ RETURN
 "table_type_4":
 	pen SYMB_VIEW_PEN
 	ADD2 hsh-13.5, 0.5
+	PEN pen_osn
 	LINE2  0, 0, 0, 1.5
 	LINE2  0, 1.5 ,13,1.5
 	LINE2  12, 0, 12, 1.5
@@ -1113,7 +1138,52 @@ RETURN
 "table_type_99":
 	pen SYMB_VIEW_PEN
 	ADD2 hsh-19, 0.5
+if table_99_gostrazm then
+	PEN pen_small
+	LINE2  0, 	0.5, 	6.5, 	0.5
+	LINE2  0, 	1, 		6.5, 	1
+	LINE2  0, 	1.5, 	6.5, 	1.5
+	PEN pen_osn
+	LINE2  16.5,	0.0,	16.5,	2.0
+	LINE2  17.5,	0.0,	17.5,	2.0
+	LINE2  0.0,		2.0,	18.5,	2.0
+	LINE2  16.5,	1.0,	18.5,	1.0
+	LINE2  1.5,		2.0,	1.5,	25.7
+	LINE2  3.0,		2.0,	3.0,	28.7
+	LINE2  13.0,	2.0,	13.0,	25.7
+	LINE2  14.5,	2.0,	14.5,	25.7
+	LINE2  0.0,		25.7,	18.5,	25.7
+	LINE2  0.0,		24.2,	18.5,	24.2
+	LINE2  0.0,		27.7,	18.5,	27.7
+	LINE2  7,		25.7,	7,	28.7
 
+	LINE2  0, 	0, 		0, 		2
+	LINE2  1.7, 0, 		1.7, 	2
+	LINE2  5.5, 0, 		5.5, 	2
+	LINE2  6.5, 0, 		6.5, 	2
+	LINE2  4, 	0, 		4, 		2
+
+	SET STYLE "текст20-5"
+	PEN  pen_text
+	TEXT2  17.0,1.5,"Лист"
+	TEXT2  18.0,1.5,"Лис-\nтов"
+	TEXT2  0.75,24.95,"Изм."
+	TEXT2  2.25,24.95,"Лист"
+	TEXT2  8,24.95,"Содержание изменения"
+	TEXT2  13.75,24.95,"Код"
+	TEXT2  16.5,24.95,"Примечание"
+	TEXT2  1.5,28.2,"Разрешение"
+	TEXT2  5,28.2,"Обозначение"
+	TEXT2  5,27.2,"Наименование"
+	TEXT2  5,26.7,"объекта"
+	TEXT2  5,26.2,"строительства"
+
+	SET STYLE "текст20-5"
+	TEXT2  17.0,0.5,sheet_id
+	SET STYLE "текст50-5"
+	if strlen(shifr)>1 then TEXT2  12.75,28.2,shifr
+	TEXT2 1.5,26.7,str_info_1
+else
 	hotspot2 0.0,	0.0		! НЛ угол ШТАММПА А4
 	hotspot2 0.0,	2.0		! ВЛ угол ШТАММПА А4
 	hotspot2 0.0,	0.5
@@ -1207,7 +1277,7 @@ RETURN
 	SET STYLE "текст20-5"
 	PEN  pen_text
 	TEXT2  17.0,1.5,"Лист"
-	TEXT2  18.0,1.5,"Листов"
+	TEXT2  18.0,1.5,"Лис-\nтов"
 	TEXT2  0.8,23.9,"Изм."
 	TEXT2  2.3,23.9,"Лист"
 	TEXT2  8.5,23.9,"Содержание изменения"
@@ -1218,21 +1288,21 @@ RETURN
 	TEXT2  5.3,25.4,"Наименование объекта"
 	TEXT2  5.3,25.0,"строительства"
 
-	SET STYLE "текст20-4"
-	PEN  pen_text
-	TEXT2  0.1,1.7,"Изм. внес"
-	TEXT2  0.1,1.2,"Составил"
-	TEXT2  0.1,0.7,"ГИП"
-	TEXT2  0.1,0.2,"Утв."
-
 	SET STYLE "текст20-5"
 !	TEXT2  14.25, 1.75, current_phase
 	TEXT2  17.0,0.5,sheet_id
 	SET STYLE "текст50-5"
 	TEXT2  11.5,27.9,"Разрешение на внесение изменений"
 	if strlen(shifr)>1 then TEXT2  13.0,26.6,shifr
+	TEXT2 1.5,25.2,str_info_1
 	SET STYLE "текст25-5"
-
+endif
+	SET STYLE "текст20-4"
+	PEN  pen_text
+	TEXT2  0.1,1.7,"Изм. внес"
+	TEXT2  0.1,1.2,"Составил"
+	TEXT2  0.1,0.7,"ГИП"
+	TEXT2  0.1,0.2,"Утв."
 
 	if not(_bfirstchange) and tis_position then
 		inx_ = inx_4 : x = 0.2
@@ -1297,28 +1367,30 @@ RETURN
 			SET STYLE "текст18-5"
 			if tis_date then TEXT2  6, x, tend_date
 		endif
-
 	endif
-
-
 RETURN
 
 
 "table_type_9":
 	ADD2 hsh-19.0, 0.5
+	hsh = 1.5
+	if tn_change>2 then hsh = 1.5 + (tn_change-2)*0.5
 	pen pen_small
-	LINE2  0.0, 1.0, 6.5, 1.0
+	for jj=1 to hsh-0.5 step 0.5
+		LINE2  0.0, jj, 6.5, jj
+	next jj
 	LINE2  17.5, 1, 18.5, 1
 	PEN pen_osn
-	LINE2  0, 0, 0, 1.5
-	LINE2  0, 1.5 ,18.5,1.5
+	LINE2  0, 0, 0, hsh
+	LINE2  6.5, 1.5 ,18.5,1.5
 	LINE2  17.5, 0, 17.5, 1.5
-	LINE2  0.85, 0, 0.85, 1.5
-	LINE2  1.7, 0, 1.7, 1.5
-	LINE2  2.85, 0, 2.85, 1.5
-	LINE2  4.0, 0, 4.0, 1.5
-	LINE2  5.5, 0, 5.5, 1.5
-	LINE2  6.5, 0, 6.5, 1.5
+	LINE2  0.85+0.15*gost_razm, 0, 0.85+0.15*gost_razm, hsh
+	LINE2  1.7+0.3*gost_razm, 0, 1.7+0.3*gost_razm, hsh
+	LINE2  2.85+0.15*gost_razm, 0, 2.85+0.15*gost_razm, hsh
+	LINE2  4.0, 0, 4.0, hsh
+	LINE2  5.5, 0, 5.5, hsh
+	LINE2  6.5, 0, 6.5, hsh
+	LINE2  0, hsh, 6.5, hsh
 	LINE2  0.0, 0.5, 6.5, 0.5
 
 	SET STYLE "текст20-5"
@@ -1329,24 +1401,24 @@ RETURN
 	IF is_position = 1 THEN
 		if tis_position and not(_bERROR) and diff_type_tabe=0 then 
 			if vartype(position_info[1][2]) = 2 then
-				IF strlen(position_info[1][2])>2 THEN TEXT2 12,1.1,"<NOTES>" + ". Арх. " + position_info[1][2] + ". <SUBSETID>"
+				IF strlen(position_info[1][2])>2 and prim_arh THEN TEXT2 12,1.1,"<NOTES>" + ". Арх. " + position_info[1][2] + ". <SUBSETID>"
 			endif	
 		endif	
 	ELSE
 		if strlen(shifr)>1 then TEXT2  12.1,0.7,shifr
 	ENDIF
 	SET STYLE "текст18-5"
-	TEXT2  0.45, 0.25, "Изм."
-	TEXT2  1.30, 0.25, "Кол.уч."
-	TEXT2  2.3, 0.25, "Лист"
-	TEXT2  3.4, 0.25, "№ док."
-	TEXT2  4.8, 0.25, "Подп."
+	TEXT2  0.45+0.05*gost_razm, 0.25, "Изм."
+	TEXT2  1.30+0.2*gost_razm, 0.25, "Кол.уч."
+	TEXT2  2.3+0.2*gost_razm, 0.25, "Лист"
+	TEXT2  3.4+0.1*gost_razm, 0.25, "№ док."
+	TEXT2  4.8-0.05*gost_razm, 0.25, "Подп."
 	TEXT2  6.0, 0.25, "Дата"
 	FOR y = 0 TO 1.5 STEP 0.5
 		HOTSPOT2 0.0, y
-		HOTSPOT2 0.85, y
-		HOTSPOT2 1.7, y
-		HOTSPOT2 2.85, y
+		HOTSPOT2 0.85+0.15*gost_razm, y
+		HOTSPOT2 1.7+0.3*gost_razm, y
+		HOTSPOT2 2.85+0.15*gost_razm, y
 		HOTSPOT2 4.0, y
 		HOTSPOT2 5.5, y
 		HOTSPOT2 6.5, y
@@ -1356,6 +1428,27 @@ RETURN
 	HOTSPOT2 17.5, 0
 	HOTSPOT2 17.5, 1
 	HOTSPOT2 17.5, 1.5
+	if not(_bfirstchange) and tis_position then
+		SET STYLE "текст18-5"
+		i = 0
+		for x = 0.75 to hsh step 0.5
+			i = i + 1
+			if i <= tn_change then
+				if vartype(change_info[i][2]) = 2 then 
+					if strlen(change_info[i][2])>-1 then
+						TEXT2  0.45+0.05*gost_razm, x, change_info[i][1]
+						TEXT2  1.3+0.2*gost_razm, x, change_info[i][6]
+						TEXT2  2.3+0.2*gost_razm, x, change_info[i][2]
+						TEXT2  3.4+0.1*gost_razm, x, change_info[i][3]
+						add2 4.1-0.05*gost_razm, x-0.25
+						surname = change_info[i][4] : gosub "signature"
+						del 1
+						if tis_date then TEXT2  6.0, x, change_info[i][5]
+					endif
+				endif
+			endif
+		next x
+	endif
 RETURN
 
 "table_type_98":
@@ -1568,6 +1661,18 @@ return
 	else
 		TEXT2  hsh-4.8, .37, format_ + name_custom
 	endif
+	if show_date then
+		SET STYLE "date"
+		PEN pen_text
+		current_out = ""
+		ch = OPEN ("DateTime", "", "%Y-%m-%d-%H-%M-%S")
+		n = INPUT (ch, "", "", current_out)
+		rot2 90
+		text2 0.51,-1.98,current_out
+		del 1
+		CLOSE (ch)
+		pen pen_osn
+	endif
 return
 
 "position":
@@ -1576,10 +1681,10 @@ return
 		HOTSPOT2 18.5, upper_bound+(tn_change-4)*0.5*(tn_change>4)
 		HOTSPOT2 0, 0
 		HOTSPOT2 18.5, 0
-		hotspot2 0.85, start_change
-		hotspot2 0.85, upper_bound+(tn_change-4)*0.5*(tn_change>4)
-		hotspot2 2.85, start_change
-		hotspot2 2.85, upper_bound+(tn_change-4)*0.5*(tn_change>4)
+		hotspot2 0.85+0.15*gost_razm, start_change
+		hotspot2 0.85+0.15*gost_razm, upper_bound+(tn_change-4)*0.5*(tn_change>4)
+		hotspot2 2.85+0.15*gost_razm, start_change
+		hotspot2 2.85+0.15*gost_razm, upper_bound+(tn_change-4)*0.5*(tn_change>4)
 		pen pen_small
 
 		_hsh = 18.5
@@ -1598,17 +1703,16 @@ return
 			hotspot2 6.5, x
 		next x
 		pen pen_osn
-		LINE2  0.85, start_change, 0.85, upper_bound+(tn_change-max_change_2)*0.5*(tn_change>max_change_2)
-		LINE2  2.85, start_change, 2.85, upper_bound+(tn_change-max_change_2)*0.5*(tn_change>max_change_2)
-		pen pen_osn
 		LINE2  6.5, upper_bound+(tn_change-max_change_2)*0.5*(tn_change>max_change_2), 0, upper_bound+(tn_change-max_change_2)*0.5*(tn_change>max_change_2)
+		LINE2  0.85+0.15*gost_razm, start_change, 0.85+0.15*gost_razm, upper_bound+(tn_change-max_change_2)*0.5*(tn_change>max_change_2)
+		LINE2  2.85+0.15*gost_razm, start_change, 2.85+0.15*gost_razm, upper_bound+(tn_change-max_change_2)*0.5*(tn_change>max_change_2)
 		PEN pen_text
 		SET STYLE "текст18-5"
-		TEXT2  0.45, start_change + 0.25, "Изм."
-		TEXT2  1.30, start_change + 0.25, "Кол.уч."
-		TEXT2  2.3, start_change + 0.25, "Лист"
-		TEXT2  3.4, start_change + 0.25, "№ док."
-		TEXT2  4.8, start_change + 0.25, "Подп."
+		TEXT2  0.45+0.05*gost_razm, start_change + 0.25, "Изм."
+		TEXT2  1.30+0.2*gost_razm, start_change + 0.25, "Кол.уч."
+		TEXT2  2.3+0.2*gost_razm, start_change + 0.25, "Лист"
+		TEXT2  3.4+0.1*gost_razm, start_change + 0.25, "№ док."
+		TEXT2  4.8-0.05*gost_razm, start_change + 0.25, "Подп."
 		TEXT2  6.0, start_change + 0.25, "Дата"
 		if _bERROR then
 			LINE2  0, 0, 18.5, upper_bound
@@ -1622,11 +1726,11 @@ return
 				if i <= tn_change then
 					if vartype(change_info[i][2]) = 2 then 
 						if strlen(change_info[i][2])>-1 then
-							TEXT2  0.45, x, change_info[i][1]
-							TEXT2  1.3, x, change_info[i][6]
-							TEXT2  2.3, x, change_info[i][2]
-							TEXT2  3.4, x, change_info[i][3]
-							add2 4.1, x-0.25
+							TEXT2  0.45+0.05*gost_razm, x, change_info[i][1]
+							TEXT2  1.3+0.2*gost_razm, x, change_info[i][6]
+							TEXT2  2.3+0.2*gost_razm, x, change_info[i][2]
+							TEXT2  3.4+0.1*gost_razm, x, change_info[i][3]
+							add2 4.1-0.05*gost_razm, x-0.25
 							surname = change_info[i][4] : gosub "signature"
 							del 1
 							if tis_date then TEXT2  6.0, x, change_info[i][5]
@@ -1646,7 +1750,7 @@ return
 					if strlen(position_info[i][2])>2 then
 						PEN pen_text
 						TEXT2  0.1, x, position_info[i][1]
-						if tis_fam then TEXT2  1.8, x, position_info[i][2]
+						if tis_fam then TEXT2  1.8+0.3*gost_razm, x, position_info[i][2]
 						SET STYLE "текст18-5"
 						if end_date then position_info[i][3] = tend_date
 						if tis_date then
@@ -1664,7 +1768,7 @@ return
 							endif
 						endif
 						SET STYLE "текст18-4"
-						add2 4.0, x-0.3
+						add2 4.0+0.2*gost_razm, x-0.3
 						surname = position_info[i][2] : gosub "signature"
 						del 1
 					endif

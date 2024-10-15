@@ -1,0 +1,981 @@
+
+! =============================================================================
+! Size Limitations
+! =============================================================================
+
+minDoorLeafWidth	= 0.2
+minDoorLeafHeight	= 0.4
+
+minUnitWidth		= minDoorLeafWidth + minSidelightWidthLeft + minSidelightWidthRight
+minUnitHeight		= minDoorLeafHeight + frameOrTransomHeight
+
+! =============================================================================
+! GS Storefront Door Functions
+! =============================================================================
+
+call "GS Storefront Door Functions"		parameters all	EgressMSWidth				= EgressMSWidth,
+														egressOffset				= egressOffset,
+														minUnitWidth				= minUnitWidth,
+														minUnitHeight				= minUnitHeight,
+														minSidelightWidthLeft		= minSidelightWidthLeft,
+														minSidelightWidthRight		= minSidelightWidthRight,
+														minTransomHeight			= minTransomHeight,
+														bEnableSwingLineTurnOff		= bEnableSwingLineTurnOff,
+														bEnableSecondaryOpLineTypes	= bEnableSecondaryOpLineTypes,
+														gs_bSameLineTypeForLeaves	= gs_bSameLineTypeForLeaves,
+														bDoorEmptyPanel				= bDoorEmptyPanel,
+														bEnableVentilationProfile	= bEnableVentilationProfile,
+														bEnableParapetInset			= bEnableParapetInset,
+														bEnableMasonryArch			= bEnableMasonryArch,
+														bEnableSill					= bEnableSill,
+														bEnableBoard				= bEnableBoard,
+														bEnableFaschen				= bEnableFaschen,
+														bEnableThreshold			= bEnableThreshold,
+														bEnableCasing				= bEnableCasing,
+														bEnableShutter				= bEnableShutter,
+														bEnableCustomCornerLeft		= bEnableCustomCornerLeft,
+														bEnableCustomCornerRight	= bEnableCustomCornerRight,
+														bEnableDoorStop				= bEnableDoorStop
+
+values "gs_frame_width" range (0,)
+
+values "gs_SashText_typ" stFrameElemJoin
+values "gs_SashText_typ_num" MITERED_JOINT, BUTT_JOINT
+
+if GLOB_MODPAR_NAME = "gs_SashText_typ" | gs_SashText_typ_num = 0 then
+	gs_SashText_typ_num = MITERED_JOINT
+	if gs_SashText_typ = stFrameElemJoin[2] then gs_SashText_typ_num = BUTT_JOINT
+	parameters gs_SashText_typ_num = gs_SashText_typ_num
+else
+	gs_SashText_typ = stFrameElemJoin[gs_SashText_typ_num]
+	parameters gs_SashText_typ = gs_SashText_typ
+endif
+
+
+! =============================================================================
+! Ventilation Profile
+! =============================================================================
+
+if bEnableVentilationProfile then
+	call "Ventilation_profile" parameters	isWindow						= 0,
+											iWindowType						= 0,
+											bVentilationProfile				= bVentilationProfile,
+											iVentilationProfileType			= iVentilationProfileType,
+											gs_VentilationProfileTypeEnable	= gs_VentilationProfileTypeEnable
+else
+	lock	"bVentilationProfile",
+			"gs_list_freeAirPerformance"
+	hideparameter	"bVentilationProfile",
+					"gs_list_freeAirPerformance"
+endif
+
+
+! =============================================================================
+! Orientation
+! =============================================================================
+
+values{2} "gs_list_orientationDef_m"	0, `Автоматически`,
+										1, `Специальный`
+
+if gs_list_orientationDef_m = 0 then
+	if SYMB_MIRRORED then
+		ac_OpeningSide = stOpeningSide[2]
+	else
+		ac_OpeningSide = stOpeningSide[1]
+	endif
+	parameters ac_OpeningSide = ac_OpeningSide
+
+	lock "ac_OpeningSide"
+	hideparameter "ac_OpeningSide"
+endif
+
+
+! =============================================================================
+! Door Leaf Widths for Listing
+! =============================================================================
+
+_formatStr = ""
+rrr = REQUEST ("Window_door_dimension", "", _formatStr)
+
+if (iDoorType = 2)	then
+	gs_list_doorleafwidths = STR{2}(_formatStr, ((gs_rttl/100) * ac_leaf_width)) + " / " + STR{2}(_formatStr, ((1 - (gs_rttl/100)) * ac_leaf_width))
+else
+	gs_list_doorleafwidths = STR{2}(_formatStr, ac_leaf_width)
+endif
+
+parameters gs_list_doorleafwidths = gs_list_doorleafwidths
+
+
+! =============================================================================
+! IFC Parameters
+! =============================================================================
+
+ifc_optype = DOOR_OP_USER_DEFINED
+
+if iDoorPanelType = 0 then
+	ifc_optype = DOOR_OP_NOT_DEFINED
+else
+	if not(gs_sidelight_left) & not(gs_sidelight_right) then
+		if iDoorType = 1 then
+			ifc_optype = DOOR_OP_SINGLE_DOOR_SINGLE_SWING
+		endif
+
+		if iDoorType = 2 then
+			ifc_optype = DOOR_OP_DOUBLE_DOOR_SINGLE_SWING
+		endif
+	endif
+endif
+
+parameters ifc_optype = ifc_optype
+
+call "IFC_optype_door" parameters ifc_optype = ifc_optype
+
+lock "ifc_optypestr"
+
+ifc_LiningDepth = WIDO_FRAME_THICKNESS
+parameters ifc_LiningDepth = ifc_LiningDepth
+
+ifc_LiningThickness	= gs_frame_width
+ifc_LiningOffset	= WIDO_FRAME_THICKNESS * WIDO_REVEAL_SIDE
+parameters	ifc_LiningThickness	= ifc_LiningThickness,
+			ifc_LiningOffset	= ifc_LiningOffset
+
+if gs_door_transom then
+	ifc_TransomOffset		= ac_unit_height - gs_transom_height
+	ifc_TransomThickness	= gs_frame_width
+else
+	ifc_TransomOffset		= 0
+	ifc_TransomThickness 	= 0
+endif
+parameters	ifc_TransomOffset		= ifc_TransomOffset,
+			ifc_TransomThickness	= ifc_TransomThickness
+
+dim ifc_DoorPanel[][4]
+if ifc_optype = DOOR_OP_NOT_DEFINED | ifc_optype = DOOR_OP_USER_DEFINED then
+	ifc_DoorPanel[1][1] = 0
+	ifc_DoorPanel[1][2] = 0
+	ifc_DoorPanel[1][3] = 0		! NOTDEFINED
+	ifc_DoorPanel[1][4] = 0		! NOTDEFINED
+else
+	for i = 1 to 1 + (iDoorType = 2)
+		ifc_DoorPanel[i][1] = gs_leaf_thk
+		ifc_DoorPanel[i][3] = 1		! SWINGING
+		if iDoorType = 1 then
+			ifc_DoorPanel[i][2] = ac_leaf_width/ac_egress_width
+			ifc_DoorPanel[i][4] = 2		! MIDDLE
+		else
+			if i = 1 then
+				ifc_DoorPanel[i][2] = lal/ac_egress_width
+				ifc_DoorPanel[i][4] = 1		! LEFT
+			else
+				ifc_DoorPanel[i][2] = lar/ac_egress_width
+				ifc_DoorPanel[i][4] = 3		! RIGHT
+			endif
+		endif
+	next i
+endif
+
+parameters ifc_DoorPanel = ifc_DoorPanel
+
+
+! =============================================================================
+! FM Types
+! =============================================================================
+
+call "FM_types" parameters all
+
+! =============================================================================
+! Swedish list parameter control
+! =============================================================================
+
+if gs_SWE_listParams_contr > 0 then
+	call "SWE_ListParameters_control" parameters gs_SWE_listParams_contr = gs_SWE_listParams_contr,
+			swe_list_d1				= swe_list_d1
+endif
+
+if (iDoorType = 2 & not(bEnableSecondaryOpLineTypes)) then
+	gs_bSameLineTypeForLeaves  = 1
+	parameters gs_bSameLineTypeForLeaves = gs_bSameLineTypeForLeaves
+	lock "gs_bSameLineTypeForLeaves", "or_swingLineType2", "or_iOpLineType3dSecondary", "or_opLineType3dSecondary"
+	hideparameter "gs_bSameLineTypeForLeaves", "or_swingLineType2", "or_iOpLineType3dSecondary", "or_opLineType3dSecondary"
+endif
+
+
+!! OPENING ANGLE IN 2D !!
+if gs_open_2D < 0	| gs_open_2D >  270 then parameters gs_open_2D = 0
+if gs_open_2D > 180	& gs_open_2D <= 270 then parameters gs_open_2D = 180
+
+
+!! OPENING ANGLE IN 3D !!
+if gs_open_3D < 0	| gs_open_3D >  270 then parameters gs_open_3D = 0
+if gs_open_3D > 180	& gs_open_3D <= 270 then parameters gs_open_3D = 180
+
+!! RESOLUTION !!
+values "res" range[3, )
+
+! PENS -------------------------------------------------------------------[
+for i = 1 to 255
+	put i
+next i
+values "gs_penJoint" use(NSP)
+values "gs_penJointFg" use(NSP)
+values "gs_penPlug" use(NSP)
+values "gs_penPlugFg" use(NSP)
+values "gs_custom_cc_separator_pen" use(NSP)
+values "gs_head_symbol_pen" use(NSP)
+values "gs_pen_2D" use(NSP)
+values "gs_pen_mull" use(NSP)
+values "gs_pen_glass" use(NSP)
+values "gs_leaf_pen_2D" use(NSP)
+values "gs_wcont_line_pen" use(NSP)
+values "gs_wallhole_pen_fg" use(NSP)
+values "gs_penFr_fg" use(NSP)
+values "gs_penLeaf_fg" use(NSP)
+values "gs_penSdl_fg" use(NSP)
+values "gs_penGlass_fg" use(NSP)
+values "or_opLinePen" use(NSP)
+values "gs_frame_pen" use(NSP)
+values "gs_leaf_pen" use(NSP)
+values "gs_glass_pen" use(NSP)
+values "gs_frame_pen_cont" use(NSP)
+for i = 1 to nsp
+	dummy = get(1)
+next i
+
+
+! ==============================================================================
+! Uniform Surfaces
+! ==============================================================================
+
+dim	surfaceParNames[6]							:	dim	surfaceParameters[6]
+	surfaceParNames[1]	= "gs_frame_mat"		:		surfaceParameters[1]	= gs_frame_mat
+	surfaceParNames[2]	= "gs_sash_mat"			:		surfaceParameters[2]	= gs_sash_mat
+	surfaceParNames[3]	= "gs_leaf_mat"			:		surfaceParameters[3]	= gs_leaf_mat
+	surfaceParNames[4]	= "gs_midrail_mat"		:		surfaceParameters[4]	= gs_midrail_mat
+	surfaceParNames[5]	= "gs_leafMidrail_mat"	:		surfaceParameters[5]	= gs_leafMidrail_mat
+	surfaceParNames[6]	= "gs_vertMull_mat"		:		surfaceParameters[6]	= gs_vertMull_mat
+
+_lastModSurfaceParameter = gs_frame_mat
+
+if stored_material[1][1] <> -9999 then
+	for i = 1 to vardim1(surfaceParNames)
+		if GLOB_MODPAR_NAME = surfaceParNames[i] then
+			_lastModSurfaceParameter	= surfaceParameters[i]
+			stored_material[1][i]	= surfaceParameters[i]
+			stored_material[2][i]	= 1
+
+			for j = 1 to i-1
+				stored_material[2][j]	= 0
+				parameters stored_material[2][j]	= stored_material[2][j]
+			next j
+
+			for k = i+1 to vardim1(surfaceParNames)
+				stored_material[2][k]	= 0
+				parameters stored_material[2][k]	= stored_material[2][k]
+			next k
+		endif
+
+		parameters	stored_material[1][i]	= stored_material[1][i],
+					stored_material[2][i]	= stored_material[2][i]
+
+		if stored_material[2][i] = 1 then
+			_lastModSurfaceParameter = stored_material[1][i]
+		endif
+	next i
+else
+	gosub "preloadSurfaces"
+endif
+
+if bLinkSurfacesFrameSash then
+	parameters	gs_frame_mat		= _lastModSurfaceParameter,
+				gs_sash_mat			= _lastModSurfaceParameter,
+				gs_leaf_mat			= _lastModSurfaceParameter,
+				gs_midrail_mat		= _lastModSurfaceParameter,
+				gs_leafMidrail_mat	= _lastModSurfaceParameter,
+				gs_vertMull_mat		= _lastModSurfaceParameter
+else
+	if GLOB_MODPAR_NAME = "bLinkSurfacesFrameSash" then
+		parameters	gs_frame_mat		= stored_material[1][1],
+					gs_sash_mat			= stored_material[1][2],
+					gs_leaf_mat			= stored_material[1][3],
+					gs_midrail_mat		= stored_material[1][4],
+					gs_leafMidrail_mat	= stored_material[1][5],
+					gs_vertMull_mat		= stored_material[1][6]
+	else
+		gosub "preloadSurfaces"
+	endif
+endif
+
+if iStorefrontType = SFTYPE_DOOR_ONLY | iStorefrontType = SFTYPE_DOOR_TRANSOM then
+	gs_sidelight_right = 0
+	gs_sidelight_left = 0
+	parameters	gs_sidelight_right	= gs_sidelight_right,
+				gs_sidelight_left	= gs_sidelight_left
+	hideparameter "gs_sidelight_right", "gs_sidelight_width_right",
+					"gs_sidelight_left", "gs_sidelight_width_left"
+	lock "gs_sidelight_right", "gs_sidelight_width_right",
+					"gs_sidelight_left", "gs_sidelight_width_left"
+endif
+if iStorefrontType = SFTYPE_DOOR_ONLY then
+	gs_door_transom = 0
+	parameters gs_door_transom = gs_door_transom
+	hideparameter "gs_door_transom", "gs_transom_height"
+	lock "gs_door_transom", "gs_transom_height"
+endif
+
+values "endFrameLeft" stEndFrameProfile
+values "iEndFrameLeft" 1, 2, 3
+
+if GLOB_MODPAR_NAME = "endFrameLeft" then
+	iEndFrameLeft = ENDFRAME_NORMAL
+	if endFrameLeft = stEndFrameProfile[2] then iEndFrameLeft = ENDFRAME_JOINT
+	if endFrameLeft = stEndFrameProfile[3] then iEndFrameLeft = ENDFRAME_CORNER
+	parameters iEndFrameLeft = iEndFrameLeft
+else
+	endFrameLeft = stEndFrameProfile[max(1, min(iEndFrameLeft,vardim1(stEndFrameProfile)))]
+	parameters endFrameLeft = endFrameLeft
+endif
+
+values "endFrameRight" stEndFrameProfile
+values "iEndFrameRight" 1, 2, 3
+
+if GLOB_MODPAR_NAME = "endFrameRight" then
+	iEndFrameRight = ENDFRAME_NORMAL
+	if endFrameRight = stEndFrameProfile[2] then iEndFrameRight = ENDFRAME_JOINT
+	if endFrameRight = stEndFrameProfile[3] then iEndFrameRight = ENDFRAME_CORNER
+	parameters iEndFrameRight = iEndFrameRight
+else
+	endFrameRight = stEndFrameProfile[max(1, min(iEndFrameRight,vardim1(stEndFrameProfile)))]
+	parameters endFrameRight = endFrameRight
+endif
+
+if iEndFrameLeft = ENDFRAME_CORNER then
+	values "frameStyleLeft" stFrameStyle[1], stFrameStyle[2], stFrameStyle[3], stFrameStyle[4]
+	values "iFrameStyleLeft" 1, 2, 3, 4
+else
+	values "frameStyleLeft" stFrameStyle[1], stFrameStyle[2]
+	values "iFrameStyleLeft" 1, 2
+endif
+
+if iEndFrameRight = ENDFRAME_CORNER then
+	VALUES "frameStyleRight" stFrameStyle[1], stFrameStyle[2], stFrameStyle[3], stFrameStyle[4]
+	values "iFrameStyleRight" 1, 2, 3, 4
+else
+	VALUES "frameStyleRight" stFrameStyle[1], stFrameStyle[2]
+	values "iFrameStyleRight" 1, 2
+endif
+
+if GLOB_MODPAR_NAME = "frameStyleLeft" then
+	iFrameStyleLeft = FRAME_STYLE_VISIBLE_MULLIONS
+	if frameStyleLeft = stFrameStyle[2] then iFrameStyleLeft = FRAME_STYLE_BUTT_GLAZED
+	if iEndFrameLeft = ENDFRAME_CORNER then
+		if frameStyleLeft = stFrameStyle[3] then iFrameStyleLeft = FRAME_STYLE_BUTT_GLAZED_WO_FRAME
+		if frameStyleLeft = stFrameStyle[4] then iFrameStyleLeft = FRAME_STYLE_ANGLE_FRAME
+	endif
+	parameters iFrameStyleLeft = iFrameStyleLeft
+else
+	frameStyleLeft = stFrameStyle[max(1, min(iFrameStyleLeft, vardim1(stFrameStyle)))]
+	parameters frameStyleLeft = frameStyleLeft
+endif
+
+if GLOB_MODPAR_NAME = "frameStyleRight" then
+	iFrameStyleRight = FRAME_STYLE_VISIBLE_MULLIONS
+	if frameStyleRight = stFrameStyle[2] then iFrameStyleRight = FRAME_STYLE_BUTT_GLAZED
+	if iEndFrameRight = ENDFRAME_CORNER then
+		if frameStyleRight = stFrameStyle[3] then iFrameStyleRight = FRAME_STYLE_BUTT_GLAZED_WO_FRAME
+		if frameStyleRight = stFrameStyle[4] then iFrameStyleRight = FRAME_STYLE_ANGLE_FRAME
+	endif
+	parameters iFrameStyleRight = iFrameStyleRight
+else
+	frameStyleRight = stFrameStyle[max(1, min(iFrameStyleRight, vardim1(stFrameStyle)))]
+	parameters frameStyleRight = frameStyleRight
+endif
+
+if iEndFrameLeft <> ENDFRAME_NORMAL then
+	gs_tolerance_left = 0
+	parameters gs_tolerance_left = gs_tolerance_left
+	lock "gs_tolerance_left"
+endif
+
+if iEndFrameRight <> ENDFRAME_NORMAL then
+	gs_tolerance_right = 0
+	parameters gs_tolerance_right = gs_tolerance_right
+	lock "gs_tolerance_right"
+endif
+
+if gs_stack_top then
+	gs_tolerance_upper = 0
+	parameters gs_tolerance_upper = gs_tolerance_upper
+	lock "gs_tolerance_upper"
+endif
+
+
+! ===== Show / Hide 2D Fills  =====
+
+if not(gs_bFills) then
+	hideparameter	"gs_fillFr",
+					"gs_penFr_fg",
+					"gs_penFr_bg",
+					"gs_fillSash",
+					"gs_penSash_fg",
+					"gs_penSash_bg",
+					"gs_fillLeaf",
+					"gs_penLeaf_fg",
+					"gs_penLeaf_bg",
+					"gs_trim_fill_in",
+					"gs_trim_pen_fg_in",
+					"gs_trim_pen_bg_in",
+					"gs_trim_fill_out",
+					"gs_trim_pen_fg_out",
+					"gs_trim_pen_bg_out",
+					"gs_gsect",
+					"gs_penGlass_fg",
+					"gs_penGlass_bg"
+
+endif
+
+if iFrameStyleMullion = FRAME_STYLE_VISIBLE_MULLIONS then
+	if gs_grid_thk>gs_fthk then
+		PARAMETERS gs_grid_thk=gs_fthk
+	endif
+endif
+
+if iFrameStyleMullion = FRAME_STYLE_BUTT_GLAZED then
+	if gs_grid_thk>gs_fthk-(gs_glass_thk*(dtlev)+gs_gsb) then
+		PARAMETERS gs_grid_thk=gs_fthk-(gs_glass_thk*(dtlev)+gs_gsb)
+	endif
+endif
+
+if iFrameStyleMullion = FRAME_STYLE_VISIBLE_MULLIONS then
+	if gridThkVert>gs_fthk then
+		PARAMETERS gridThkVert=gs_fthk
+	endif
+endif
+
+if iFrameStyleMullion = FRAME_STYLE_BUTT_GLAZED then
+	if gridThkVert>gs_fthk-(gs_glass_thk*(dtlev)+gs_gsb) then
+		PARAMETERS gridThkVert=gs_fthk-(gs_glass_thk*(dtlev)+gs_gsb)
+	endif
+endif
+
+if iEndFrameLeft <> ENDFRAME_CORNER then
+	HIDEPARAMETER "leftCornerAngle"
+else
+	values "leftCornerAngle" range(0, 180), range(180, 360)
+endif
+
+if iEndFrameRight <> ENDFRAME_CORNER then
+	HIDEPARAMETER "rightCornerAngle"
+else
+	values "rightCornerAngle" range(0, 180), range(180, 360)
+endif
+
+values "midRailWidth" range(0, ]
+values "bottomRailWidth" range(0, ]
+
+if not(gs_door_transom) then
+	hideparameter	"nHorDivision",
+					"divWidthHor",
+					"divWidthVertTransom",
+					"nVertDivTransom"
+	lock	"nHorDivision",
+			"divWidthHor",
+			"divWidthVertTransom",
+			"nVertDivTransom"
+endif
+
+if not(bEnableMiddleRail) then
+	hideparameter "bMiddleRail"
+	lock "bMiddleRail"
+endif
+
+if bMiddleRail then
+	if midRailElevation < (2*gs_hor_gnum+1)*gs_grid_w + gs_fw_lower + midRailWidth/2 then PARAMETERS midRailElevation = (2*gs_hor_gnum+1)*gs_grid_w + gs_fw_lower + midRailWidth/2
+	if iDoorPanelType = PANEL_STYLE1 then
+		if midRailElevation > ac_unit_height-frameOrTransomHeight-(gs_hor_gnumtr*2+1)*gs_grid_w-midRailWidth/2 then
+			PARAMETERS midRailElevation = ac_unit_height-frameOrTransomHeight-(gs_hor_gnumtr*2+1)*gs_grid_w-midRailWidth/2
+		endif
+	else
+		if midRailElevation > ac_unit_height-frameOrTransomHeight-(gs_hor_gnumtr*2+1)*gs_grid_w-midRailWidth/2 then
+			PARAMETERS midRailElevation = ac_unit_height-frameOrTransomHeight-(gs_hor_gnumtr*2+1)*gs_grid_w-midRailWidth/2
+		endif
+	endif
+else
+	hideparameter	"midRailElevation",
+					"midRailWidth",
+					"divWidthVertBottom",
+					"nVertDivBottom"
+	lock	"midRailElevation",
+			"midRailWidth",
+			"divWidthVertBottom",
+			"nVertDivBottom"
+endif
+
+if not(gs_sidelight_left) and not(gs_sidelight_right) then
+	hideparameter "nVertDivMiddle", "nVertDivBottom", "divWidthVertBottom", "divWidthVertMiddle"
+	lock "nVertDivMiddle", "nVertDivBottom", "divWidthVertBottom", "divWidthVertMiddle"
+endif
+
+VALUES "frameStyleMullion"  stFrameStyle[1],stFrameStyle[2]
+VALUES "iFrameStyleMullion" 1, 2
+
+if GLOB_MODPAR_NAME = "frameStyleMullion" then
+	iFrameStyleMullion = FRAME_STYLE_VISIBLE_MULLIONS
+	if frameStyleMullion = stFrameStyle[2] then iFrameStyleMullion = FRAME_STYLE_BUTT_GLAZED
+	parameters iFrameStyleMullion = iFrameStyleMullion
+else
+	frameStyleMullion = stFrameStyle[max(1, min(iFrameStyleMullion, vardim1(stFrameStyle)))]
+	parameters frameStyleMullion = frameStyleMullion
+endif
+
+VALUES "divisionMethod" stDivisionMethod
+values "iDivisionMethod" 1, 2
+
+if GLOB_MODPAR_NAME = "divisionMethod" then
+	iDivisionMethod = DIVISION_NUM
+	if divisionMethod= stDivisionMethod[2] then iDivisionMethod = DIVISION_WIDTH
+	parameters iDivisionMethod = iDivisionMethod
+else
+	divisionMethod = stDivisionMethod[max(1, min(iDivisionMethod, vardim1(stDivisionMethod)))]
+	parameters divisionMethod = divisionMethod
+endif
+
+if iDivisionMethod = DIVISION_NUM then
+	HIDEPARAMETER "divWidthHor","divWidthVertBottom","divWidthVertMiddle","divWidthVertTransom"
+endif
+
+if iDivisionMethod = DIVISION_WIDTH then
+	HIDEPARAMETER "nVertDivTransom","gs_hor_gtp","gs_hor_dtp","nVertDivBottom","gs_hor_gnum","nHorDivision","gs_ver_gnum","gs_hor_d","gs_ver_d","nVertDivMiddle","gs_hor_gnumtr","gs_hor_dtr"
+endif
+
+if not(gs_ds) then
+	HIDEPARAMETER "gs_ds_w", "gs_ds_thk"
+	lock "gs_ds_w", "gs_ds_thk"
+endif
+values "gs_ds_w" range (0, ]
+values "gs_ds_thk" range (0, ]
+
+! =============================================================================
+! Transom and Sidelight
+! =============================================================================
+
+values "gs_opening_dir_sl"	stOpeningDir
+values "gs_opening_dir_sl_m"	OPENING_DIR_DEFAULT_OUTSIDE, OPENING_DIR_FLIPPED_INSIDE
+
+if not(gs_sidelight_left | gs_sidelight_right | gs_door_transom) then
+	lock "gs_opening_dir_sl", "gs_opening_dir_sl_m"
+	hideparameter "gs_opening_dir_sl", "gs_opening_dir_sl_m"
+	parameters gs_opening_dir_sl_m = 1
+endif
+
+if GLOB_MODPAR_NAME = "gs_opening_dir_sl" then
+	gs_opening_dir_sl_m = OPENING_DIR_DEFAULT_OUTSIDE
+	if gs_opening_dir_sl = stOpeningDir[2] then gs_opening_dir_sl_m = OPENING_DIR_FLIPPED_INSIDE
+	parameters gs_opening_dir_sl_m = gs_opening_dir_sl_m
+else
+	gs_opening_dir_sl = stOpeningDir[gs_opening_dir_sl_m]
+	parameters gs_opening_dir_sl = gs_opening_dir_sl
+endif
+
+! =============================================================================
+! Door Leaf and Handles
+! =============================================================================
+
+iHandleCategoryEnable	= 1 + 2 + 4 + 8 + 16 + 64
+
+if iDoorType = 1 then
+	call "DoorLeafPanels" parameters all A = ac_leaf_width,
+										 B = ac_leaf_height,
+					iDoorPanelType			= iDoorPanelType,
+					bAsymmetricLeafs		= 0,
+					bStorefrontDoor			= 1,
+					bStorefrontClassic		= 1,
+					gs_leaf_optype_m		= gs_leaf_optype_m,
+					stDoorTypes				= stDoorTypes,
+	! Handle parameters -----------------------------------------------
+					bSecondPanel			= (iDoorType = 2),
+					iHandleCategoryEnable	= iHandleCategoryEnable,
+					gs_handle_type			= gs_handle_type,
+					gs_handle_type_m		= gs_handle_type_m,
+					gs_handle_type_out		= gs_handle_type_out,
+					gs_handle_type_out_m	= gs_handle_type_out_m,
+	! Kick Board parameters --------------------------------------
+					bEnableKickBoard	= 1,
+					bSecondKickBoard	= 0,
+					bKickBoardOut		= bKickBoardOut,
+					bKickBoardIn		= bKickBoardIn,
+	! Glass Area Calc parameters --------------------------------------
+					gs_rebate_width			= 0,
+					gs_ds_w					= gs_ds_w,
+					bMiddleRail				= bMiddleRail,
+					gs_int_fw				= midRailWidth,
+					gs_fw_lower				= bottomRailWidth,
+					gs_fw_side				= leafFrameWidth,
+							returned_parameters	bLockMullionParamsLeaf,
+												bLockGlassParamsLeaf,
+												PanelGlassArea
+
+else
+	call "DoorLeafPanels" parameters all A = ac_leaf_width,
+										 B = ac_leaf_height,
+					iDoorPanelType			= iDoorPanelType,
+					bAsymmetricLeafs		= 0,
+					bStorefrontDoor			= 1,
+					bStorefrontClassic		= 1,
+					gs_leaf_optype_m		= gs_leaf_optype_m,
+					stDoorTypes				= stDoorTypes,
+	! Handle parameters -----------------------------------------------
+					bSecondPanel			= (iDoorType = 2),
+					iHandleCategoryEnable	= iHandleCategoryEnable,
+					gs_handle_type			= gs_handle_type,
+					gs_handle_type_m		= gs_handle_type_m,
+					gs_handle_type_out		= gs_handle_type_out,
+					gs_handle_type_out_m	= gs_handle_type_out_m,
+					gs_handle_type2_m		= gs_handle_type2_m,
+					gs_handle_type2_out		= gs_handle_type2_out,
+					gs_handle_type2_out_m	= gs_handle_type2_out_m,
+	! Kick Board parameters --------------------------------------
+					bEnableKickBoard	= 1,
+					bSecondKickBoard	= 1,
+					bKickBoardOut		= bKickBoardOut,
+					bKickBoardIn		= bKickBoardIn,
+					bKickBoardOut2		= bKickBoardOut2,
+					bKickBoardIn2		= bKickBoardIn2,
+
+							returned_parameters	bLockMullionParamsLeaf,
+												bLockGlassParamsLeaf
+
+endif
+
+if not(gs_sidelight_left) & not(gs_sidelight_right) & iDoorPanelType <> PANEL_STYLE7 & iDoorPanelType <> PANEL_STYLE8 then
+	lock "bottomRailWidth"
+	hideparameter "bottomRailWidth"
+endif
+
+if bLockGlassParamsLeaf and not(gs_door_transom) and not(gs_sidelight_left) and not(gs_sidelight_right) then
+	lock "gs_glass_mat", "gs_glass_pen", "gs_pen_glass",
+		"gs_gsect", "gs_penGlass_fg", "gs_penGlass_bg",
+		"frameStyleMullion", "iFrameStyleMullion", "gs_md", "nVertDivBottom",
+		"gs_glass_thk", "gs_gsmd", "gs_gsb", "buttGalzedJoint",
+		"titleGlassMullions"
+
+	hideparameter "gs_glass_mat", "gs_glass_pen", "gs_pen_glass",
+				"gs_gsect", "gs_penGlass_fg", "gs_penGlass_bg",
+				"frameStyleMullion", "gs_md", "nVertDivBottom",
+				"gs_glass_thk", "gs_gsmd", "gs_gsb", "buttGalzedJoint",
+				"titleGlassMullions"
+endif
+
+
+! =============================================================================
+! 3D Detail Level
+! =============================================================================
+
+if gs_3DDetEnable =0 then
+
+    values{2} "iDWDet3D" 	DETLEVEL_DW3D_DETAILED,		`Детальный`,
+						    DETLEVEL_DW3D_SIMPLE,		`Простой`,
+						    DETLEVEL_DW3D_OFF,			`Откл.`
+
+else
+	dim n3DScaleValueMask[]
+	dim n3DScaleValueMask_m[]
+
+	i=1
+	if bittest( gs_3DDetEnable, 0) then                                              ! Scale Sensitive in Value list, 1
+				n3DScaleValueMask[i] = stDetail[1]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_SCALESENS
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 1) then                                              ! Detailed in Value list,2
+				n3DScaleValueMask[i] = stDetail[2]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_DETAILED
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 2) then                                              ! Simple in Value list,4
+				n3DScaleValueMask[i] = stDetail[3]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_SIMPLE
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 3) then                                              ! Off in Value list,8
+				n3DScaleValueMask[i] = stDetail[4]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_OFF
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 4) then                                              ! Chinese Simple in Value list,16
+				n3DScaleValueMask[i] = stDetail[5]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_CHI_SIMPLE
+				i = i + 1
+	endif
+	if bittest( gs_3DDetEnable, 5) then                                              ! Chinese Detailed in Value list,32
+				n3DScaleValueMask[i] = stDetail[6]
+				n3DScaleValueMask_m[i] = DETLEVEL_DW3D_CHI_DETAILED
+				i = i + 1
+	endif
+
+	values{2} "iDWDet3D" n3DScaleValueMask_m, n3DScaleValueMask
+endif
+
+
+doorWidth = (ac_unit_width -(frameOrSLightWidthRight+frameOrSLightWidthLeft + gs_frame_width))/2
+doorHeight = ac_unit_height - (topPanelHeight + gs_frame_width * gs_door_transom + gs_frame_width/2)
+
+values "gs_rttl" range[1, 99]
+
+if (iDoorPanelType <> PANEL_STYLE7) & (iDoorPanelType <> PANEL_STYLE8) then
+	hideparameter "leafFrameWidth"
+	lock "leafFrameWidth"
+endif
+
+if iDoorPanelType <> PANEL_STYLE4 and iDoorPanelType <> PANEL_STYLE5 then HIDEPARAMETER "gs_lock_mat"
+
+!!! END OF DOOR !!!
+
+
+!! MULLION DEPTH=FRAME DEPTH !!
+if gs_md = 1 then
+	gs_grid_thk = gs_fthk
+	PARAMETERS gs_grid_thk = gs_grid_thk
+	gridThkVert = gs_fthk
+	PARAMETERS gridThkVert = gridThkVert
+	HIDEPARAMETER "gs_grid_thk", "gridThkVert"
+	LOCK "gs_grid_thk", "gridThkVert"
+endif
+!! END OF MULLION DEPTH=FRAME DEPTH !!
+
+!! GLASS SETBACK=1/2 MULLION !!
+if gs_gsmd=1 then
+	gs_gsb = MIN(gs_grid_thk,gridThkVert)/2-gs_glass_thk/2
+	PARAMETERS gs_gsb = gs_gsb
+	HIDEPARAMETER "gs_gsb"
+	LOCK "gs_gsb"
+endif
+!! END OF GLASS SETBACK=1/2 MULLION !!
+
+
+! =============================================================================
+! Onorm list Settings
+! =============================================================================
+
+if LibraryLangCode = "AUT" or LibraryLangCode = "CHE" or LibraryLangCode = "GER" then
+	call "Onorm_Door" parameters all
+else
+	hideparameter "gs_onorm_Title"
+endif
+
+! =============================================================================
+! SWE Label sash ID handling
+! =============================================================================
+gs_UTrans_Div = 0
+gs_LTrans_Div = 0
+
+if iDoorType = 1 then
+	gs_leaf_optype_m = 1 		!LEAF_1L_SIDE_HUNG
+else
+	gs_leaf_optype_m = 5 		!LEAF_2L_SIDE_HUNG
+endif
+parameters gs_leaf_optype_m = gs_leaf_optype_m
+
+if iStorefrontType = SFTYPE_DOOR_TRANSOM then
+	gs_optype_m_02 = 1			!SASH_FIXED
+	parameters	gs_optype_m_02 = gs_optype_m_02
+endif
+if iStorefrontType = SFTYPE_DOOR_TRSL then
+	gs_optype_m_02 = 1			!SASH_FIXED
+	gs_optype_m_05 = 1			!SASH_FIXED
+	gs_optype_m_06 = 1			!SASH_FIXED
+	gs_optype_m_09 = 1			!SASH_FIXED
+	gs_optype_m_10 = 1			!SASH_FIXED
+
+	parameters	gs_optype_m_09 = gs_optype_m_09,
+				gs_optype_m_10 = gs_optype_m_10,
+				gs_optype_m_02 = gs_optype_m_02,
+				gs_optype_m_05 = gs_optype_m_05,
+				gs_optype_m_06 = gs_optype_m_06
+
+	if gs_door_transom and (gs_sidelight_left or gs_sidelight_right) then
+		gs_UTrans_Div = 1
+	endif
+endif
+
+	call "winDoorCasIDmacro" parameters 	isSweDoorWindow			= 0,
+											sashRowNum				= 0,
+											sashColumnNum			= 0,
+											iWindowType				= 0,
+											iWindowClass			= 7,			!WINCLASS_DOORSASH
+											gs_bLeftSLight			= gs_sidelight_left,
+											gs_bSLight				= gs_sidelight_right,
+											gs_UTrans				= gs_door_transom,
+											gs_LTrans				= 0,
+											gs_UTrans_Div			= gs_UTrans_Div,
+											gs_LTrans_Div			= 0,
+											storeFrontSide1			= gs_sidelight_right,
+											storeFrontSide2			= gs_sidelight_left,
+											nDinamicSash			= 0
+
+
+! =============================================================================
+! Glass Area calculations
+! =============================================================================
+
+glassarea_counter = 0
+
+if iDoorType = 1 then
+	glassarea_counter = glassarea_counter + PanelGlassArea
+endif
+
+if iDoorType = 2 then
+	for i = 1 to 2
+		law	= lar
+		if i = 2 then	law	= lal
+
+		call "DoorLeafPanels" PARAMETERS		a						= law,
+												b						= ac_leaf_height,
+												iDoorPanelType			= iDoorPanelType,
+												stDoorTypes				= stDoorTypes,
+												gs_rebate_width			= 0,
+												gs_ds_w					= gs_ds_w,
+												bMiddleRail				= bMiddleRail,
+												gs_int_fw				= midRailWidth,
+												gs_fw_lower				= bottomRailWidth,
+												bStorefrontDoor			= 1,
+												bStorefrontClassic		= 1,
+												gs_fw_side				= leafFrameWidth,
+												bSecondPanel			= (iDoorType = 2),
+												gs_handle_type			= gs_handle_type,
+												gs_handle_type_m		= gs_handle_type_m,
+												gs_handle_type_out		= gs_handle_type_out,
+												gs_handle_type_out_m	= gs_handle_type_out_m,
+												gs_handle_type2_m		= gs_handle_type2_m,
+												gs_handle_type2_out		= gs_handle_type2_out,
+												gs_handle_type2_out_m	= gs_handle_type2_out_m,
+												bEnableKickBoard	= 1,
+												bSecondKickBoard	= 1,
+												bKickBoardOut		= bKickBoardOut,
+												bKickBoardIn		= bKickBoardIn,
+												bKickBoardOut2		= bKickBoardOut2,
+												bKickBoardIn2		= bKickBoardIn2,
+									returned_parameters	bLockMullionParams,
+														bLockGlassParams,
+														PanelGlassArea
+
+		glassarea_counter = glassarea_counter + PanelGlassArea
+	next i
+endif
+
+RightGlassArea = 0
+if gs_sidelight_right then
+		GlassHeight		= B - topPanelHeight - gs_fw_side_right - bottomRailWidth
+		MidRailHeight	= midRailWidth
+		GlassWidth		= rightPanelWidth - gs_fw_side_right + gs_right_g
+
+		RightGlassArea	= GlassWidth * GlassHeight
+		RightGlassArea	= RightGlassArea - gs_grid_w * GlassWidth * (gs_hor_gnum + gs_hor_gnumtr)
+		if bMiddleRail then RightGlassArea = RightGlassArea - midRailWidth * GlassWidth
+endif
+
+LeftGlassArea = 0
+if gs_sidelight_left then
+	GlassHeight		= B - topPanelHeight - gs_fw_side_left - bottomRailWidth
+	MidRailHeight	= midRailWidth
+	GlassWidth		= leftPanelWidth - gs_fw_side_left + gs_left_g
+
+	LeftGlassArea	= GlassWidth * GlassHeight
+	LeftGlassArea	= LeftGlassArea - gs_grid_w * GlassWidth * (gs_hor_gnum + gs_hor_gnumtr)
+	if bMiddleRail then LeftGlassArea = LeftGlassArea - midRailWidth * GlassWidth
+endif
+
+FullTransomArea	= 0
+if gs_door_transom then
+	GlassHeight		= topPanelHeight - gs_fw_upper
+
+	GlassWidth		= A - leftPanelWidth - RightPanelWidth - gs_fw_side_left - gs_fw_side_right
+	TransomArea 	= GlassWidth * GlassHeight
+	HorGridArea		= gs_hor_gtp * gs_grid_w * GlassWidth
+	VertGridArea	= gs_ver_gnum * gridWidthVert * GlassHeight
+	GrillSection	= gs_hor_gtp * gs_ver_gnum * gs_grid_w * gridWidthVert
+	TransomArea		= TransomArea - HorGridArea - VertGridArea + GrillSection
+
+	RightTransomArea = 0
+	if gs_sidelight_right then
+		GlassWidth			= rightPanelWidth - gs_fw_side_right + gs_right_g
+		RightTransomArea	= GlassWidth * GlassHeight
+		RightTransomArea	= RightTransomArea  - gs_hor_gtp * gs_grid_w * GlassWidth
+	endif
+
+	LeftTransomArea = 0
+	if gs_sidelight_left then
+		GlassWidth			= leftPanelWidth - gs_fw_side_left + gs_left_g
+		LeftTransomArea		= GlassWidth * GlassHeight
+		LeftTransomArea		= LeftTransomArea - gs_hor_gtp * gs_grid_w * GlassWidth
+	endif
+
+	FullTransomArea = RightTransomArea + LeftTransomArea + TransomArea
+endif
+
+! =============================================================================
+! Total Glazed Area Listing Parameters
+! =============================================================================
+if NOT(gs_list_glassarea_override) then
+	if GLOB_MODPAR_NAME = "gs_list_glassarea" then
+		gs_list_glassarea_tmp = gs_list_glassarea
+		parameters gs_list_glassarea_tmp = gs_list_glassarea_tmp
+	else
+		gs_list_glassarea = gs_list_glassarea_tmp
+		parameters gs_list_glassarea = gs_list_glassarea
+	endif
+
+	glassarea_counter = glassarea_counter + RightGlassArea + LeftGlassArea + FullTransomArea
+	parameters gs_list_glassarea = glassarea_counter
+	lock "gs_list_glassarea"
+else
+	if GLOB_MODPAR_NAME = "gs_list_glassarea" then
+		gs_list_glassarea_tmp = gs_list_glassarea
+		parameters gs_list_glassarea_tmp = gs_list_glassarea_tmp
+	else
+		gs_list_glassarea = gs_list_glassarea_tmp
+		parameters gs_list_glassarea = gs_list_glassarea
+	endif
+endif
+
+! =============================================================================
+! Zone Recognitions for Doors - Parapet wall Inset value calculation
+!		GLOB_ELEVATION				- UNconditional - Zone`s always flowing
+!		WIDO_REVEAL_SIDE			- conditional
+!		REVEAL (WIDO_SILL)			- conditional
+!		Sidelight Parapet Height	- conditional
+!
+! ParapetWallInset Values:	flowing: zero or more counting from the outside (reveal side)
+!		-EPS < >= WALL_THICKNESS
+! =============================================================================
+
+
+ZONE_RECOGNITION_NONE 		= 0
+ZONE_RECOGNITION_FULL 		= 1
+ZONE_RECOGNITION_OUTSIDE 	= 2
+ZONE_RECOGNITION_INSIDE 	= 3
+
+_isZoneFlow = 1
+if _isZoneFlow then
+	if WIDO_REVEAL_SIDE then
+		pwi = ZONE_RECOGNITION_INSIDE
+	else
+		pwi = ZONE_RECOGNITION_OUTSIDE
+	endif
+else
+	pwi = ZONE_RECOGNITION_NONE
+endif
+parameters pwi  = pwi
+
+
+end
+
+"preloadSurfaces":
+		parameters	stored_material[1][1]	= gs_frame_mat,
+					stored_material[1][2]	= gs_sash_mat,
+					stored_material[1][3]	= gs_leaf_mat,
+					stored_material[1][4]	= gs_midrail_mat,
+					stored_material[1][5]	= gs_leafMidrail_mat,
+					stored_material[1][6]	= gs_vertMull_mat
+return
+

@@ -1,0 +1,1246 @@
+
+unID = gs_hotspotUnIdBegin
+
+leftOvhg	=	max(gs_frame_ovhg_left_out, gs_frame_ovhg_left_in)
+rightOvhg	=	max(gs_frame_ovhg_right_out, gs_frame_ovhg_right_in)
+topOvhg		=	max(gs_frame_ovhg_top_out, gs_frame_ovhg_top_in)
+bottomOvhg	=	max(gs_frame_ovhg_bottom_out, gs_frame_ovhg_bottom_in)
+
+PaneWidthArray[1]	= PaneWidthArray[1] + gs_frame_offset_left
+PaneHeightArray[1]	= PaneHeightArray[1] + gs_frame_offset_lower
+
+
+! =============================================================================
+!
+! =============================================================================
+
+dim	SimpleSashArray[]
+dim	SashOffsetArray[]
+dim	SashCutArray[]
+
+bFoundNonSlidingSash = 0
+
+for iPane = 1 to gs_panes_number
+
+	CasementID = CasementIDArray[1][iPane]
+	if CasementID > 0 then
+		optype_act = optypeIDArray[CasementID]
+
+! =============================================================================
+
+		if lod3D = 1 | lod3D = 5 then
+			iSimpleSashFrameType = SIMPLESASH_NORMAL
+			if	optype_act = SASH_DOUBLE_SIDE_HUNG |\
+				optype_act = SASH_DOUBLE_TILT_TURN |\
+				optype_act = SASH_DOUBLE_TILT_TURN_M then iSimpleSashFrameType = SIMPLESASH_SIDEHUNG
+			if	optype_act = SASH_SLIDING_HOR |\
+				optype_act = SASH_SLIDING_HOR_M |\
+				optype_act = SASH_DOUBLE_SLIDING_HOR |\
+				optype_act = SASH_DOUBLE_SLIDING_HOR_M then iSimpleSashFrameType = SIMPLESASH_SLIDEHOR
+			if	optype_act = SASH_SLIDING_VER |\
+				optype_act = SASH_DOUBLE_SLIDING_VER then iSimpleSashFrameType = SIMPLESASH_SLIDEVER
+			SimpleSashArray[iPane] = iSimpleSashFrameType
+		else
+			SimpleSashArray[iPane] = SIMPLESASH_NONE
+		endif
+
+! =============================================================================
+
+		simp_mod = 0
+		if lod3D = 1 | lod3D = 5 then ! Simple | Chinese
+			if optype_act <> SASH_FIXED then simp_mod =  gs_sash_width - gs_rebate_width
+			if	optype_act = SASH_HOR_PIVOT |\
+				optype_act = SASH_VER_PIVOT |\
+				optype_act = SASH_VER_PIVOT_M |\
+				optype_act = SASH_SLIDING_HOR |\
+				optype_act = SASH_SLIDING_HOR_M |\
+				optype_act = SASH_DOUBLE_SLIDING_HOR |\
+				optype_act = SASH_DOUBLE_SLIDING_HOR_M |\
+				optype_act = SASH_SLIDING_VER |\
+				optype_act = SASH_DOUBLE_SLIDING_VER then simp_mod = gs_sash_width
+		else
+			if	optype_act = SASH_SLIDING_HOR |\
+				optype_act = SASH_SLIDING_HOR_M |\
+				optype_act = SASH_DOUBLE_SLIDING_HOR |\
+				optype_act = SASH_DOUBLE_SLIDING_HOR_M |\
+				optype_act = SASH_SLIDING_VER |\
+				optype_act = SASH_DOUBLE_SLIDING_VER then simp_mod = 0.0001
+		endif
+		SashOffsetArray[iPane] = simp_mod
+
+! =============================================================================
+
+		iSashCutType = SASHCUT_NONE
+		if not(lod3D = 1 | lod3D = 5) then ! Simple | Chinese
+			if	optype_act = SASH_FIXED_SCREW |\
+				optype_act = SASH_SIDE_HUNG |\
+				optype_act = SASH_SIDE_HUNG_M |\
+				optype_act = SASH_TILT_TURN |\
+				optype_act = SASH_TILT_TURN_M |\
+				optype_act = SASH_BOTTOM_HUNG |\
+				optype_act = SASH_TOP_HUNG |\
+				optype_act = SASH_DOUBLE_SIDE_HUNG |\
+				optype_act = SASH_DOUBLE_TILT_TURN |\
+				optype_act = SASH_DOUBLE_TILT_TURN_M then iSashCutType = SASHCUT_REBATE
+			if	optype_act = SASH_SLIDING_HOR |\
+				optype_act = SASH_SLIDING_HOR_M |\
+				optype_act = SASH_DOUBLE_SLIDING_HOR |\
+				optype_act = SASH_DOUBLE_SLIDING_HOR_M |\
+				optype_act = SASH_SLIDING_VER |\
+				optype_act = SASH_DOUBLE_SLIDING_VER then iSashCutType = SASHCUT_MIDDLE
+		endif
+		SashCutArray[iPane] = iSashCutType
+
+		if	optype_act <> SASH_SLIDING_HOR &\
+			optype_act <> SASH_SLIDING_HOR_M &\
+			optype_act <> SASH_DOUBLE_SLIDING_HOR &\
+			optype_act <> SASH_DOUBLE_SLIDING_HOR_M &\
+			optype_act <> SASH_SLIDING_VER &\
+			optype_act <> SASH_DOUBLE_SLIDING_VER then bFoundNonSlidingSash = 1
+	else
+		SimpleSashArray[iPane]	= SIMPLESASH_NONE
+		SashOffsetArray[iPane]	= 0
+		SashCutArray[iPane]		= SASHCUT_NONE
+	endif
+next iPane
+
+if not(bFoundNonSlidingSash) & lod3D = 2 then
+	for iPane = 1 to gs_panes_number
+			SashOffsetArray[iPane]	= 0
+			SashCutArray[iPane]		= SASHCUT_NONE
+	next iPane
+
+	gs_rebate_depth = gs_frame_thk / 2
+endif
+
+
+! =============================================================================
+!
+! =============================================================================
+
+leftOutX 		= -a/2 - leftOvhg
+leftInX			= -a/2 + gs_frame_width_left
+rightOutX  		=  a/2 + rightOvhg
+rightInX		=  a/2 - gs_frame_width
+bottomOutY		= -bottomOvhg
+bottomInY		=  gs_frame_width_lower
+topOutY			= b + topOvhg
+topInY			= b - gs_frame_width_upper
+
+dim SashLeftX[]
+dim SashRightX[]
+dim SashTopY[]
+dim SashBottomY[]
+
+sumPaneWidths = 0
+sumPaneHeights = 0
+for iPane = 1 to gs_panes_number
+	if bHorizMultisashWindow then
+		if iPane = 1 then
+			if bLeftFrame then
+				SashLeftX[iPane] = leftInX
+			else
+				SashLeftX[iPane] = leftOutX
+			endif
+		else
+			SashLeftX[iPane] = -A/2 + sumPaneWidths + MullionWidthArray[iPane-1]/2
+		endif
+		if iPane = gs_panes_number then
+			if bRightFrame then
+				SashRightX[iPane] = rightInX
+			else
+				SashRightX[iPane] = rightOutX
+			endif
+		else
+			sumPaneWidths = sumPaneWidths + PaneWidthArray[iPane]
+			SashRightX[iPane] = -A/2 + sumPaneWidths - MullionWidthArray[iPane]/2
+		endif
+
+		SashTopY[iPane]		= topInY
+		SashBottomY[iPane]	= bottomInY
+	else
+		if bLeftFrame then
+			SashLeftX[iPane] = leftInX
+		else
+			SashLeftX[iPane] = leftOutX
+		endif
+		if bRightFrame then
+			SashRightX[iPane] = rightInX
+		else
+			SashRightX[iPane] = rightOutX
+		endif
+
+		if iPane = 1 then
+			SashBottomY[iPane] = bottomInY
+		else
+			SashBottomY[iPane] = sumPaneHeights + TransomWidthArray[iPane-1]/2
+		endif
+		if iPane = gs_panes_number then
+			SashTopY[iPane] = topInY
+		else
+			sumPaneHeights = sumPaneHeights + PaneHeightArray[iPane]
+			SashTopY[iPane] = sumPaneHeights - TransomWidthArray[iPane]/2		
+		endif
+	endif
+next iPane
+
+
+! =============================================================================
+! Hotspot Editing
+! =============================================================================
+
+if bHorizMultisashWindow then
+	if gs_repeat_modules & not(bFirstModule) then
+		hotspot -A/2 + gs_frame_offset_left, 0, 0, unID
+		hotspot -A/2 + gs_frame_offset_left, B, 0, unID+1
+	endif
+	unID = unID+2
+
+	if gs_panes_number > 1 then
+		_BaseHotspotX = -A/2 + gs_frame_offset_left
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_01,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_01,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_01,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_01,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_01, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_01, 3
+			hotspot _BaseHotspotX + PaneWidth_01,	0, 0, unID+2, PaneWidth_01, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_01, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_01, 3
+			hotspot _BaseHotspotX + PaneWidth_01,	B, 0, unID+5, PaneWidth_01, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 2 then
+		_BaseHotspotX = _BaseHotspotX + PaneWidth_01
+
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_02,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_02,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_02,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_02,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_02, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_02, 3
+			hotspot _BaseHotspotX + PaneWidth_02,	0, 0, unID+2, PaneWidth_02, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_02, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_02, 3
+			hotspot _BaseHotspotX + PaneWidth_02,	B, 0, unID+5, PaneWidth_02, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 3 then
+		_BaseHotspotX = _BaseHotspotX + PaneWidth_02
+
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_03,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_03,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_03,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_03,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_03, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_03, 3
+			hotspot _BaseHotspotX + PaneWidth_03,	0, 0, unID+2, PaneWidth_03, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_03, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_03, 3
+			hotspot _BaseHotspotX + PaneWidth_03,	B, 0, unID+5, PaneWidth_03, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 4 then
+		_BaseHotspotX = _BaseHotspotX + PaneWidth_03
+
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_04,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_04,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_04,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_04,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_04, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_04, 3
+			hotspot _BaseHotspotX + PaneWidth_04,	0, 0, unID+2, PaneWidth_04, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_04, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_04, 3
+			hotspot _BaseHotspotX + PaneWidth_04,	B, 0, unID+5, PaneWidth_04, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 5 then
+		_BaseHotspotX = _BaseHotspotX + PaneWidth_04
+
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_05,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_05,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_05,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_05,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_05, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_05, 3
+			hotspot _BaseHotspotX + PaneWidth_05,	0, 0, unID+2, PaneWidth_05, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_05, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_05, 3
+			hotspot _BaseHotspotX + PaneWidth_05,	B, 0, unID+5, PaneWidth_05, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 6 then
+		_BaseHotspotX = _BaseHotspotX + PaneWidth_05
+
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_06,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_06,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_06,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_06,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_06, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_06, 3
+			hotspot _BaseHotspotX + PaneWidth_06,	0, 0, unID+2, PaneWidth_06, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_06, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_06, 3
+			hotspot _BaseHotspotX + PaneWidth_06,	B, 0, unID+5, PaneWidth_06, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 7 then
+		_BaseHotspotX = _BaseHotspotX + PaneWidth_06
+
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_07,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_07,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_07,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_07,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_07, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_07, 3
+			hotspot _BaseHotspotX + PaneWidth_07,	0, 0, unID+2, PaneWidth_07, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_07, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_07, 3
+			hotspot _BaseHotspotX + PaneWidth_07,	B, 0, unID+5, PaneWidth_07, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 8 then
+		_BaseHotspotX = _BaseHotspotX + PaneWidth_07
+
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_08,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_08,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_08,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_08,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_08, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_08, 3
+			hotspot _BaseHotspotX + PaneWidth_08,	0, 0, unID+2, PaneWidth_08, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_08, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_08, 3
+			hotspot _BaseHotspotX + PaneWidth_08,	B, 0, unID+5, PaneWidth_08, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 9 then
+		_BaseHotspotX = _BaseHotspotX + PaneWidth_08
+
+		if gs_iPanesConfig = PANESCONFIG_UNIFORM then
+			hotspot _BaseHotspotX + PaneWidth_09,	0, 0, unID+2
+			hotspot _BaseHotspotX + PaneWidth_09,	B, 0, unID+5
+			hotspot _BaseHotspotX + PaneWidth_09,	0, gs_frame_thk
+			hotspot _BaseHotspotX + PaneWidth_09,	B, gs_frame_thk
+		else
+			hotspot _BaseHotspotX,					0, 0, unID, PaneWidth_09, 1+128
+			hotspot _BaseHotspotX - 1,				0, 0, unID+1, PaneWidth_09, 3
+			hotspot _BaseHotspotX + PaneWidth_09,	0, 0, unID+2, PaneWidth_09, 2
+
+			hotspot _BaseHotspotX,					B, 0, unID+3, PaneWidth_09, 1+128
+			hotspot _BaseHotspotX - 1,				B, 0, unID+4, PaneWidth_09, 3
+			hotspot _BaseHotspotX + PaneWidth_09,	B, 0, unID+5, PaneWidth_09, 2
+		endif
+		unID = unID+6
+	endif
+else
+	if gs_repeat_modules & not(bFirstModule) then
+		hotspot -A/2,	gs_frame_offset_lower, 0, unID
+		hotspot A/2,	gs_frame_offset_lower, 0, unID+1
+	endif
+	unID = unID+2
+
+	if gs_panes_number > 1 then
+		_BaseHotspotY = gs_frame_offset_lower
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_01,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_01,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_01,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_01,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_01, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_01, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_01,	0, unID+2, PaneHeight_01, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_01, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_01, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_01,		0, unID+5, PaneHeight_01, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 2 then
+		_BaseHotspotY = _BaseHotspotY + PaneHeight_01
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_02,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_02,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_02,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_02,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_02, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_02, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_02,	0, unID+2, PaneHeight_02, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_02, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_02, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_02,		0, unID+5, PaneHeight_02, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 3 then
+		_BaseHotspotY = _BaseHotspotY + PaneHeight_02
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_03,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_03,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_03,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_03,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_03, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_03, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_03,	0, unID+2, PaneHeight_03, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_03, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_03, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_03,		0, unID+5, PaneHeight_03, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 4 then
+		_BaseHotspotY = _BaseHotspotY + PaneHeight_03
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_04,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_04,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_04,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_04,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_04, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_04, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_04,	0, unID+2, PaneHeight_04, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_04, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_04, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_04,		0, unID+5, PaneHeight_04, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 5 then
+		_BaseHotspotY = _BaseHotspotY + PaneHeight_04
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_05,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_05,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_05,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_05,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_05, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_05, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_05,	0, unID+2, PaneHeight_05, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_05, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_05, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_05,		0, unID+5, PaneHeight_05, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 6 then
+		_BaseHotspotY = _BaseHotspotY + PaneHeight_05
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_06,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_06,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_06,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_06,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_06, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_06, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_06,	0, unID+2, PaneHeight_06, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_06, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_06, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_06,		0, unID+5, PaneHeight_06, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 7 then
+		_BaseHotspotY = _BaseHotspotY + PaneHeight_06
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_07,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_07,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_07,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_07,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_07, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_07, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_07,	0, unID+2, PaneHeight_07, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_07, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_07, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_07,		0, unID+5, PaneHeight_07, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 8 then
+		_BaseHotspotY = _BaseHotspotY + PaneHeight_07
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_08,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_08,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_08,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_08,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_08, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_08, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_08,	0, unID+2, PaneHeight_08, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_08, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_08, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_08,		0, unID+5, PaneHeight_08, 2
+		endif
+		unID = unID+6
+	endif
+
+	if gs_panes_number > 9 then
+		_BaseHotspotY = _BaseHotspotY + PaneHeight_08
+
+		if gs_iPanesConfigVertical = PANESCONFIG_UNIFORM then
+			hotspot -A/2, _BaseHotspotY + PaneHeight_09,	0, unID+2
+			hotspot A/2, _BaseHotspotY + PaneHeight_09,		0, unID+5
+			hotspot -A/2, _BaseHotspotY + PaneHeight_09,	gs_frame_thk
+			hotspot A/2, _BaseHotspotY + PaneHeight_09,		gs_frame_thk
+		else
+			hotspot -A/2, _BaseHotspotY,					0, unID, PaneHeight_09, 1+128
+			hotspot -A/2, _BaseHotspotY - 1,				0, unID+1, PaneHeight_09, 3
+			hotspot -A/2, _BaseHotspotY + PaneHeight_09,	0, unID+2, PaneHeight_09, 2
+
+			hotspot A/2, _BaseHotspotY,						0, unID+3, PaneHeight_09, 1+128
+			hotspot A/2, _BaseHotspotY - 1,					0, unID+4, PaneHeight_09, 3
+			hotspot A/2, _BaseHotspotY + PaneHeight_09,		0, unID+5, PaneHeight_09, 2
+		endif
+		unID = unID+6
+	endif
+endif
+
+
+! =============================================================================
+! Unit Hotspots
+! =============================================================================
+
+if bShowUnitHotspots then
+	unID = 100
+
+	hotspot  a/2, 0, 0,				unID: unID=unID+1
+	hotspot -a/2, 0, 0,				unID: unID=unID+1
+	hotspot  a/2, 0, gs_frame_thk,	unID: unID=unID+1
+	hotspot -a/2, 0, gs_frame_thk,	unID: unID=unID+1
+
+	hotspot  a/2, b, 0,				unID: unID=unID+1
+	hotspot -a/2, b, 0,				unID: unID=unID+1
+	hotspot  a/2, b, gs_frame_thk,	unID: unID=unID+1
+	hotspot -a/2, b, gs_frame_thk,	unID: unID=unID+1
+
+endif
+
+
+! =============================================================================
+! Frame
+! =============================================================================
+
+if gs_frame_pen_cont < 0.5 then gs_frame_pen_cont = SYMB_SECT_PEN
+if gs_fillFr < 0.5 then gs_fillFr = SYMB_FILL
+if gs_penFr_bg < 0.5 then gs_penFr_bg = SYMB_FBGD_PEN
+if gs_penFr_fg < 0.5 then gs_penFr_fg = SYMB_FILL_PEN
+
+group "frame"
+
+	cutnum = 0
+
+	pen gs_frame_pen_cont
+	sect_fill gs_fillFr, gs_penFr_bg, gs_penFr_fg, gs_frame_pen_cont
+
+	pen gs_frame_pen
+
+	! --- Cutting in case of corner window -----------------------------------------
+	halfA = A / 2
+
+	if abs(gs_frame_ovhg_left_out - gs_frame_ovhg_left_in) > EPS then
+		addx -halfA - gs_frame_ovhg_left_out
+		rotz 90
+		cutplane -90 + atn((gs_frame_ovhg_left_out - gs_frame_ovhg_left_in) / gs_frame_thk)
+		del 2
+		cutnum = cutnum + 1
+	endif
+
+	if abs(gs_frame_ovhg_right_out - gs_frame_ovhg_right_in) > EPS then
+		addx halfA + gs_frame_ovhg_right_out
+		rotz 90
+		cutplane 90 - atn((gs_frame_ovhg_right_out - gs_frame_ovhg_right_in) / gs_frame_thk)
+		del 2
+		cutnum = cutnum + 1
+	endif
+
+	if abs(gs_frame_ovhg_top_out - gs_frame_ovhg_top_in) > EPS then
+		addy B + gs_frame_ovhg_top_out
+		rotz 90
+		roty -90 - atn((gs_frame_ovhg_top_out - gs_frame_ovhg_top_in) / gs_frame_thk)
+		cutplane 180
+		del 3
+		cutnum = cutnum + 1
+	endif
+
+	if abs(gs_frame_ovhg_bottom_out - gs_frame_ovhg_bottom_in) > EPS then
+		addy -gs_frame_ovhg_bottom_out
+		rotz 90
+		roty 90 + atn((gs_frame_ovhg_bottom_out - gs_frame_ovhg_bottom_in) / gs_frame_thk)
+		cutplane 180
+		del 3
+		cutnum = cutnum + 1
+	endif
+
+	! --- Handling Inner-outer Materials -------------------------------------------
+
+	if (gs_frame_mat = gs_frame_mat2) | bNoRebate then				! One body, in case of similar materials or frame without rebate (Vent Window)
+		if bNoRebate then
+			if bOpeningDirectionInside then
+				var_mater = gs_frame_mat
+				var_mater2 = gs_frame_mat2
+			else
+				var_mater = gs_frame_mat2
+				var_mater2 = gs_frame_mat
+			endif
+		else
+			var_mater = gs_frame_mat
+			var_mater2 = gs_frame_mat
+		endif
+	
+		in_out_cikl = 1
+		out_thk = 0
+		part_thk = gs_frame_thk
+	else												! two bodies
+		in_out_cikl = 2
+
+	! --- Inner-outer Material Control ---------------------------------------------
+
+		temp_frame_mat	= gs_frame_mat
+		temp_frame_mat2	= gs_frame_mat2
+
+		if bOpeningDirectionInside then
+			gs_frame_mat	= temp_frame_mat
+			gs_frame_mat2	= temp_frame_mat2
+		else
+			gs_frame_mat	= temp_frame_mat2
+			gs_frame_mat2	= temp_frame_mat
+		endif
+
+		var_mater	= gs_frame_mat
+		var_mater2	= gs_frame_mat2
+
+		if lod3D = 2 then	! Detailed
+			out_thk = gs_frame_thk - gs_rebate_depth
+			part_thk = out_thk
+		else
+			if lod3D = 5 then
+				out_thk = gs_frame_thk/2
+			else
+				if bOpeningDirectionInside then
+					out_thk = gs_frame_thk/2 - gs_glass_thk/2
+				else
+					out_thk = gs_frame_thk/2 + gs_glass_thk/2
+				endif
+			endif
+			part_thk = out_thk
+		endif
+	endif
+
+	for ijk = 1 to in_out_cikl
+		material var_mater
+
+	! --- Left Side ----------------------------------------------------------------
+		if bLeftFrame then
+			if bHorizMultisashWindow then
+				top_idx = 1
+			else
+				top_idx = gs_panes_number
+			endif
+			bottom_idx = 1
+
+			put SashLeftX[top_idx] + SashOffsetArray[top_idx], SashTopY[top_idx] - SashOffsetArray[top_idx], 10
+
+			if gs_SashText_typ_num = MITERED_JOINT then
+				put	leftOutX,	topOutY,				15 - gs_stack_left * 7,
+					leftOutX,	bottomOutY,				10 - gs_stack_left * 2
+			else
+				put leftOutX, SashTopY[top_idx] - SashOffsetArray[top_idx], 13 - gs_stack_left * 5
+
+				put leftOutX, SashBottomY[bottom_idx] + SashOffsetArray[bottom_idx], 8
+			endif
+
+			put SashLeftX[bottom_idx] + SashOffsetArray[bottom_idx], SashBottomY[bottom_idx] + SashOffsetArray[bottom_idx], 15
+
+		! --- Masking to mullion and simple sash frame ---
+			idx = 1
+
+			if SimpleSashArray[idx] = SIMPLESASH_SLIDEVER then
+				simpleSashDivY = SashBottomY[idx] + (SashTopY[idx] - SashBottomY[idx]) / 2
+				put	SashLeftX[idx] + SashOffsetArray[idx],	simpleSashDivY - gs_sash_width/2,	10,
+					SashLeftX[idx] + SashOffsetArray[idx],	simpleSashDivY + gs_sash_width/2,	15
+			endif
+
+			if not(bHorizMultisashWindow) & gs_panes_number > 1 then
+				for iPane = 1 to gs_panes_number
+					if iPane > 1 then
+						if SimpleSashArray[iPane] = SIMPLESASH_SLIDEVER then
+							simpleSashDivY = SashBottomY[iPane] + (SashTopY[iPane] - SashBottomY[iPane]) / 2
+							put	SashLeftX[iPane] + SashOffsetArray[iPane],	simpleSashDivY - gs_sash_width/2,	10,
+								SashLeftX[iPane] + SashOffsetArray[iPane],	simpleSashDivY + gs_sash_width/2,	15
+						endif
+					endif
+
+					if iPane < gs_panes_number then
+						put	SashLeftX[iPane] + SashOffsetArray[iPane],		SashTopY[iPane] - SashOffsetArray[iPane], 10
+						put	SashLeftX[iPane+1] + SashOffsetArray[iPane+1],	SashBottomY[iPane+1] + SashOffsetArray[iPane+1], 15
+					endif
+				next iPane
+			endif
+
+			base
+			cprism_ var_mater2,var_mater,var_mater,
+					nsp/3, part_thk,
+					get(nsp)
+			gosub 1000
+		endif
+
+	! --- Right Side ---------------------------------------------------------------
+		if bRightFrame then
+			top_idx = gs_panes_number
+			if bHorizMultisashWindow then
+				bottom_idx = gs_panes_number
+			else
+				bottom_idx = 1
+			endif
+
+			put SashRightX[top_idx] - SashOffsetArray[top_idx], SashTopY[top_idx] - SashOffsetArray[top_idx], 10
+
+			if gs_SashText_typ_num = MITERED_JOINT then
+				put	rightOutX,	topOutY,				15 - gs_stack_right * 7,
+					rightOutX,	bottomOutY,				10 - gs_stack_right * 2
+			else
+				put rightOutX, SashTopY[top_idx] - SashOffsetArray[top_idx], 13 - gs_stack_right * 5
+				put rightOutX, SashBottomY[bottom_idx] + SashOffsetArray[bottom_idx], 8
+			endif
+
+			put SashRightX[bottom_idx] - SashOffsetArray[bottom_idx], SashBottomY[bottom_idx] + SashOffsetArray[bottom_idx], 15
+
+		! --- Masking to mullion and simple sash frame ---
+			if bHorizMultisashWindow then
+				idx = gs_panes_number
+			else
+				idx = 1
+			endif
+
+			if SimpleSashArray[idx] = SIMPLESASH_SLIDEVER then
+				simpleSashDivY = SashBottomY[idx] + (SashTopY[idx] - SashBottomY[idx]) / 2
+				put	SashRightX[idx] - SashOffsetArray[idx],	simpleSashDivY - gs_sash_width/2,	10,
+					SashRightX[idx] - SashOffsetArray[idx],	simpleSashDivY + gs_sash_width/2,	15
+			endif
+
+			if not(bHorizMultisashWindow) & gs_panes_number > 1 then
+				for iPane=1 to gs_panes_number
+					if iPane > 1 then
+						if SimpleSashArray[iPane] = SIMPLESASH_SLIDEVER then
+							simpleSashDivY = SashBottomY[iPane] + (SashTopY[iPane] - SashBottomY[iPane]) / 2
+							put	SashRightX[iPane] - SashOffsetArray[iPane],	simpleSashDivY - gs_sash_width/2,	10,
+								SashRightX[iPane] - SashOffsetArray[iPane],	simpleSashDivY + gs_sash_width/2,	15
+						endif
+					endif
+
+					if iPane < gs_panes_number then
+						put	SashRightX[iPane] - SashOffsetArray[iPane],		SashTopY[iPane] - SashOffsetArray[iPane], 10
+						put	SashRightX[iPane+1] - SashOffsetArray[iPane+1],	SashBottomY[iPane+1] + SashOffsetArray[iPane+1], 15
+					endif
+				next iPane
+			endif
+
+			base
+			cprism_ var_mater2,var_mater,var_mater,
+					nsp/3, part_thk,
+					get(nsp)
+			gosub 1010
+		endif
+
+	! --- Top -------------------------------------------------------------------
+		idx = gs_panes_number
+
+		if bRightFrame then
+			put	SashRightX[idx] - SashOffsetArray[idx],	SashTopY[idx] - SashOffsetArray[idx], 10
+		else
+			if gs_SashText_typ_num = MITERED_JOINT then
+				put	rightOutX,	SashTopY[idx] - SashOffsetArray[idx], 15
+			endif
+		endif
+
+		if gs_SashText_typ_num = BUTT_JOINT then
+			put	rightOutX,	SashTopY[idx] - SashOffsetArray[idx], 13 - gs_stack_right * 5
+		endif
+
+	! --- Masking corners ---
+		top_mask = 15
+		if gs_stack_right then top_mask = 13
+		if gs_stack_top then top_mask = 8
+
+		top_mask_2 = 15
+		if gs_SashText_typ_num = BUTT_JOINT | not(bLeftFrame) then
+			if gs_stack_left then
+				top_mask_2 = 8
+			else
+				if gs_stack_top then
+					top_mask_2 = 13
+				else
+					top_mask_2 = 15
+				endif
+			endif
+		endif
+		if gs_SashText_typ_num = MITERED_JOINT & bLeftFrame then
+			if gs_stack_left or gs_stack_top then
+				top_mask_2 = 8
+			else
+				top_mask_2 = 10
+			endif
+		endif
+
+		put			rightOutX,		topOutY,				top_mask,
+					leftOutX,		topOutY,				top_mask_2
+
+		if bHorizMultisashWindow then
+			idx = 1
+		else
+			idx = gs_panes_number
+		endif
+
+		if gs_SashText_typ_num = BUTT_JOINT then
+			put	leftOutX,	SashTopY[idx] - SashOffsetArray[idx], 15 - bLeftFrame * 7
+		endif
+
+		if bLeftFrame then
+			put	SashLeftX[idx] + SashOffsetArray[idx],	SashTopY[idx] - SashOffsetArray[idx], 15
+		else
+			if gs_SashText_typ_num = MITERED_JOINT then
+				put	leftOutX,	SashTopY[idx] - SashOffsetArray[idx],	15
+			endif
+		endif
+
+	! --- Masking to mullion and simple sash frame ---
+		if bHorizMultisashWindow then
+			idx = 1
+		else
+			idx = gs_panes_number
+		endif
+
+		if SimpleSashArray[idx] = SIMPLESASH_SLIDEHOR | SimpleSashArray[idx] = SIMPLESASH_SIDEHUNG then
+			simpleSashDivx = SashLeftX[idx] + (SashRightX[idx] - SashLeftX[idx]) / 2
+			if SimpleSashArray[idx] = SIMPLESASH_SLIDEHOR then
+				put	simpleSashDivx - gs_sash_width/2,	SashTopY[idx] - SashOffsetArray[idx],	10,
+					simpleSashDivx + gs_sash_width/2,	SashTopY[idx] - SashOffsetArray[idx],	15
+			else
+				put	simpleSashDivx - gs_sash_width,	SashTopY[idx] - SashOffsetArray[idx],	10,
+					simpleSashDivx + gs_sash_width,	SashTopY[idx] - SashOffsetArray[idx],	15
+			endif
+		endif
+
+		if bHorizMultisashWindow & gs_panes_number > 1 then
+			for iPane = 1 to gs_panes_number
+				if iPane > 1 then
+					if SimpleSashArray[iPane] = SIMPLESASH_SLIDEHOR | SimpleSashArray[iPane] = SIMPLESASH_SIDEHUNG then
+						simpleSashDivx = SashLeftX[iPane] + (SashRightX[iPane] - SashLeftX[iPane]) / 2
+						if SimpleSashArray[iPane] = SIMPLESASH_SLIDEHOR then
+							put	simpleSashDivx - gs_sash_width/2,	SashTopY[iPane] - SashOffsetArray[iPane],	10,
+								simpleSashDivx + gs_sash_width/2,	SashTopY[iPane] - SashOffsetArray[iPane],	15
+						else
+							put	simpleSashDivx - gs_sash_width,	SashTopY[iPane] - SashOffsetArray[iPane],	10,
+								simpleSashDivx + gs_sash_width,	SashTopY[iPane] - SashOffsetArray[iPane],	15
+						endif
+					endif
+				endif
+
+				if iPane < gs_panes_number then
+					put	SashRightX[iPane] - SashOffsetArray[iPane],		SashTopY[iPane] - SashOffsetArray[iPane], 10
+					put	SashLeftX[iPane+1] + SashOffsetArray[iPane+1],	SashTopY[iPane+1] - SashOffsetArray[iPane+1], 15
+				endif
+			next iPane
+		endif
+
+		base
+		cprism_ var_mater2,var_mater,var_mater,
+				nsp/3, part_thk,
+				get (nsp)
+		gosub 2000
+
+
+	! --- Bottom -------------------------------------------------------------------
+		if bHorizMultisashWindow then
+			idx = gs_panes_number
+		else
+			idx = 1
+		endif
+
+		if bRightFrame then
+			put	SashRightX[idx] - SashOffsetArray[idx],	SashBottomY[idx] + SashOffsetArray[idx], 10
+		else
+			if gs_SashText_typ_num = MITERED_JOINT then
+				put	rightOutX,	SashBottomY[idx] + SashOffsetArray[idx], 15
+			endif
+		endif
+
+		if gs_SashText_typ_num = BUTT_JOINT then
+			put	rightOutX,	SashBottomY[idx] + SashOffsetArray[idx], 13 - gs_stack_right * 5
+		endif
+
+	! --- Masking corners ---
+		bottom_mask = 15
+		if gs_stack_right then bottom_mask = 13
+		if gs_stack_bottom then bottom_mask = 8
+
+		bottom_mask_2 = 15
+		if gs_SashText_typ_num = BUTT_JOINT | not(bLeftFrame) then
+			if gs_stack_left then
+				bottom_mask_2 = 8
+			else
+				if gs_stack_bottom then
+					bottom_mask_2 = 13
+				else
+					bottom_mask_2 = 15
+				endif
+			endif
+		endif
+		if gs_SashText_typ_num = MITERED_JOINT & bLeftFrame then
+			if gs_stack_left or gs_stack_bottom then
+				bottom_mask_2 = 8
+			else
+				bottom_mask_2 = 10
+			endif
+		endif
+
+		put			rightOutX,		bottomOutY,				bottom_mask,
+					leftOutX,		bottomOutY,				bottom_mask_2
+
+		idx = 1
+
+		if gs_SashText_typ_num = BUTT_JOINT then
+			put	leftOutX,	SashBottomY[idx] + SashOffsetArray[idx], 15 - bLeftFrame * 7
+		endif
+
+		if bLeftFrame then
+			put	SashLeftX[idx] + SashOffsetArray[idx],	SashBottomY[idx] + SashOffsetArray[idx], 15
+		else
+			if gs_SashText_typ_num = MITERED_JOINT then
+				put	leftOutX,	SashBottomY[idx] + SashOffsetArray[idx],	15
+			endif
+		endif
+
+	! --- Masking to mullion and simple sash frame ---
+		iPane = 1
+		if SimpleSashArray[iPane] = SIMPLESASH_SLIDEHOR | SimpleSashArray[iPane] = SIMPLESASH_SIDEHUNG then
+			simpleSashDivx = SashLeftX[iPane] + (SashRightX[iPane] - SashLeftX[iPane]) / 2
+			if SimpleSashArray[iPane] = SIMPLESASH_SLIDEHOR then
+				put	simpleSashDivx - gs_sash_width/2,	SashBottomY[iPane] + SashOffsetArray[iPane],	10,
+					simpleSashDivx + gs_sash_width/2,	SashBottomY[iPane] + SashOffsetArray[iPane],	15
+			else
+				put	simpleSashDivx - gs_sash_width,	SashBottomY[iPane] + SashOffsetArray[iPane],	10,
+					simpleSashDivx + gs_sash_width,	SashBottomY[iPane] + SashOffsetArray[iPane],	15
+			endif
+		endif
+
+		if bHorizMultisashWindow & gs_panes_number > 1 then
+			for iPane = 1 to gs_panes_number
+				if iPane > 1 then
+					if SimpleSashArray[iPane] = SIMPLESASH_SLIDEHOR | SimpleSashArray[iPane] = SIMPLESASH_SIDEHUNG then
+						simpleSashDivx = SashLeftX[iPane] + (SashRightX[iPane] - SashLeftX[iPane]) / 2
+						if SimpleSashArray[iPane] = SIMPLESASH_SLIDEHOR then
+							put	simpleSashDivx - gs_sash_width/2,	SashBottomY[iPane] + SashOffsetArray[iPane],	10,
+								simpleSashDivx + gs_sash_width/2,	SashBottomY[iPane] + SashOffsetArray[iPane],	15
+						else
+							put	simpleSashDivx - gs_sash_width,	SashBottomY[iPane] + SashOffsetArray[iPane],	10,
+								simpleSashDivx + gs_sash_width,	SashBottomY[iPane] + SashOffsetArray[iPane],	15
+						endif
+					endif
+				endif
+
+				if iPane < gs_panes_number then
+					put	SashRightX[iPane] - SashOffsetArray[iPane],		SashBottomY[iPane] + SashOffsetArray[iPane], 10
+					put	SashLeftX[iPane+1] + SashOffsetArray[iPane+1],	SashBottomY[iPane+1] + SashOffsetArray[iPane+1], 15
+				endif
+			next iPane
+		endif
+
+		base
+		cprism_ var_mater2,var_mater,var_mater,
+				nsp/3, part_thk,
+				get (nsp)
+		gosub 2000
+
+! Vertical Mullions --------------------------------------------------------
+		if bHorizMultisashWindow then
+			for iPane = 1 to gs_panes_number-1
+				put	SashRightX[iPane] - SashOffsetArray[iPane],		SashBottomY[iPane] + SashOffsetArray[iPane], 15
+
+				if SimpleSashArray[iPane] = SIMPLESASH_SLIDEVER then
+					simpleSashDivY = SashBottomY[iPane] + (SashTopY[iPane] - SashBottomY[iPane]) / 2
+					put	SashRightX[iPane] - SashOffsetArray[iPane],	simpleSashDivY - gs_sash_width/2,	10,
+						SashRightX[iPane] - SashOffsetArray[iPane],	simpleSashDivY + gs_sash_width/2,	15
+				endif
+
+				put	SashRightX[iPane] - SashOffsetArray[iPane],		SashTopY[iPane] - SashOffsetArray[iPane], 10,
+					SashLeftX[iPane+1] + SashOffsetArray[iPane+1],	SashTopY[iPane+1] - SashOffsetArray[iPane+1], 15
+
+				if SimpleSashArray[iPane+1] = SIMPLESASH_SLIDEVER then
+					simpleSashDivY = SashBottomY[iPane+1] + (SashTopY[iPane+1] - SashBottomY[iPane+1]) / 2
+					put	SashLeftX[iPane+1] + SashOffsetArray[iPane+1],	simpleSashDivY + gs_sash_width/2,	10,
+						SashLeftX[iPane+1] + SashOffsetArray[iPane+1],	simpleSashDivY - gs_sash_width/2,	15
+				endif
+
+				put	SashLeftX[iPane+1] + SashOffsetArray[iPane+1],	SashBottomY[iPane+1] + SashOffsetArray[iPane+1], 10
+
+				base
+				cprism_ var_mater2,var_mater,var_mater,
+						nsp/3, part_thk,
+						get(nsp)
+				gosub 1000
+			next iPane
+		else
+
+! Horizontal Mullions --------------------------------------------------------
+			for iPane = 1 to gs_panes_number-1
+
+				put	SashRightX[iPane] - SashOffsetArray[iPane],		SashTopY[iPane] - SashOffsetArray[iPane], 15
+
+				if SimpleSashArray[iPane] = SIMPLESASH_SLIDEHOR | SimpleSashArray[iPane] = SIMPLESASH_SIDEHUNG then
+					simpleSashDivx = SashLeftX[iPane] + (SashRightX[iPane] - SashLeftX[iPane]) / 2
+					if SimpleSashArray[iPane] = SIMPLESASH_SLIDEHOR then
+						put	simpleSashDivx + gs_sash_width/2,	SashTopY[iPane] - SashOffsetArray[iPane],	10,
+							simpleSashDivx - gs_sash_width/2,	SashTopY[iPane] - SashOffsetArray[iPane],	15
+					else
+						put	simpleSashDivx + gs_sash_width,	SashTopY[iPane] - SashOffsetArray[iPane],	10,
+							simpleSashDivx - gs_sash_width,	SashTopY[iPane] - SashOffsetArray[iPane],	15
+					endif
+				endif
+
+				put	SashLeftX[iPane] + SashOffsetArray[iPane],		SashTopY[iPane] - SashOffsetArray[iPane], 10,
+					SashLeftX[iPane+1] + SashOffsetArray[iPane+1],	SashBottomY[iPane+1] + SashOffsetArray[iPane+1], 15
+
+				if SimpleSashArray[iPane+1] = SIMPLESASH_SLIDEHOR | SimpleSashArray[iPane+1] = SIMPLESASH_SIDEHUNG then
+					simpleSashDivx = SashLeftX[iPane+1] + (SashRightX[iPane+1] - SashLeftX[iPane+1]) / 2
+					if SimpleSashArray[iPane+1] = SIMPLESASH_SLIDEHOR then
+						put	simpleSashDivx - gs_sash_width/2,	SashBottomY[iPane+1] + SashOffsetArray[iPane+1],	10,
+							simpleSashDivx + gs_sash_width/2,	SashBottomY[iPane+1] + SashOffsetArray[iPane+1],	15
+					else
+						put	simpleSashDivx - gs_sash_width,	SashBottomY[iPane+1] + SashOffsetArray[iPane+1],	10,
+							simpleSashDivx + gs_sash_width,	SashBottomY[iPane+1] + SashOffsetArray[iPane+1],	15
+					endif
+				endif
+
+				put	SashRightX[iPane+1] - SashOffsetArray[iPane+1],	SashBottomY[iPane+1] + SashOffsetArray[iPane+1], 10
+
+				base
+				cprism_ var_mater2,var_mater,var_mater,
+						nsp/3, part_thk,
+						get (nsp)
+				gosub 2000
+			next iPane
+		endif
+
+! Double Sash Dividers --------------------------------------------------------
+		if lod3D = 1 | lod3D = 5 then
+			for iPane = 1 to gs_panes_number
+				iSimpleSashFrameType = SimpleSashArray[iPane]
+				if iSimpleSashFrameType = SIMPLESASH_SIDEHUNG then
+					simpleSashDivx = SashLeftX[iPane] + (SashRightX[iPane] - SashLeftX[iPane]) / 2
+					base
+					cprism_ var_mater2,var_mater,var_mater,
+						4, part_thk,
+						simpleSashDivx - gs_sash_width,	sashBottomY[iPane] + SashOffsetArray[iPane],	10,
+						simpleSashDivx + gs_sash_width,	SashBottomY[iPane] + SashOffsetArray[iPane],	15,
+						simpleSashDivx + gs_sash_width,	SashTopY[iPane] - SashOffsetArray[iPane],		10,
+						simpleSashDivx - gs_sash_width,	SashTopY[iPane] - SashOffsetArray[iPane],		15
+					gosub 1000
+				endif
+				if iSimpleSashFrameType = SIMPLESASH_SLIDEHOR then
+					simpleSashDivx = SashLeftX[iPane] + (SashRightX[iPane] - SashLeftX[iPane]) / 2
+					base
+					cprism_ var_mater2,var_mater,var_mater,
+						4, part_thk,
+						simpleSashDivx - gs_sash_width/2,	sashBottomY[iPane] + SashOffsetArray[iPane],	10,
+						simpleSashDivx + gs_sash_width/2,	SashBottomY[iPane] + SashOffsetArray[iPane],	15,
+						simpleSashDivx + gs_sash_width/2,	SashTopY[iPane] - SashOffsetArray[iPane],		10,
+						simpleSashDivx - gs_sash_width/2,	SashTopY[iPane] - SashOffsetArray[iPane],		15
+					gosub 1000
+				endif
+				if iSimpleSashFrameType = SIMPLESASH_SLIDEVER then
+					simpleSashDivY = SashBottomY[iPane] + (SashTopY[iPane] - SashBottomY[iPane]) / 2
+					base
+					cprism_ var_mater2,var_mater,var_mater,
+						4, part_thk,
+						SashLeftX[iPane]  + SashOffsetArray[iPane], simpleSashDivy - gs_sash_width/2,	10,
+						SashLeftX[iPane]  + SashOffsetArray[iPane], simpleSashDivy + gs_sash_width/2,	15,
+						SashRightX[iPane] - SashOffsetArray[iPane], simpleSashDivy + gs_sash_width/2,	10,
+						SashRightX[iPane] - SashOffsetArray[iPane], simpleSashDivy - gs_sash_width/2,	15
+					gosub 2000
+				endif
+			next iPane
+		endif
+
+! -----------------------------------------------------------------------------
+
+		addz part_thk
+		part_thk= gs_frame_thk-out_thk
+
+		var_mater = gs_frame_mat2
+		var_mater2 = gs_frame_mat2
+	next ijk
+	del in_out_cikl
+
+	for kj = 1 to cutnum
+		cutend
+	next kj
+	cutnum = 0
+endgroup
+
+
+! ==============================================================================
+! Sash cavities in Frame
+! ==============================================================================
+
+group "harcsi"
+	if lod3D = 2 then
+		if GLOB_CONTEXT = 4 | GLOB_CONTEXT = 6 then
+			pen gs_frame_pen_cont
+		else
+			pen gs_frame_pen
+		endif
+		sect_fill gs_fillFr, gs_penFr_bg, gs_penFr_fg, gs_frame_pen_cont
+
+		for iPane = 1 to gs_panes_number
+			iSashCutType = SashCutArray[iPane]
+			if iSashCutType = SASHCUT_REBATE then
+				addz gs_frame_thk - gs_rebate_depth
+				material gs_frame_mat2
+				prism_ 4, gs_frame_thk,
+					SashLeftX[iPane] - gs_rebate_width,		sashBottomY[iPane] - gs_rebate_width,	15,
+					SashRightX[iPane] + gs_rebate_width,	SashBottomY[iPane] - gs_rebate_width,	15,
+					SashRightX[iPane] + gs_rebate_width,	SashTopY[iPane] + gs_rebate_width,		15,
+					SashLeftX[iPane] - gs_rebate_width,		SashTopY[iPane] + gs_rebate_width,		15
+				del 1
+			endif
+			if	iSashCutType = SASHCUT_MIDDLE &\
+				abs(SashLeftX[iPane] - SashRightX[iPane]) > EPS &\
+				abs(sashBottomY[iPane] - SashTopY[iPane]) > EPS then
+
+				addz gs_frame_thk/2
+				material gs_frame_mat2
+				prism_ 4, gs_frame_thk,
+					SashLeftX[iPane],	sashBottomY[iPane],	14,
+					SashRightX[iPane],	SashBottomY[iPane],	14,
+					SashRightX[iPane],	SashTopY[iPane],	14,
+					SashLeftX[iPane],	SashTopY[iPane],	14
+				material gs_frame_mat
+				prism_ 4, -gs_frame_thk,
+					SashLeftX[iPane],	sashBottomY[iPane],	11,
+					SashRightX[iPane],	SashBottomY[iPane],	11,
+					SashRightX[iPane],	SashTopY[iPane],	11,
+					SashLeftX[iPane],	SashTopY[iPane],	11
+				del 1
+			endif
+		next iPane
+	endif
+endgroup
+
+pen gs_frame_pen
+sect_fill gs_fillFr, gs_penFr_bg, gs_penFr_fg, gs_frame_pen_cont
+
+if lod3D = 2 then	! Detailed
+	placegroup subgroup("frame","harcsi")
+else
+	placegroup "frame"
+endif
+
+
+! =============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! =============================================================================
+
+
+1000:
+! --- Texture directions -------------------------------------------------------
+
+vert 0, 0, 0
+vert 0, 1, 0
+vert 1, 0, 0
+vert 0, 0, 1
+coor 2, -1, -2, -3, -4
+body 1
+
+return
+
+1010:
+! --- Texture directions -------------------------------------------------------
+
+vert 0, 0, 0
+vert 0, 1, 0
+vert -1, 0, 0
+vert 0, 0, 1
+coor 2, -1, -2, -3, -4
+body 1
+
+return
+
+2000:
+! --- Texture directions -------------------------------------------------------
+
+vert 0, 0, 0
+vert 1, 0, 0
+vert 0, 1, 0
+vert 0, 0, 1
+coor 2, -1, -2, -3, -4
+body 1
+
+return

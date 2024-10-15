@@ -1,0 +1,666 @@
+
+! =============================================================================
+! reset fill indexes if Use Fills is OFF
+! =============================================================================
+gs_fillFr		= gs_bFills * gs_fillFr
+gs_fillSh		= gs_bFills * gs_fillSash
+gs_penSh_fg		= gs_bFills * gs_penSash_fg
+gs_penSh_bg		= gs_bFills * gs_penSash_bg
+gs_fillShCover	= gs_bFills * gs_fillShCover
+
+
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then		! Demolition
+	line_type gs_Demolition_linetype
+else
+	line_type 1
+endif
+
+! =============================================================================
+! GS Corner Window Functions
+! =============================================================================
+
+call "GS Corner Window Functions",
+	parameters all	iWindowShape				= iWindowShape,
+					gs_IsCurved					= gs_IsCurved,
+					bParalellInCurvedWalls		= bParalellInCurvedWalls,
+					bDisabeMirroring			= bDisabeMirroring,
+
+					bLeftCornerFunction			= bLeftCornerFunction,
+					leftCornerAngle				= leftCornerAngle,
+					bLeftDiffConnWall			= bLeftDiffConnWall,
+					leftConnWallThk				= leftConnWallThk,
+					bRightCornerFunction		= bRightCornerFunction,
+					rightCornerAngle			= rightCornerAngle,
+					bRightDiffConnWall			= bRightDiffConnWall,
+					rightConnWallThk			= rightConnWallThk,
+					bEnableVentilationProfile	= bEnableVentilationProfile,
+					bEnableParapetInset			= bEnableParapetInset,
+					bEnableMasonryArch			= bEnableMasonryArch,
+					bEnableFaschen				= bEnableFaschen,
+					bEnableThreshold			= bEnableThreshold,
+					bEnableCustomCornerLeft		= bEnableCustomCornerLeft,
+					bEnableCustomCornerRight	= bEnableCustomCornerRight,
+	returned_parameters	ac_unit_width,
+						gs_frame_ovhg_left_out,
+						gs_frame_ovhg_right_out,
+						gs_frame_ovhg_left_in,
+						gs_frame_ovhg_right_in,
+						bMirrored,
+						addPrmX, addPrmY,
+						mulPrmX, mulPrmY,
+						iLoD2D,
+
+						gs_opLinePen,
+						gs_iSwingType,
+						gs_swingLineType,
+						bShowAddHotspots, bShowUnitHotspots
+
+if iLoD2D = 0 then end
+
+lod2D	= DET2D_FS_OFF
+if iLoD2D = SYMBW_S_1LINE then				lod2D = DET2D_FS_SIMPLE_ONE 		! Simple - One Line --> INT 200
+if iLoD2D = SYMBW_S_CENTERLINE then		lod2D = DET2D_FS_SIMPLE_ONE 		! Simple - Centerline --> SWE 200
+if iLoD2D = SYMBW_S_2LINE_ACC then			lod2D = DET2D_FS_SIMPLE_TWO 		! Simple - Two Lines
+if iLoD2D = SYMBW_S_2LINE then				lod2D = DET2D_FS_SIMPLE_CHI			! Chinese Simple
+if iLoD2D = SYMBW_M_2LINE_GLASS then		lod2D = DET2D_FS_MIDDLE 			! Middle - without acc
+if iLoD2D = SYMBW_M_2LINE_NOGLASS then		lod2D = DET2D_FS_SIMPLE_TWO 		! Middle - with acc --> INT 100
+if iLoD2D = SYMBW_M_FRAMESASH then			lod2D = DET2D_FS_DETAILED			! NLD Middle
+if iLoD2D = SYMBW_D_SGLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> INT 50, DAN 20
+if iLoD2D = SYMBW_D_REBATEONGLASS then		lod2D = DET2D_FS_DETAILED 			! Detailed --> NLD Detailed
+if iLoD2D = SYMBW_D_SGLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> INT 50, DAN 20
+if iLoD2D = SYMBW_D_2GLASS then				lod2D = DET2D_FS_DETAILED 			! Detailed --> NOR 50
+if iLoD2D = SYMBW_D_2LINE_HS then			lod2D = DET2D_FS_DETAILED_CHI		! Chinese Detailed
+
+_nTrans = 0
+add2 addPrmX, addPrmY
+mul2 mulPrmX, mulPrmY
+
+mul2 1,-1
+add2 0,WIDO_FRAME_THICKNESS
+_nTrans = _nTrans + 4
+
+temp = gs_frame_ovhg_left_out
+gs_frame_ovhg_left_out = gs_frame_ovhg_left_in
+gs_frame_ovhg_left_in = temp
+
+temp = gs_frame_ovhg_right_out
+gs_frame_ovhg_right_out = gs_frame_ovhg_right_in
+gs_frame_ovhg_right_in = temp
+
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then gs_swingLineType = gs_Demolition_linetype	! Demolition
+
+sashThicknessForMacro	= _slidingSashThk
+
+if lod2D > DET2D_FS_SIMPLE_ONE & lod2D <> DET2D_FS_SIMPLE_CHI then
+	if iPanesSizeConfig	= PANES_CUSTOM then
+		gosub "sashEditingHotspots"
+	endif
+
+	if bShowAddHotspots then
+		gosub "additionalHotspots"
+	endif
+endif
+
+
+! ==============================================================================
+! Draw window frame and sash
+! ==============================================================================
+
+if iTypeDemolitionFill = RENOVATION_FILL_NEW & gs_bShowNewOnCC then end		! New
+
+dim	_sashPosX[]
+dim	_sashPosZ[]
+dim	_openingLength2D[]
+
+if iWindowType = WIN_W2HorizontalSlide then
+	_sashPosX[1] = gs_frame_width_left / 2
+	_sashPosX[2] = -gs_frame_width / 2
+
+	_sashPosZ[1] = _slidingSashThk
+	_sashPosZ[2] = 0
+
+	_openingLength2D[1]	= openingLength2D_03 * (iOpeningTypeMain = OPENINGTYPE_MAIN_DOUBLE)
+	_openingLength2D[2]	= -openingLength2D_01
+
+	for _casementID = 1 to 2
+		_bLeftCornerFunction	= bLeftCornerFunction * (_casementID = 1)
+		_bRightCornerFunction	= (bRightCornerFunction | bCornerWindow) * (_casementID = 2)
+		_gs_frame_left_endline	= (not ((gs_tolerance_left > EPS) & gs_stack_left)) * (_casementID = 1)
+		_gs_frame_right_endline	= (not(bCornerWindow) & not ((gs_tolerance_right > EPS) & gs_stack_right)) * (_casementID = 2)
+		_gs_frame_left_endline_comp		= (1 + (gs_left_oversize < EPS)) * (_casementID = 1)
+		_gs_frame_right_endline_comp	= (1 + (gs_right_oversize < EPS)) * (_casementID = 2)
+		_gs_frame_left_unitline			= (_casementID = 1)
+		_gs_frame_right_unitline		= not(bCornerWindow)*(_casementID = 2)
+		_gs_bFrameLeft					= (_casementID = 1)
+		_gs_bFrameRight					= (_casementID = 2)
+
+		_gs_frame_ovhg_left_out		= gs_frame_ovhg_left_out * (_casementID = 1)
+		_gs_frame_ovhg_right_out	= gs_frame_ovhg_right_out * (_casementID = 2)
+		_gs_frame_ovhg_left_in		= gs_frame_ovhg_left_in * (_casementID = 1)
+		_gs_frame_ovhg_right_in		= gs_frame_ovhg_right_in * (_casementID = 2)
+
+		if _casementID = 1 then
+			add2 -ac_unit_width / 2 + sashWidth2 / 2, 0
+
+			aForMacro				= sashWidth2 + gs_frame_width_left
+			_openingType			= gs_optype_m_03
+			sh_unID					= 1010
+		endif
+		if _casementID = 2 then
+			add2 ac_unit_width / 2 - sashWidth1 / 2, 0
+			aForMacro				= sashWidth1 + gs_frame_width
+			_openingType			= gs_optype_m_01
+			sh_unID					= 1030
+		endif
+
+		add2 _sashPosX[_casementID], 0
+		gosub "callCasementMacro"
+		del 1
+		del 1
+	next _casementID
+endif
+
+if iWindowType = WIN_W3HorizontalSlide then
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+		_sashPosX[1] = gs_frame_width_left / 2
+		_sashPosX[2] = 0
+		_sashPosX[3] = -(gs_frame_width + gs_sash_width/2)/ 2
+
+		_sashPosZ[1] = 0
+		_sashPosZ[2] = _slidingSashThk
+		_sashPosZ[3] = _slidingSashThk
+	endif
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+		_sashPosX[1] = gs_frame_width_left / 2
+		_sashPosX[2] = gs_sash_width
+		_sashPosX[3] = -gs_frame_width / 2
+
+		_sashPosZ[1] = _slidingSashThk
+		_sashPosZ[2] = _slidingSashThk
+		_sashPosZ[3] = 0
+	endif
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES |\
+		 iOpeningTypeMain = OPENINGTYPE_MAIN_3SASHES then
+
+		_sashPosX[1] = gs_frame_width_left / 2
+		_sashPosX[2] = 0
+		_sashPosX[3] = -gs_frame_width / 2
+	endif
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES then
+		_sashPosZ[1] = _slidingSashThk
+		_sashPosZ[2] = 0
+		_sashPosZ[3] = _slidingSashThk
+	endif
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_3SASHES then
+		_sashPosZ[1] = _slidingSashThk * 2
+		_sashPosZ[2] = _slidingSashThk
+		_sashPosZ[3] = 0
+	endif
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES then
+		_openingLength2D[1]	= openingLength2D_03
+		_openingLength2D[2]	= 0
+		_openingLength2D[3]	= -openingLength2D_04
+	endif
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_3SASHES then
+		_openingLength2D[1]	= openingLength2D_03
+		_openingLength2D[2]	= openingLength2D_01
+		_openingLength2D[3]	= -openingLength2D_04
+	endif
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+		_openingLength2D[1]	= openingLength2D_03
+		_openingLength2D[2]	= 0
+		_openingLength2D[3]	= 0
+	endif
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+		_openingLength2D[1]	= 0
+		_openingLength2D[2]	= openingLength2D_01
+		_openingLength2D[3]	= 0
+	endif
+
+	for _casementID = 1 to 3
+		_bLeftCornerFunction	= bLeftCornerFunction * (_casementID = 1)
+		_bRightCornerFunction	= (bRightCornerFunction | bCornerWindow) * (_casementID = 3)
+		_gs_frame_left_endline	= (not ((gs_tolerance_left > EPS) & gs_stack_left)) * (_casementID = 1)
+		_gs_frame_right_endline	= (not(bCornerWindow) & not ((gs_tolerance_right > EPS) & gs_stack_right)) * (_casementID = 3)
+		_gs_frame_left_endline_comp		= (1 + (gs_left_oversize < EPS)) * (_casementID = 1)
+		_gs_frame_right_endline_comp	= (1 + (gs_right_oversize < EPS)) * (_casementID = 3)
+		_gs_frame_left_unitline			= (_casementID = 1)
+		_gs_frame_right_unitline		= not(bCornerWindow)*(_casementID = 3)
+		_gs_bFrameLeft					= (_casementID = 1)
+		_gs_bFrameRight					= (_casementID = 3)
+
+		_gs_frame_ovhg_left_out		= gs_frame_ovhg_left_out * (_casementID = 1)
+		_gs_frame_ovhg_right_out	= gs_frame_ovhg_right_out * (_casementID = 3)
+		_gs_frame_ovhg_left_in		= gs_frame_ovhg_left_in * (_casementID = 1)
+		_gs_frame_ovhg_right_in		= gs_frame_ovhg_right_in * (_casementID = 3)
+
+
+		if _casementID = 1 then
+			add2 -ac_unit_width / 2 + (sashWidth1)/2, 0
+			aForMacro				= sashWidth1 + gs_frame_width_left
+			_openingType			= gs_optype_m_03
+			sh_unID					= 1010
+		endif
+		if _casementID = 2 then
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+				! double sash 2-3 with overlapping middle frame: modified sashWidth2 input
+				aForMacro				= sashWidth2 + gs_sash_width/2
+				add2 -ac_unit_width / 2 + gs_frame_width_left + sashWidth1 + (aForMacro)/2 - gs_sash_width, 0
+			else
+				add2 -ac_unit_width / 2 + gs_frame_width_left + sashWidth1 + (sashWidth2)/2 - gs_sash_width, 0
+				aForMacro				= sashWidth2
+			endif
+			_openingType			= gs_optype_m_01
+			sh_unID					= 1030
+		endif
+		if _casementID = 3 then
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+				! double sash 2-3 with overlapping middle frame: modified sashWidth2 input
+				aForMacro				= sashWidth3 + gs_frame_width + gs_sash_width/2
+				add2 ac_unit_width / 2 - sashWidth3/2, 0
+			else
+				aForMacro				= sashWidth3 + gs_frame_width
+				add2 ac_unit_width / 2 - sashWidth3/2, 0
+			endif
+			_openingType			= gs_optype_m_04
+			sh_unID					= 1040
+		endif
+
+		add2 _sashPosX[_casementID], 0
+		gosub "callCasementMacro"
+		del 1
+		del 1
+	next _casementID
+endif
+
+if iWindowType = WIN_W4HorizontalSlide then
+
+	_sashPosX[1] = gs_frame_width_left / 2
+	_sashPosX[2] = gs_frame_width_left
+	_sashPosX[3] = gs_frame_width_left
+	_sashPosX[4] = -gs_frame_width / 2
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+		_sashPosZ[1] = _slidingSashThk
+		_sashPosZ[2] = 0
+		_sashPosZ[3] = 0
+		_sashPosZ[4] = _slidingSashThk
+	else
+		_sashPosZ[1] = _slidingSashThk
+		_sashPosZ[2] = 0
+		_sashPosZ[3] = _slidingSashThk
+		_sashPosZ[4] = 0
+	endif
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_4SASHES then
+		_openingLength2D[1]	= openingLength2D_03
+		_openingLength2D[2]	= -openingLength2D_01
+		_openingLength2D[3]	= openingLength2D_02
+		_openingLength2D[4]	= -openingLength2D_04
+	else
+		_openingLength2D[1]	= 0
+		_openingLength2D[2]	= -openingLength2D_01
+		_openingLength2D[3]	= openingLength2D_02
+		_openingLength2D[4]	= 0
+	endif
+
+	for _casementID = 1 to 4
+		_bLeftCornerFunction	= bLeftCornerFunction * (_casementID = 1)
+		_bRightCornerFunction	= (bRightCornerFunction | bCornerWindow) * (_casementID = 4)
+		_gs_frame_left_endline	= (not ((gs_tolerance_left > EPS) & gs_stack_left)) * (_casementID = 1)
+		_gs_frame_right_endline	= (not(bCornerWindow) & not ((gs_tolerance_right > EPS) & gs_stack_right)) * (_casementID = 4)
+		_gs_frame_left_endline_comp		= (1 + (gs_left_oversize < EPS)) * (_casementID = 1)
+		_gs_frame_right_endline_comp	= (1 + (gs_right_oversize < EPS)) * (_casementID = 4)
+		_gs_frame_left_unitline			= (_casementID = 1)
+		_gs_frame_right_unitline		= not(bCornerWindow)*(_casementID = 4)
+		_gs_bFrameLeft					= (_casementID = 1)
+		_gs_bFrameRight					= (_casementID = 4)
+
+		_gs_frame_ovhg_left_out		= gs_frame_ovhg_left_out * (_casementID = 1)
+		_gs_frame_ovhg_right_out	= gs_frame_ovhg_right_out * (_casementID = 4)
+		_gs_frame_ovhg_left_in		= gs_frame_ovhg_left_in * (_casementID = 1)
+		_gs_frame_ovhg_right_in		= gs_frame_ovhg_right_in * (_casementID = 4)
+
+
+		if _casementID = 1 then
+			add2 -ac_unit_width / 2 + (sashWidth1)/2, 0
+			aForMacro				= sashWidth1 + gs_frame_width_left
+			_openingType			= gs_optype_m_03
+			sh_unID					= 1000
+		endif
+		if _casementID = 2 then
+			add2 -ac_unit_width / 2 + sashWidth1 + (sashWidth2)/2 - gs_sash_width, 0
+			aForMacro				= sashWidth2
+			_openingType			= gs_optype_m_01
+			sh_unID					= 1020
+		endif
+		if _casementID = 3 then
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+				add2 -ac_unit_width / 2 + sashWidth1 + sashWidth2 - gs_sash_width + sashWidth3/2, 0
+				aForMacro				= sashWidth3
+			else
+				add2 -ac_unit_width / 2 + sashWidth1 + sashWidth2 + sashWidth3/2 - 2*gs_sash_width, 0
+				aForMacro				= sashWidth3
+			endif
+			_openingType			= gs_optype_m_02
+			sh_unID					= 1030
+		endif
+		if _casementID = 4 then
+			add2 ac_unit_width / 2 - _sashWidth4/2, 0
+			aForMacro				= _sashWidth4 + gs_frame_width
+			_openingType			= gs_optype_m_04
+			sh_unID					= 1040
+		endif
+
+		add2 _sashPosX[_casementID], 0
+		gosub "callCasementMacro"
+		del 1
+		del 1
+	next _casementID
+endif
+
+
+if iWindowType = WIN_W6HorizontalSlide then
+	_sashPosX[1] = gs_frame_width_left / 2
+	_sashPosX[2] = gs_frame_width_left
+	_sashPosX[3] = 0
+	_sashPosX[4] = 0
+	_sashPosX[5] = -gs_frame_width
+	_sashPosX[6] = -gs_frame_width / 2
+
+	if iNumberOfRails = RAILSNUMBER_2 then
+		_sashPosZ[1] = _slidingSashThk
+		_sashPosZ[2] = 0
+		_sashPosZ[3] = _slidingSashThk
+		_sashPosZ[4] = 0
+		_sashPosZ[5] = _slidingSashThk
+		_sashPosZ[6] = 0
+	
+		_openingLength2D[1]	= openingLength2D_05
+		_openingLength2D[2]	= -openingLength2D_03
+		_openingLength2D[3]	= openingLength2D_01
+		_openingLength2D[4]	= -openingLength2D_02
+		_openingLength2D[5]	= openingLength2D_04
+		_openingLength2D[6]	= -openingLength2D_06
+	else
+		_sashPosZ[1] = 0
+		_sashPosZ[2] = _slidingSashThk
+		_sashPosZ[3] = _slidingSashThk * 2
+		_sashPosZ[4] = _slidingSashThk * 2
+		_sashPosZ[5] = _slidingSashThk
+		_sashPosZ[6] = 0
+	
+		_openingLength2D[1]	= 0
+		_openingLength2D[2]	= -openingLength2D_01 / 2
+		_openingLength2D[3]	= -openingLength2D_01
+		_openingLength2D[4]	= openingLength2D_02
+		_openingLength2D[5]	= openingLength2D_02 / 2
+		_openingLength2D[6]	= 0
+	endif
+	
+	for _casementID = 1 to 6
+		_bLeftCornerFunction	= bLeftCornerFunction * (_casementID = 1)
+		_bRightCornerFunction	= (bRightCornerFunction | bCornerWindow) * (_casementID = 6)
+		_gs_frame_left_endline	= (not ((gs_tolerance_left > EPS) & gs_stack_left)) * (_casementID = 1)
+		_gs_frame_right_endline	= (not(bCornerWindow) & not ((gs_tolerance_right > EPS) & gs_stack_right)) * (_casementID = 6)
+		_gs_frame_left_endline_comp		= (1 + (gs_left_oversize < EPS)) * (_casementID = 1)
+		_gs_frame_right_endline_comp	= (1 + (gs_right_oversize < EPS)) * (_casementID = 6)
+		_gs_frame_left_unitline			= (_casementID = 1)
+		_gs_frame_right_unitline		= not(bCornerWindow)*(_casementID = 6)
+		_gs_bFrameLeft					= (_casementID = 1)
+		_gs_bFrameRight					= (_casementID = 6)
+
+		_gs_frame_ovhg_left_out		= gs_frame_ovhg_left_out * (_casementID = 1)
+		_gs_frame_ovhg_right_out	= gs_frame_ovhg_right_out * (_casementID = 6)
+		_gs_frame_ovhg_left_in		= gs_frame_ovhg_left_in * (_casementID = 1)
+		_gs_frame_ovhg_right_in		= gs_frame_ovhg_right_in * (_casementID = 6)
+
+		if _casementID = 1 then
+			add2 -ac_unit_width / 2 + (1/2 * sashWidth1), 0
+			aForMacro				= sashWidth1 + gs_frame_width_left
+			_openingType			= gs_optype_m_05
+			sh_unID					= 1000
+		endif
+		if _casementID = 2 then
+			add2 -ac_unit_width / 2 + (3/2 * sashWidth1) - gs_sash_width, 0
+			aForMacro				= sashWidth1
+			_openingType			= gs_optype_m_03
+			sh_unID					= 1010
+		endif
+		if _casementID = 3 then
+			add2 -ac_unit_width / 2 + (5/2 * sashWidth1) - gs_sash_width, 0
+			aForMacro				= sashWidth1
+			_openingType			= gs_optype_m_01
+			sh_unID					= 1030
+		endif
+		if _casementID = 4 then
+			add2 ac_unit_width / 2 - (5/2 * sashWidth1) + gs_sash_width, 0
+			aForMacro				= sashWidth1
+			_openingType			= gs_optype_m_02
+			sh_unID					= 1040
+		endif
+		if _casementID = 5 then
+			add2 ac_unit_width / 2 - (3/2 * sashWidth1) + gs_sash_width, 0
+			aForMacro				= sashWidth1
+			_openingType			= gs_optype_m_04
+			sh_unID					= 1050
+		endif
+		if _casementID = 6 then
+			add2 ac_unit_width / 2 - (1/2 * sashWidth1), 0
+			aForMacro				= sashWidth1 + gs_frame_width
+			_openingType			= gs_optype_m_06
+			sh_unID					= 1060
+		endif
+
+		add2 _sashPosX[_casementID], 0
+		gosub "callCasementMacro"
+		del 1
+		del 1
+	next _casementID
+endif
+
+del _nTrans
+
+
+! ===============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ===============================================================================
+
+
+"callCasementMacro":
+
+	call "BasicWindowPanelStraight",
+		parameters	A							= aForMacro,
+					iTypeDemolitionFill			= iTypeDemolitionFill,
+					gs_Demolition_linetype		= gs_Demolition_linetype,
+					gs_optype_m					= _openingType,
+					bLeftCornerFunction			= _bLeftCornerFunction,
+					bRightCornerFunction		= _bRightCornerFunction,
+					gs_frame_left_endline		= _gs_frame_left_endline,
+					gs_frame_right_endline		= _gs_frame_right_endline,
+					gs_frame_left_endline_comp	= _gs_frame_left_endline_comp,
+					gs_frame_right_endline_comp	= _gs_frame_right_endline_comp,
+					gs_frame_left_unitline		= _gs_frame_left_unitline,
+					gs_frame_right_unitline		= _gs_frame_right_unitline,
+					gs_bFrameLeft				= _gs_bFrameLeft,
+					gs_bFrameRight				= _gs_bFrameRight,
+					gs_frame_ovhg_left_out		= _gs_frame_ovhg_left_out,
+					gs_frame_ovhg_right_out		= _gs_frame_ovhg_right_out,
+					gs_frame_ovhg_left_in		= _gs_frame_ovhg_left_in,
+					gs_frame_ovhg_right_in		= _gs_frame_ovhg_right_in,
+
+					gs_frame_thk				= gs_frame_thk,
+					gs_frame_width				= gs_frame_width,
+					gs_frame_width_left			= gs_frame_width_left,
+					gs_frame_cut_width			= 0,
+					gs_frame_cut_depth			= 0,
+					gs_sash_thk					= sashThicknessForMacro,
+					gs_sash_width				= gs_sash_width,
+					sashOffset					= _sashPosZ[_casementID],
+					iMullionStyle				= iMullionStyle_00,
+					gs_open_2D					= 0,
+					gs_opLinePen				= gs_opLinePen,
+					gs_iSwingType				= gs_iSwingType,
+					iLoD2D						= iLoD2D,
+					gs_pen_2D					= gs_pen_2D,
+					gs_frame_pen_cont			= gs_frame_pen_cont,
+					gs_fillFr					= gs_fillFr,
+					gs_penFr_fg					= gs_penFr_fg,
+					gs_penFr_bg					= gs_penFr_bg,
+					gs_fillSh					= gs_fillSash,
+					gs_penSh_fg					= gs_penSash_fg,
+					gs_penSh_bg					= gs_penSash_bg,
+					gs_fillShCover				= gs_fillShCover,
+					gs_penShCov_fg       		= gs_penShCov_fg,
+					gs_penShCov_bg      		= gs_penShCov_bg,
+					gs_glass_thk				= gs_glass_thk,
+					sh_UnID						= sh_unID,
+					owning2D					= _openingLength2D[_casementID],
+					bShowUnitHotspots			= bShowUnitHotspots
+
+return
+
+
+
+"sashEditingHotspots":
+	if iWindowType = WIN_W2HorizontalSlide then
+		unID=1300
+		hotspot2 ac_unit_width/2-gs_frame_width,            -gs_frame_thk, unID, sashWidth1, 1+128:unID=unID+1
+		hotspot2 ac_unit_width/2-gs_frame_width+1,          -gs_frame_thk, unID, sashWidth1, 3:unID=unID+1
+		hotspot2 ac_unit_width/2-gs_frame_width-sashWidth1, -gs_frame_thk, unID, sashWidth1, 2
+	endif
+
+	if iWindowType = WIN_W3HorizontalSlide then
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+			_posY = -gs_frame_thk
+		else
+			_posY = 0
+		endif
+		unID=1300
+		hotspot2 -ac_unit_width/2+gs_frame_width_left,            _posY, unID, sashWidth1, 1+128:unID=unID+1
+		hotspot2 -ac_unit_width/2+gs_frame_width_left-1,          _posY, unID, sashWidth1, 3:unID=unID+1
+		hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1, _posY, unID, sashWidth1, 2
+
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES then
+			add2 0, -gs_frame_thk
+			unID=1310
+			hotspot2 (gs_frame_width_left - gs_frame_width) / 2,					_posY, unID, tempSashWidth2, 1+128,	sashWidth2	:unID=unID+1
+			hotspot2 (gs_frame_width_left - gs_frame_width) / 2 - 1,				_posY, unID, tempSashWidth2, 3,		sashWidth2	:unID=unID+1
+			hotspot2 (gs_frame_width_left - gs_frame_width) / 2 + tempSashWidth2,	_posY, unID, tempSashWidth2, 2,		sashWidth2
+			del 1
+		endif
+
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE | iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+				_posY = 0
+			else
+				_posY = -gs_frame_thk
+			endif
+
+			unID=1310
+			hotspot2 ac_unit_width/2-gs_frame_width,            _posY, unID, sashWidth2, 1+128		:unID=unID+1
+			hotspot2 ac_unit_width/2-gs_frame_width+1,          _posY, unID, sashWidth2, 3:unID=unID+1
+			hotspot2 ac_unit_width/2-gs_frame_width-sashWidth2, _posY, unID, sashWidth2, 2, sashWidth2, `Двойные Створки`
+		endif
+	endif
+
+	if iWindowType = WIN_W4HorizontalSlide then
+		if iOpeningTypeMain	= OPENINGTYPE_MAIN_DIFFRAIL |\
+			iOpeningTypeMain	= OPENINGTYPE_MAIN_4SASHES then
+			unID=1300
+			hotspot2 -ac_unit_width/2+gs_frame_width_left,            -gs_frame_thk, unID, sashWidth1, 1+128:unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left-1,          -gs_frame_thk, unID, sashWidth1, 3:unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1, -gs_frame_thk, unID, sashWidth1, 2
+	
+			unID=1310
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1-gs_sash_width,            -gs_frame_thk, unID, sashWidth2, 1+128:unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1-1-gs_sash_width,          -gs_frame_thk, unID, sashWidth2, 3:unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width, -gs_frame_thk, unID, sashWidth2, 2
+	
+			unID=1320
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2-2*gs_sash_width,     -gs_frame_thk, unID, sashWidth3, 1+128:unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2-1,         			-gs_frame_thk, unID, sashWidth3, 3:unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2+sashWidth3-2*gs_sash_width, 			-gs_frame_thk, unID, sashWidth3, 2
+		endif
+	
+		if iOpeningTypeMain	= OPENINGTYPE_MAIN_SAMERAIL then
+			unID=1310
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width, -gs_frame_thk, unID, sashWidth2, 1+128:unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+1-gs_sash_width,          -gs_frame_thk, unID, sashWidth2, 3:unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1-gs_sash_width,            -gs_frame_thk, unID, sashWidth2, 2
+	
+			unID=1320
+			hotspot2 ac_unit_width/2-gs_frame_width-sashWidth1-sashWidth2+gs_sash_width, -gs_frame_thk, unID, sashWidth2, 1+128:unID=unID+1
+			hotspot2 ac_unit_width/2-gs_frame_width-sashWidth1-1+gs_sash_width,          -gs_frame_thk, unID, sashWidth2, 3:unID=unID+1
+			hotspot2 ac_unit_width/2-gs_frame_width-sashWidth1+gs_sash_width,            -gs_frame_thk, unID, sashWidth2, 2
+		endif
+	endif
+return
+
+
+"additionalHotspots":
+	unID=1350
+	if iWindowType = WIN_W3HorizontalSlide then
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES |  iOpeningTypeMain = OPENINGTYPE_MAIN_3SASHES then
+			add2 0, -gs_frame_thk
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1,			0,	unID	:unID=unID+1
+			del 1
+			hotspot2 (gs_frame_width_left - gs_frame_width) / 2 + sashWidth2 / 2,	0,	unID	:unID=unID+1
+		endif
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE | iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+				_posY = 0
+				_posY2 = -gs_frame_thk
+			else
+				_posY = -gs_frame_thk
+				_posY2 = -0
+			endif
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1, _posY, unID	:unID=unID+1
+			hotspot2 ac_unit_width/2-gs_frame_width-sashWidth2, _posY2,  unID	:unID=unID+1
+		endif
+	endif
+
+	if iWindowType = WIN_W4HorizontalSlide then
+		if iOpeningTypeMain	= OPENINGTYPE_MAIN_DIFFRAIL |\
+			iOpeningTypeMain	= OPENINGTYPE_MAIN_4SASHES then
+
+			unID=1350
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1-0.5*gs_sash_width, 0, unID							: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2-1.5*gs_sash_width, 0, unID				: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2+sashWidth3-2.5*gs_sash_width, 0, unID	: unID=unID+1
+		endif
+		if iOpeningTypeMain	= OPENINGTYPE_MAIN_SAMERAIL then
+			unID=1350
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1, 0, unID											: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width, 0, unID				: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2+sashWidth3-2*gs_sash_width, 0, unID	: unID=unID+1
+		endif
+	endif
+
+	if iWindowType = WIN_W6HorizontalSlide then
+		if iNumberOfRails = RAILSNUMBER_2 then
+			hotspot2 -ac_unit_width/2+gs_frame_width_left-gs_sash_width+sashWidth1, -_slidingSashThk, unID								: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1 * 2 - gs_sash_width, -_slidingSashThk, unID							: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left-gs_sash_width/2+sashWidth1 * 3 - gs_sash_width * 2, -_slidingSashThk, unID		: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left-gs_sash_width+sashWidth1 * 4 - gs_sash_width * 3, -_slidingSashThk, unID		: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left-gs_sash_width/2*0+sashWidth1 * 5 - gs_sash_width * 4, -_slidingSashThk, unID	: unID=unID+1
+		else
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1, -_slidingSashThk * 2, unID					: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1 * 2 - gs_sash_width, -_slidingSashThk, unID	: unID=unID+1
+			hotspot2 -ac_unit_width/2+gs_frame_width_left+sashWidth1 * 3 - gs_sash_width * 2, 0, unID				: unID=unID+1
+			hotspot2 ac_unit_width/2-gs_frame_width-sashWidth1 * 2 + gs_sash_width, -_slidingSashThk, unID			: unID=unID+1
+			hotspot2 ac_unit_width/2-gs_frame_width-sashWidth1 * 1, -_slidingSashThk * 2, unID						: unID=unID+1
+		endif
+	endif
+
+	unID=1360
+	hotspot2 -ac_unit_width/2+gs_frame_width_left,							0, unID		:unID=unID+1
+	hotspot2  ac_unit_width/2-gs_frame_width,								0, unID		:unID=unID+1
+	hotspot2 -ac_unit_width/2+gs_frame_width_left,				-gs_frame_thk, unID		:unID=unID+1
+	hotspot2  ac_unit_width/2-gs_frame_width,					-gs_frame_thk, unID		:unID=unID+1
+return

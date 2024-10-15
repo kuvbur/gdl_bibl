@@ -66,7 +66,7 @@ type_razm = 0
 isEmp = 0
 
 !Изображение в ведомость
-if GLOB_VIEW_TYPE=9 and show_perem_2d>EPS then 
+if (GLOB_VIEW_TYPE=9 and show_perem_2d>EPS) or show_perem_2d=5 then 
 	perem_ved_wall_show = 0
 	if GLOB_PREVIEW_MODE=1 then rot2 -SYMB_ROTANGLE
 	h_st_usl = perem_max_h*2
@@ -80,14 +80,20 @@ if show_perem_2d=4 then
 	if vartype(otstup_2)=1 and main_name<>"" then
 		del top
 		add2 0,otstup_2
-		mul2 1,SGN(otstup)
-		if (AC_Wall_Direction_Type=0) or (AC_Wall_Direction_Type=2) then mul2 1,-1
+		mul2 1,sgnx
+		if (AC_Wall_Direction_Type=0) or (AC_Wall_Direction_Type=2) then 
+			mul2 1,-1
+		endif
 		if abs(otstup)-900<EPS then add2 0,abs(otstup)
 		if (AC_Wall_Direction_Type=0) or (AC_Wall_Direction_Type=2) then mul2 1,-1
-		mul2 1,-SGN(otstup)
-		if WIDO_REVEAL_SIDE then mul2 -1,1
+		mul2 1,-sgnx
+		sign_transform = 1
+		if WIDO_REVEAL_SIDE then
+			sign_transform = -1
+			mul2 -1,1
+		endif
 		if perem_mul then rot2 180
-		rot2 90
+		rot2 sign_transform*90
 		add2 -max_t/2,0
 	else
 		rot2 -90
@@ -158,11 +164,16 @@ end
 		_bmat = perem_material[inx]
 		gosub "set_pen" 
 		gosub "draw_rect"
-
 		if nsp/3>0 and abs(int(nsp/3)-nsp/3)<EPS and not(isEmp and _bmat<EPS) and first_emp then
 			pen pen_cut
 			fill _fillType
-			POLY2_b nsp/3, 7, _fillPen, _fillBgPen, use(nsp)
+			if perem_coord[inx][6] = iType_UGx2 then
+				POLY2_b nsp/6, 7, _fillPen, _fillBgPen, get(nsp/2)
+				POLY2_b nsp/3, 7, _fillPen, _fillBgPen, get(nsp)
+				gosub "draw_rect"
+			else
+				POLY2_b nsp/3, 7, _fillPen, _fillBgPen, use(nsp)
+			endif
 			x1=0 : y1=0 : s1=0
 			x1=get(1)
 			y1=get(1)
@@ -181,7 +192,7 @@ end
 		endif
 		if NSP>0 then ttr=max(get(NSP))
 		qty_arm_osn = qty_arm[inx_type][1]
-		if qty_arm_osn>EPS and not(isEmp) then
+		if qty_arm_osn>EPS and not(isEmp) and perem_diam>EPS then
 			pen 21
 			if (qty_arm_osn-1)<EPS then qty_arm_osn = 2
 			perem_shag_osn = (ttt-zs_leftright*2)/(qty_arm_osn-1)
@@ -208,6 +219,7 @@ end
 				else
 					dx = perem_zazor[i]
 				endif
+				if perem_type[i] = iType_UGMIRR then dx = max(perem_tug[i], perem_zazor[i])
 				dt = dx
 			else
 				dx = perem_t[i]*perem_qty_by_type[i]+perem_zazor[i]*(perem_qty_by_type[i]-1)
@@ -274,6 +286,10 @@ end
 					txt = "Ж/б элемент "+str("%.0mm",perem_h[i])+"(H)x"+str("%.0mm",perem_t[i])+"(B)"
 					txt2 = "L="+str("%.0mm", perem_dlin[i])+"мм" 
 				endif
+				if perem_type[i]=iType_UTEPL then 
+					txt = perem_profile[i]
+					txt2 = "t="+str("%.0mm",perem_t[i])+"мм"
+				endif
 				if perem_type[i]=iType_UGMIRR or perem_type[i]=iType_UG or perem_type[i]=iType_UGx2 then txt2 = "L="+str("%.0mm", perem_dlin[i])+"мм"
 			else
 				txt = perem_pos[i]
@@ -291,7 +307,7 @@ end
 				for k=1 to perem_qty_by_type[i]+(perem_type[i]=iType_UGx2)
 					ce = cx+8*PAPER_TO_MODEL*sgn(cv[i][1])
 					line2  ce,csy, cx, cy
-					circle2 cx,cy,0.2*PAPER_TO_MODEL
+					circle2 cx,cy,0.1*PAPER_TO_MODEL
 					cx = cx+(abs(dt)+perem_zazor[i])*(dt<EPS)+abs(dt)*(dt>EPS)
 				next k
 				ll = max(txt_width, txt2_width)
@@ -314,15 +330,15 @@ end
 	DRAWINDEX 0
 	pen pen_cont
 	dim coord_otm[1][2] : coord_otm[1][1]=0: coord_otm[1][2]=0
-	xotm_start = xotm_start + 3*PAPER_TO_MODEL
+	xotm_start = xotm + 5*PAPER_TO_MODEL
 	dim otm[1][2] : otm[1][1]="" : otm[1][2]=""
-	if GLOB_VIEW_TYPE=9 then
+	if GLOB_VIEW_TYPE=9 or show_perem_2d=5 then
 		otm[1][1]=otm_txt_
 	else
 		otm[1][1]=ur
 		otm[1][2]=perem_marka
 	endif
-	call 'macro_otm' parameters otm=otm, polozh = 4, coord=coord_otm,Shrift_tip=Shrift_otm_tip,Shrift=Shrift,Shrift_razm=Shrift_otm_razm,dlin_polki=max(xotm_start, 5*PAPER_TO_MODEL)
+	call 'macro_otm' parameters otm=otm, polozh = 4, coord=coord_otm,Shrift_tip=Shrift_otm_tip,Shrift=Shrift,Shrift_razm=Shrift_otm_razm,dlin_polki=max(xotm_start, 8*PAPER_TO_MODEL)
 return
 
 "side_view":
@@ -442,7 +458,8 @@ return
 return
 
 "draw_rect":
-	if abs(h)>EPS and abs(ttt)>EPS then
+	is_ugol = perem_coord[inx][6] = iType_UG or perem_coord[inx][6] = iType_UGMIRR or perem_coord[inx][6] = iType_UGx2
+	if abs(h)>EPS and ((abs(ttt)>EPS and is_ugol<>1) or is_ugol=1) then
 		flag_form = 0
 		tttug = perem_coord[inx][1]
 		if perem_coord[inx][6] = iType_UG then !Уголок
@@ -459,7 +476,7 @@ return
 			hotspot 0,dh,l
 			hotspot -t_ug,dh-t_ug,0
 			hotspot -t_ug,dh-t_ug,l
-			t=max(zaz,t)
+			ttt=max(zaz,ttt)
 			flag_form = 1
 		endif
 
@@ -473,40 +490,39 @@ return
 			put -tttug +t_ug+zaz,dh-t_ug,jt
 			put -tttug +t_ug+zaz,dh,jt
 			put 0+zaz,dh,-1
-
 			hotspot 0+zaz,dh,0
 			hotspot 0+zaz,dh,l
 			hotspot t_ug+zaz,dh-t_ug,0
 			hotspot t_ug+zaz,dh-t_ug,l
-			t=zaz
+			ttt=max(zaz,t_ug)
 			flag_form = 1
 		endif
 		if perem_coord[inx][6] = iType_UGx2 then !Спаренный уголок
-				t_ug = perem_tug[inx_type]
-				zaz = perem_coord[inx][7]
-				put 0+zaz,dh,jt
-				put 0+zaz,dh+h-t_ug,jt
-				put t_ug+zaz,dh+h-t_ug,jt
-				put t_ug+zaz,dh-t_ug,jt
-				put -tttug+t_ug+zaz,dh-t_ug,jt
-				put -tttug+t_ug+zaz,dh,jt
-				put 0+zaz,dh,-1
-				put 0,dh,jt
-				put 0,dh+h-t_ug,jt
-				put -t_ug,dh+h-t_ug,jt
-				put -t_ug,dh-t_ug,jt
-				put tttug-t_ug,dh-t_ug,jt
-				put tttug-t_ug,dh,jt
-				put 0,dh,-1
-				hotspot 0+zaz,dh,0
-				hotspot 0+zaz,dh,l
-				hotspot t_ug+zaz,dh-t_ug,0
-				hotspot t_ug+zaz,dh-t_ug,l
-				hotspot 0,dh,0
-				hotspot 0,dh,l
-				hotspot -t_ug,dh-t_ug,0
-				hotspot -t_ug,dh-t_ug,l
-				t=zaz
+			t_ug = perem_tug[inx_type]
+			zaz = perem_coord[inx][7]
+			put 0+zaz,dh,jt
+			put 0+zaz,dh+h-t_ug,jt
+			put t_ug+zaz,dh+h-t_ug,jt
+			put t_ug+zaz,dh-t_ug,jt
+			put -tttug+t_ug+zaz,dh-t_ug,jt
+			put -tttug+t_ug+zaz,dh,jt
+			put 0+zaz,dh,-1
+			put 0,dh,jt
+			put 0,dh+h-t_ug,jt
+			put -t_ug,dh+h-t_ug,jt
+			put -t_ug,dh-t_ug,jt
+			put tttug-t_ug,dh-t_ug,jt
+			put tttug-t_ug,dh,jt
+			put 0,dh,-1
+			hotspot 0+zaz,dh,0
+			hotspot 0+zaz,dh,l
+			hotspot t_ug+zaz,dh-t_ug,0
+			hotspot t_ug+zaz,dh-t_ug,l
+			hotspot 0,dh,0
+			hotspot 0,dh,l
+			hotspot -t_ug,dh-t_ug,0
+			hotspot -t_ug,dh-t_ug,l
+			ttt=max(zaz,t_ug)
 			flag_form = 1
 		endif
 		if perem_coord[inx][6] = iType_PROF and flag_form = 0 then 
@@ -520,7 +536,6 @@ return
 			put ttt,dh+h,jt
 			put ttt,dh,jt
 			put 0,dh,-1
-			t = ttt
 		endif
 	endif
 return
@@ -538,7 +553,7 @@ return
 		if ii>EPS then pen_sim = perem_pen_sim_m[ii+1]
 		if pen_sim<1 or pen_sim>255 then pen_sim=1
 	endif
-	if abs(show_perem_2d-3)>EPS and GLOB_VIEW_TYPE<>9 then
+	if abs(show_perem_2d-3)>EPS and GLOB_VIEW_TYPE<>9 and show_perem_2d<>5 then
 		pen_cont = pen_sim
 		pen_cut = pen_sim
 	endif
@@ -638,7 +653,7 @@ return
 			if not(perem_fill_eq) then _bmat = perem_material_type[inx_type]
 			if not(perem_fill_eq) then _pen = perem_pen_cut
 			gosub "set_pen"
-			if _fillTyp>EPS then fill _fillType
+			if _fillType>EPS then fill _fillType
 			pen _pen
 			_penLtIdx = 1
 			for _i = _idxStartPoints_m[inx_type][_iComp] to _idxEndPoints_m[inx_type][_iComp] step 5

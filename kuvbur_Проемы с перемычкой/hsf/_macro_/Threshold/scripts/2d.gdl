@@ -1,0 +1,1589 @@
+
+! Contact person: <NJ>
+
+! ==============================================================================
+! This macro draws the Threshold
+! ------------------------------------------------------------------------------
+! Input parameters:
+! Geometry ---------------------------------------------------------------------
+!	A:						wallhole width (length) (Obsolete)
+!	B:						wallhole height (length)
+!	refWidth:				reference width in curved walls (length)
+!	leftWidth:				wallhole's side distance from the origin at the left side (length)
+!	rightWidth:				wallhole's side distance from the origin at the right side (length)
+!	gs_tolerance_left:		tolerance at the left side (length)
+!	gs_tolerance_right:		tolerance at the right side (length)
+! Functions --------------------------------------------------------------------
+!	gs_IsCurved:			Does the door follow the curvature of the wall? (0 / 1)
+! Door Frame -------------------------------------------------------------------
+!	iFrameStyle:			Style of the door frame (integer; 1-3)
+!	gs_frame_wthk:			Is the door frame thickness equals with the wall thickness? (0 / 1)
+!	gs_fthk:				Thickness of the Door frame (length)
+!	gs_frame_thkin:			Thickness of the intermediate door frames (length)
+!	gs_frame_width_left:	Width of the frame at left (length)
+!	gs_frame_width_right:	Width of the frame at right (length)
+!	gs_ds_thk:				thickness of bumper in case of iFrameStyle = FRAME_STYLE_DOUBLE_REBATE (length)
+!	gs_ds_w:				width of bumper in case of iFrameStyle = FRAME_STYLE_DOUBLE_REBATE (length)
+!	gs_rebate_width:		width of bumper in case of iFrameStyle = FRAME_STYLE_SIMPLE_REBATE (length)
+! Door Leaf --------------------------------------------------------------------
+!	gs_leaf_thk:			Thickness of the Door Leaf (length)
+! Sidelight --------------------------------------------------------------------
+!	gs_sidelight_left:			Enable/disable sidelight at the left side (0 / 1)
+!	gs_sidelight_width_left:	Width of sidelight at the left side (length)
+!	gs_sidelight_right:			Enable/disable sidelight at the right side (0 / 1)
+!	gs_sidelight_width_right:	Width of sidelight at the right side (length)
+! Oversize ---------------------------------------------------------------------
+!	gs_left_oversize:		Left opening oversize (length)
+!	gs_right_oversize:		Right opening oversize (length)
+! Casing -----------------------------------------------------------------------
+!	gs_trim_width_in:		Width of inside Trim. (length)
+!	gs_trim_width_out:		Width of outside Trim. (length)
+! Threshold --------------------------------------------------------------------
+!	iThresholdType:				Identifies the type of the threshold
+!								(integer; 1 = no, 2 = normal threshold, 3 = extended threshold, 4 = extended both sides)
+!	gs_treshold_nosing:		Nosing of the Threshold (length)
+!	gs_treshold_nosing_2:	Nosing of the Threshold (length)
+! 2D Representation ------------------------------------------------------------
+!	lod2D_treshold:			Level of detail. (integer, 0..2)
+!	gs_pen_2D:				Contour pen of the Trim, Sill and Threshold. (pen)
+!	gs_wallhole_fill:		Type of the fill on the Threshold. (fill type)
+!	gs_wallhole_pen_fg:		Fill pen on the Threshold. (pen)
+!	gs_wallhole_pen_bg:		Fill background pen on the Threshold. (pen)
+! Ganging ----------------------------------------------------------------------
+!	gs_stack_left:			Align to door/window on left side (0 / 1)
+!	gs_stack_right:			Align to door/window on right side (0 / 1)
+!
+! Related Global Variables:
+!	GLOB_SCRIPT_TYPE
+!	GLOB_CONTEXT
+!	WALL_THICKNESS
+!	WALL_INCL
+!	WALL_SECT_PEN
+!	WIDO_FRAME_THICKNESS
+!	WIDO_SILL
+!	WIDO_LEFT_JAMB
+!	WIDO_RIGHT_JAMB
+!	WIDO_ORIG_DIST
+!	WIDO_REVEAL_SIDE
+!	SYMB_MIRRORED
+!	SYMB_ROTANGLE
+!
+! Hotspot IDs:
+!	10100:		Extended Threshold Outside Left
+!	10101:		Extended Threshold Outside Right
+!	10102:		Extended Threshold Inside Left
+!	10103:		Extended Threshold Inside Right
+!
+!	10010:		Outside Trim's left inner
+!	10011:		Outside Trim's right inner
+!	10012:		Inside Trim's left inner
+!	10013:		Inside Trim's right inner
+! ==============================================================================
+
+! ==============================================================================
+! Set this to 1 for showing circles on threshold points
+bShowCirclesOnPoints = 0
+! ==============================================================================
+
+
+if lod2D_treshold = 0 then end
+
+! Save the current parameter buffer ============================================
+
+dim savedQueueValues[]
+call "SaveQueue" parameters returned_parameters savedQueueValues
+
+
+! ==============================================================================
+! Handling Detail Levels
+! ==============================================================================
+
+if gs_stack_left then
+	overSizeLeft = gs_left_oversize
+	widoLeftJamb = 0
+endif
+
+if gs_stack_right then
+	overSizeRight = gs_right_oversize
+	widoRightJamb = 0
+endif
+
+if WIDO_REVEAL_SIDE then
+	sy = 1
+	dy = -WIDO_FRAME_THICKNESS
+else
+	sy = -1
+	dy = 0
+endif
+
+
+! ==============================================================================
+!	Draw Threshold
+! ==============================================================================
+
+if (bThreshold & iThresholdType <> TRESHOLD_HEVE  & iThresholdType <> TRESHOLD_HC) then
+
+! defining wallhole coordinate system
+
+	del top
+	if WIDO_REVEAL_SIDE then
+		add2 0,-WIDO_FRAME_THICKNESS
+	else
+		mul2 1,-1
+	endif
+
+	add2 0, -gs_frame_oversize_thk*(iFrameStyle = FRAME_STYLE_WRAPPED_EXTRUSION)
+
+	if curvedWall then put 0, WOD, 900
+
+! left treshold - frame connection
+
+	if	iThresholdType = TRESHOLD_NORMAL |\
+		(iThresholdType = TRESHOLD_EXTENDED & WIDO_REVEAL_SIDE) |\
+		(iThresholdType = TRESHOLD_EXTENDED_SWE & not(WIDO_REVEAL_SIDE)) |\
+		iThresholdType = TRESHOLD_FLAT |\
+		iThresholdType = TRESHOLD_ANSLAG |\
+		iThresholdType = TRESHOLD_GUMMI |\
+		iThresholdType = TRESHOLD_BRANN |\
+		iThresholdType = TRESHOLD_BADEROMS |\
+		iThresholdType = TRESHOLD_AKKUSTIKK |\
+		iThresholdType = TRESHOLD_SIMPLE then
+
+		lineVisibility = 1
+	else
+		lineVisibility = 0
+	endif
+
+
+	if bNor & nor_nosing_left < EPS & nor_threshold_extension > EPS & WIDO_REVEAL_SIDE then
+		startIdx	= idxSillStartPlasterLeft
+		endIdx		= idxSillEndPlasterLeft
+		sectIdx		= 0
+		treshIdx	= 0
+		sectY		= -gs_treshold_width + leftRevealPnts[idxFrameEndRevealLeft][2]
+
+		for i = startIdx to endIdx
+			if abs(leftRevealPnts[i][2]) < EPS then
+				treshIdx = i
+			else
+				if i < endIdx then
+					if 0 < leftRevealPnts[i][2] & 0 > leftRevealPnts[i+1][2] then
+						treshIdx	= i+1
+					endif
+				endif
+			endif
+
+			if abs(leftRevealPnts[i][2] - sectY) < EPS then
+				sectIdx = i
+				sectX	= leftRevealPnts[i][1]
+			endif
+
+			if i < endIdx then
+				if sectY > leftRevealPnts[i][2] & sectY < leftRevealPnts[i+1][2] then
+					sectIdx	= i+1
+					dx = leftRevealPnts[i+1][1] - leftRevealPnts[i][1]
+					dy = leftRevealPnts[i+1][2] - leftRevealPnts[i][2]
+					sectX = leftRevealPnts[i][1] + ((sectY - leftRevealPnts[i][2]) / dy) * dx
+				endif
+			endif
+		next i
+
+		if sectIdx > 0 & treshIdx > 0 then
+			put sectX, sectY, 0
+			for i = sectIdx to treshIdx
+				put leftRevealPnts[i][1], leftRevealPnts[i][2], 0
+			next i
+		endif
+	endif
+
+
+	if iFrameStyle = FRAME_STYLE_BLOCK or lod2D_treshold = 1 then
+		leafDiff = 0
+		if lod2D_treshold = 2 & (iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE) then
+			leafDiff = gs_leaf_thk
+		endif
+		if WIDO_REVEAL_SIDE then
+			if gs_frame_wthk and gs_sidelight_left then
+				put -leftWidth + gs_frame_width_left + gs_tolerance_left, leftRevealPnts[idxFrameStartRevealLeft][2] + nor_mody_left,  0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, leftRevealPnts[idxFrameEndRevealLeft][2] - gs_frame_thkin + nor_mody_left_out,  0,
+					-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameEndRevealLeft][2] - gs_frame_thkin + nor_mody_left_out,  0
+			else
+				put -leftWidth + leftFrameOffset, leftRevealPnts[idxFrameStartRevealLeft][2] + nor_mody_left,  0
+			endif
+
+			put	-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameEndRevealLeft][2] - leafDiff, lineVisibility
+		else
+			put -leftWidth + leftFrameOffset, leftRevealPnts[idxFrameStartRevealLeft][2] + leafDiff,  0
+
+			if gs_frame_wthk and gs_sidelight_left then
+				put -leftWidth + leftFrameOffset, leftRevealPnts[idxFrameStartRevealLeft][2] + gs_frame_thkin - nor_mody_left_out, 0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, leftRevealPnts[idxFrameStartRevealLeft][2] + gs_frame_thkin - nor_mody_left_out, 0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, leftRevealPnts[idxFrameEndRevealLeft][2] - nor_mody_left, lineVisibility
+			else
+				put	-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameEndRevealLeft][2] - nor_mody_left, lineVisibility
+			endif
+		endif
+	endif
+	if iFrameStyle = FRAME_STYLE_DOUBLE_REBATE & lod2D_treshold = 2 then
+		if WIDO_REVEAL_SIDE then
+			if gs_frame_wthk and gs_sidelight_left then
+				put -leftWidth + gs_frame_width_left + gs_tolerance_left, 			leftRevealPnts[idxFrameStartRevealLeft][2] + nor_mody_left,  0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, 			leftRevealPnts[idxFrameEndRevealLeft][2] - gs_frame_thkin + nor_mody_left_out,  0,
+					-leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameEndRevealLeft][2] - gs_frame_thkin + nor_mody_left_out,  0
+			else
+				put -leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameStartRevealLeft][2] + nor_mody_left,  0
+			endif
+
+			put	-leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk - gs_ds_thk, 0,
+				-leftWidth + leftFrameOffset + gs_ds_w, leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk - gs_ds_thk, 0
+
+			if iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE then
+				put -leftWidth + leftFrameOffset + gs_ds_w, leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk, lineVisibility
+			else
+				put -leftWidth + leftFrameOffset + gs_ds_w, leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk, 0,
+					-leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk, 0,
+					-leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameEndRevealLeft][2], lineVisibility
+			endif
+		else
+			if iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE then
+				put -leftWidth + leftFrameOffset + gs_ds_w, leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk, 0
+			else
+				put -leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameStartRevealLeft][2],  0,
+					-leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk, 0,
+					-leftWidth + leftFrameOffset + gs_ds_w, leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk, 0
+			endif
+
+			put	-leftWidth + leftFrameOffset + gs_ds_w, leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk + gs_ds_thk, 0,
+				-leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk + gs_ds_thk, 0
+
+			if gs_frame_wthk and gs_sidelight_left then
+				put	-leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameStartRevealLeft][2] + gs_frame_thkin - nor_mody_left_out, 0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, 			leftRevealPnts[idxFrameStartRevealLeft][2] + gs_frame_thkin - nor_mody_left_out, 0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, 			leftRevealPnts[idxFrameEndRevealLeft][2] - nor_mody_left, lineVisibility
+			else
+				put	-leftWidth + leftFrameOffset, 			leftRevealPnts[idxFrameEndRevealLeft][2] - nor_mody_left, lineVisibility
+			endif
+		endif
+	endif
+	if	(iFrameStyle = FRAME_STYLE_SIMPLE_REBATE		|\
+		 iFrameStyle = FRAME_STYLE_EXTRUSION			|\
+		 iFrameStyle = FRAME_STYLE_WRAPPED_EXTRUSION)	&\
+		lod2D_treshold = 2 then
+		if WIDO_REVEAL_SIDE then
+			if gs_frame_wthk and gs_sidelight_left then
+				put -leftWidth + gs_frame_width_left + gs_tolerance_left, 		leftRevealPnts[idxFrameStartRevealLeft][2] + nor_mody_left, 0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, 		leftRevealPnts[idxFrameEndRevealLeft][2] - gs_frame_thkin + nor_mody_left_out, 0,
+					-leftWidth + leftFrameOffset, 		leftRevealPnts[idxFrameEndRevealLeft][2] - gs_frame_thkin + nor_mody_left_out, 0
+			else
+				put -leftWidth + leftFrameOffset, 		leftRevealPnts[idxFrameStartRevealLeft][2] + nor_mody_left, 0
+			endif
+
+			if iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE then
+				put	-leftWidth + leftFrameOffset, 					leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk, lineVisibility
+			else
+				put	-leftWidth + leftFrameOffset, 					leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk, 0,
+					-leftWidth + leftFrameOffset - gs_rebate_width, leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk, 0,
+					-leftWidth + leftFrameOffset - gs_rebate_width, leftRevealPnts[idxFrameEndRevealLeft][2], 		 lineVisibility
+			endif
+		else
+			if iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE then
+				put -leftWidth + leftFrameOffset, 					leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk, 0
+			else
+				put -leftWidth + leftFrameOffset - gs_rebate_width, leftRevealPnts[idxFrameStartRevealLeft][2],  		 0,
+					-leftWidth + leftFrameOffset - gs_rebate_width, leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk, 0,
+					-leftWidth + leftFrameOffset, 					leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk, 0
+			endif
+
+			if gs_frame_wthk and gs_sidelight_left then
+				put -leftWidth + leftFrameOffset, 	leftRevealPnts[idxFrameStartRevealLeft][2] + gs_frame_thkin - nor_mody_left_out, 0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, 	leftRevealPnts[idxFrameStartRevealLeft][2] + gs_frame_thkin - nor_mody_left_out, 0,
+					-leftWidth + gs_frame_width_left + gs_tolerance_left, 	leftRevealPnts[idxFrameEndRevealLeft][2] - nor_mody_left, lineVisibility
+			else
+				put	-leftWidth + leftFrameOffset, 		leftRevealPnts[idxFrameEndRevealLeft][2] - nor_mody_left, lineVisibility
+			endif
+		endif
+	endif
+
+
+! Extended part of treshold on "board" side
+
+	if	iThresholdType = TRESHOLD_BOTHEXTENDED |\
+		((iThresholdType = TRESHOLD_EXTENDED | (nor_nosing_left > EPS)) & not(WIDO_REVEAL_SIDE)) |\
+		(iThresholdType = TRESHOLD_EXTENDED_SWE & WIDO_REVEAL_SIDE) then
+
+		leftLastPoint_X	 = leftRevealPnts[idxBoardEndRevealLeft][1]
+		leftLastPoint_Y	 = leftRevealPnts[idxBoardEndRevealLeft][2]
+
+		if not(WIDO_REVEAL_SIDE) then
+			leftOverhang  = gs_treshold_ovhg_2 * not(gs_stack_left)
+			if bNor then
+				nosing = nor_nosing_left
+			else
+				nosing = gs_treshold_nosing_2
+			endif
+		else
+			leftOverhang  = gs_treshold_ovhg * not(gs_stack_left)
+			if bNor then
+				nosing = nor_nosing_left
+			else
+				nosing = gs_treshold_nosing
+			endif
+		endif
+
+		if bTShapedOpening & gs_sidelight_left & gs_sidelight_parapet_hgt_left > EPS then
+			px  = -leftWidth + gs_sidelight_WHole_width_left + gs_reveal_double_innerLeft_sL
+			px1 = px - leftOverhang
+			if curvedWall then
+				py  = WOD - signWallIsLeft * sqr(radBoard^2 - (px + thkPlasterAtBoardSlLeft)^2)
+				py0 = WOD - signWallIsLeft * sqr(radBoard^2 - px1^2)
+				py1 = py + nosing
+			else
+				py  = WALL_THICKNESS - WIDO_SILL + px * incX - leftOverhang * incX
+				py0 = py
+				py1 = py + nosing / cos(WALL_INCL)
+			endif
+			put	px + thkPlasterAtBoardSlLeft,	WIDO_FRAME_THICKNESS,	0,
+				px + thkPlasterAtBoardSlLeft,	py,						0,
+				px1,							py0,					1 + 3000 * (curvedWall & (leftOverhang > EPS)),
+				px1,							py1,					1
+		else
+			for i = idxBoardStartPlasterLeft to idxBoardEndPlasterLeft
+				put leftRevealPnts[i][1], leftRevealPnts[i][2], 0
+			next i
+
+			if not(curvedWall) then
+				px1 = leftLastPoint_X - leftOverhang
+				py1 = leftLastPoint_Y - leftOverhang * incX + nosing / cos (WALL_INCL)
+
+				put leftLastPoint_X, leftLastPoint_Y, 0,
+					leftLastPoint_X  - leftOverhang, leftLastPoint_Y  - leftOverhang * incX,							not(gs_stack_left),
+					leftLastPoint_X  - leftOverhang, leftLastPoint_Y  - leftOverhang * incX + nosing / cos (WALL_INCL),	1
+			else
+				p1x = leftLastPoint_X  - leftOverhang
+				p2x = leftLastPoint_X  - leftOverhang
+				p1y = leftLastPoint_Y
+				p2y = leftLastPoint_Y  + nosing
+
+				px1 = leftLastPoint_X - leftOverhang
+				py1 = leftLastPoint_Y + nosing
+
+				if bParalellInCurvedWalls then
+					xo = 0 : yo = WOD : ro = radBoard
+					x1 = p1x : y1 = 1 : x2 = p1x : y2 = 0
+
+					gosub 101
+					gosub 102
+
+					p1y = cy
+				else
+					xo = 0 : yo = WOD : ro = radBoard
+					x1 = p2x : y1 = p2y : x2 = p2x * bNor : y2 = WOD
+
+					gosub 101
+					gosub 102
+
+					p1y = cy
+					p1x = cx
+				endif
+
+				if gs_stack_left then
+					p1x = leftLastPoint_X
+					p1y = leftLastPoint_Y
+					p2x = leftLastPoint_X + (((leftLastPoint_X - leftRevealPnts[idxFrameEndRevealLeft][1]) * (p2y - leftLastPoint_Y)) / (leftLastPoint_Y - leftRevealPnts[idxFrameEndRevealLeft][2]))
+					px1 = p2x
+				endif
+
+				put leftLastPoint_X, leftLastPoint_Y, 0,
+					p1x, p1y, 3000 + not(gs_stack_left),
+					p2x, p2y, 1
+			endif
+		endif
+	endif
+
+	if	iThresholdType = TRESHOLD_BOTHEXTENDED |\
+		((iThresholdType = TRESHOLD_EXTENDED | (nor_nosing_right > EPS)) & not(WIDO_REVEAL_SIDE)) |\
+		(iThresholdType = TRESHOLD_EXTENDED_SWE & WIDO_REVEAL_SIDE) then
+
+		rightLastPoint_X = rightRevealPnts[idxBoardEndRevealRight][1]
+		rightLastPoint_Y = rightRevealPnts[idxBoardEndRevealRight][2]
+
+		if not(WIDO_REVEAL_SIDE) then
+			rightOverhang = gs_treshold_ovhg_2 * not(gs_stack_right)
+			if bNor then
+				nosing = nor_nosing_right
+			else
+				nosing = gs_treshold_nosing_2
+			endif
+		else
+			rightOverhang = gs_treshold_ovhg * not(gs_stack_right)
+			if bNor then
+				nosing = nor_nosing_right
+			else
+				nosing = gs_treshold_nosing
+			endif
+		endif
+
+		if bTShapedOpening & gs_sidelight_right & gs_sidelight_parapet_hgt_right > EPS then
+			px  = rightWidth - gs_sidelight_WHole_width_right - gs_reveal_double_innerRight_sR
+			px2 = px + rightOverhang
+			if curvedWall then
+				py  = WOD - signWallIsLeft * sqr(radBoard^2 - (px - thkPlasterAtBoardSlRight)^2)
+				py0 = WOD - signWallIsLeft * sqr(radBoard^2 - px2^2)
+				py2 = py + nosing
+			else
+				py  = WALL_THICKNESS - WIDO_SILL + px * incX - leftOverhang * incX
+				py0 = py
+				py2 = py + nosing / cos(WALL_INCL)
+			endif
+			put	px2,							py2,					1,
+				px2,							py0,					0,
+				px - thkPlasterAtBoardSlRight,	py,						3000 * (curvedWall & (rightOverhang > EPS)),
+				px - thkPlasterAtBoardSlRight,	WIDO_FRAME_THICKNESS,	0
+		else
+			if not(curvedWall) then
+				put	rightLastPoint_X + rightOverhang, rightLastPoint_Y + rightOverhang * incX + nosing / cos (WALL_INCL), not(gs_stack_right),
+					rightLastPoint_X + rightOverhang, rightLastPoint_Y + rightOverhang * incX, 0,
+					rightLastPoint_X, rightLastPoint_Y, 0
+
+				px2 = rightLastPoint_X + rightOverhang
+				py2 = rightLastPoint_Y + rightOverhang * incX + nosing / cos (WALL_INCL)
+			else
+				p3x = rightLastPoint_X + rightOverhang
+				p4x = rightLastPoint_X + rightOverhang
+				p3y = rightLastPoint_Y + nosing
+				p4y = rightLastPoint_Y
+
+				px2 = rightLastPoint_X + rightOverhang
+				py2 = rightLastPoint_Y + nosing
+
+				if bParalellInCurvedWalls then
+					xo = 0 : yo = WOD :	ro = radBoard
+					x1 = p4x : y1 = 1 : x2 = p4x : y2 = 0
+					gosub 101
+					gosub 102
+					p4y = cy
+				else
+					xo = 0 : yo = WOD : ro = radBoard
+					x1 = p3x : y1 = p3y : x2 = p3x * bNor : y2 = WOD
+					gosub 101
+					gosub 102
+					p4y = cy
+					p4x = cx
+				endif
+
+				if gs_stack_right then
+					p4x = rightLastPoint_X
+					p4y = rightLastPoint_Y
+					p3x = rightLastPoint_X + (((rightLastPoint_X - rightRevealPnts[idxFrameEndRevealRight][1]) * (p3y - rightLastPoint_Y)) / (rightLastPoint_Y - rightRevealPnts[idxFrameEndRevealRight][2]))
+					px2 = p3x
+				endif
+
+				put p3x, p3y, not(gs_stack_right),
+					p4x, p4y, 0,
+					rightLastPoint_X, rightLastPoint_Y, 3000
+			endif
+
+			for i = idxBoardEndPlasterRight to idxBoardStartPlasterRight step -1
+				put rightRevealPnts[i][1], rightRevealPnts[i][2], 0
+			next i
+		endif
+
+		if bShowAddHotspots then
+			hotspot2 px1, py1, 10102
+			hotspot2 px2, py2, 10103
+		endif
+	endif
+
+
+	if bNor & nor_nosing_left < EPS & nor_threshold_extension > EPS & not(WIDO_REVEAL_SIDE) then
+		startIdx	= idxBoardStartPlasterLeft
+		endIdx		= idxBoardEndPlasterLeft
+		sectIdx		= 0
+		sectY		= gs_treshold_width
+
+		for i = startIdx to endIdx
+			if abs(leftRevealPnts[i][2] - sectY) < EPS then
+				sectIdx = i
+				sectX	= leftRevealPnts[i][1]
+				i = endIdx
+			endif
+
+			if i < endIdx then
+				if sectY > leftRevealPnts[i][2] & sectY < leftRevealPnts[i+1][2] then
+					sectIdx	= i+1
+					dx = leftRevealPnts[i+1][1] - leftRevealPnts[i][1]
+					dy = leftRevealPnts[i+1][2] - leftRevealPnts[i][2]
+					sectX = leftRevealPnts[i][1] + ((sectY - leftRevealPnts[i][2]) / dy) * dx
+					i = endIdx
+				endif
+			endif
+		next i
+
+		if sectIdx > 0 then
+			for i = startIdx to sectIdx - 1
+				put leftRevealPnts[i][1], leftRevealPnts[i][2], 0
+			next i
+			put sectX, sectY, lineVisibility
+		endif
+	endif
+
+
+! right treshold - frame connection
+
+	if	iThresholdType = TRESHOLD_NORMAL |\
+		(iThresholdType = TRESHOLD_EXTENDED & not(WIDO_REVEAL_SIDE)) |\
+		(iThresholdType = TRESHOLD_EXTENDED_SWE & WIDO_REVEAL_SIDE) |\
+		iThresholdType = TRESHOLD_FLAT |\
+		iThresholdType = TRESHOLD_ANSLAG |\
+		iThresholdType = TRESHOLD_GUMMI |\
+		iThresholdType = TRESHOLD_BRANN |\
+		iThresholdType = TRESHOLD_BADEROMS |\
+		iThresholdType = TRESHOLD_AKKUSTIKK |\
+		iThresholdType = TRESHOLD_SIMPLE then
+
+		lineVisibility = 1
+	else
+		lineVisibility = 0
+	endif
+
+	if bNor & nor_nosing_right < EPS & nor_threshold_extension > EPS & not(WIDO_REVEAL_SIDE) then
+		startIdx	= idxBoardStartPlasterRight
+		endIdx		= idxBoardEndPlasterRight
+		sectIdx		= 0
+		sectY		= gs_treshold_width
+
+		for i = startIdx to endIdx
+			if abs(rightRevealPnts[i][2] - sectY) < EPS then
+				sectIdx = i
+				sectX	= rightRevealPnts[i][1]
+				i = endIdx
+			endif
+
+			if i < endIdx then
+				if sectY > rightRevealPnts[i][2] & sectY < rightRevealPnts[i+1][2] then
+					sectIdx	= i+1
+					dx = rightRevealPnts[i+1][1] - rightRevealPnts[i][1]
+					dy = rightRevealPnts[i+1][2] - rightRevealPnts[i][2]
+					sectX = rightRevealPnts[i][1] + ((sectY - rightRevealPnts[i][2]) / dy) * dx
+					i = endIdx
+				endif
+			endif
+		next i
+
+		if sectIdx > 0 then
+			put sectX, sectY, 0
+			for i = sectIdx - 1 to startIdx step -1
+				put rightRevealPnts[i][1], rightRevealPnts[i][2], 0
+			next i
+		endif
+	endif
+
+
+
+
+	if iFrameStyle = FRAME_STYLE_BLOCK | lod2D_treshold = 1 then
+		if WIDO_REVEAL_SIDE then
+			put	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - leafDiff, 0
+			if gs_frame_wthk and gs_sidelight_right then
+				put rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - gs_frame_thkin + nor_mody_right_out,  0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, rightRevealPnts[idxFrameEndRevealRight][2] - gs_frame_thkin + nor_mody_right_out,  0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, rightRevealPnts[idxFrameStartRevealRight][2] + nor_mody_right,  lineVisibility
+			else
+				put rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + nor_mody_right,  lineVisibility
+			endif
+		else
+			if gs_frame_wthk and gs_sidelight_right then
+				put	rightWidth - gs_frame_width_right - gs_tolerance_right, rightRevealPnts[idxFrameEndRevealRight][2] - nor_mody_right, 0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, rightRevealPnts[idxFrameStartRevealRight][2] + gs_frame_thkin  - nor_mody_right_out, 0,
+					rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + gs_frame_thkin  - nor_mody_right_out, 0
+			else
+				put	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - nor_mody_right, 0
+			endif
+
+			put	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + leafDiff,  lineVisibility
+		endif
+	endif
+	if iFrameStyle = FRAME_STYLE_DOUBLE_REBATE & lod2D_treshold = 2 then
+		if WIDO_REVEAL_SIDE then
+			if iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE then
+				put rightWidth - rightFrameOffset - gs_ds_w, rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk, 0
+			else
+				put	rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameEndRevealRight][2], 0,
+					rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk, 0,
+					rightWidth - rightFrameOffset - gs_ds_w, rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk, 0
+			endif
+
+			put	rightWidth - rightFrameOffset - gs_ds_w, rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk - gs_ds_thk, 0,
+				rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk - gs_ds_thk, 0
+
+			if gs_frame_wthk and gs_sidelight_right then
+				put	rightWidth - rightFrameOffset, 		rightRevealPnts[idxFrameEndRevealRight][2] - gs_frame_thkin + nor_mody_right_out,  0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, 	rightRevealPnts[idxFrameEndRevealRight][2] - gs_frame_thkin + nor_mody_right_out,  0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, 	rightRevealPnts[idxFrameStartRevealRight][2] + nor_mody_right,  lineVisibility
+			else
+				put	rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameStartRevealRight][2] + nor_mody_right,  lineVisibility
+			endif
+		else
+			if gs_frame_wthk and gs_sidelight_right then
+				put	rightWidth - gs_frame_width_right - gs_tolerance_right, 			rightRevealPnts[idxFrameEndRevealRight][2] - nor_mody_right, 0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, 			rightRevealPnts[idxFrameStartRevealRight][2] + gs_frame_thkin - nor_mody_right_out, 0,
+					rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameStartRevealRight][2] + gs_frame_thkin - nor_mody_right_out, 0
+			else
+				put	rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameEndRevealRight][2] - nor_mody_right, 0
+			endif
+
+			put	rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk + gs_ds_thk,  0,
+				rightWidth - rightFrameOffset - gs_ds_w, rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk + gs_ds_thk,  0
+
+			if iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE then
+				put rightWidth - rightFrameOffset - gs_ds_w, rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk,  lineVisibility
+			else
+				put rightWidth - rightFrameOffset - gs_ds_w, rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk,  0,
+					rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk,  0,
+					rightWidth - rightFrameOffset, 			rightRevealPnts[idxFrameStartRevealRight][2],  lineVisibility
+			endif
+		endif
+	endif
+	if	(iFrameStyle = FRAME_STYLE_SIMPLE_REBATE		|\
+		 iFrameStyle = FRAME_STYLE_EXTRUSION			|\
+		 iFrameStyle = FRAME_STYLE_WRAPPED_EXTRUSION)	&\
+		lod2D_treshold = 2 then
+		if WIDO_REVEAL_SIDE then
+			if iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE then
+				put rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk, 0
+			else
+				put	rightWidth - rightFrameOffset + gs_rebate_width, rightRevealPnts[idxFrameEndRevealRight][2], 0,
+					rightWidth - rightFrameOffset + gs_rebate_width, rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk, 0,
+					rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk, 0
+			endif
+
+			if gs_frame_wthk and gs_sidelight_right then
+				put	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - gs_frame_thkin + nor_mody_right_out,  0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, rightRevealPnts[idxFrameEndRevealRight][2] - gs_frame_thkin + nor_mody_right_out,  0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, rightRevealPnts[idxFrameStartRevealRight][2] + nor_mody_right,  lineVisibility
+			else
+				put	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + nor_mody_right,  lineVisibility
+			endif
+		else
+			if gs_frame_wthk and gs_sidelight_right then
+				put	rightWidth - gs_frame_width_right - gs_tolerance_right, rightRevealPnts[idxFrameEndRevealRight][2] - nor_mody_right, 0,
+					rightWidth - gs_frame_width_right - gs_tolerance_right, rightRevealPnts[idxFrameStartRevealRight][2] + gs_frame_thkin - nor_mody_right_out, 0,
+					rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + gs_frame_thkin - nor_mody_right_out, 0
+			else
+				put	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - nor_mody_right, 0
+			endif
+
+			if iThresholdType = TRESHOLD_NORMAL | iThresholdType = TRESHOLD_EXTENDED | iThresholdType = TRESHOLD_EXTENDED_SWE then
+				put	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk,  lineVisibility
+			else
+				put	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk,  0,
+					rightWidth - rightFrameOffset + gs_rebate_width, rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk,  0,
+					rightWidth - rightFrameOffset + gs_rebate_width, rightRevealPnts[idxFrameStartRevealRight][2],  lineVisibility
+			endif
+		endif
+	endif
+
+
+! Extended part of treshold on "sill" side
+	if	iThresholdType = TRESHOLD_BOTHEXTENDED |\
+		((iThresholdType = TRESHOLD_EXTENDED | nor_nosing_right > EPS) & WIDO_REVEAL_SIDE) |\
+		(iThresholdType = TRESHOLD_EXTENDED_SWE & not(WIDO_REVEAL_SIDE)) then
+
+		if not(WIDO_REVEAL_SIDE) then
+			rightOverhang = gs_treshold_ovhg * not (gs_stack_right)
+			if bNor then
+				nosing = nor_nosing_right
+			else
+				nosing = gs_treshold_nosing
+			endif
+		else
+			rightOverhang = gs_treshold_ovhg_2 * not (gs_stack_right)
+			if bNor then
+				nosing = nor_nosing_right
+			else
+				nosing = gs_treshold_nosing_2
+			endif
+		endif
+
+		if bTShapedOpening & gs_sidelight_right & gs_sidelight_parapet_hgt_right > EPS then
+			px  = rightWidth - gs_sidelight_WHole_width_right - gs_reveal_right_sR
+			px2 = px + rightOverhang
+			if curvedWall then
+				py  = WOD - signWallIsLeft * sqr(radSill^2 - (px - thkPlasterAtSillSlRight)^2)
+				py0 = WOD - signWallIsLeft * sqr(radSill^2 - px2^2)
+				py2 = py - nosing
+			else
+				py  = -WIDO_SILL
+				py0 = py
+				py2 = py - nosing
+			endif
+			put	px - thkPlasterAtSillSlRight,	0,		0,
+				px - thkPlasterAtSillSlRight,	py,		0,
+				px2,							py0,	1 + 3000 * (curvedWall & (rightOverhang > EPS)),
+				px2,							py2,	1
+		else
+			put	rightRevealPnts[idxFrameStartRevealRight][1], rightRevealPnts[idxFrameStartRevealRight][2],  0
+
+			if iRevealType > REVEAL_NO then
+				put rightRevealPnts[idxFrameStartRevealRight-1][1], rightRevealPnts[idxFrameStartRevealRight-1][2], 0
+			endif
+
+			for i = idxSillEndPlasterRight to idxSillStartPlasterRight step -1
+				put rightRevealPnts[i][1], rightRevealPnts[i][2], 0
+			next i
+
+			if not(curvedWall) then
+				px2 = rightRevealPnts[1][1] + rightOverhang
+				py2 = rightRevealPnts[1][2] - nosing
+
+				put px2, rightRevealPnts[1][2],  not(gs_stack_right),
+					px2, py2, 1
+			else
+				p3x = rightRevealPnts[1][1] + rightOverhang
+				p4x = rightRevealPnts[1][1] + rightOverhang
+				p3y = rightRevealPnts[1][2] - nosing
+				p4y = rightRevealPnts[1][2]
+				px2 = rightRevealPnts[1][1] + rightOverhang
+				py2 = rightRevealPnts[1][2] - nosing
+
+				if bParalellInCurvedWalls then
+					xo = 0 : yo = WOD : ro = radSill
+					x1 = p4x : y1 = 1 : x2 = p4x :y2 = 0
+					gosub 101
+					gosub 102
+					p4y = cy
+				else
+					xo = 0 : yo = WOD : ro = radSill
+					x1 = p3x : y1 = p3y : x2 = p3x * bNor : y2 = WOD
+					gosub 101
+					gosub 102
+					p4y = cy
+					p4x = cx
+				endif
+
+				if gs_stack_right then
+					p4x = rightRevealPnts[1][1]
+					p4y = rightRevealPnts[1][2]
+					if abs(rightRevealPnts[1][2] - rightRevealPnts[2][2]) < EPS then
+						p3x = rightRevealPnts[1][1] + (((rightRevealPnts[1][1] - rightRevealPnts[idxFrameEndRevealRight][1]) * (p3y - rightRevealPnts[1][2])) / (rightRevealPnts[1][2] - rightRevealPnts[idxFrameEndRevealRight][2]))
+					else
+						p3x = rightRevealPnts[1][1] + (((rightRevealPnts[1][1] - rightRevealPnts[2][1]) * (p3y - rightRevealPnts[1][2])) / (rightRevealPnts[1][2] - rightRevealPnts[2][2]))
+					endif
+					px2 = p3x
+				endif
+
+				put	p4x, p4y, 3000 + not(gs_stack_right),
+					p3x, p3y, 1
+			endif
+		endif
+	endif
+
+	if	iThresholdType = TRESHOLD_BOTHEXTENDED |\
+		((iThresholdType = TRESHOLD_EXTENDED | nor_nosing_left > EPS) and WIDO_REVEAL_SIDE) |\
+		(iThresholdType = TRESHOLD_EXTENDED_SWE & not(WIDO_REVEAL_SIDE)) then
+
+		if not(WIDO_REVEAL_SIDE) then
+			leftOverhang  = gs_treshold_ovhg * not (gs_stack_left)
+			if bNor then
+				nosing = nor_nosing_left
+			else
+				nosing = gs_treshold_nosing
+			endif
+		else
+			leftOverhang = gs_treshold_ovhg_2 * not (gs_stack_left)
+			if bNor then
+				nosing = nor_nosing_left
+			else
+				nosing = gs_treshold_nosing_2
+			endif
+		endif
+
+		if bTShapedOpening & gs_sidelight_left & gs_sidelight_parapet_hgt_left > EPS then
+			px  = -leftWidth + gs_sidelight_WHole_width_left + gs_reveal_left_sL
+			px1 = px - leftOverhang
+			if curvedWall then
+				py  = WOD - signWallIsLeft * sqr(radSill^2 - (px + thkPlasterAtSillSlLeft)^2)
+				py0 = WOD - signWallIsLeft * sqr(radSill^2 - px1^2)
+				py1 = py - nosing
+			else
+				py  = -WIDO_SILL
+				py0 = py
+				py1 = py - nosing
+			endif
+			put	px1,							py1,	not(gs_stack_left),
+				px1,							py0,	0,
+				px + thkPlasterAtSillSlLeft,	py,		3000 * (curvedWall & (leftOverhang > EPS)),
+				px + thkPlasterAtSillSlLeft,	0,		0
+		else
+			if not(curvedWall) then
+				px1 = leftRevealPnts[1][1] - leftOverhang
+				py1 = leftRevealPnts[1][2] - nosing
+
+				put	px1, py1, not(gs_stack_left),
+					px1, leftRevealPnts[1][2],  0
+			else
+				p1x = leftRevealPnts[1][1]  - leftOverhang
+				p2x = leftRevealPnts[1][1]  - leftOverhang
+				p1y = leftRevealPnts[1][2]
+				p2y = leftRevealPnts[1][2]  - nosing
+				px1 = leftRevealPnts[1][1]  - leftOverhang
+				py1 = leftRevealPnts[1][2]  - nosing
+
+				if bParalellInCurvedWalls then
+					xo = 0 : yo = WOD : ro = radSill
+					x1 = p1x : y1 = 1 : x2 = p1x :y2 = 0
+					gosub 101
+					gosub 102
+					p1y = cy
+				else
+					xo = 0 : yo = WOD : ro = radSill
+					x1 = p2x : y1 = p2y : x2 = bNor * p2x : y2 = WOD
+					gosub 101
+					gosub 102
+					p1y = cy
+					p1x = cx
+				endif
+
+				if gs_stack_left then
+					p1x = leftRevealPnts[1][1]
+					p1y = leftRevealPnts[1][2]
+					if abs(leftRevealPnts[1][2] - leftRevealPnts[2][2]) < EPS then
+						p2x = leftRevealPnts[1][1] + (((leftRevealPnts[1][1] - leftRevealPnts[idxFrameEndRevealLeft][1]) * (p2y - leftRevealPnts[1][2])) / (leftRevealPnts[1][2] - leftRevealPnts[idxFrameEndRevealLeft][2]))
+					else
+						p2x = leftRevealPnts[1][1] + (((leftRevealPnts[1][1] - leftRevealPnts[2][1]) * (p2y - leftRevealPnts[1][2])) / (leftRevealPnts[1][2] - leftRevealPnts[2][2]))
+					endif
+					px1 = p2x
+				endif
+
+				put	p2x, p2y, not(gs_stack_left),
+					p1x, p1y, 0
+			endif
+
+			for i = idxSillStartPlasterLeft to idxSillEndPlasterLeft
+				put leftRevealPnts[i][1], leftRevealPnts[i][2], 0
+			next i
+
+			if iRevealType > REVEAL_NO then
+				put leftRevealPnts[idxFrameStartRevealLeft-1][1], leftRevealPnts[idxFrameStartRevealLeft-1][2], 0
+			endif
+
+			put	leftRevealPnts[idxFrameStartRevealLeft][1], leftRevealPnts[idxFrameStartRevealLeft][2],  0
+		endif
+
+		if bShowAddHotspots then
+			hotspot2 px1, py1, 10100
+			hotspot2 px2, py2, 10101
+		endif
+	endif
+
+
+	if bNor & nor_nosing_right < EPS & nor_threshold_extension > EPS & WIDO_REVEAL_SIDE then
+		startIdx	= idxSillStartPlasterRight
+		endIdx		= idxSillEndPlasterRight
+		sectIdx		= 0
+		treshIdx	= 0
+		sectY		= -gs_treshold_width + rightRevealPnts[idxFrameEndRevealRight][2]
+
+		for i = startIdx to endIdx
+			if abs(rightRevealPnts[i][2]) < EPS then
+				treshIdx = i
+			else
+				if i < endIdx then
+					if 0 < rightRevealPnts[i][2] & 0 > rightRevealPnts[i+1][2] then
+						treshIdx	= i+1
+					endif
+				endif
+			endif
+
+			if abs(rightRevealPnts[i][2] - sectY) < EPS then
+				sectIdx = i
+				sectX	= rightRevealPnts[i][1]
+			endif
+
+			if i < endIdx then
+				if sectY > rightRevealPnts[i][2] & sectY < rightRevealPnts[i+1][2] then
+					sectIdx	= i+1
+					dx = rightRevealPnts[i+1][1] - rightRevealPnts[i][1]
+					dy = rightRevealPnts[i+1][2] - rightRevealPnts[i][2]
+					sectX = rightRevealPnts[i][1] + ((sectY - rightRevealPnts[i][2]) / dy) * dx
+				endif
+			endif
+		next i
+
+		if sectIdx > 0 & treshIdx > 0 then
+
+
+			for i = treshIdx to sectIdx step -1
+				put rightRevealPnts[i][1], rightRevealPnts[i][2], 0
+			next i
+
+			put sectX, sectY, lineVisibility
+
+		endif
+	endif
+
+
+! Draw Threshold ---------------------------------------------------------------
+
+	if nsp > 6 then
+		pen gs_pen_2D
+		line_type gs_sillTreshold_lineType
+		set fill gs_wallhole_fill
+
+		if bShowCirclesOnPoints then
+			dim tempCoords[][3]
+
+			for i = 1 to (nsp/3)
+				tempCoords[i][1] = get(1)
+				tempCoords[i][2] = get(1)
+				tempCoords[i][3] = get(1)
+				drawindex 50
+				circle2 tempCoords[i][1], tempCoords[i][2], 0.01
+			next i
+
+			for i = 1 to vardim1(tempCoords)
+				put tempCoords[i][1], tempCoords[i][2], tempCoords[i][3]
+			next i
+		endif
+
+		poly2_b nsp/3, 1+2+4+64, gs_wallhole_pen_fg, gs_wallhole_pen_bg, get(nsp)
+
+		if gs_threshold_nor & lineVisibility & lod2D_treshold > 0 then
+
+			if gs_frame_wthk then
+				if WIDO_REVEAL_SIDE then
+					line2	-leftWidth + gs_frame_width_left + gs_tolerance_left, leftRevealPnts[idxFrameStartRevealLeft][2] + nor_mody_left,
+							-leftWidth + gs_frame_width_left + gs_tolerance_left, leftRevealPnts[idxFrameStartRevealLeft][2]
+					line2	rightWidth - gs_frame_width_right - gs_tolerance_right*0, rightRevealPnts[idxFrameStartRevealRight][2] + nor_mody_right,
+							rightWidth - gs_frame_width_right - gs_tolerance_right*0, rightRevealPnts[idxFrameStartRevealRight][2]
+				else
+					line2	-leftWidth + gs_frame_width_left + gs_tolerance_left, leftRevealPnts[idxFrameEndRevealLeft][2] - nor_mody_left,
+							-leftWidth + gs_frame_width_left + gs_tolerance_left, leftRevealPnts[idxFrameEndRevealLeft][2]
+					line2	rightWidth - gs_frame_width_right - gs_tolerance_right*0, rightRevealPnts[idxFrameEndRevealRight][2] - nor_mody_right,
+							rightWidth - gs_frame_width_right - gs_tolerance_right*0, rightRevealPnts[idxFrameEndRevealRight][2]
+				endif
+			else
+				if WIDO_REVEAL_SIDE then
+					line2	-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameStartRevealLeft][2] + nor_mody_left,
+							-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameStartRevealLeft][2]
+					line2	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + nor_mody_right,
+							rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2]
+				else
+					line2	-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameEndRevealLeft][2] - nor_mody_left,
+							-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameEndRevealLeft][2]
+					line2	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - nor_mody_right,
+							rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2]
+				endif
+			endif
+
+			if	iFrameStyle = FRAME_STYLE_SIMPLE_REBATE		|\
+				iFrameStyle = FRAME_STYLE_EXTRUSION			|\
+				iFrameStyle = FRAME_STYLE_WRAPPED_EXTRUSION	then
+				if WIDO_REVEAL_SIDE then
+					LINE2	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameEndRevealRight][2] - gs_leaf_thk,
+							-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameEndRevealLeft][2] - gs_leaf_thk
+				else
+					LINE2	rightWidth - rightFrameOffset, rightRevealPnts[idxFrameStartRevealRight][2] + gs_leaf_thk,
+							-leftWidth + leftFrameOffset, leftRevealPnts[idxFrameStartRevealLeft][2] + gs_leaf_thk
+				endif
+			endif
+		endif
+	else
+		for i=1 to nsp
+			n = get(1)
+		next i
+	endif
+	del 1  ! surrounding frame offset
+	del 1  ! deleting wallhole coordinate system
+endif
+
+
+! Restore the saved parameter buffer ===========================================
+
+call "LoadQueue" parameters savedQueueValues = savedQueueValues
+
+
+! ==============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ==============================================================================
+
+
+! ==============================================================================
+! === SUBROUTINES
+! ==============================================================================
+
+! ==============================================================================
+!		Extended Threshold - Outside
+! ==============================================================================
+
+1200:
+	bJambAtExtTreshold = WIDO_REVEAL_SIDE
+	bTrimAtExtThreshold = ((bJambAtExtTreshold & bDrawOutsideTrim) | (not(bJambAtExtTreshold) & bDrawInsideTrim))
+
+	if bJambAtExtTreshold then
+		thkSkinLeft  = thkSkinAtSillLeft
+		thkSkinRight = thkSkinAtSillRight
+		penSkin	= penSkinAtSill
+		ltSkin	= ltSkinAtSill
+	else
+		thkSkinLeft  = thkSkinAtBoardLeft
+		thkSkinRight = thkSkinAtBoardRight
+		penSkin	= penSkinAtBoard
+		ltSkin	= ltSkinAtBoard
+	endif
+
+	if not(curvedWall) then
+
+		! ===== Straigh Wall =====
+
+		bBevelExtTreshold = bInclinedWall & (bInclinedWall & not(WIDO_REVEAL_SIDE))
+
+		pxLW = -leftWidth  + gs_frame_width_left  + gs_tolerance_left
+		pxRW =  rightWidth - gs_frame_width_right - gs_tolerance_right
+
+		rightJamb = bJambAtExtTreshold * widoRightJamb
+		leftJamb  = bJambAtExtTreshold * widoLeftJamb
+
+		if gs_frame_wthk then
+			trimWidthL = 0
+			trimWidthR = 0
+			sillThk = 0
+		else
+			trimWidth  = ((lod2D_treshold = 2) & bTrimAtExtThreshold) * gs_trim_width_out
+			trimWidthL = gs_frame_width_left  + gs_tolerance_left  - trimWidth
+			trimWidthR = gs_frame_width_right + gs_tolerance_right - trimWidth
+
+			if bInclinedWall then
+				if bBevelExtTreshold then
+					sillThk = WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL
+				else
+					sillThk = WIDO_SILL
+				endif
+			else
+				if not(WIDO_REVEAL_SIDE) then
+					sillThk = WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL
+				else
+					sillThk = WIDO_SILL
+				endif
+			endif
+		endif
+
+		dTL = bTrimAtExtThreshold * (gs_stack_left + gs_stack_right) * gs_trim_width_out / 2 + not(bTrimAtExtThreshold) * (gs_stack_right - gs_stack_left) * gs_trim_width_out / 2
+		dTR = bTrimAtExtThreshold * (gs_stack_left + gs_stack_right) * gs_trim_width_out / 2 + not(bTrimAtExtThreshold) * (gs_stack_left - gs_stack_right) * gs_trim_width_out / 2
+
+		put pxRW - rightJamb + trimWidthR + dTR, -frameThkR, 0
+
+		px1 = pxRW - rightJamb + trimWidthR + dTR
+		px2 = pxLW + leftJamb  - trimWidthL - dTL
+
+		if bBevelExtTreshold then
+			nosingTreshold = gs_treshold_nosing / cos(WALL_INCL)
+
+			py1 = -gs_fthk - sillThk - incX * (pxRW + trimWidthR)
+			py2 = py1 - nosingTreshold
+			py4 = -gs_fthk - sillThk + incX * (pxRW + trimWidthL)
+			py3 = py4 - nosingTreshold
+		else
+			py1 = -gs_fthk - sillThk
+			py2 = py1 - gs_treshold_nosing
+			py4 = -gs_fthk - sillThk
+			py3 = py4 - gs_treshold_nosing
+		endif
+
+		if thkSkinRight > EPS & not(gs_stack_right) then
+			put	pxRW - rightJamb + trimWidthR + dTR - thkSkinRight,	-frameThkR,												0,
+				px1 - thkSkinRight,								 	py1 + thkSkinRight * incV * not(bJambAtExtTreshold),	0
+		endif
+
+		put px1,	py1,	1,
+			px1,	py2,	1,
+			px2,	py3,	1,
+			px2,	py4,	0
+
+!!!		if bShowAddHotspots then
+!!!			hotspot2 px1, py2, 10100
+!!!			hotspot2 px2, py3, 10101
+!!!		endif
+
+		if thkSkinLeft > EPS & not(gs_stack_left) then
+			put px2 + thkSkinLeft,									py4 - thkSkinLeft * incV * not(bJambAtExtTreshold),	0,
+				pxLW + leftJamb - trimWidthL - dTL + thkSkinLeft,	-frameThkL,											1
+		endif
+
+		put pxLW + leftJamb - trimWidthL - dTL, -frameThkL, 0
+
+	else
+		! ===== Curved  Wall =====
+
+		iSign = wallIsLeft - not(wallIsLeft)
+		signSymbRotAngle = sgn(SYMB_ROTANGLE - 90)
+
+		LengtToArc = iSign * 180 / radBoard / PI
+		alfaTrimWidthIn		= LengtToArc * gs_trim_width_in
+
+		LengtToArc = iSign * 180 / radSill / PI
+		alfaTrimWidthOut	= LengtToArc * gs_trim_width_out
+
+		if wallIsLeft then
+			alfaLeftEdge = 180 + abs(alfaLeft)
+		else
+			alfaLeftEdge = -abs(alfaLeft)
+		endif
+
+		if wallIsLeft then
+			alfaRightEdge = -180 - abs(alfaRight)
+		else
+			alfaRightEdge = abs(alfaRight)
+		endif
+
+		if WIDO_REVEAL_SIDE then
+			aL = alfaLeftEdge - not(gs_stack_left) * (bDrawOutsideTrim * (lod2D_treshold = 2) * alfaTrimWidthOut + iCurveSign * alfaLeftJamb)
+			x1 = radSill * sin(aL)
+			y1 = radSill * cos(aL)
+
+			aR = alfaRightEdge + not(gs_stack_right) * (bDrawOutsideTrim * (lod2D_treshold = 2) * alfaTrimWidthOut + iCurveSign * alfaRightJamb)
+			x2 = radSill * sin(aR)
+			y2 = radSill * cos(aR)
+
+			alfaTrimWidthAtThreshold = alfaTrimWidthOut
+		else
+			aL = alfaLeftEdge - not(gs_stack_left) * (bDrawInsideTrim * (lod2D_treshold = 2) * alfaTrimWidthIn)
+			x1 = radBoard * sin(aL)
+			y1 = radBoard * cos(aL)
+
+			aR = alfaRightEdge + not(gs_stack_right) * (bDrawInsideTrim * (lod2D_treshold = 2) * alfaTrimWidthIn)
+			x2 = radBoard * sin(aR)
+			y2 = radBoard * cos(aR)
+
+			alfaTrimWidthAtThreshold = alfaTrimWidthIn
+		endif
+
+		y1 = sy * (WOD + dy + y1)
+		y2 = sy * (WOD + dy + y2)
+
+		if bTrimAtExtThreshold then
+			aL = aL + not(gs_stack_left)  * alfaTrimWidthAtThreshold
+			aR = aR - not(gs_stack_right) * alfaTrimWidthAtThreshold
+		endif
+
+		iS = bJambAtExtTreshold - not(bJambAtExtTreshold)
+
+		put x2 - iS * (frameThkR + y2) * tan(aR),	y2 - (frameThkR + y2),	0
+
+		if not(gs_stack_right) then
+
+!!!			pen penSkin
+!!!			line_type ltSkin
+!!!			line_property 2
+
+			if thkSkinRight > EPS then
+				px1 = x2 - iS * (frameThkR + y2) * tan(aR) + iCurveSign * thkSkinRight / cos(aR)
+				py1 = y2 - (frameThkR + y2)
+
+				px2 = x2 + iCurveSign * thkSkinRight * cos(aR)
+				py2 = y2 + signSymbRotAngle * thkSkinRight * sin(aR)
+
+				put px1, py1,	0,
+					px2, py2, 0
+
+!!!				line2 x2,y2, px2,py2
+!!!			else
+!!!				px1 = x2 - iS * (frameThkR + y2) * tan(aR)
+!!!				py1 = y2 - (frameThkR + y2)
+!!!
+!!!				px2 = x2
+!!!				py2 = y2
+			endif
+
+!!!			line2 px1,py1, px2,py2
+		endif
+
+		put x2,										y2,							1,
+			x2 - iS * gs_treshold_nosing * tan(aR),	y2 - gs_treshold_nosing,	1,
+			x1 - iS * gs_treshold_nosing * tan(aL),	y1 - gs_treshold_nosing,	1,
+			x1,										y1,							0
+
+!!!		if bShowAddHotspots then
+!!!			hotspot2 x2 - iS * gs_treshold_nosing * tan(aR),	y2 - gs_treshold_nosing, 10100
+!!!			hotspot2 x1 - iS * gs_treshold_nosing * tan(aL),	y1 - gs_treshold_nosing, 10101
+!!!		endif
+
+		if not(gs_stack_left) then
+
+!!!			pen penSkin
+!!!			line_type ltSkin
+!!!			line_property 2
+
+			if thkSkinLeft > EPS then
+				px1 = x1 - iCurveSign * thkSkinLeft * cos(aL)
+				py1 = y1 - signSymbRotAngle * thkSkinLeft * sin(aL)
+
+				px2 = x1 - iS * (frameThkL + y1) * tan(aL) - iCurveSign * thkSkinLeft / cos(aL)
+				py2 = y1 - (frameThkL + y1)
+
+				put px1, py1,	0,
+					px2, py2, 0
+
+!!!				line2 x1,y1, px1,py1
+!!!			else
+!!!				px1 = x1
+!!!				py1 = y1
+!!!
+!!!				px2 = x1 - iS * (frameThkL + y1) * tan(aL)
+!!!				py2 = y1 - (frameThkL + y1)
+			endif
+
+!!!			line2 px1,py1, px2,py2
+		endif
+
+		put x1 - iS * (frameThkL + y1) * tan(aL),	y1 - (frameThkL + y1),	0
+
+	endif
+
+return
+
+
+! ==============================================================================
+!		Extended Threshold - Inside
+! ==============================================================================
+300:
+	bJambAtExtTreshold = not(WIDO_REVEAL_SIDE)
+	bTrimAtExtThreshold = ((bJambAtExtTreshold & bDrawOutsideTrim) | (not(bJambAtExtTreshold) & bDrawInsideTrim))
+
+	if bJambAtExtTreshold then
+		thkSkinLeft	 = thkSkinAtSillLeft
+		thkSkinRight = thkSkinAtSillRight
+		penSkin	= penSkinAtSill
+		ltSkin	= ltSkinAtSill
+	else
+		thkSkinLeft  = thkSkinAtBoardLeft
+		thkSkinRight = thkSkinAtBoardRight
+		penSkin	= penSkinAtBoard
+		ltSkin	= ltSkinAtBoard
+	endif
+
+	if not(curvedWall) then
+
+		! ===== Straigh Wall =====
+
+		bBevelExtTreshold = bInclinedWall & not(bInclinedWall & WIDO_REVEAL_SIDE)
+
+		pxLW = -leftWidth  + gs_frame_width_left  + gs_tolerance_left
+		pxRW =  rightWidth - gs_frame_width_right - gs_tolerance_right
+
+		rightJamb = bJambAtExtTreshold * widoRightJamb
+		leftJamb  = bJambAtExtTreshold * widoLeftJamb
+
+		if gs_frame_wthk then
+			trimWidthL = 0
+			trimWidthR = 0
+			sillThk = 0
+		else
+			trimWidth = ((lod2D_treshold = 2) & bTrimAtExtThreshold) * gs_trim_width_in
+			trimWidthL = gs_frame_width_left  + gs_tolerance_left  - trimWidth
+			trimWidthR = gs_frame_width_right + gs_tolerance_right - trimWidth
+
+			if bInclinedWall then
+				if not(bBevelExtTreshold) then
+					sillThk = WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL
+				else
+					sillThk = WIDO_SILL
+				endif
+			else
+				if WIDO_REVEAL_SIDE then
+					sillThk = WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL
+				else
+					sillThk = WIDO_SILL
+				endif
+			endif
+		endif
+
+		dTL = bTrimAtExtThreshold * (gs_stack_left + gs_stack_right) * gs_trim_width_in / 2 + not(bTrimAtExtThreshold) * (gs_stack_right - gs_stack_left) * gs_trim_width_in / 2
+		dTR = bTrimAtExtThreshold * (gs_stack_left + gs_stack_right) * gs_trim_width_in / 2 + not(bTrimAtExtThreshold) * (gs_stack_left - gs_stack_right) * gs_trim_width_in / 2
+
+		put pxLW + leftJamb - trimWidthL - dTL, 0, 0
+
+		px1 = pxRW - rightJamb + trimWidthR + dTR
+		px2 = pxLW + leftJamb - trimWidthL  - dTL
+
+		if not(bBevelExtTreshold) then
+			nosingTreshold = gs_treshold_nosing_2 / cos(WALL_INCL)
+
+			py1 = sillThk + incX * (pxRW + trimWidthR)
+			py2 = py1 + nosingTreshold
+			py4 = sillThk - incX * (pxRW + trimWidthL)
+			py3 = py4 + nosingTreshold
+		else
+			py1 = sillThk
+			py2 = py1 + gs_treshold_nosing_2
+			py4 = sillThk
+			py3 = py4 + gs_treshold_nosing_2
+		endif
+
+		if thkSkinLeft > EPS & not(gs_stack_left) then
+			put	pxLW + leftJamb - trimWidthL - dTL + thkSkinLeft,	0,													0,
+				px2 + thkSkinLeft,									py4 + thkSkinLeft * incV * not(bJambAtExtTreshold),	0
+		endif
+
+		put	px2,	py4,	1,
+			px2,	py3,	1,
+			px1,	py2,	1,
+			px1,	py1,	0
+
+!!!		if bShowAddHotspots then
+!!!			hotspot2 px1, py2, 10102
+!!!			hotspot2 px2, py3, 10103
+!!!		endif
+
+		if thkSkinRight > EPS & not(gs_stack_right) then
+			put px1 - thkSkinRight,									py1 - thkSkinRight * incV * not(bJambAtExtTreshold),	0,
+				pxRW - rightJamb + trimWidthR + dTR - thkSkinRight,	0,														0
+		endif
+
+		put pxRW - rightJamb + trimWidthR + dTR, 0, 0
+
+	else
+		! ===== Curved  Wall =====
+
+		iSign = wallIsLeft - not(wallIsLeft)
+		signSymbRotAngle = sgn(SYMB_ROTANGLE - 90)
+
+		LengtToArc = iSign * 180 / radBoard / PI
+		alfaTrimWidthIn		= LengtToArc * gs_trim_width_in
+
+		LengtToArc = iSign * 180 / radSill / PI
+		alfaTrimWidthOut	= LengtToArc * gs_trim_width_out
+
+		if wallIsLeft then
+			alfaLeftEdge = 180 + abs(alfaLeft)
+		else
+			alfaLeftEdge = -abs(alfaLeft)
+		endif
+
+		if wallIsLeft then
+			alfaRightEdge = -180 - abs(alfaRight)
+		else
+			alfaRightEdge = abs(alfaRight)
+		endif
+
+		if WIDO_REVEAL_SIDE then
+			aL = alfaLeftEdge - not(gs_stack_left) * (bDrawInsideTrim * (lod2D_treshold = 2) * alfaTrimWidthIn)
+			x1 = radBoard * sin(aL)
+			y1 = radBoard * cos(aL)
+
+			aR = alfaRightEdge + not(gs_stack_right) * (bDrawInsideTrim * (lod2D_treshold = 2) * alfaTrimWidthIn)
+			x2 = radBoard * sin(aR)
+			y2 = radBoard * cos(aR)
+
+			alfaTrimWidthAtThreshold = alfaTrimWidthIn
+		else
+			aL = alfaLeftEdge - not(gs_stack_left) * (bDrawOutsideTrim * (lod2D_treshold = 2) * alfaTrimWidthOut + iCurveSign * alfaLeftJamb)
+			x1 = radSill * sin(aL)
+			y1 = radSill * cos(aL)
+
+			aR = alfaRightEdge + not(gs_stack_right) * (bDrawOutsideTrim * (lod2D_treshold = 2) * alfaTrimWidthOut + iCurveSign * alfaRightJamb)
+			x2 = radSill * sin(aR)
+			y2 = radSill * cos(aR)
+
+			alfaTrimWidthAtThreshold = alfaTrimWidthOut
+		endif
+
+		y1 = sy * (WOD + dy + y1)
+		y2 = sy * (WOD + dy + y2)
+
+		if bTrimAtExtThreshold then
+			aL = aL + not(gs_stack_left)  * alfaTrimWidthAtThreshold
+			aR = aR - not(gs_stack_right) * alfaTrimWidthAtThreshold
+		endif
+
+		iS = bJambAtExtTreshold - not(bJambAtExtTreshold)
+
+		put x1 + iS * y1 * tan(aL),	0,	0
+
+		if not(gs_stack_left) then
+
+!!!			pen penSkin
+!!!			line_type ltSkin
+!!!			line_property 2
+
+			if thkSkinLeft > EPS then
+				px1 = x1 + iS * y1 * tan(aL) - iCurveSign * thkSkinLeft / cos(aL)
+				py1 = 0
+
+				px2 = x1 - iCurveSign * thkSkinLeft * cos(aL)
+				py2 = y1 - signSymbRotAngle * thkSkinLeft * sin(aL)
+
+				put px1, py1,	0,
+					px2, py2, 0
+
+!!!				line2 x1,y1, px2,py2
+!!!			else
+!!!				px1 = x1 + iS * y1 * tan(aL)
+!!!				py1 = 0
+!!!
+!!!				px2 = x1
+!!!				py2 = y1
+			endif
+
+!!!			line2 px1,py1, px2,py2
+		endif
+
+		put	x1,											y1,							1,
+			x1 - iS * gs_treshold_nosing_2 * tan(aL),	y1 + gs_treshold_nosing_2,	1,
+			x2 - iS * gs_treshold_nosing_2 * tan(aR),	y2 + gs_treshold_nosing_2,	1,
+			x2,											y2,							0
+
+!!!		if bShowAddHotspots then
+!!!			hotspot2 x2 - iS * gs_treshold_nosing_2 * tan(aR),	y2 + gs_treshold_nosing_2, 10102
+!!!			hotspot2 x1 - iS * gs_treshold_nosing_2 * tan(aL),	y1 + gs_treshold_nosing_2, 10103
+!!!		endif
+
+		if not(gs_stack_right) then
+
+!!!			pen penSkin
+!!!			line_type ltSkin
+!!!			line_property 2
+
+			if thkSkinRight > EPS then
+				px1 = x2 + iCurveSign * thkSkinRight * cos(aR)
+				py1 = y2 + signSymbRotAngle * thkSkinRight * sin(aR)
+
+				px2 = x2 + iS * y2 * tan(aR) + iCurveSign * thkSkinRight / cos(aR)
+				py2 = 0
+
+				put px1, py1, 0,
+					px2, py2, 0
+
+!!!				line2 x2,y2, px1,py1
+!!!			else
+!!!				px1 = x2
+!!!				py1 = y2
+!!!
+!!!				px2 = x2 + iS * y2 * tan(aR)
+!!!				py2 = 0
+			endif
+
+!!!			line2 px1,py1, px2,py2
+		endif
+
+		put x2 + iS * y2 * tan(aR),	0,	0
+
+	endif
+return
+
+
+! ==============================================================================
+! Circle - Line intersection
+! ------------------------------------------------------------------------------
+! Input variables:
+!	EPS:				epsylon
+!	xo,yo,ro:			circle
+!	x1,y1, x2,y2		line
+!
+! Returned variables:
+!	state:				0 = no intersection point
+!						1 = one intersection point (tangential line)
+!						2 = two intersection points
+!	xa, ya:				intersection point #1
+!	xb, yb:				intersection point #2
+! ==============================================================================
+
+101:
+	tempX1 = x1 - xo: tempY1 = y1 - yo
+	tempX2 = x2 - xo: tempY2 = y2 - yo
+
+	if abs(tempX2 - tempX1) < EPS then
+		if abs(ro - abs(tempX1)) < EPS then
+			state = 1
+			xa = tempX1
+			ya = 0
+			xb = tempX1
+			yb = 0
+		else
+			if abs(ro) - abs(tempX1) < 0 then
+				state = 0: xa = 0: ya = 0: xb = 0: yb = 0
+			else
+				state = 2
+				xa = tempX1
+				ya = sqr(ro^2 - tempX1^2)
+				xb = tempX1
+				yb = -sqr(ro^2 - tempX1^2)
+			endif
+		endif
+	else
+		kf = (tempY2 - tempY1) / (tempX2 - tempX1)
+		ad = 1 + kf^2
+		bd = 2 * tempY1 * kf - 2 * tempX1 * kf^2
+		cd = tempY1^2 - 2 * tempX1 * tempY1 * kf + tempX1^2 * kf^2 - ro^2
+
+		if bd^2 - 4 * ad * cd < 0 then
+			state = 0: xa = 0: ya = 0: xb = 0: yb = 0
+		else
+			xa = (-bd + sqr(bd^2 - 4 * ad * cd)) / (2 * ad)
+			ya = tempY1 + (xa - tempX1) * kf
+			xb = (-bd - sqr(bd^2 - 4 * ad * cd)) / (2 * ad)
+			yb = tempY1 + (xb - tempX1) * kf
+
+			if abs(xa - xb) < EPS then state = 1 else state = 2
+		endif
+	endif
+
+	if state = 2 then
+		da = sqr((tempX1 - xa)^2 + (tempY1 - ya)^2)
+		db = sqr((tempX1 - xb)^2 + (tempY1 - yb)^2)
+
+		if db < da then
+			xxo = xa: yyo = ya
+			xa = xb:  ya = yb
+			xb = xxo: yb = yyo
+		endif
+	endif
+
+	xa = xa + xo: ya = ya + yo
+	xb = xb + xo: yb = yb + yo
+return
+
+
+! ==============================================================================
+! Select good intersection point after Circle - Line intersection
+! ------------------------------------------------------------------------------
+! Input variables:
+!	state:				intersection status
+!	wallIsLeft:
+!	xa, ya:				intersection point #1
+!	xb, yb:				intersection point #2
+!
+! Returned variables:
+!	cx, cy:				selected intersection point
+! ==============================================================================
+
+102:
+	cx = 0
+	cy = 0
+	if state = 1 then
+		cx = xa
+		cy = ya
+	endif
+	if state = 2 then
+		if wallIsLeft then
+			if ya > yb then
+				cx = xb
+				cy = yb
+			else
+				cx = xa
+				cy = ya
+			endif
+		else
+			if ya < yb then
+				cx = xb
+				cy = yb
+			else
+				cx = xa
+				cy = ya
+			endif
+		endif
+	endif
+return
+
+
+

@@ -108,6 +108,7 @@ if not(_bEmptyLayoutRevHistory) then
 	tis_autosign = is_autosign
 	tis_fam = 1
 	tis_date = 1
+	tis_RVI = 0
 
 	for i = 1 to vardim2(GlobIssueScheme)
 		if STRSTR(GlobIssueScheme[1][i], "!!НАЧАЛО ШТАМПА!!", 1) then ROW_FAM_START_ISSUE = i+1
@@ -172,8 +173,11 @@ if not(_bEmptyLayoutRevHistory) then
 		if STRSTR(GlobIssueScheme[1][i], "Somestuff_QtyIssue_", 1) then
 			somestuff_row_inx[vardim1(somestuff_row_inx)+1] = i
 		endif
-
+		if STRSTR(GlobIssueScheme[1][i], "Somestuff_Layout_Type", 1)>0 then
+			if STRSTR(LayoutRevHistory[1][i], "РВИ", 1)>0 then tis_RVI = 1
+		endif
 	next i
+
 	!Изменения
 	ROW_ISPOSITION = 0	!Название должности вкл/выкл
 	ROW_ISAUTOSUGN = 0	!Подпись вкл/выкл
@@ -389,22 +393,25 @@ if not(_bEmptyLayoutRevHistory) then
 						strrev = LayoutRevHistory[last_rev_inx][inx_row]
 						pos = STRSTR (strrev , "@")-1
 						somestuff_row_data[i][1] = STRSUB(strrev ,1,pos) !ID изменения
-
 						strrev = STRSUB(strrev,pos+2,STRLEN(strrev))
 						pos = STRSTR (strrev , "@")-1
 						somestuff_row_data[i][2] = STRSUB(strrev ,1,pos) !Кол-во участков
 						if somestuff_row_data[i][2]="0" then somestuff_row_data[i][2] = ""
 						strrev = STRSUB(strrev,pos+2,STRLEN(strrev))
-						pos = STRSTR (strrev , "@")-1
-						tipe_izzm = STRSUB(strrev ,1,pos)
-						if strstr(tipe_izzm,"изм",1) or strstr(tipe_izzm,"зам",1) or strstr(tipe_izzm,"нов",1) or strstr(tipe_izzm,"аннул",1) then
-							somestuff_row_data[i][3] = tipe_izzm !Тип изменения
-							strrev = STRSUB(strrev,pos+2,STRLEN(strrev))
-							somestuff_row_data[i][4] = strrev  !Фамилия
-						else
-							somestuff_row_data[i][4] = tipe_izzm !Тип изменения
+						tipe_izzm = "" : fam = ""
+						if (STRSTR (strrev,"@"))>0 then
+							pos = STRSTR (strrev , "@")-1
+							tipe_izzm = STRSUB(strrev,1,pos)
+							fam = STRSUB(strrev,pos+2,STRLEN(strrev))
+						else	
+							fam = strrev
 						endif
-
+						if strlen(fam)<5 and (strstr(fam,"изм",1) or strstr(fam,"зам",1) or strstr(fam,"нов",1) or strstr(fam,"аннул",1)) then
+							tipe_izzm = fam
+							fam = ""
+						endif
+						somestuff_row_data[i][3] = tipe_izzm
+						somestuff_row_data[i][4] = fam
 					endif
 				endif
 			next i
@@ -786,6 +793,17 @@ if shifr<>" " then
 endif
 if shifrt_l="-" then shifr = ""
 
+ch1 = 1 : has_sign = 1
+if tis_autosign then
+	ch1 = OPEN ("TEXT", "Подпись", "SEPARATOR = ';', MODE = RO, LIBRARY")
+	if ch1>0 then 
+		has_sign = 1
+	else
+		print "Подпись не найдена"
+		has_sign = 0
+	endif
+endif
+
 IF type_table <> 99 and type_table > 4 THEN 
 	HOTSPOT2 0,0
 	is_end = 0
@@ -821,16 +839,6 @@ IF type_table <> 99 and type_table > 4 THEN
 endif
 
 gosub "fill_in"
-ch1 = 1 : has_sign = 1
-if tis_autosign then
-	ch1 = OPEN ("TEXT", "Подпись", "SEPARATOR = ';', MODE = RO, LIBRARY")
-	if ch1>0 then 
-		has_sign = 1
-	else
-		print "Подпись не найдена"
-		has_sign = 0
-	endif
-endif
 
 if _bERROR then
 	pen_small = pen_error
@@ -855,7 +863,7 @@ if type_table = 10 then
 	if not(is_second) then type_table = 1
 endif
 
-IF type_table = 99 THEN 
+IF type_table = 99 THEN
 	inx_1 = 0 : inx_2 = 0  : inx_3 = 0   : inx_4 = 0 : inx_n = 0 : inx_last = vardim1(change_info)
 	for kk = 1 to vardim1(position_info)
 		if strstr(position_info[kk][1], "контр", 1)>0 and strlen(position_info[kk][2])>5 and inx_n=0 then inx_n=kk
@@ -903,8 +911,31 @@ IF type_table = 99 THEN
 	else
 		str_info_1 = table_99_info_1
 	endif
+	if tis_RVI and type_table = 99 then
+		for i=1 to vardim2(GlobIssueScheme)
+			if STRSTR(GlobIssueScheme[1][i], "Somestuff_Izm_", 1)>0 and STRSTR(GlobIssueScheme[1][i], "_Column_", 1)>0 then
+				inx_col_rvi = 0 : inx_row_rvi = 0
+				for kk=1 to 100
+					strf = "Somestuff_Izm_"+str("%.0", kk) + "_"
+					if STRSTR(GlobIssueScheme[1][i], strf, 1)>0 then
+						inx_row_rvi = kk
+						kk=100
+					endif
+				next kk
+				for kk=1 to 5
+					strf = "Column_"+str("%.0", kk)
+					if STRSTR(GlobIssueScheme[1][i], strf, 1)>0 then
+						inx_col_rvi = kk
+						kk=5
+					endif
+				next kk
+				if inx_row_rvi>0 and inx_col_rvi>0 then
+					rvi[inx_row_rvi][inx_col_rvi] = LayoutRevHistory[1][i]
+				endif
+			endif
+		next i
+	endif
 endif
-
 
 if is_dop_graph and type_table <> 10 then gosub "dop_graph"
 if is_agreed and type_table <> 10 then gosub "agreed"
@@ -1304,6 +1335,45 @@ endif
 	TEXT2  0.1,0.7,"ГИП"
 	TEXT2  0.1,0.2,"Утв."
 
+	if tis_RVI and vardim1(rvi)>0 then
+		rrr = request("Height_of_style","текст20-4", txt_hgt)
+		txt_hgt = txt_hgt * 0.1
+		sx = 23.7 : if table_99_gostrazm then sx = 24.2
+		hr = 0.8
+		for i=1 to vardim1(rvi)
+			if strlen(rvi[i][3])>0 then
+				sx = sx - txt_hgt
+				hr_ = hr
+				SET STYLE "текст20-5"
+				txt_2 = rvi[i][2] : mlb_in_str = rvi[i][2] : mlb_l_max = 14
+				if stw(mlb_in_str)>=mlb_l_max then
+					mlb_n_row = 1 : mlb_out_str = "!"
+					call "macro_line_break" parameters mlb_in_str=mlb_in_str, mlb_l_max=mlb_l_max,mlb_in_scale=1, RETURNED_PARAMETERS mlb_n_row, mlb_out_str, mlb_out_str_arr
+					hr_ = max(hr_, mlb_n_row*txt_hgt)
+					txt_2 = mlb_out_str
+				endif
+				txt_3 = rvi[i][3] : mlb_in_str = rvi[i][3] : mlb_l_max = 99
+				if stw(mlb_in_str)>=mlb_l_max then
+					mlb_n_row = 1 : mlb_out_str = "!"
+					call "macro_line_break" parameters mlb_in_str=mlb_in_str, mlb_l_max=mlb_l_max,mlb_in_scale=1, RETURNED_PARAMETERS mlb_n_row, mlb_out_str, mlb_out_str_arr
+					hr_ = max(hr_, mlb_n_row*txt_hgt)
+					txt_3 = mlb_out_str
+					SET STYLE "текст20-1"
+					text2 3.2,sx,txt_3
+				else
+					SET STYLE "текст20-4"
+					text2 3.2,sx-hr_/2,txt_3
+				endif
+				SET STYLE "текст20-5"
+				text2 2.25,sx-hr_/2,txt_2
+				text2 0.75,sx-hr_/2,rvi[i][1]
+				text2 13.75,sx-hr_/2,rvi[i][4]
+				sx = sx - hr_
+				line2 0, sx - txt_hgt/2, 18.5, sx - txt_hgt/2
+			endif
+		next i
+	endif
+
 	if not(_bfirstchange) and tis_position then
 		inx_ = inx_4 : x = 0.2
 		if abs(inx_)>0 then
@@ -1400,12 +1470,15 @@ RETURN
 	TEXT2  18,0.5,sheet_id
 	IF is_position = 1 THEN
 		if tis_position and not(_bERROR) and diff_type_tabe=0 then 
-			if vartype(position_info[1][2]) = 2 then
-				IF strlen(position_info[1][2])>2 and prim_arh THEN TEXT2 12,1.1,"<NOTES>" + ". Арх. " + position_info[1][2] + ". <SUBSETID>"
-			endif	
+			if prim_arh then
+				if vartype(position_info[1][2]) = 2 then
+					IF strlen(position_info[1][2])>2 THEN TEXT2 12,1.1,"<NOTES>" + ". Арх. " + position_info[1][2] + ". <SUBSETID>"
+				endif	
+			else
+				SET STYLE "текст50-5"
+				if strlen(shifr)>1 then TEXT2 12.1,0.7,shifr
+			endif
 		endif	
-	ELSE
-		if strlen(shifr)>1 then TEXT2  12.1,0.7,shifr
 	ENDIF
 	SET STYLE "текст18-5"
 	TEXT2  0.45+0.05*gost_razm, 0.25, "Изм."
@@ -1780,7 +1853,7 @@ return
 return
 
 "signature":
-	if tis_autosign and has_sign then
+	if tis_autosign and has_sign and is_autosign then
 		DRAWINDEX 50
 		PEN pen_podp
 		CALL "Подпись" parameters surname = surname, pen_podp=pen_podp

@@ -1,0 +1,2413 @@
+
+
+! =============================================================================
+! Set level of 3D detail
+! =============================================================================
+lod3D = 0										! Don't draw anything
+if (GLOB_VIEW_TYPE = 9 & GLOB_PREVIEW_MODE = 0) then
+	! force detailed 3D for Surface Schedule
+	lod3D = 2	! Detailed
+else
+	if iDWDet3D = DETLEVEL_DW3D_SIMPLE then lod3D = 1	! Simple
+	if iDWDet3D = DETLEVEL_DW3D_DETAILED then lod3D = 2	! Detailed
+	if iDWDet3D = DETLEVEL_DW3D_CHI_SIMPLE | iDWDet3D = DETLEVEL_DW3D_CHI_DETAILED then
+		if (GLOB_CONTEXT = 4 | GLOB_CONTEXT = 24 | GLOB_CONTEXT = 6) then
+			lod3D = 5								! Chinese
+		else
+			lod3D = 2
+		endif
+	endif
+endif
+
+_bDetSimpleOrChinese = (lod3D = 1 | lod3D = 5)
+
+! =============================================================================
+! reset fill indexes if Use Fills is OFF
+! =============================================================================
+gs_fillFr		= gs_bFills * gs_fillFr
+gs_penFr_fg		= gs_bFills * gs_penFr_fg
+gs_penFr_bg		= gs_bFills * gs_penFr_bg
+
+gs_fillSash		= gs_bFills * gs_fillSash
+gs_penSash_fg	= gs_bFills * gs_penSash_fg
+gs_penSash_bg	= gs_bFills * gs_penSash_bg
+
+if not(gs_shadow) then shadow off
+
+
+! =============================================================================
+! GS Corner Window Functions
+! =============================================================================
+
+call "GS Corner Window Functions",
+	parameters all	iWindowShape				= iWindowShape,
+					gs_IsCurved					= gs_IsCurved,
+					bParalellInCurvedWalls		= bParalellInCurvedWalls,
+					lod3D						= lod3D,
+					bDisabeMirroring			= bDisabeMirroring,
+
+					bLeftCornerFunction			= bLeftCornerFunction,
+					leftCornerAngle				= leftCornerAngle,
+					bLeftDiffConnWall			= bLeftDiffConnWall,
+					leftConnWallThk				= leftConnWallThk,
+					bRightCornerFunction		= bRightCornerFunction,
+					rightCornerAngle			= rightCornerAngle,
+					bRightDiffConnWall			= bRightDiffConnWall,
+					rightConnWallThk			= rightConnWallThk,
+					bEnableVentilationProfile	= bEnableVentilationProfile,
+					bEnableParapetInset			= bEnableParapetInset,
+					bEnableMasonryArch			= bEnableMasonryArch,
+					bEnableFaschen				= bEnableFaschen,
+					bEnableThreshold			= bEnableThreshold,
+					bEnableCustomCornerLeft		= bEnableCustomCornerLeft,
+					bEnableCustomCornerRight	= bEnableCustomCornerRight,
+	returned_parameters	ac_unit_width, ac_unit_height,
+						gs_frame_ovhg_left_out,
+						gs_frame_ovhg_right_out,
+						gs_frame_ovhg_top_out,
+						gs_frame_ovhg_bottom_out,
+						gs_frame_ovhg_left_in,
+						gs_frame_ovhg_right_in,
+						gs_frame_ovhg_top_in,
+						gs_frame_ovhg_bottom_in,
+						bMirrored,
+						xform11, xform12, xform13, xform14,
+						xform21, xform22, xform23, xform24,
+						xform31, xform32, xform33, xform34,
+
+						bOplines3d, opLineType3dIn, opLineType3dOut, gs_opline_style_m, gs_opLinePen,
+						bShowAddHotspots, bShowAddHotspotsForIS, bShowUnitHotspots
+
+
+! =============================================================================
+! Block for operator mode
+! =============================================================================
+
+if GLOB_SEO_TOOL_MODE then
+	prism_ 4, WIDO_FRAME_THICKNESS,
+		-ac_unit_width/2, 0, 15,
+		 ac_unit_width/2, 0, 15,
+		 ac_unit_width/2, ac_unit_height, 15,
+		-ac_unit_width/2, ac_unit_height, 15
+
+	end
+endif
+
+if lod3D = 0 then end
+
+xform	xform11, xform12, xform13, xform14,
+		xform21, xform22, xform23, xform24,
+		xform31, xform32, xform33, xform34
+
+muly -1
+addy WIDO_FRAME_THICKNESS
+
+temp = gs_frame_ovhg_left_out
+gs_frame_ovhg_left_out = gs_frame_ovhg_left_in
+gs_frame_ovhg_left_in = temp
+
+temp = gs_frame_ovhg_right_out
+gs_frame_ovhg_right_out = gs_frame_ovhg_right_in
+gs_frame_ovhg_right_in = temp
+
+temp = gs_frame_ovhg_top_in
+gs_frame_ovhg_top_in = gs_frame_ovhg_top_out
+gs_frame_ovhg_top_out = temp
+
+temp = gs_frame_ovhg_bottom_in
+gs_frame_ovhg_bottom_in = gs_frame_ovhg_bottom_out
+gs_frame_ovhg_bottom_out = temp
+
+
+A = ac_unit_width
+B = ac_unit_height
+
+
+! =============================================================================
+! Draw window frame and sash
+! =============================================================================
+
+rotx 90
+
+if gs_frame_pen_cont < 1 then gs_frame_pen_cont = SYMB_SECT_PEN
+
+if gs_fillFr   < 1 then gs_fillFr   = SYMB_FILL
+if gs_penFr_bg < 1 then gs_penFr_bg = SYMB_FBGD_PEN
+if gs_penFr_fg < 1 then gs_penFr_fg = SYMB_FILL_PEN
+
+
+if lod3D = 5 then	! Chinese
+	fr_sect_fill_type	= gs_fillShCover
+	fr_sect_fill_fg		= gs_penShCov_fg
+	fr_sect_fill_bg		= gs_penShCov_bg
+else
+	fr_sect_fill_type	= gs_fillFr
+	fr_sect_fill_fg		= gs_penFr_fg
+	fr_sect_fill_bg		= gs_penFr_bg
+endif
+
+
+! =============================================================================
+! Draw Frame
+! =============================================================================
+
+leftOvhg	=	MAX(gs_frame_ovhg_left_out, gs_frame_ovhg_left_in)
+rightOvhg	=	MAX(gs_frame_ovhg_right_out, gs_frame_ovhg_right_in)
+topOvhg		=	MAX(gs_frame_ovhg_top_out, gs_frame_ovhg_top_in)
+bottomOvhg	=	MAX(gs_frame_ovhg_bottom_out, gs_frame_ovhg_bottom_in)
+
+! --------------------------------------------------------------------------------
+! Handling Frame Surfaces
+! --------------------------------------------------------------------------------
+if gs_frame_mat = gs_frame_mat2 then
+	_bFrameSameColors	= 1
+else
+	_bFrameSameColors	= 0
+endif
+
+in_out_mask = 15
+
+if _bFrameSameColors then
+	! One body, in case of similar materials
+	_numIterations = 1
+
+	gs_frame_mat2 = gs_frame_mat
+
+	out_thk = 0
+	part_thk = gs_frame_thk
+else
+	! two different colored bodies
+	_numIterations = 2
+
+	! switch materials if not flipped
+	if not(WIDO_REVEAL_SIDE) then
+		temp_frame_mat	= gs_frame_mat
+		gs_frame_mat	= gs_frame_mat2
+		gs_frame_mat2	= temp_frame_mat
+	endif
+
+	if _bDetSimpleOrChinese then
+		out_thk = gs_frame_thk/2
+	else
+		out_thk = gs_frame_thk - gs_rebate_depth
+	endif
+	part_thk = out_thk
+endif
+
+_iterationMaterial		= gs_frame_mat
+_iterationMaterial2		= gs_frame_mat2
+
+! --------------------------------------------------------------------------------
+! Sash Width editing hotspots
+! --------------------------------------------------------------------------------
+if iPanesSizeConfig	= PANES_CUSTOM then
+	if iWindowType = WIN_W2HorizontalSlide then
+		gosub "sashEditHotspots_2"
+	endif
+	if iWindowType = WIN_W3HorizontalSlide then
+		gosub "sashEditHotspots_3"
+	endif
+	if iWindowType = WIN_W4HorizontalSlide then
+		gosub "sashEditHotspots_4"
+	endif
+endif
+
+
+! --------------------------------------------------------------------------------
+! Unit Hotspots
+! --------------------------------------------------------------------------------
+if bShowUnitHotspots then
+	gosub "unitHotspots"
+endif
+
+
+! --------------------------------------------------------------------------------
+! Transom Height Editing Hotspots
+! --------------------------------------------------------------------------------
+if _bPossibleTransom & gs_UTrans then
+	gosub "transomHotspots"
+endif
+
+! --------------------------------------------------------------------------------
+! Frame point calculations
+! --------------------------------------------------------------------------------
+_bMiteredJoin = (gs_SashText_typ_num = MITERED_JOINT)
+
+offsetSash	= 0.01 * not(_bDetSimpleOrChinese) * not(_bFrameSameColors)
+
+if _bPossibleTransom then
+	bLeftFix = (gs_optype_m_07 = SASH_FIXED)
+
+	if gs_UTrans then
+		if iUTrans = 2 then
+			bLeftFix = (gs_optype_m_06 = SASH_FIXED)
+		endif
+		if iUTrans = 4 then
+			bLeftFix = (gs_optype_m_05 = SASH_FIXED)
+		endif
+	endif
+else
+	bLeftFix = 0
+endif
+
+if _bPossibleTransom then
+	bMidLeftFix = (gs_optype_m_05 = SASH_FIXED)
+
+	if gs_UTrans then
+		if iUTrans = 2 then
+			bMidLeftFix = (gs_optype_m_06 = SASH_FIXED)
+		endif
+	endif
+else
+	bMidLeftFix = 0
+endif
+
+if _bPossibleTransom then
+	bMidRightFix = (gs_optype_m_06 = SASH_FIXED)
+	if gs_UTrans then
+		if iUTrans = 2 then
+			bMidRightFix = (gs_optype_m_08 = SASH_FIXED)
+		endif
+		if iUTrans = 3 | iUTrans = 4 then
+			bMidRightFix = (gs_optype_m_05 = SASH_FIXED)
+		endif
+	endif
+else
+	bMidRightFix = 0
+endif
+
+if _bPossibleTransom then
+	bRightFix = (gs_optype_m_08 = SASH_FIXED)
+	if gs_UTrans then
+		if iUTrans = 4 then
+			bRightFix = (gs_optype_m_05 = SASH_FIXED)
+		endif
+	endif
+else
+	bRightFix = 0
+endif
+
+leftOutX			= -a/2-leftOvhg
+leftInX				= -a/2+gs_frame_width_left
+leftInX_Top			= leftInX + not(bLeftFix) * (gs_sash_width - gs_rebate_width) * _bDetSimpleOrChinese
+leftInX_Middle		= leftInX + gs_sash_width * _bDetSimpleOrChinese
+
+rightOutX			= a/2+rightOvhg
+rightInX			= a/2-gs_frame_width
+rightInX_Top		= rightInX - not(bRightFix) * (gs_sash_width - gs_rebate_width) * _bDetSimpleOrChinese
+rightInX_Middle		= rightInX - gs_sash_width * _bDetSimpleOrChinese
+
+bottomOutY			= -bottomOvhg
+bottomInY			=  gs_frame_width_lower + gs_sash_width * _bDetSimpleOrChinese
+
+topOutY				= b+topOvhg
+topInY				= b-gs_frame_width_upper - not(gs_UTrans) * gs_sash_width * _bDetSimpleOrChinese
+topInY_Left			= topInY - (gs_UTrans * not(bLeftFix)) * (gs_sash_width - gs_rebate_width) * _bDetSimpleOrChinese
+topInY_MidLeft		= topInY - (gs_UTrans * not(bMidLeftFix)) * (gs_sash_width - gs_rebate_width) * _bDetSimpleOrChinese
+topInY_MidRight		= topInY - (gs_UTrans * not(bMidRightFix)) * (gs_sash_width - gs_rebate_width) * _bDetSimpleOrChinese
+topInY_Right		= topInY - (gs_UTrans * not(bRightFix)) * (gs_sash_width - gs_rebate_width) * _bDetSimpleOrChinese
+
+if _bPossibleTransom then
+	upperTransomTopY			= gs_UTrans_h + gs_UTrans_w/2
+	upperTransomTopY_Left		= upperTransomTopY + not(bLeftFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+	upperTransomTopY_MidLeft	= upperTransomTopY + not(bMidLeftFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+	upperTransomTopY_MidRight	= upperTransomTopY + not(bMidRightFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+	upperTransomTopY_Right		= upperTransomTopY + not(bRightFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+
+	upperTransomBottomY			= gs_UTrans_h - gs_UTrans_w/2 - gs_sash_width * (lod3D = 1 | lod3D = 5)
+
+	if iWindowType = WIN_W3HorizontalSlide then
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+			LeftmullionMidX		= -a/2+gs_frame_width_left+sashWidth1
+		else
+			LeftmullionMidX		= -a/2+gs_frame_width_left+sashWidth1-gs_sash_width/2
+		endif
+	else
+		LeftmullionMidX			= -a/2+gs_frame_width_left+sashWidth1-gs_sash_width/2
+	endif
+	LeftmullionLeftX_Top		= LeftmullionMidX - gs_Mullion_w_left/2 - not(bLeftFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+	LeftmullionLeftX_Middle		= LeftmullionMidX - gs_sash_width/2 * (lod3D = 1 | lod3D = 5)
+	
+	LeftmullionRightX_Top		= LeftmullionMidX + gs_Mullion_w_left/2 + not(bMidLeftFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+	LeftmullionRightX_Middle	= LeftmullionMidX + gs_sash_width/2 * (lod3D = 1 | lod3D = 5)
+
+
+	if iWindowType = WIN_W4HorizontalSlide then
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+			! no overlapping sahses in the middle
+			MidmullionMidX			= -a/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width
+		else
+			MidmullionMidX			= -a/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width-gs_sash_width/2
+		endif
+	else
+		MidmullionMidX			= -a/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width+gs_sash_width/2
+	endif
+
+	if iWindowType = WIN_W4HorizontalSlide & (iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL) then
+		MidmullionLeftX_Middle		= MidmullionMidX - gs_sash_width * (lod3D = 1 | lod3D = 5)
+		
+		MidmullionRightX_Middle		= MidmullionMidX + gs_sash_width * (lod3D = 1 | lod3D = 5)
+	else
+		MidmullionLeftX_Middle		= MidmullionMidX - gs_sash_width/2 * (lod3D = 1 | lod3D = 5)
+		
+		MidmullionRightX_Middle		= MidmullionMidX + gs_sash_width/2 * (lod3D = 1 | lod3D = 5)
+	endif
+
+	MidmullionLeftX_Top			= MidmullionMidX - gs_Mullion_w_mid/2 - not(bMidLeftFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+	MidmullionRightX_Top		= MidmullionMidX + gs_Mullion_w_mid/2 + not(bMidRightFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+
+	if iWindowType = WIN_W3HorizontalSlide then
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+			RightmullionMidX		= a/2-gs_frame_width-sashWidth3
+		else
+			RightmullionMidX		= a/2-gs_frame_width-sashWidth3+gs_sash_width/2
+		endif
+	else
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+			RightmullionMidX	= -a/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width+sashWidth3-gs_sash_width/2
+		else
+			RightmullionMidX	= -a/2+gs_frame_width_left+sashWidth1+sashWidth2+sashWidth3-gs_sash_width*2-gs_sash_width/2
+		endif
+	endif
+	RightmullionLeftX_Top		= RightmullionMidX - gs_Mullion_w/2 - not(bMidRightFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+	RightmullionLeftX_Middle	= RightmullionMidX - gs_sash_width/2 * (lod3D = 1 | lod3D = 5)
+	
+	RightmullionRightX_Top		= RightmullionMidX + gs_Mullion_w/2 + not(bRightFix) * (gs_sash_width - gs_rebate_width) * (lod3D = 1 | lod3D = 5)
+	RightmullionRightX_Middle	= RightmullionMidX + gs_sash_width/2 * (lod3D = 1 | lod3D = 5)
+endif
+
+if iWindowType = WIN_W6HorizontalSlide | iWindowType = WIN_W2HorizontalSlide then
+	if iWindowType = WIN_W2HorizontalSlide then
+		MullionMidX	= -a/2+gs_frame_width_left-gs_sash_width/2 + sashWidth2
+	else
+		MullionMidX	= -a/2+gs_frame_width_left-gs_sash_width/2 + sashWidth1
+	endif
+	MullionLeftX_Middle	= MullionMidX - gs_sash_width/2 * _bDetSimpleOrChinese
+	MullionRightX_Middle= MullionMidX + gs_sash_width/2 * _bDetSimpleOrChinese
+endif
+
+! --------------------------------------------------------------------------------
+! Draw Ventilation Profile
+! --------------------------------------------------------------------------------
+_isVentilationOverFrame = (bEnableVentilationProfile & bVentilationProfile & iVentilationProfileType = VENTPROFILE_OVER_FRAME)
+
+if _isVentilationOverFrame then
+	gosub "ventAboveFrame"
+endif
+
+
+! --------------------------------------------------------------------------------
+! Draw Frame
+! --------------------------------------------------------------------------------
+material gs_frame_mat
+pen gs_frame_pen
+
+gosub	"drawFrame"
+
+
+! =============================================================================
+! Draw Casement
+! =============================================================================
+
+if gs_UTrans then
+	mainSashHeight		= gs_UTrans_h-gs_UTrans_w/2-gs_frame_width_lower
+	transomSashHeight	= ac_unit_height-gs_UTrans_h-gs_UTrans_w/2-gs_frame_width_upper+2*gs_rebate_width
+else
+	mainSashHeight		= ac_unit_height-gs_frame_width_lower-gs_frame_width_upper
+	transomSashHeight	= 0
+endif
+
+dim	_sashPosX[]
+dim	_sashPosZ[]
+dim _openingLength[]
+
+_bSashIsEditable	= 0
+
+bForMacro				= mainSashHeight
+frameWidthForMacro		= gs_frame_width
+frameThicknessForMacro	= gs_sash_thk
+sashWidthForMacro		= gs_sash_width
+
+penSash_fg_forMacro		= gs_penSash_fg
+penSash_bg_forMacro		= gs_penSash_bg
+fillSashForMacro		= gs_fillSash
+
+grillMatForMacro		= gs_grill_mat2
+grillMatForMacro_2		= gs_grill_mat
+frameMatForMacro		= gs_sash_mat2
+frameMatForMacro_2		= gs_sash_mat
+
+IF lod3D = 2 THEN			! Detailed
+	if gs_sash_uniform then
+		_iMullionStyle = iMullionStyle_00
+	endif
+
+	sashThicknessForMacro	= _slidingSashThk
+endif
+
+if _bDetSimpleOrChinese then					! Simple and Chinese
+	_iMullionStyle	= MULLION_NONE
+
+	sashThicknessForMacro = gs_frame_thk/2
+
+	gs_full_edit = 0
+
+	if lod3D = 5 then
+		penSash_fg_forMacro		= gs_penShCov_fg
+		penSash_bg_forMacro		= gs_penShCov_bg
+		fillSashForMacro		= gs_fillShCover
+
+		sashThicknessForMacro	= gs_frame_thk
+		frameThicknessForMacro	= gs_frame_thk
+
+		grillMatForMacro		= gs_grill_mat
+		grillMatForMacro_2		= gs_grill_mat2
+	endif
+endif
+
+if iWindowType = WIN_W2HorizontalSlide then
+	_bSashLedge = bSashLedge
+	gosub "drawSashes_2"
+endif
+
+if iWindowType = WIN_W3HorizontalSlide then
+	_bSashLedge = bSashLedge
+	gosub  "drawSashes_3"
+endif
+
+if iWindowType = WIN_W4HorizontalSlide then
+	_bSashLedge = bSashLedge
+	gosub "drawSashes_4"
+endif
+
+if iWindowType = WIN_W6HorizontalSlide then
+	_bSashLedge = bSashLedge
+	gosub  "drawSashes_6"
+endif
+
+
+! --- Upper Transom ---
+
+if gs_UTrans then
+	bForMacro				= transomSashHeight
+	frameWidthForMacro		= gs_sash_width
+	frameThicknessForMacro	= gs_sash_thk
+	sashWidthForMacro		= gs_sash_width
+	sashThicknessForMacro	= gs_sash_thk
+
+	if _bDetSimpleOrChinese then
+		_posZ = gs_sash_thk/2+gs_frame_thk/2
+	else
+		_posZ = gs_frame_thk - gs_rebate_depth
+	endif
+
+	if lod3D = 5 then
+		grillMatForMacro	= gs_grill_mat2
+		grillMatForMacro_2	= gs_grill_mat
+	endif
+
+	! --- Type 1 Transom ---
+	if iUTrans = 1 then
+		_bSashLedge = 0
+		gosub "transomType4Sashes"
+	endif
+
+	! --- Type 2 Transom ---
+	if iUTrans = 2 then
+		_bSashLedge = 0
+		gosub "transomType2Sashes"
+	endif
+
+	! --- Type 3 Transom ---
+	if iUTrans = 3 then
+		_bSashLedge = 0
+		gosub "transomType3Sashes"
+	endif
+
+	! --- Type 4 Transom ---
+	if iUTrans = 4 then
+		_bSashLedge = 0
+		gosub "transomTypeUndivided"
+	endif
+
+endif
+
+!! END OF CASEMENT !!
+
+! ===============================================================================
+end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end ! end
+! ===============================================================================
+
+
+"transomTypeUndivided":
+	sh_unID = 1500
+	__tempSashWidth = ac_unit_width - gs_frame_width - gs_frame_width_left + 2*gs_rebate_width
+
+	add -ac_unit_width/2 + gs_frame_width_left - gs_rebate_width + __tempSashWidth/2 , gs_UTrans_h  + gs_UTrans_w/2 - gs_rebate_width, _posZ
+
+	CasementIDForMacro = 5
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_05
+	endif
+	aForMacro = __tempSashWidth
+
+	gosub "callCasementMacro"
+	del 1
+return
+
+
+"transomType3Sashes":
+	sh_unID = 3500
+	if iWindowType = WIN_W3HorizontalSlide &\
+		iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+
+		firstSashWidth = sashWidth1 - gs_Mullion_w_left/2 + 2*gs_rebate_width
+	else
+		firstSashWidth = sashWidth1 - gs_sash_width/2 - gs_Mullion_w_left/2 + 2*gs_rebate_width
+	endif
+	add -ac_unit_width/2 + gs_frame_width_left  - gs_rebate_width + firstSashWidth/2, gs_UTrans_h + gs_UTrans_w/2 - gs_rebate_width, _posZ
+
+	CasementIDForMacro = 7
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_07
+	endif
+	aForMacro = firstSashWidth
+
+	gosub "callCasementMacro"
+
+	sh_unID = 1500
+	if iWindowType = WIN_W3HorizontalSlide then
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+			secondSashWidth = sashWidth2-gs_sash_width/2-gs_Mullion_w_left/2-gs_Mullion_w/2+2*gs_rebate_width
+		else
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+				secondSashWidth = sashWidth2-gs_Mullion_w_left/2-gs_Mullion_w/2+2*gs_rebate_width-gs_sash_width/2
+			else
+				secondSashWidth = sashWidth2-gs_Mullion_w_left/2-gs_Mullion_w/2+2*gs_rebate_width-gs_sash_width
+			endif
+		endif
+		addx firstSashWidth/2 + gs_Mullion_w_left - 2*gs_rebate_width + secondSashWidth/2
+	else
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+			secondSashWidth = sashWidth2 + sashWidth3 - gs_Mullion_w_left/2 - gs_Mullion_w/2 + 2*gs_rebate_width - gs_sash_width
+		else
+			secondSashWidth = sashWidth2 + sashWidth3 - gs_Mullion_w_left/2 - gs_Mullion_w/2 + 2*gs_rebate_width - 2*gs_sash_width
+		endif
+		addx firstSashWidth/2 + gs_Mullion_w_left - 2*gs_rebate_width + (secondSashWidth)/2
+	endif
+
+	CasementIDForMacro = 5
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_05
+	endif
+	aForMacro = secondSashWidth
+
+	gosub "callCasementMacro"
+
+	sh_unID = 4500
+	if iWindowType = WIN_W3HorizontalSlide then
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+			thirdSashWidth = sashWidth3-gs_Mullion_w_left/2+2*gs_rebate_width
+		else
+			thirdSashWidth = sashWidth3-gs_sash_width/2-gs_Mullion_w_left/2+2*gs_rebate_width
+		endif
+	else
+		thirdSashWidth = _sashWidth4-gs_sash_width/2-gs_Mullion_w/2+2*gs_rebate_width
+	endif
+
+	addx secondSashWidth/2+gs_Mullion_w-2*gs_rebate_width+thirdSashWidth/2
+
+	CasementIDForMacro = 8
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_08
+	endif
+	aForMacro = thirdSashWidth
+
+	gosub "callCasementMacro"
+	del 3
+return
+
+
+"transomType4Sashes":
+	sh_unID = 3500
+	_nTrans = 0
+	firstSashWidth = sashWidth1-gs_sash_width/2-gs_Mullion_w_left/2+2*gs_rebate_width
+
+	add -ac_unit_width/2+gs_frame_width_left+firstSashWidth/2-gs_rebate_width, gs_UTrans_h + gs_UTrans_w/2 - gs_rebate_width, _posZ
+	_nTrans = _nTrans + 1
+
+	CasementIDForMacro = 7
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_07
+	endif
+	aForMacro = firstSashWidth
+
+	gosub "callCasementMacro"
+
+	sh_unID = 1500
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+		secondSashWidth = sashWidth2-gs_sash_width/2-gs_Mullion_w_left/2-gs_Mullion_w_mid/2+2*gs_rebate_width
+	else
+		secondSashWidth = sashWidth2-gs_sash_width-gs_Mullion_w_left/2-gs_Mullion_w_mid/2+2*gs_rebate_width
+	endif
+
+	addx firstSashWidth/2+gs_Mullion_w_left-2*gs_rebate_width+(secondSashWidth)/2
+	_nTrans = _nTrans + 1
+
+	CasementIDForMacro = 5
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_05
+	endif
+	aForMacro = secondSashWidth
+
+	gosub "callCasementMacro"
+
+	sh_unID = 2500
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+		thirdSashWidth = sashWidth3-gs_sash_width/2-gs_Mullion_w_mid/2-gs_Mullion_w/2+2*gs_rebate_width
+	else
+		thirdSashWidth = sashWidth3-gs_sash_width-gs_Mullion_w_mid/2-gs_Mullion_w/2+2*gs_rebate_width
+	endif
+	addx secondSashWidth/2+gs_Mullion_w_mid-2*gs_rebate_width+(thirdSashWidth)/2
+	_nTrans = _nTrans + 1
+
+	CasementIDForMacro = 6
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_06
+	endif
+	aForMacro = thirdSashWidth
+
+	gosub "callCasementMacro"
+
+	sh_unID = 4500
+	fourthSashWidth = _sashWidth4-gs_sash_width/2-gs_Mullion_w/2+2*gs_rebate_width
+	addx thirdSashWidth/2+gs_Mullion_w-2*gs_rebate_width+fourthSashWidth/2
+	_nTrans = _nTrans + 1
+
+	CasementIDForMacro = 8
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_08
+	endif
+	aForMacro = fourthSashWidth
+
+	gosub "callCasementMacro"
+
+	del _nTrans
+return
+
+
+"transomType2Sashes":
+	sh_unID = 3500
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+		firstSashWidth = sashWidth1 + sashWidth2 - gs_sash_width - gs_Mullion_w_mid/2 + 2*gs_rebate_width
+	else
+		if _bDetSimpleOrChinese then
+			firstSashWidth = sashWidth1 + sashWidth2 - gs_sash_width - gs_Mullion_w_mid/2 + 2*gs_rebate_width
+		else
+			firstSashWidth = sashWidth1 + sashWidth2 - 1.5*gs_sash_width - gs_Mullion_w_mid/2 + 2*gs_rebate_width
+		endif
+	endif
+
+	CasementIDForMacro = 7
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_07
+	endif
+
+	add -ac_unit_width/2+gs_frame_width_left-gs_rebate_width+firstSashWidth/2, gs_UTrans_h + gs_UTrans_w/2-gs_rebate_width, _posZ
+
+	aForMacro = firstSashWidth
+
+	gosub "callCasementMacro"
+	del 1
+
+	sh_unID = 1500
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+		secondSashWidth = sashWidth3 + _sashWidth4 - gs_sash_width - gs_Mullion_w_mid/2 + 2*gs_rebate_width
+	else
+		if _bDetSimpleOrChinese then
+			secondSashWidth = sashWidth3 + _sashWidth4 - 2*gs_sash_width - gs_Mullion_w_mid/2 + 2*gs_rebate_width
+		else
+			secondSashWidth = sashWidth3 + _sashWidth4 - 1.5*gs_sash_width - gs_Mullion_w_mid/2 + 2*gs_rebate_width
+		endif
+	endif
+	add ac_unit_width/2 - gs_frame_width_left + gs_rebate_width - secondSashWidth/2, gs_UTrans_h + gs_UTrans_w/2-gs_rebate_width, _posZ
+
+	CasementIDForMacro = 5
+	if not(gs_sash_uniform) then
+		_iMullionStyle = iMullionStyle_05
+	endif
+
+	aForMacro = secondSashWidth
+
+	gosub "callCasementMacro"
+
+	del 1
+return
+
+"drawSashes_6":
+	__nTrans = 0
+
+	if iNumberOfRails = RAILSNUMBER_2 then
+		_sashPosX[1] = 0
+		_sashPosX[2] = 0
+		_sashPosX[3] = 0
+		_sashPosX[4] = 0
+		_sashPosX[5] = 0
+		_sashPosX[6] = 0
+	else
+		if _bDetSimpleOrChinese then
+			_sashPosX[1] = 0
+			_sashPosX[2] = 0
+			_sashPosX[3] = 0
+			_sashPosX[4] = gs_sash_width
+			_sashPosX[5] = gs_sash_width
+			_sashPosX[6] = gs_sash_width
+		else
+			_sashPosX[1] = 0
+			_sashPosX[2] = -openingLength_01 / 2
+			_sashPosX[3] = 0
+			_sashPosX[4] = gs_sash_width
+			_sashPosX[5] = gs_sash_width + openingLength_02 / 2
+			_sashPosX[6] = gs_sash_width
+		endif
+	endif
+
+	if _bDetSimpleOrChinese then
+		_sashPosZ[1] = 0
+		_sashPosZ[2] = 0
+		_sashPosZ[3] = 0
+		_sashPosZ[4] = 0
+		_sashPosZ[5] = 0
+		_sashPosZ[6] = 0
+	else
+		if iNumberOfRails = RAILSNUMBER_2 then
+			_sashPosZ[1] = 0
+			_sashPosZ[2] = _slidingSashThk
+			_sashPosZ[3] = 0
+			_sashPosZ[4] = _slidingSashThk
+			_sashPosZ[5] = 0
+			_sashPosZ[6] = _slidingSashThk
+		else
+			_sashPosZ[1] = _slidingSashThk * 2
+			_sashPosZ[2] = _slidingSashThk
+			_sashPosZ[3] = 0
+			_sashPosZ[4] = 0
+			_sashPosZ[5] = _slidingSashThk
+			_sashPosZ[6] = _slidingSashThk * 2
+		endif
+	endif
+
+	if _bDetSimpleOrChinese then
+		add -a/2 + gs_frame_width_left + sashWidth1 / 2, gs_frame_width_lower, gs_sash_thk / 2 + gs_frame_thk / 2
+	else
+		add -a/2 + gs_frame_width_left + sashWidth1 / 2, gs_frame_width_lower, gs_rebate_depth
+	endif
+	__nTrans = __nTrans + 1
+	for _casementID = 1 to 6
+		if _casementID = 1 then
+			sh_unID = 5000
+			CasementIDForMacro	= 5
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_05
+			endif
+
+			if iNumberOfRails = RAILSNUMBER_2 then
+				_iHandleType = gs_handle_type_m * not(_bDetSimpleOrChinese)
+				_mirroredHandlePosition = 1
+			else
+				_iHandleType = gs_handle_type_m * not(_bDetSimpleOrChinese)
+				_mirroredHandlePosition = 0
+			endif
+		endif
+		if _casementID = 2 then
+			sh_unID = 3000
+			CasementIDForMacro	= 3
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_03
+			endif
+
+			if iNumberOfRails = RAILSNUMBER_2 then
+				_iHandleType = 0
+				_mirroredHandlePosition = 1
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+		endif
+		if _casementID = 3 then
+			sh_unID = 1000
+			_bSashIsEditable	= 1 * not(_bDetSimpleOrChinese)
+			CasementIDForMacro	= 1
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_01
+			endif
+
+			if iNumberOfRails = RAILSNUMBER_2 then
+				_iHandleType = gs_handle_type_m * not(_bDetSimpleOrChinese)
+				_mirroredHandlePosition = 1
+			else
+				_iHandleType = gs_handle_type_m * not(_bDetSimpleOrChinese)
+				_mirroredHandlePosition = 0
+			endif
+		endif
+		if _casementID = 4 then
+			sh_unID = 2000
+			_bSashIsEditable	= 1 * not(_bDetSimpleOrChinese)
+			CasementIDForMacro	= 2
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_02
+			endif
+
+			if iNumberOfRails = RAILSNUMBER_2 then
+				_iHandleType = 0
+				_mirroredHandlePosition = 1
+			else
+				_iHandleType = gs_handle_type_m * not(_bDetSimpleOrChinese)
+				_mirroredHandlePosition = 0
+			endif
+		endif
+		if _casementID = 5 then
+			sh_unID = 4000
+			CasementIDForMacro	= 4
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_04
+			endif
+
+			if iNumberOfRails = RAILSNUMBER_2 then
+				_iHandleType = gs_handle_type_m * not(_bDetSimpleOrChinese)
+				_mirroredHandlePosition = 1
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+		endif
+		if _casementID = 6 then
+			sh_unID = 6000
+			CasementIDForMacro	= 6
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_06
+			endif
+
+			if iNumberOfRails = RAILSNUMBER_2 then
+				_iHandleType = 0
+				_mirroredHandlePosition = 1
+			else
+				_iHandleType = gs_handle_type_m * not(_bDetSimpleOrChinese)
+				_mirroredHandlePosition = 0
+			endif
+		endif
+
+		aForMacro = sashWidth1
+
+		if not(_bDetSimpleOrChinese) & iNumberOfRails = RAILSNUMBER_2 then
+			_bSashIsEditable	= 1
+		endif
+		add _sashPosX[_casementID], 0, _sashPosZ[_casementID] + (lod3D = 5) * gs_rebate_depth
+		__nTrans = __nTrans + 1
+		gosub "callCasementMacro"
+
+		del 1
+		__nTrans = __nTrans - 1
+
+		add aForMacro - gs_sash_width, 0, 0
+		__nTrans = __nTrans + 1
+	next _casementID
+
+	del __nTrans
+return
+
+
+"drawSashes_4":
+	__nTrans = 0
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+		_sashPosX[1] = 0
+		_sashPosX[2] = 0
+		_sashPosX[3] = gs_sash_width
+		_sashPosX[4] = gs_sash_width
+	else
+		_sashPosX[1] = 0
+		_sashPosX[2] = 0
+		_sashPosX[3] = 0
+		_sashPosX[4] = 0
+	endif
+
+	if _bDetSimpleOrChinese then
+		_sashPosZ[1] = 0
+		_sashPosZ[2] = 0
+		_sashPosZ[3] = 0
+		_sashPosZ[4] = 0
+	else
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+			_sashPosZ[1] = 0
+			_sashPosZ[2] = _slidingSashThk
+			_sashPosZ[3] = _slidingSashThk
+			_sashPosZ[4] = 0
+		else
+			_sashPosZ[1] = 0
+			_sashPosZ[2] = _slidingSashThk
+			_sashPosZ[3] = 0
+			_sashPosZ[4] = _slidingSashThk
+		endif
+	endif
+
+	if _bDetSimpleOrChinese then
+		add -a/2 + gs_frame_width_left, gs_frame_width_lower, gs_sash_thk / 2 + gs_frame_thk / 2
+	else
+		add -a/2 + gs_frame_width_left, gs_frame_width_lower, gs_rebate_depth
+	endif
+	__nTrans = __nTrans + 1
+
+	for _casementID = 1 to 4
+		if _casementID = 1 then
+			sh_unID = 3000
+			CasementIDForMacro	= 3
+			aForMacro = sashWidth1
+
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_4SASHES then
+				_iHandleType = gs_handle_type_m
+				_mirroredHandlePosition = 0
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_03
+			endif
+
+			addx sashWidth1 / 2
+			__nTrans = __nTrans + 1
+		endif
+		if _casementID = 2 then
+			sh_unID = 1000
+			CasementIDForMacro	= 1
+			aForMacro = sashWidth2
+
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+				_iHandleType = gs_handle_type_m
+				_mirroredHandlePosition = 0
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_01
+			endif
+
+			addx sashWidth2 / 2
+			__nTrans = __nTrans + 1
+		endif
+		if _casementID = 3 then
+			sh_unID = 2000
+			CasementIDForMacro	= 2
+			aForMacro = sashWidth3
+
+			if	iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL |\
+				iOpeningTypeMain = OPENINGTYPE_MAIN_DIFFRAIL |\
+				iOpeningTypeMain = OPENINGTYPE_MAIN_4SASHES then
+
+				_iHandleType = gs_handle_type_m
+				_mirroredHandlePosition = 0
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_02
+			endif
+
+			addx sashWidth3 / 2
+			__nTrans = __nTrans + 1
+		endif
+		if _casementID = 4 then
+			sh_unID = 4000
+			CasementIDForMacro	= 4
+			aForMacro = _sashWidth4
+
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_4SASHES then
+				_iHandleType = gs_handle_type_m
+				_mirroredHandlePosition = 0
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_04
+			endif
+
+			addx _sashWidth4 / 2
+			__nTrans = __nTrans + 1
+		endif
+
+		if not(_bDetSimpleOrChinese) then
+			_bSashIsEditable	= 1
+		endif
+		add _sashPosX[_casementID], 0, _sashPosZ[_casementID] + (lod3D = 5) * gs_rebate_depth
+		__nTrans = __nTrans + 1
+		gosub "callCasementMacro"
+
+		del 2
+		__nTrans = __nTrans - 2
+
+		add aForMacro - gs_sash_width, 0, 0
+		__nTrans = __nTrans + 1
+	next _casementID
+
+	del __nTrans
+return
+
+
+"drawSashes_3":
+	__nTrans = 0
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_3SASHES |\
+		iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES |\
+		iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+
+		_sashPosX[1] = 0
+		_sashPosX[2] = 0
+		_sashPosX[3] = 0
+	endif
+
+	if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+		_sashPosX[1] = 0
+		_sashPosX[2] = gs_sash_width
+		_sashPosX[3] = gs_sash_width
+	endif
+
+	if _bDetSimpleOrChinese then
+		_sashPosZ[1] = 0
+		_sashPosZ[2] = 0
+		_sashPosZ[3] = 0
+	else
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES then
+			_sashPosZ[1] = 0
+			_sashPosZ[2] = _slidingSashThk
+			_sashPosZ[3] = 0
+		endif
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_3SASHES then
+			_sashPosZ[1] = 0
+			_sashPosZ[2] = _slidingSashThk
+			_sashPosZ[3] = 2*_slidingSashThk
+		endif
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+			_sashPosZ[1] = _slidingSashThk
+			_sashPosZ[2] = 0
+			_sashPosZ[3] = 0
+		endif
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+			_sashPosZ[1] = 0
+			_sashPosZ[2] = 0
+			_sashPosZ[3] = _slidingSashThk
+		endif
+	endif
+
+	if _bDetSimpleOrChinese then
+		add -a/2 + gs_frame_width_left, gs_frame_width_lower, gs_sash_thk / 2 + gs_frame_thk / 2
+	else
+		add -a/2 + gs_frame_width_left, gs_frame_width_lower, gs_rebate_depth
+	endif
+	__nTrans = __nTrans + 1
+
+
+	for _casementID = 1 to 3
+		if _casementID = 1 then
+			sh_unID = 3000
+			CasementIDForMacro	= 3
+			aForMacro = sashWidth1
+
+			if	iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE |\
+				iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES |\
+				iOpeningTypeMain = OPENINGTYPE_MAIN_3SASHES then
+
+				_iHandleType = gs_handle_type_m
+				_mirroredHandlePosition = 0
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_03
+			endif
+
+			addx sashWidth1 / 2
+			__nTrans = __nTrans + 1
+		endif
+		if _casementID = 2 then
+			sh_unID = 1000
+			CasementIDForMacro	= 1
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+				aForMacro = sashWidth2 + gs_sash_width/2
+			else
+				aForMacro = sashWidth2
+			endif
+
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+				_iHandleType = gs_handle_type_m
+				_mirroredHandlePosition = 1
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_01
+			endif
+
+			! place cutplane for "doublesash" made of 2 regular overextended sashes
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE & not(_bDetSimpleOrChinese) then
+				addx sashWidth2
+				roty 90
+				CUTPLANE{2} 0, 1+2+4
+				del 2
+			endif
+			addx aForMacro / 2
+			__nTrans = __nTrans + 1
+		endif
+		if _casementID = 3 then
+			sh_unID = 4000
+			CasementIDForMacro	= 4
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+				aForMacro = sashWidth3 + gs_sash_width/2
+			else
+				aForMacro = sashWidth3
+			endif
+
+			if	iOpeningTypeMain = OPENINGTYPE_MAIN_2SASHES |\
+				iOpeningTypeMain = OPENINGTYPE_MAIN_3SASHES then
+
+				_iHandleType = gs_handle_type_m
+				_mirroredHandlePosition = 0
+			else
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			endif
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_04
+			endif
+
+			! place cutplane for "doublesash" made of 2 regular overextended sashes
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE & not(_bDetSimpleOrChinese) then
+				addx gs_sash_width/2
+				roty -90
+				CUTPLANE{2} 0, 1+2+4
+				del 2
+			endif
+			addx aForMacro / 2
+			__nTrans = __nTrans + 1
+		endif
+
+		if not(_bDetSimpleOrChinese) then
+			_bSashIsEditable	= 1
+		endif
+		add _sashPosX[_casementID], 0, _sashPosZ[_casementID] + (lod3D = 5) * gs_rebate_depth
+		__nTrans = __nTrans + 1
+
+		gosub "callCasementMacro"
+
+		if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE & not(_bDetSimpleOrChinese) &\
+			(_casementID = 2 | _casementID = 3) then
+			CUTEND
+		endif
+
+		del 2
+		__nTrans = __nTrans - 2
+
+		add aForMacro - gs_sash_width, 0, 0
+		__nTrans = __nTrans + 1
+	next _casementID
+
+	del __nTrans
+return
+
+
+"drawSashes_2":
+	__nTrans = 0
+
+	_sashPosX[1] = 0
+	_sashPosX[2] = 0
+
+	if _bDetSimpleOrChinese then
+		_sashPosZ[1] = 0
+		_sashPosZ[2] = 0
+	else
+		_sashPosZ[1] = 0
+		_sashPosZ[2] = _slidingSashThk
+	endif
+
+	if _bDetSimpleOrChinese then
+		add -a/2 + gs_frame_width_left, gs_frame_width_lower, gs_sash_thk / 2 + gs_frame_thk / 2
+	else
+		add -a/2 + gs_frame_width_left, gs_frame_width_lower, gs_rebate_depth
+	endif
+	__nTrans = __nTrans + 1
+
+	for _casementID = 1 to 2
+		if _casementID = 1 then
+			sh_unID = 3000
+			CasementIDForMacro	= 3
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_03
+			else
+				if iMullionStyle_00 = MULLION_DIVIDED then
+					! use sash 1 settings for sash 3
+					vgn_03			= vgn_01
+					hgn_03			= hgn_01
+					vgn2_03			= vgn2_01
+					hgn2_03			= hgn2_01
+					gs_horiz_div_height_03 = gs_horiz_div_height_01
+				endif
+			endif
+
+			if iOpeningTypeMain = OPENINGTYPE_MAIN_SINGLE then
+				_iHandleType = 0
+				_mirroredHandlePosition = 0
+			else
+				_iHandleType = gs_handle_type_m
+				_mirroredHandlePosition = 0
+			endif
+
+			aForMacro = sashWidth2
+			addx aForMacro / 2
+			__nTrans = __nTrans + 1
+		endif
+		if _casementID = 2 then
+			sh_unID = 1000
+			CasementIDForMacro	= 1
+
+			if not(gs_sash_uniform) then
+				_iMullionStyle = iMullionStyle_01
+			endif
+
+			_iHandleType = gs_handle_type_m
+			_mirroredHandlePosition = 0
+
+			aForMacro = sashWidth1
+			addx aForMacro / 2
+			__nTrans = __nTrans + 1
+		endif
+
+		if not(_bDetSimpleOrChinese) then
+			_bSashIsEditable	= 1
+		endif
+
+		add _sashPosX[_casementID], 0, _sashPosZ[_casementID] + (lod3D = 5) * gs_rebate_depth
+		__nTrans = __nTrans + 1
+
+		gosub "callCasementMacro"
+
+		del 2
+		__nTrans = __nTrans - 2
+
+		add aForMacro - gs_sash_width, 0, 0
+		__nTrans = __nTrans + 1
+	next _casementID
+
+	del __nTrans
+return
+
+
+"callCasementMacro":
+	CALL "Casement_rectangular" PARAMETERS 	a = aForMacro,
+											b = bForMacro,
+
+											CasementID		= CasementIDForMacro,
+											gs_frame_width	= frameWidthForMacro,
+											gs_frame_thk 	= frameThicknessForMacro,
+											gs_sash_thk		= sashThicknessForMacro,
+											gs_sash_width	= sashWidthForMacro,
+
+											gs_rebate_width	= gs_rebate_width,
+											gs_rebate_depth	= gs_rebate_depth,
+
+											iMullionStyle_01 = _iMullionStyle,
+											iMullionStyle_02 = _iMullionStyle,
+											iMullionStyle_03 = _iMullionStyle,
+											iMullionStyle_04 = _iMullionStyle,
+											iMullionStyle_05 = _iMullionStyle,
+											iMullionStyle_06 = _iMullionStyle,
+											iMullionStyle_07 = _iMullionStyle,
+											iMullionStyle_08 = _iMullionStyle,
+											iMullionPosition = iMullionPosition,
+
+											bSashLedge			= _bSashLedge,
+											sashLedgeHeight		= sashLedgeHeight,
+											sashLedgeThickness	= sashLedgeThickness,
+
+											gs_handle_type_m	= _iHandleType,
+											gs_cust_handle		= gs_cust_handle,
+											gs_han_height		= gs_han_height,
+											gs_han_pos			= gs_han_pos,
+											mirroredHandlePosition = _mirroredHandlePosition,
+
+											gw	= gw,
+											gth	= gth,
+											gs_glass_thk = gs_glass_thk,
+											
+											! for Divided Sash in W2Sliding
+											vgn2_01			= vgn2_01,
+											hgn2_01			= hgn2_01,
+											vgn2_03			= vgn2_03,
+											hgn2_03			= hgn2_03,
+											vergrid2_01		= vergrid2_01,
+											horgrid2_01		= horgrid2_01,
+											vergrid2_03		= vergrid2_03,
+											horgrid2_03		= horgrid2_03,
+											gs_horiz_div_height_01 = gs_horiz_div_height_01,
+											gs_horiz_div_height_03 = gs_horiz_div_height_03,
+
+											vgn_01			= vgn_01,
+											hgn_01			= hgn_01,
+											vgn_02			= vgn_02,
+											hgn_02			= hgn_02,
+											vgn_03			= vgn_03,
+											hgn_03			= hgn_03,
+											vgn_04			= vgn_04,
+											hgn_04			= hgn_04,
+											vgn_05			= vgn_05,
+											hgn_05			= hgn_05,
+											vgn_06			= vgn_06,
+											hgn_06			= hgn_06,
+											vgn_07			= vgn_07,
+											hgn_07			= hgn_07,
+											vgn_08			= vgn_08,
+											hgn_08			= hgn_08,
+
+											vergrid_01		= vergrid_01,
+											horgrid_01		= horgrid_01,
+											vergrid_02		= vergrid_02,
+											horgrid_02		= horgrid_02,
+											vergrid_03		= vergrid_03,
+											horgrid_03		= horgrid_03,
+											vergrid_04		= vergrid_04,
+											horgrid_04		= horgrid_04,
+											vergrid_05		= vergrid_05,
+											horgrid_05		= horgrid_05,
+											vergrid_06		= vergrid_06,
+											horgrid_06		= horgrid_06,
+											vergrid_07		= vergrid_07,
+											horgrid_07		= horgrid_07,
+											vergrid_08		= vergrid_08,
+											horgrid_08		= horgrid_08,
+
+											ghe					= ghe,
+											gs_glass_pen		= gs_glass_pen,
+											gs_glass_pen_cont	= gs_frame_pen_cont,
+
+											VentilationProfileHeight		= VentilationProfileHeight,
+											isVentilationProfileInSash_01	= isVentilationProfileInSash_01,
+											isVentilationProfileInSash_02	= isVentilationProfileInSash_02,
+											isVentilationProfileInSash_03	= isVentilationProfileInSash_03,
+											isVentilationProfileInSash_04	= isVentilationProfileInSash_04,
+											isVentilationProfileInSash_05	= isVentilationProfileInSash_05,
+											isVentilationProfileInSash_06	= isVentilationProfileInSash_06,
+											isVentilationProfileInSash_07	= isVentilationProfileInSash_07,
+											isVentilationProfileInSash_08	= isVentilationProfileInSash_08,
+											isVentilationProfileInSash_09	= 0,
+											isVentilationProfileInSash_10	= 0,
+											isVentilationProfileInSash_11	= 0,
+
+											openingLength_01	= openingLength_01,
+											openingMaxLength_01	= openingMaxLength_01,
+											openingLength_02	= openingLength_02,
+											openingMaxLength_02	= openingMaxLength_02,
+											openingLength_03	= openingLength_03,
+											openingMaxLength_03	= openingMaxLength_03,
+											openingLength_04	= openingLength_04,
+											openingMaxLength_04	= openingMaxLength_04,
+											openingLength_05	= openingLength_05,
+											openingMaxLength_05	= openingMaxLength_05,
+											openingLength_06	= openingLength_06,
+											openingMaxLength_06	= openingMaxLength_06,
+
+											gs_optype_m_01		= gs_optype_m_01,
+											gs_optype_m_02		= gs_optype_m_02,
+											gs_optype_m_03		= gs_optype_m_03,
+											gs_optype_m_04		= gs_optype_m_04,
+											gs_optype_m_05		= gs_optype_m_05,
+											gs_optype_m_06		= gs_optype_m_06,
+											gs_optype_m_07		= gs_optype_m_07,
+											gs_optype_m_08		= gs_optype_m_08,
+
+											openingAngle_05		= openingAngle_05,
+											openingAngle2_05	= openingAngle2_05,
+											openingAngle_06		= openingAngle_06,
+											openingAngle2_06	= openingAngle2_06,
+											openingAngle_07		= openingAngle_07,
+											openingAngle2_07	= openingAngle2_07,
+											openingAngle_08		= openingAngle_08,
+											openingAngle2_08	= openingAngle2_08,
+
+											gs_full_edit		= _bSashIsEditable,
+											gs_frame_pen		= gs_frame_pen,
+											gs_sash_pen			= gs_sash_pen,
+
+											gs_sash_mat			= frameMatForMacro_2,
+											gs_sash_mat2		= frameMatForMacro,
+											gs_grill_mat		= grillMatForMacro_2,
+											gs_grill_mat2		= grillMatForMacro,
+											matSashLedgeOutside	= matSashLedgeOutside,
+											matSashLedgeInside	= matSashLedgeInside,
+											gs_handle_mat		= gs_handle_mat,
+											gs_handle_ac_mat	= gs_handle_ac_mat,
+											gs_glass_mat		= gs_glass_mat,
+											gs_ventProfile_mat	= gs_ventProfile_mat,
+											gs_sash_pen_cont	= gs_frame_pen_cont,
+											gs_fillSash			= fillSashForMacro,
+											gs_penSash_bg		= penSash_bg_forMacro,
+											gs_penSash_fg		= penSash_fg_forMacro,
+											gs_frame_pen_cont	= gs_frame_pen_cont,
+											gs_ventProfile_fill		= gs_ventProfile_fill,
+											gs_ventProfile_pen_fg	= gs_ventProfile_pen_fg,
+											gs_ventProfile_pen_bg	= gs_ventProfile_pen_bg,
+											bOpeningDirectionInside	= WIDO_REVEAL_SIDE,
+											gs_SashText_typ_num	= gs_SashText_typ_num,
+
+											gs_cust_panel_01	= gs_cust_panel_01,
+											gs_cust_panel_02	= gs_cust_panel_02,
+											gs_cust_panel_03	= gs_cust_panel_03,
+											gs_cust_panel_04	= gs_cust_panel_04,
+											gs_cust_panel_05	= gs_cust_panel_05,
+											gs_cust_panel_06	= gs_cust_panel_06,
+											gs_cust_panel_07	= gs_cust_panel_07,
+											gs_cust_panel_08	= gs_cust_panel_08,
+
+											sh_unID				= sh_unID,
+											lod3D				= lod3D,
+											bOplines3d 			= bOplines3d,
+											opLineType3dIn		= opLineType3dIn,
+											opLineType3dOut		= opLineType3dOut,
+											gs_opline_style_m 	= gs_opline_style_m,
+											gs_opLinePen		= gs_opLinePen,
+											gs_panel_mat		= gs_panel_mat,
+											gs_panel_mat2		= gs_panel_mat2
+
+return
+
+
+
+"sashEditHotspots_2":
+	unID=1300
+	hotspot A/2-gs_frame_width,            0, gs_frame_thk, unID, sashWidth1, 1+128:unID=unID+1
+	hotspot A/2-gs_frame_width+1,          0, gs_frame_thk, unID, sashWidth1, 3:unID=unID+1
+	hotspot A/2-gs_frame_width-sashWidth1, 0, gs_frame_thk, unID, sashWidth1, 2
+
+	unID=1310
+	hotspot A/2-gs_frame_width,            B, gs_frame_thk, unID, sashWidth1, 1+128:unID=unID+1
+	hotspot A/2-gs_frame_width+1,          B, gs_frame_thk, unID, sashWidth1, 3:unID=unID+1
+	hotspot A/2-gs_frame_width-sashWidth1, B, gs_frame_thk, unID, sashWidth1, 2
+return
+
+
+"sashEditHotspots_3":
+	if iOpeningTypeMain	= OPENINGTYPE_MAIN_1SIDE | iOpeningTypeMain	= OPENINGTYPE_MAIN_1MIDDLE then
+		unID=1300
+		hotspot -A/2+gs_frame_width_left,            0, 0, unID, sashWidth1, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left-1,          0, 0, unID, sashWidth1, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1, 0, 0, unID, sashWidth1, 2
+	
+		unID=1310
+		hotspot -A/2+gs_frame_width_left,            B, 0, unID, sashWidth1, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left-1,          B, 0, unID, sashWidth1, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1, B, 0, unID, sashWidth1, 2
+	endif
+	if iOpeningTypeMain	= OPENINGTYPE_MAIN_2SASHES then
+		unID=1300
+		hotspot -A/2+gs_frame_width_left,            0, 0, unID, sashWidth1, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left-1,          0, 0, unID, sashWidth1, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1, 0, 0, unID, sashWidth1, 2
+	
+		unID=1310
+		hotspot -A/2+gs_frame_width_left,            B, 0, unID, sashWidth1, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left-1,          B, 0, unID, sashWidth1, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1, B, 0, unID, sashWidth1, 2
+
+		unID=1320
+		hotspot (gs_frame_width_left - gs_frame_width) / 2,					0, 0, unID, tempSashWidth2, 1+128,	sashWidth2	:unID=unID+1
+		hotspot (gs_frame_width_left - gs_frame_width) / 2 - 1,				0, 0, unID, tempSashWidth2, 3,		sashWidth2	:unID=unID+1
+		hotspot (gs_frame_width_left - gs_frame_width) / 2 + tempSashWidth2,	0, 0, unID, tempSashWidth2, 2,		sashWidth2
+	
+		unID=1330
+		hotspot (gs_frame_width_left - gs_frame_width) / 2,					B, 0, unID, tempSashWidth2, 1+128,	sashWidth2	:unID=unID+1
+		hotspot (gs_frame_width_left - gs_frame_width) / 2 - 1,				B, 0, unID, tempSashWidth2, 3,		sashWidth2	:unID=unID+1
+		hotspot (gs_frame_width_left - gs_frame_width) / 2 + tempSashWidth2,	B, 0, unID, tempSashWidth2, 2,		sashWidth2
+	endif
+return
+
+
+"sashEditHotspots_4":
+	if iOpeningTypeMain	= OPENINGTYPE_MAIN_DIFFRAIL |\
+		iOpeningTypeMain	= OPENINGTYPE_MAIN_4SASHES then
+		unID=1300
+		hotspot -A/2+gs_frame_width_left,            0, 0, unID, sashWidth1, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left-1,          0, 0, unID, sashWidth1, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1, 0, 0, unID, sashWidth1, 2
+	
+		unID=1310
+		hotspot -A/2+gs_frame_width_left,            B, 0, unID, sashWidth1, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left-1,          B, 0, unID, sashWidth1, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1, B, 0, unID, sashWidth1, 2
+
+		unID=1320
+		hotspot -A/2+gs_frame_width_left+sashWidth1-gs_sash_width,            0, 0, unID, sashWidth2, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1-1-gs_sash_width,          0, 0, unID, sashWidth2, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width, 0, 0, unID, sashWidth2, 2
+	
+		unID=1330
+		hotspot -A/2+gs_frame_width_left+sashWidth1-gs_sash_width,            B, 0, unID, sashWidth2, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1-1-gs_sash_width,          B, 0, unID, sashWidth2, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width, B, 0, unID, sashWidth2, 2
+
+		unID=1340
+		hotspot -A/2+gs_frame_width_left+sashWidth1+sashWidth2-2*gs_sash_width,            0, 0, unID, sashWidth3, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1+sashWidth2-1-2*gs_sash_width,          0, 0, unID, sashWidth3, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1+sashWidth2+sashWidth3-2*gs_sash_width, 0, 0, unID, sashWidth3, 2
+	
+		unID=1350
+		hotspot -A/2+gs_frame_width_left+sashWidth1+sashWidth2-2*gs_sash_width,            B, 0, unID, sashWidth3, 1+128:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1+sashWidth2-1-2*gs_sash_width,          B, 0, unID, sashWidth3, 3:unID=unID+1
+		hotspot -A/2+gs_frame_width_left+sashWidth1+sashWidth2+sashWidth3-2*gs_sash_width, B, 0, unID, sashWidth3, 2
+	endif
+
+	if iOpeningTypeMain	= OPENINGTYPE_MAIN_SAMERAIL then
+		unID=1320
+		hotspot -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width, 0, 0, unID, sashWidth2, 1+128:unID=unID+1
+		hotspot -ac_unit_width/2+gs_frame_width_left+sashWidth1+1-gs_sash_width,          0, 0, unID, sashWidth2, 3:unID=unID+1
+		hotspot -ac_unit_width/2+gs_frame_width_left+sashWidth1-gs_sash_width,            0, 0, unID, sashWidth2, 2
+
+		unID=1330
+		hotspot -ac_unit_width/2+gs_frame_width_left+sashWidth1+sashWidth2-gs_sash_width, B, 0, unID, sashWidth2, 1+128:unID=unID+1
+		hotspot -ac_unit_width/2+gs_frame_width_left+sashWidth1+1-gs_sash_width,          B, 0, unID, sashWidth2, 3:unID=unID+1
+		hotspot -ac_unit_width/2+gs_frame_width_left+sashWidth1-gs_sash_width,            B, 0, unID, sashWidth2, 2
+
+		unID=1340
+		hotspot ac_unit_width/2-gs_frame_width-sashWidth1-sashWidth2+gs_sash_width, 0, 0, unID, sashWidth2, 1+128:unID=unID+1
+		hotspot ac_unit_width/2-gs_frame_width-sashWidth1-1+gs_sash_width,          0, 0, unID, sashWidth2, 3:unID=unID+1
+		hotspot ac_unit_width/2-gs_frame_width-sashWidth1+gs_sash_width,            0, 0, unID, sashWidth2, 2
+
+		unID=1350
+		hotspot ac_unit_width/2-gs_frame_width-sashWidth1-sashWidth2+gs_sash_width, B, 0, unID, sashWidth2, 1+128:unID=unID+1
+		hotspot ac_unit_width/2-gs_frame_width-sashWidth1-1+gs_sash_width,          B, 0, unID, sashWidth2, 3:unID=unID+1
+		hotspot ac_unit_width/2-gs_frame_width-sashWidth1+gs_sash_width,            B, 0, unID, sashWidth2, 2
+	endif
+return
+
+"unitHotspots":
+	unID=100
+	hotspot a/2, 0, 0, unID		:unID=unID+1
+	hotspot -a/2, 0, 0, unID	:unID=unID+1
+	hotspot a/2, 0, gs_frame_thk, unID		:unID=unID+1
+	hotspot -a/2, 0, gs_frame_thk, unID	:unID=unID+1
+
+	hotspot a/2, b, 0, unID		:unID=unID+1
+	hotspot -a/2, b, 0, unID	:unID=unID+1
+	hotspot a/2, b, gs_frame_thk, unID		:unID=unID+1
+	hotspot -a/2, b, gs_frame_thk, unID
+return
+
+"transomHotspots":
+	unID=1400
+	hotspot A/2, 0, 0, 	unID, gs_UTrans_h, 1+128:unID=unID+1
+	hotspot A/2, -1, 0, unID, gs_UTrans_h, 3:unID=unID+1
+	hotspot A/2, gs_UTrans_h, 0, 	unID, gs_UTrans_h, 2
+
+	unID=1410
+	hotspot -A/2, 0, 0,  unID, gs_UTrans_h, 1+128:unID=unID+1
+	hotspot -A/2, -1, 0, unID, gs_UTrans_h, 3:unID=unID+1
+	hotspot -A/2, gs_UTrans_h, 0, unID, gs_UTrans_h, 2
+return
+
+
+"ventAboveFrame":
+	addy ac_unit_height
+	if not(WIDO_REVEAL_SIDE) then
+		addz gs_frame_thk
+		mulz -1
+	endif
+	call "Ventilation_profile" parameters	A							= ac_unit_width,
+											VentilationProfileThickness	= VentilationProfileThickness,
+											VentilationProfileHeight	= VentilationProfileHeight,
+											gs_frame_thk				= gs_frame_thk,
+											bVentilationProfile			= bVentilationProfile,
+											iVentilationProfileType		= iVentilationProfileType,
+											gs_ventProfile_pen			= gs_frame_pen,
+											gs_ventProfile_pen_cont		= gs_frame_pen_cont,
+											gs_ventProfile_fill			= gs_ventProfile_fill,
+											gs_ventProfile_pen_bg		= gs_ventProfile_pen_bg,
+											gs_ventProfile_pen_fg		= gs_ventProfile_pen_fg,
+											gs_ventProfile_mat			= gs_ventProfile_mat
+	if not(WIDO_REVEAL_SIDE) then del 2
+	del 1
+return
+
+
+"drawFrame":
+
+	group "frame"
+	
+		sect_fill fr_sect_fill_type, fr_sect_fill_bg, fr_sect_fill_fg, gs_frame_pen_cont
+
+		! --------------------------------------------------------------------------------
+		! Cuttings
+		! --------------------------------------------------------------------------------
+		halfA = A / 2
+	
+		_numCut	= 0
+	
+		! Cut Ventilation Profile
+		if _isVentilationOverFrame then
+			addy ac_unit_height
+			cutpolya 5, 2, 0,
+				-ac_unit_width/2, 0, 11+3*not(WIDO_REVEAL_SIDE),
+				-ac_unit_width/2, VentilationProfileHeight, 11+3*not(WIDO_REVEAL_SIDE),
+				ac_unit_width/2, VentilationProfileHeight, 11+3*not(WIDO_REVEAL_SIDE),
+				ac_unit_width/2, 0, 11+3*not(WIDO_REVEAL_SIDE),
+				-ac_unit_width/2, 0, -1
+			del 1
+			_numCut = _numCut + 1
+		endif
+	
+		if abs(gs_frame_ovhg_left_out - gs_frame_ovhg_left_in) > EPS then
+			addx -halfA - gs_frame_ovhg_left_out
+			rotz 90
+			cutplane -90 + atn((gs_frame_ovhg_left_out - gs_frame_ovhg_left_in) / gs_frame_thk)
+			del 2
+			_numCut = _numCut + 1
+		endif
+	
+		if abs(gs_frame_ovhg_right_out - gs_frame_ovhg_right_in) > EPS then
+			addx halfA + gs_frame_ovhg_right_out
+			rotz 90
+			cutplane 90 - atn((gs_frame_ovhg_right_out - gs_frame_ovhg_right_in) / gs_frame_thk)
+			del 2
+			_numCut = _numCut + 1
+		endif
+	
+		if abs(gs_frame_ovhg_top_out - gs_frame_ovhg_top_in) > EPS then
+			addy B + gs_frame_ovhg_top_out
+			rotz 90
+			roty -90 - atn((gs_frame_ovhg_top_out - gs_frame_ovhg_top_in) / gs_frame_thk)
+			cutplane 180
+			del 3
+			_numCut = _numCut + 1
+		endif
+	
+		if abs(gs_frame_ovhg_bottom_out - gs_frame_ovhg_bottom_in) > EPS then
+			addy -gs_frame_ovhg_bottom_out
+			rotz 90
+			roty 90 + atn((gs_frame_ovhg_bottom_out - gs_frame_ovhg_bottom_in) / gs_frame_thk)
+			cutplane 180
+			del 3
+			_numCut = _numCut + 1
+		endif
+	
+		! --------------------------------------------------------------------------------
+		! Coloring the frame
+		! --------------------------------------------------------------------------------
+	
+		if not(_bDetSimpleOrChinese) & not(_bFrameSameColors) then
+			for _iNum = 1 to 2
+				if gs_UTrans then
+					cutform	4, 1, 16,
+						0,0,1,gs_frame_thk/2,
+						leftInX_Middle, bottomInY, 31,
+						rightInX_Middle, bottomInY, 31,
+						rightInX_Middle, upperTransomBottomY, 31,
+						leftInX_Middle, upperTransomBottomY, 31
+				else
+					cutform	4, 1, 16,
+						0,0,1,gs_frame_thk/2,
+						leftInX_Middle, bottomInY, 31,
+						rightInX_Middle, bottomInY, 31,
+						rightInX_Middle, topInY, 31,
+						leftInX_Middle, topInY, 31
+				endif
+				_numCut = _numCut + 1
+	
+				addz gs_frame_thk
+				mulz -1
+				material gs_frame_mat2
+			next _iNum
+			del (_iNum-1) * 2
+		endif
+	
+		!###################################################################
+	
+		for _iNum = 1 to _numIterations
+	
+	! --- Left Side ----------------------------------------------------------------
+			put	leftOutX, not(_bMiteredJoin) * bottomInY + _bMiteredJoin * bottomOutY, stack_mask_l,
+				leftOutX, not(_bMiteredJoin) * topInY_Left + _bMiteredJoin * topOutY, 10
+			if gs_UTrans then
+				put	leftInX_Top, topInY_Left, in_out_mask,
+					leftInX_Top, upperTransomTopY_Left, 10,
+					leftInX_Middle, upperTransomBottomY, 15
+
+				if not(_bDetSimpleOrChinese) & not(_bFrameSameColors) then
+					put	leftInX_Middle + offsetSash, upperTransomBottomY - offsetSash, in_out_mask
+				endif
+			else
+				put	leftInX_Middle, topInY_Left, in_out_mask
+
+				if not(_bDetSimpleOrChinese) & not(_bFrameSameColors) then
+					put	leftInX_Middle + offsetSash, topInY_Left - offsetSash, in_out_mask
+				endif
+			endif
+
+			if not(_bDetSimpleOrChinese) & not(_bFrameSameColors) then
+				put leftInX_Middle + offsetSash, bottomInY + offsetSash, in_out_mask
+			endif
+
+			put	leftInX_Middle, bottomInY, 10
+	
+			cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+				nsp/3, part_thk, get(nsp)
+	
+			gosub "setTexture1"
+	
+	! --- Right Side ---------------------------------------------------------------
+			put	rightOutX, not(_bMiteredJoin) * bottomInY + _bMiteredJoin * bottomOutY, stack_mask_r,
+				rightOutX, not(_bMiteredJoin) * topInY_Right + _bMiteredJoin * topOutY, 10
+
+			if gs_UTrans then
+				put	rightInX_Top, topInY_Left, in_out_mask,
+					rightInX_Top, upperTransomTopY_Left, 10,
+					rightInX_Middle, upperTransomBottomY, 15
+
+				if not(_bDetSimpleOrChinese) & not(_bFrameSameColors) then
+					put	rightInX_Middle - offsetSash, upperTransomBottomY - offsetSash, in_out_mask
+				endif
+			else
+				put	rightInX_Middle, topInY_Left, in_out_mask
+				if not(_bDetSimpleOrChinese) & not(_bFrameSameColors) then
+					put	rightInX_Middle - offsetSash, topInY_Right - offsetSash, in_out_mask
+				endif
+			endif
+
+			if not(_bDetSimpleOrChinese) & not(_bFrameSameColors) then
+				put rightInX_Middle - offsetSash, bottomInY + offsetSash, in_out_mask
+			endif
+
+			put	rightInX_Middle, bottomInY, 10
+	
+			cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+				nsp/3,part_thk, get(nsp)
+	
+			gosub "setTexture1"
+	
+	! --- Bottom ---------------------------------------------------------------------
+			put	rightOutX,	bottomOutY,	stack_mask_b,
+				leftOutX,	bottomOutY,	15 * not(_bMiteredJoin) + 10 * _bMiteredJoin
+			if not(_bMiteredJoin) then
+				put	leftOutX,	bottomInY,	8
+			endif
+			put	leftInX_Middle,	bottomInY,	in_out_mask
+
+
+			if iWindowType = WIN_W3HorizontalSlide | iWindowType = WIN_W4HorizontalSlide then
+				if _bDetSimpleOrChinese then
+					put	LeftmullionLeftX_Middle,	bottomInY,	10,
+						LeftmullionRightX_Middle,	bottomInY,	in_out_mask
+
+					if iWindowType = WIN_W4HorizontalSlide then
+						put	MidmullionLeftX_Middle,		bottomInY,	10,
+							MidmullionRightX_Middle,	bottomInY,	in_out_mask
+					endif
+
+					put RightmullionLeftX_Middle,	bottomInY,	10, 
+						RightmullionRightX_Middle,	bottomInY,	in_out_mask
+				else
+					put	leftInX_Middle + offsetSash, bottomInY + offsetSash, in_out_mask,
+						rightInX_Middle - offsetSash, bottomInY + offsetSash, 15
+				endif
+			endif
+
+
+			if iWindowType = WIN_W2HorizontalSlide & _bDetSimpleOrChinese then
+					put	MullionLeftX_Middle,	bottomInY,	10,
+						MullionRightX_Middle,	bottomInY,	in_out_mask
+			endif
+
+			if iWindowType = WIN_W6HorizontalSlide & _bDetSimpleOrChinese then
+				for ii = 1 to 5
+					if iNumberOfRails = RAILSNUMBER_3 then
+						if ii = 3 then
+							_mullionWidthMod = gs_sash_width / 2
+						else
+							_mullionWidthMod = 0
+						endif
+						if ii > 2 then
+							if ii = 3 then
+								_mullionPosMod = gs_sash_width / 2
+							else
+								_mullionPosMod = gs_sash_width
+							endif
+						else
+							_mullionPosMod = 0
+						endif
+					else
+						_mullionPosMod		= 0
+						_mullionWidthMod	= 0
+					endif
+		
+					put	MullionLeftX_Middle + (sashWidth1 - gs_sash_width) * (ii - 1) - _mullionWidthMod + _mullionPosMod,	bottomInY,	10,
+						MullionRightX_Middle + (sashWidth1 - gs_sash_width) * (ii - 1) + _mullionWidthMod + _mullionPosMod,	bottomInY,	in_out_mask
+				next ii
+			endif
+	
+			put	rightInX_Middle, bottomInY, 10
+			if not(_bMiteredJoin) then
+				put	rightOutX,	bottomInY,	13
+			endif
+	
+			cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+				nsp/3,part_thk, get(nsp)
+	
+			gosub "setTexture2"
+	
+	! --- Top --------------------------------------------------------------------------
+			put	rightOutX,	topOutY,	stack_mask_t,
+				leftOutX,	topOutY,	15 * not(_bMiteredJoin) + 10 * _bMiteredJoin
+			if not(_bMiteredJoin) then
+				put	leftOutX,	topInY_Left,	8
+			endif
+
+
+			if iWindowType = WIN_W3HorizontalSlide | iWindowType = WIN_W4HorizontalSlide then	
+				if gs_UTrans then
+					put	leftInX_Top,	topInY_Left,	in_out_mask
+				else
+					put	leftInX_Middle + offsetSash,	topInY - offsetSash,	15
+				endif
+				if iUTrans = 1 | iUTrans = 3 then
+					put	LeftmullionLeftX_Top,	topInY_Left, 10,
+						LeftmullionRightX_Top,	topInY_MidLeft,in_out_mask
+				endif
+				if iUTrans = 1 | iUTrans = 2 then
+					put	MidmullionLeftX_Top,	topInY_MidLeft, 10,
+						MidmullionRightX_Top,	topInY_MidRight,in_out_mask
+				endif
+				if iUTrans = 1 | iUTrans = 3 then
+					put	RightmullionLeftX_Top,	topInY_MidRight, 10,
+						RightmullionRightX_Top,	topInY_Right,in_out_mask
+				endif
+				if not(gs_UTrans) then
+					put	LeftmullionLeftX_Middle,	topInY - offsetSash,	10,
+						LeftmullionRightX_Middle,	topInY - offsetSash,	in_out_mask
+
+					if iWindowType = WIN_W4HorizontalSlide then
+						put MidmullionLeftX_Middle,		topInY - offsetSash,	10,
+							MidmullionRightX_Middle,	topInY - offsetSash,	in_out_mask
+					endif
+
+					put	RightmullionLeftX_Middle,	topInY - offsetSash,	10,
+						RightmullionRightX_Middle,	topInY - offsetSash,	in_out_mask
+				endif
+				if gs_UTrans then
+					put	rightInX_Top,	topInY_Right,	10
+				else
+					put	rightInX_Middle - offsetSash,	topInY - offsetSash,	10
+				endif
+			endif
+
+			if iWindowType = WIN_W6HorizontalSlide	| iWindowType = WIN_W2HorizontalSlide then
+				put	leftInX_Middle + offsetSash,	topInY - offsetSash,	15
+				
+				if iWindowType = WIN_W2HorizontalSlide & _bDetSimpleOrChinese then
+						put	MullionLeftX_Middle,	topInY - offsetSash,	10,
+							MullionRightX_Middle,	topInY - offsetSash,	in_out_mask
+				endif
+
+				if iWindowType = WIN_W6HorizontalSlide & _bDetSimpleOrChinese then
+					for ii = 1 to 5
+						if iNumberOfRails = RAILSNUMBER_3 then
+							if ii = 3 then
+								_mullionWidthMod = gs_sash_width / 2
+							else
+								_mullionWidthMod = 0
+							endif
+							if ii > 2 then
+								if ii = 3 then
+									_mullionPosMod = gs_sash_width / 2
+								else
+									_mullionPosMod = gs_sash_width
+								endif
+							else
+								_mullionPosMod = 0
+							endif
+						else
+							_mullionPosMod		= 0
+							_mullionWidthMod	= 0
+						endif
+			
+						put	MullionLeftX_Middle + (sashWidth1 - gs_sash_width) * (ii - 1) - _mullionWidthMod + _mullionPosMod,	topInY - offsetSash,	10,
+							MullionRightX_Middle + (sashWidth1 - gs_sash_width) * (ii - 1) + _mullionWidthMod + _mullionPosMod,	topInY - offsetSash,	in_out_mask
+					next ii
+				endif
+	
+				put	rightInX_Middle - offsetSash,	topInY - offsetSash,	10
+			endif
+
+			if not(_bMiteredJoin) then
+				put	rightOutX,	topInY_Right,	13
+			endif
+	
+			cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+				nsp/3,part_thk, get(nsp)
+	
+			gosub "setTexture2"
+
+	! --- Transom -------------------------------------------------------
+			if gs_UTrans then
+				put	rightInX_Top, upperTransomTopY_Left, 10,
+					rightInX_Middle, upperTransomBottomY, in_out_mask
+
+				if _bDetSimpleOrChinese then
+					put	RightmullionRightX_Middle,	upperTransomBottomY,	10,
+						RightmullionLeftX_Middle,	upperTransomBottomY,	in_out_mask
+
+					if iWindowType = WIN_W4HorizontalSlide then
+						put	MidmullionRightX_Middle,	upperTransomBottomY,	10,
+							MidmullionLeftX_Middle,		upperTransomBottomY,	in_out_mask
+					endif
+
+					put	LeftmullionRightX_Middle,	upperTransomBottomY,	10,
+						LeftmullionLeftX_Middle,	upperTransomBottomY,	in_out_mask
+				else
+					put	rightInX_Middle - offsetSash,	upperTransomBottomY - offsetSash, 15,
+						leftInX_Middle + offsetSash,	upperTransomBottomY - offsetSash, 15
+				endif
+				put	leftInX_Middle, upperTransomBottomY, 10,
+					leftInX_Top, upperTransomTopY_Left, in_out_mask
+
+				if iUTrans = 1 | iUTrans = 3 then
+					put	LeftmullionLeftX_Top,	upperTransomTopY_Left, 10,
+						LeftmullionRightX_Top,	upperTransomTopY_MidLeft,in_out_mask
+				endif
+				if iUTrans = 1 | iUTrans = 2 then
+					put	MidmullionLeftX_Top,	upperTransomTopY_MidLeft, 10,
+						MidmullionRightX_Top,	upperTransomTopY_MidRight,in_out_mask
+				endif
+				if iUTrans = 1 | iUTrans = 3 then
+					put	RightmullionLeftX_Top,	upperTransomTopY_MidRight, 10,
+						RightmullionRightX_Top,	upperTransomTopY_Right,in_out_mask
+				endif
+	
+				cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+					nsp/3,part_thk, get(nsp)
+	
+				gosub "setTexture2"
+			endif
+
+! --- Upper Divisions ----------------------------------------------------------------
+			if gs_UTrans then
+				if iUTrans = 1 | iUTrans = 3 then
+					cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+						4,part_thk,
+						LeftmullionLeftX_Top,	upperTransomTopY_Left, 10,
+						LeftmullionRightX_Top,	upperTransomTopY_MidLeft,in_out_mask,
+						LeftmullionRightX_Top,	topInY_MidLeft,	10,
+						LeftmullionLeftX_Top,	topInY_Left,	in_out_mask
+					gosub "setTexture1"
+				endif
+				if iUTrans = 1 | iUTrans = 2 then
+					cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+						4,part_thk,
+						MidmullionLeftX_Top,	upperTransomTopY_MidLeft, 10,
+						MidmullionRightX_Top,	upperTransomTopY_MidRight,in_out_mask,
+						MidmullionRightX_Top,	topInY_MidRight,10,
+						MidmullionLeftX_Top,	topInY_MidLeft,in_out_mask
+					gosub "setTexture1"
+				endif
+				if iUTrans = 1 | iUTrans = 3 then
+					cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+						4,part_thk,
+						RightmullionLeftX_Top,	upperTransomTopY_MidRight, 10,
+						RightmullionRightX_Top,	upperTransomTopY_Right,in_out_mask,
+						RightmullionRightX_Top,	topInY_Right,10,
+						RightmullionLeftX_Top,	topInY_MidRight,in_out_mask
+					gosub "setTexture1"
+				endif
+			endif
+
+	
+	! --- Sash frames in 3D Simple -------------------------------------------------------
+			if _bDetSimpleOrChinese then
+				if iWindowType = WIN_W3HorizontalSlide	| iWindowType = WIN_W4HorizontalSlide then
+					cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+						4,part_thk,
+						LeftmullionLeftX_Middle,	bottomInY,	10,
+						LeftmullionRightX_Middle,	bottomInY,	15,
+						LeftmullionRightX_Middle,	gs_UTrans * upperTransomBottomY + not(gs_UTrans) * topInY, 10,
+						LeftmullionLeftX_Middle,	gs_UTrans * upperTransomBottomY + not(gs_UTrans) * topInY, in_out_mask
+					gosub "setTexture1"
+					if iWindowType = WIN_W4HorizontalSlide then
+						cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+							4,part_thk,
+							MidmullionLeftX_Middle,	bottomInY,	10,
+							MidmullionRightX_Middle,	bottomInY,	15,
+							MidmullionRightX_Middle,	gs_UTrans * upperTransomBottomY + not(gs_UTrans) * topInY, 10,
+							MidmullionLeftX_Middle,	gs_UTrans * upperTransomBottomY + not(gs_UTrans) * topInY, in_out_mask
+						gosub "setTexture1"
+					endif
+					cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+						4,part_thk,
+						RightmullionLeftX_Middle,	bottomInY,	10,
+						RightmullionRightX_Middle,	bottomInY,	15,
+						RightmullionRightX_Middle,	gs_UTrans * upperTransomBottomY + not(gs_UTrans) * topInY, 10,
+						RightmullionLeftX_Middle,	gs_UTrans * upperTransomBottomY + not(gs_UTrans) * topInY, in_out_mask
+					gosub "setTexture1"
+				endif
+
+				if iWindowType = WIN_W2HorizontalSlide	then
+					cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+						4,part_thk,
+						MullionLeftX_Middle,	bottomInY,	10,
+						MullionRightX_Middle,	bottomInY,	15,
+						MullionRightX_Middle,	not(gs_UTrans) * topInY, 10,
+						MullionLeftX_Middle,	not(gs_UTrans) * topInY, in_out_mask
+					gosub "setTexture1"
+				endif
+
+				if iWindowType = WIN_W6HorizontalSlide	then
+					for ii = 1 to 5
+						if iNumberOfRails = RAILSNUMBER_3 then
+							if ii = 3 then
+								_mullionWidthMod = gs_sash_width / 2
+							else
+								_mullionWidthMod = 0
+							endif
+							if ii > 2 then
+								if ii = 3 then
+									_mullionPosMod = gs_sash_width / 2
+								else
+									_mullionPosMod = gs_sash_width
+								endif
+							else
+								_mullionPosMod = 0
+							endif
+						else
+							_mullionPosMod		= 0
+							_mullionWidthMod	= 0
+						endif
+		
+						cprism_ _iterationMaterial2,_iterationMaterial,_iterationMaterial,
+							4,part_thk,
+							MullionLeftX_Middle - _mullionWidthMod + _mullionPosMod,	bottomInY,	10,
+							MullionRightX_Middle + _mullionWidthMod + _mullionPosMod,	bottomInY,	15,
+							MullionRightX_Middle + _mullionWidthMod + _mullionPosMod,	not(gs_UTrans) * topInY, 10,
+							MullionLeftX_Middle - _mullionWidthMod + _mullionPosMod,	not(gs_UTrans) * topInY, in_out_mask
+						gosub "setTexture1"
+				
+						addx (sashWidth1 - gs_sash_width)
+					next ii
+					del 5
+				endif
+			endif
+	
+			addz part_thk
+			part_thk = gs_frame_thk - out_thk
+	
+			_iterationMaterial = gs_frame_mat2
+			_iterationMaterial2 = gs_frame_mat2
+		next _iNum
+		del _numIterations
+	
+		for i = 1 to _numCut
+			cutend
+		next i
+		_numCut = 0
+	endgroup
+	
+	if _bPossibleTransom & gs_UTrans then
+		group "harcsi"
+			gosub "transomSashRebateGroup"
+		endgroup
+	endif
+
+	if lod3D = 2 & (_bPossibleTransom & gs_UTrans) then
+		placegroup subgroup("frame","harcsi")
+		killgroup "harcsi"
+	else
+		placegroup "frame"
+	endif
+
+	killgroup "frame"
+return
+
+
+"transomSashRebateGroup":
+	material gs_frame_mat2
+	mulz -1
+
+	if GLOB_VIEW_TYPE = 4 | GLOB_VIEW_TYPE = 5 | GLOB_PREVIEW_MODE = 2 then
+		pen gs_frame_pen_cont
+	else
+		pen gs_frame_pen
+	endif
+	sect_fill gs_fillFr, gs_penFr_bg, gs_penFr_fg, gs_frame_pen_cont
+
+	addz -gs_frame_thk
+
+	__yTransomBottom	= gs_UTrans_h + gs_UTrans_w/2 - gs_rebate_width
+	__yTransomTop		= B - gs_frame_width_upper + gs_rebate_width
+	__xTransomLeft		= -a/2+gs_frame_width_left
+	__xTransomRight		= a/2-gs_frame_width
+
+	if gs_UTrans then
+		if iUTrans = TRANSOM_4SASHES then
+			if iWindowType = WIN_W4HorizontalSlide then
+				if gs_optype_m_07 <> SASH_FIXED then
+					if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+						prism_ 5, gs_rebate_depth,
+								 __xTransomLeft-gs_rebate_width,     												__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width,	__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width, 	__yTransomTop,		15,
+								 __xTransomLeft-gs_rebate_width, 													__yTransomTop,		15,
+								 __xTransomLeft-gs_rebate_width,     												__yTransomBottom,	15
+					else
+						prism_ 5, gs_rebate_depth,
+								 __xTransomLeft-gs_rebate_width,     												__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width,	__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width, 	__yTransomTop,		15,
+								 __xTransomLeft-gs_rebate_width, 													__yTransomTop,		15,
+								 __xTransomLeft-gs_rebate_width,     												__yTransomBottom,	15
+					endif
+				endif
+	
+				if gs_optype_m_05 <> SASH_FIXED then
+					if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+						prism_ 5, gs_rebate_depth,
+								 __xTransomLeft-gs_sash_width+sashWidth1+sashWidth2-gs_Mullion_w_mid/2+gs_rebate_width, 	__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width,    		__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width, 			__yTransomTop,		15,
+								 __xTransomLeft-gs_sash_width+sashWidth1+sashWidth2-gs_Mullion_w_mid/2+gs_rebate_width, 	__yTransomTop,		15,
+								 __xTransomLeft-gs_sash_width+sashWidth1+sashWidth2-gs_Mullion_w_mid/2+gs_rebate_width, 	__yTransomBottom,	15
+					else
+						prism_ 5, gs_rebate_depth,
+								 __xTransomLeft-1.5*gs_sash_width+sashWidth1+sashWidth2-gs_Mullion_w_mid/2+gs_rebate_width, 		__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width,    				__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width, 					__yTransomTop,		15,
+								 __xTransomLeft-1.5*gs_sash_width+sashWidth1+sashWidth2-gs_Mullion_w_mid/2+gs_rebate_width, 		__yTransomTop,		15,
+								 __xTransomLeft-1.5*gs_sash_width+sashWidth1+sashWidth2-gs_Mullion_w_mid/2+gs_rebate_width, 		__yTransomBottom,	15
+					endif
+				endif
+	
+				if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+					_sashMod = -1
+					_sashMod2 = -1.5
+				else
+					_sashMod = -1.5
+					_sashMod2 = -2.5
+				endif
+				if gs_optype_m_06 <> SASH_FIXED then
+					prism_ 5, gs_rebate_depth,
+							 __xTransomLeft+_sashMod2*gs_sash_width+sashWidth1+sashWidth2+sashWidth3-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15,
+							 __xTransomLeft+_sashMod*gs_sash_width+sashWidth1+sashWidth2+gs_Mullion_w_mid/2-gs_rebate_width,    			__yTransomBottom,	15,
+							 __xTransomLeft+_sashMod*gs_sash_width+sashWidth1+sashWidth2+gs_Mullion_w_mid/2-gs_rebate_width, 				__yTransomTop,		15,
+							 __xTransomLeft+_sashMod2*gs_sash_width+sashWidth1+sashWidth2+sashWidth3-gs_Mullion_w/2+gs_rebate_width, 	__yTransomTop,		15,
+							 __xTransomLeft+_sashMod2*gs_sash_width+sashWidth1+sashWidth2+sashWidth3-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15
+				endif
+	
+				if gs_optype_m_08 <> SASH_FIXED then
+					prism_ 5, gs_rebate_depth,
+							  __xTransomRight+gs_rebate_width,  																			__yTransomBottom,	15,
+							  __xTransomLeft+_sashMod2*gs_sash_width+sashWidth1+sashWidth2+sashWidth3+gs_Mullion_w/2-gs_rebate_width,	__yTransomBottom,	15,
+							  __xTransomLeft+_sashMod2*gs_sash_width+sashWidth1+sashWidth2+sashWidth3+gs_Mullion_w/2-gs_rebate_width, 	__yTransomTop,		15,
+							  __xTransomRight+gs_rebate_width, 																			__yTransomTop,		15,
+							  __xTransomRight+gs_rebate_width, 																			__yTransomBottom,	15
+				endif
+			endif
+		endif
+
+		if iUTrans = TRANSOM_2SASHES then
+			if iWindowType = WIN_W4HorizontalSlide then
+				if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+					_sashMod = -1
+				else
+					_sashMod = -1.5
+				endif
+
+				if gs_optype_m_05 <> SASH_FIXED then
+					prism_ 5, gs_rebate_depth,
+							 __xTransomLeft-gs_rebate_width,     																	__yTransomBottom,	15,
+							 __xTransomLeft+gs_sash_width*_sashMod+sashWidth1+sashWidth2-gs_Mullion_w_mid/2+gs_rebate_width,    	__yTransomBottom,	15,
+							 __xTransomLeft+gs_sash_width*_sashMod+sashWidth1+sashWidth2-gs_Mullion_w_mid/2+gs_rebate_width, 		__yTransomTop,		15,
+							 __xTransomLeft-gs_rebate_width, 																		__yTransomTop,		15,
+							 __xTransomLeft-gs_rebate_width,     																	__yTransomBottom,	15
+				endif
+
+				if gs_optype_m_07 <> SASH_FIXED then
+					prism_ 5, gs_rebate_depth,
+							  __xTransomRight+gs_rebate_width,  																	__yTransomBottom,	15,
+							  __xTransomLeft+gs_sash_width*_sashMod+sashWidth1+sashWidth2+gs_Mullion_w_mid/2-gs_rebate_width,		__yTransomBottom,	15,
+							  __xTransomLeft+gs_sash_width*_sashMod+sashWidth1+sashWidth2+gs_Mullion_w_mid/2-gs_rebate_width, 	__yTransomTop,		15,
+							  __xTransomRight+gs_rebate_width, 																	__yTransomTop,		15,
+							  __xTransomRight+gs_rebate_width, 																	__yTransomBottom,	15
+				endif
+			endif
+		endif
+
+		if iUTrans = TRANSOM_3SASHES then
+			if iWindowType = WIN_W4HorizontalSlide then
+				if iOpeningTypeMain = OPENINGTYPE_MAIN_SAMERAIL then
+					_sashMod = -1
+					_sashMod2 = -1.5
+				else
+					_sashMod = -1
+					_sashMod2 = -2.5
+				endif
+				if gs_optype_m_07 <> SASH_FIXED then
+					prism_ 5, gs_rebate_depth,
+							 __xTransomLeft-gs_rebate_width,     															__yTransomBottom,	15,
+							 __xTransomLeft+_sashMod*gs_sash_width/2+sashWidth1 -gs_Mullion_w_left/2+gs_rebate_width,    	__yTransomBottom,	15,
+							 __xTransomLeft+_sashMod*gs_sash_width/2+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width, 		__yTransomTop,		15,
+							 __xTransomLeft-gs_rebate_width, 																__yTransomTop,		15,
+							 __xTransomLeft-gs_rebate_width,     															__yTransomBottom,	15
+				endif
+
+				if gs_optype_m_05 <> SASH_FIXED then
+					prism_ 5, gs_rebate_depth,
+							 __xTransomLeft+_sashMod2*gs_sash_width+sashWidth1+sashWidth2+sashWidth3-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15,
+							 __xTransomLeft+_sashMod*gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width,    					__yTransomBottom,	15,
+							 __xTransomLeft+_sashMod*gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width, 						__yTransomTop,		15,
+							 __xTransomLeft+_sashMod2*gs_sash_width+sashWidth1+sashWidth2+sashWidth3-gs_Mullion_w/2+gs_rebate_width, 	__yTransomTop,		15,
+							 __xTransomLeft+_sashMod2*gs_sash_width+sashWidth1+sashWidth2+sashWidth3-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15
+				endif
+
+				if gs_optype_m_08 <> SASH_FIXED then
+					prism_ 5, gs_rebate_depth,
+							  __xTransomRight+gs_rebate_width,  																			__yTransomBottom,	15,
+							  __xTransomLeft+gs_sash_width*_sashMod2+sashWidth1+sashWidth2+sashWidth3+gs_Mullion_w/2-gs_rebate_width,	__yTransomBottom,	15,
+							  __xTransomLeft+gs_sash_width*_sashMod2+sashWidth1+sashWidth2+sashWidth3+gs_Mullion_w/2-gs_rebate_width,	__yTransomTop,		15,
+							  __xTransomRight+gs_rebate_width, 																			__yTransomTop,		15,
+							  __xTransomRight+gs_rebate_width, 																			__yTransomBottom,	15
+				endif
+			endif
+
+			if iWindowType = WIN_W3HorizontalSlide then
+				if gs_optype_m_07 <> SASH_FIXED then
+					if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+						prism_ 5, gs_rebate_depth,
+								 __xTransomLeft-gs_rebate_width,     									__yTransomBottom,	15,
+								 __xTransomLeft+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width,		__yTransomBottom,	15,
+								 __xTransomLeft+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width, 		__yTransomTop,		15,
+								 __xTransomLeft-gs_rebate_width, 										__yTransomTop,		15,
+								 __xTransomLeft-gs_rebate_width,     									__yTransomBottom,	15
+					else
+						prism_ 5, gs_rebate_depth,
+								 __xTransomLeft-gs_rebate_width,     												__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width,	__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1-gs_Mullion_w_left/2+gs_rebate_width, 	__yTransomTop,		15,
+								 __xTransomLeft-gs_rebate_width, 													__yTransomTop,		15,
+								 __xTransomLeft-gs_rebate_width,     												__yTransomBottom,	15
+					endif
+				endif
+
+				if gs_optype_m_05 <> SASH_FIXED then
+					if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+						prism_ 5, gs_rebate_depth,
+								 __xTransomLeft+sashWidth1+sashWidth2-gs_sash_width-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width,    	__yTransomBottom,	15,
+								 __xTransomLeft-gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width, 		__yTransomTop,		15,
+								 __xTransomLeft+sashWidth1+sashWidth2-gs_sash_width-gs_Mullion_w/2+gs_rebate_width, 	__yTransomTop,		15,
+								 __xTransomLeft+sashWidth1+sashWidth2-gs_sash_width-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15
+					else
+						if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+							prism_ 5, gs_rebate_depth,
+									 __xTransomLeft-gs_sash_width/2+sashWidth1+sashWidth2-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15,
+									 __xTransomLeft+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width,    						__yTransomBottom,	15,
+									 __xTransomLeft+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width, 							__yTransomTop,		15,
+									 __xTransomLeft-gs_sash_width/2+sashWidth1+sashWidth2-gs_Mullion_w/2+gs_rebate_width, 	__yTransomTop,		15,
+									 __xTransomLeft-gs_sash_width/2+sashWidth1+sashWidth2-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15
+						else
+							prism_ 5, gs_rebate_depth,
+									 __xTransomLeft-gs_sash_width/2+sashWidth1+sashWidth2-gs_sash_width-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15,
+									 __xTransomLeft-gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width,    					__yTransomBottom,	15,
+									 __xTransomLeft-gs_sash_width/2+sashWidth1+gs_Mullion_w_left/2-gs_rebate_width, 						__yTransomTop,		15,
+									 __xTransomLeft-gs_sash_width/2+sashWidth1+sashWidth2-gs_sash_width-gs_Mullion_w/2+gs_rebate_width, 	__yTransomTop,		15,
+									 __xTransomLeft-gs_sash_width/2+sashWidth1+sashWidth2-gs_sash_width-gs_Mullion_w/2+gs_rebate_width, 	__yTransomBottom,	15
+						endif
+					endif
+				endif
+
+				if gs_optype_m_08 <> SASH_FIXED then
+					if iOpeningTypeMain = OPENINGTYPE_MAIN_1SIDE then
+						prism_ 5, gs_rebate_depth,
+								  __xTransomRight+gs_rebate_width,  													__yTransomBottom,	15,
+								  __xTransomLeft+sashWidth1+sashWidth2-gs_sash_width+gs_Mullion_w/2-gs_rebate_width,	__yTransomBottom,	15,
+								  __xTransomLeft+sashWidth1+sashWidth2-gs_sash_width+gs_Mullion_w/2-gs_rebate_width, 	__yTransomTop,		15,
+								  __xTransomRight+gs_rebate_width, 													__yTransomTop,		15,
+								  __xTransomRight+gs_rebate_width, 													__yTransomBottom,	15
+					else
+						if iOpeningTypeMain = OPENINGTYPE_MAIN_1MIDDLE then
+							prism_ 5, gs_rebate_depth,
+									  __xTransomRight+gs_rebate_width,  																	__yTransomBottom,	15,
+									  __xTransomLeft+gs_sash_width/2+sashWidth1+sashWidth2-gs_sash_width+gs_Mullion_w/2-gs_rebate_width,	__yTransomBottom,	15,
+									  __xTransomLeft+gs_sash_width/2+sashWidth1+sashWidth2-gs_sash_width+gs_Mullion_w/2-gs_rebate_width, 	__yTransomTop,		15,
+									  __xTransomRight+gs_rebate_width, 																	__yTransomTop,		15,
+									  __xTransomRight+gs_rebate_width, 																	__yTransomBottom,	15
+						else
+							prism_ 5, gs_rebate_depth,
+									  __xTransomRight+gs_rebate_width,  																	__yTransomBottom,	15,
+									  __xTransomLeft-gs_sash_width/2+sashWidth1+sashWidth2-gs_sash_width+gs_Mullion_w/2-gs_rebate_width,	__yTransomBottom,	15,
+									  __xTransomLeft-gs_sash_width/2+sashWidth1+sashWidth2-gs_sash_width+gs_Mullion_w/2-gs_rebate_width, 	__yTransomTop,		15,
+									  __xTransomRight+gs_rebate_width, 																	__yTransomTop,		15,
+									  __xTransomRight+gs_rebate_width, 																	__yTransomBottom,	15
+						endif
+					endif
+				endif
+			endif
+		endif
+
+		if iUTrans = TRANSOM_UNDIVIDED then
+			if gs_optype_m_05 <> SASH_FIXED then
+				prism_ 5, gs_rebate_depth,
+						 __xTransomLeft-gs_rebate_width,   __yTransomBottom,	15,
+						 __xTransomRight+gs_rebate_width, 	__yTransomBottom,	15,
+						 __xTransomRight+gs_rebate_width, 	__yTransomTop,		15,
+						 __xTransomLeft-gs_rebate_width, 	__yTransomTop,		15,
+						 __xTransomLeft-gs_rebate_width,	__yTransomBottom,	15
+			endif
+		endif
+	endif
+	del 1
+return
+
+
+"setTexture1":
+! --- Texture directions -------------------------------------------------------
+	base
+	vert 0, 0, 0
+	vert 0, 1, 0
+	vert 1, 0, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+return
+
+
+"setTexture2":
+! --- Texture directions -------------------------------------------------------
+	base
+	vert 0, 0, 0
+	vert 1, 0, 0
+	vert 0, 1, 0
+	vert 0, 0, 1
+	coor 2, -1, -2, -3, -4
+	body 1
+return
+

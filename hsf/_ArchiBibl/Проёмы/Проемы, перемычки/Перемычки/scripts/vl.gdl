@@ -16,15 +16,15 @@ if not(flag_not_use) then
 	end
 endif
 
-dim t_perem_nagr[4]
-dim t_perem_naen[4]
-dim t_perem_obozn[4]
-dim t_perem_h[4]
-dim t_perem_t[4]
-dim t_perem_ves[4]
-dim t_perem_dlin[4]
+dim t_perem_nagr[]
+dim t_perem_naen[]
+dim t_perem_obozn[]
+dim t_perem_h[]
+dim t_perem_t[]
+dim t_perem_ves[]
+dim t_perem_dlin[]
 dim t_perem_tug[]
-for i=1 to 4
+for i=1 to 8
 	t_perem_nagr[i] = 0
 	t_perem_naen[i] = ""
 	t_perem_h[i] = 0
@@ -64,6 +64,8 @@ if GLOB_MODPAR_NAME = "perem_dl_2" and perem_eq_dl then
 	PARAMETERS perem_dl_3 = perem_dl_2
 	PARAMETERS perem_dl_4 = perem_dl_2
 endif
+
+values{2} "perem_utepl_spec" itype_spec, t_type_spec
 
 !------------------------- Чтение и восстановление конфигурации -----------------------------------------
 perem_config_t=""
@@ -272,11 +274,14 @@ if (perem_marka_reset or perem_reset) and use_spec then
 	PARAMETERS perem_marka_reset = perem_marka_reset
 endif
 
+if not(use_spec) then 
+	parameters perem_otm = ur
+	HIDEPARAMETER "perem_marka_reset", "perem_reset"
+endif
+
 if perem_pos_reset or perem_reset then
 	perem_pos_in_read = 0
 	perem_pos_reset = 0
-	is_pos_excel = 1
-	success = LIBRARYGLOBAL ("Libraryflobals-perem", "is_pos_excel", is_pos_excel)
 	success = LIBRARYGLOBAL ("Libraryflobals-perem", "perem_pos_in_read", perem_pos_in_read)
 	if perem_pos_in_read then
 		for i=1 to 4
@@ -315,6 +320,7 @@ if perem_pos_reset or perem_reset then
 	endif
 	PARAMETERS perem_pos_reset = perem_pos_reset
 endif
+
 if perem_reset and not(perem_pos_reset) and not(perem_marka_reset) then 
 	perem_reset = 0
 	PARAMETERS perem_reset=perem_reset
@@ -362,15 +368,6 @@ if main_name="" then
 	label_posxyz[1] = 0 : label_posxyz[2] = 0 : label_posxyz[3] = 0
 	label_posang[1] = 0 : label_posang[2] = 0
 	parameters label_posxyz = label_posxyz, label_posang = label_posang, label_posset = 1
-!	dim param_name_out_t[] : i=1
-!	param_name_out_t[1] = "!!Перемычка!!"
-!	i=i+1 : param_name_out_t[i] = "perem_marka - марка перемычки"
-!	i=i+1 : param_name_out_t[i] = "ur - уровень низа марки"
-!	parameters param_name_out = param_name_out_t
-!	dim param_temp_out_t[] : i=0
-!	i=i+1 : param_temp_out_t[i] = "%perem_marka%"
-!	i=i+1 : param_temp_out_t[i] = "%ur%"
-!	parameters param_temp_out = param_temp_out_t
 	! --------------------------------------------------
 else
 	if vardim1(perem_zazor_by_layer)<>vardim1(perem_qty_type) or vardim1(perem_th_by_layer)<>vardim1(perem_qty_type) then
@@ -445,15 +442,39 @@ endif
 
 !!!---------------------------Сортамент арматуры ----------------------------------------------------
 if has_ARM then
-	dim reinforce_class[8]
-	dim reinforce_diam[16][8]
-	dim reinforce_weight[16][8]
+	dim reinforce_gost[] : reinforce_gost[1] = ""
+	dim reinforce_class[] : reinforce_class[1] = ""
+	dim reinforce_diam[][] : reinforce_diam[1][1] = 0
+	dim reinforce_weight[][] : reinforce_weight[1][1] = 0
+	ch6=OPEN("TEXT","Сортамент_арматуры.txt","SEPARATOR=';',MODE=RO,LIBRARY")
+	i = 1 : gost_in="" : class_in="" : diam_in=0 : area_in=0 : weight_in=0 : nclass=1 : ndiam=1
+	REPEAT
+		n=INPUT(ch6, i+1, 1, gost_in, class_in, diam_in, area_in, weight_in)
+		if reinforce_class[nclass] = "" then
+			reinforce_class[nclass]= class_in
+			reinforce_gost[nclass]= gost_in
+		endif
+		if class_in <> reinforce_class[nclass] then  
+			nclass = nclass + 1
+			reinforce_class[nclass]= class_in
+			reinforce_gost[nclass]= gost_in
+			ndiam = 1
+		endif
+		if reinforce_diam[ndiam][nclass] = 0 then 
+			reinforce_diam[ndiam][nclass] = diam_in / 1000
+			reinforce_weight[ndiam][nclass] = weight_in
+		endif
+		if diam_in/1000 <> reinforce_diam[ndiam][nclass] then 
+			ndiam = ndiam + 1
+			reinforce_diam[ndiam][nclass] = diam_in / 1000
+			reinforce_weight[ndiam][nclass] = weight_in
+		endif
+		i = i + 1
+	UNTIL n = -1	
+	close (ch6)
 	dim diam_temp[] : diam_temp[1] = 0
 	dim diam_d[] : diam_d[1] = 0
 	dim diam_o[] : diam_o[1] = 0
-	success = LIBRARYGLOBAL ("Libraryflobals-kzh", "reinforce_class", reinforce_class)
-	success = LIBRARYGLOBAL ("Libraryflobals-kzh", "reinforce_diam", reinforce_diam)
-	success = LIBRARYGLOBAL ("Libraryflobals-kzh", "reinforce_weight", reinforce_weight)
 	!Основная
 	values "perem_class" reinforce_class
 	class = perem_class : gosub "get_diam" : diam_o = diam_temp !Список диаметров для выбранного класса
@@ -537,7 +558,7 @@ if perem_qty_type[inx] then
 				LOCK "perem_profile_1"
 			endif
 		endif
-		if th<EPS then
+		if th<EPS or t_perem_qty_by_type<EPS then
 			values "perem_qty_by_type_1" range[1,5]
 		else
 			PARAMETERS perem_qty_by_type_1 = t_perem_qty_by_type : LOCK "perem_qty_by_type_1"
@@ -556,9 +577,11 @@ if perem_qty_type[inx] then
 		PARAMETERS perem_podbor_1 = 0 : LOCK "perem_podbor_1"
 		PARAMETERS perem_qty_by_type_1 = 1 : LOCK "perem_qty_by_type_1"
 	endif
-	if t_perem_type = iType_CONC or t_perem_type = iType_ARM then
+	if t_perem_type = iType_CONC or t_perem_type = iType_ARM or t_perem_type = iType_UTEPL then
 		PARAMETERS perem_zazor_1 = 0 : LOCK "perem_zazor_1"
-		PARAMETERS perem_profile_1 = t_perem_profile : LOCK "perem_profile_1"
+		if t_perem_type = iType_CONC or t_perem_type = iType_ARM then
+			PARAMETERS perem_profile_1 = t_perem_profile : LOCK "perem_profile_1"
+		endif
 		values 'perem_h_1' range[0.03,1]
 		if th>EPS then 
 			PARAMETERS perem_t_1 = t_perem_togr : LOCK "perem_t_1"
@@ -625,7 +648,7 @@ if perem_qty_type[inx] then
 				LOCK "perem_profile_2"
 			endif
 		endif
-		if th<EPS then
+		if th<EPS or t_perem_qty_by_type<EPS then
 			values "perem_qty_by_type_2" range[1,5]
 		else
 			PARAMETERS perem_qty_by_type_2 = t_perem_qty_by_type : LOCK "perem_qty_by_type_2"
@@ -644,9 +667,11 @@ if perem_qty_type[inx] then
 		PARAMETERS perem_podbor_2 = 0 : LOCK "perem_podbor_2"
 		PARAMETERS perem_qty_by_type_2 = 1 : LOCK "perem_qty_by_type_2"
 	endif
-	if t_perem_type = iType_CONC or t_perem_type = iType_ARM then
+	if t_perem_type = iType_CONC or t_perem_type = iType_ARM or t_perem_type = iType_UTEPL then
 		PARAMETERS perem_zazor_2 = 0 : LOCK "perem_zazor_2"
-		PARAMETERS perem_profile_2 = t_perem_profile : LOCK "perem_profile_2"
+		if t_perem_type = iType_CONC or t_perem_type = iType_ARM then
+			PARAMETERS perem_profile_2 = t_perem_profile : LOCK "perem_profile_2"
+		endif
 		values 'perem_h_2' range[0.03,1]
 		if th>EPS then 
 			PARAMETERS perem_t_2 = t_perem_togr : LOCK "perem_t_2"
@@ -713,7 +738,7 @@ if perem_qty_type[inx] then
 				LOCK "perem_profile_3"
 			endif
 		endif
-		if th<EPS then
+		if th<EPS or t_perem_qty_by_type<EPS then
 			values "perem_qty_by_type_3" range[1,5]
 		else
 			PARAMETERS perem_qty_by_type_3 = t_perem_qty_by_type : LOCK "perem_qty_by_type_3"
@@ -732,9 +757,11 @@ if perem_qty_type[inx] then
 		PARAMETERS perem_podbor_3 = 0 : LOCK "perem_podbor_3"
 		PARAMETERS perem_qty_by_type_3 = 1 : LOCK "perem_qty_by_type_3"
 	endif
-	if t_perem_type = iType_CONC or t_perem_type = iType_ARM then
+	if t_perem_type = iType_CONC or t_perem_type = iType_ARM or t_perem_type = iType_UTEPL then
 		PARAMETERS perem_zazor_3 = 0 : LOCK "perem_zazor_3"
-		PARAMETERS perem_profile_3 = t_perem_profile : LOCK "perem_profile_3"
+		if t_perem_type = iType_CONC or t_perem_type = iType_ARM then
+			PARAMETERS perem_profile_3 = t_perem_profile : LOCK "perem_profile_3"
+		endif
 		values 'perem_h_3' range[0.03,1]
 		if th>EPS then 
 			PARAMETERS perem_t_3 = t_perem_togr : LOCK "perem_t_3"
@@ -801,7 +828,7 @@ if perem_qty_type[inx] then
 				LOCK "perem_profile_4"
 			endif
 		endif
-		if th<EPS then
+		if th<EPS or t_perem_qty_by_type<EPS then
 			values "perem_qty_by_type_4" range[1,5]
 		else
 			PARAMETERS perem_qty_by_type_4 = t_perem_qty_by_type : LOCK "perem_qty_by_type_4"
@@ -818,11 +845,13 @@ if perem_qty_type[inx] then
 	else
 		LOCK "perem_subtype_4"
 		PARAMETERS perem_podbor_4 = 0 : LOCK "perem_podbor_4"
-		PARAMETERS perem_qty_by_type_4 = 1 : LOCK "perem_qty_by_type_4"
+		PARAMETERS perem_qty_by_type_4 = 1 : LOCK "4"
 	endif
-	if t_perem_type = iType_CONC or t_perem_type = iType_ARM then
+	if t_perem_type = iType_CONC or t_perem_type = iType_ARM or t_perem_type = iType_UTEPL then
 		PARAMETERS perem_zazor_4 = 0 : LOCK "perem_zazor_4"
-		PARAMETERS perem_profile_4 = t_perem_profile : LOCK "perem_profile_4"
+		if t_perem_type = iType_CONC or t_perem_type = iType_ARM then
+			PARAMETERS perem_profile_4 = t_perem_profile : LOCK "perem_profile_4"
+		endif
 		values 'perem_h_4' range[0.03,1]
 		if th>EPS then 
 			PARAMETERS perem_t_4 = t_perem_togr : LOCK "perem_t_4"
@@ -858,23 +887,66 @@ else
 endif
 
 t_perem_nagr_max = 10000000
-for inx=1 to vardim1(t_perem_nagr)
+for inx=1 to min(vardim1(t_perem_nagr), vardim1(perem_qty_type))
 	if t_perem_nagr[inx]-t_perem_nagr_max<EPS and perem_qty_type[inx] then t_perem_nagr_max=t_perem_nagr[inx]
 next inx
 
 !-----------Формирование контрольной строки для разбивки------------------
+!t_perem_marka_sum = ""
+!for inx=1 to vardim1(perem_coord)
+!	var = ""
+!	for j=1 to vardim2(perem_coord)
+!		if abs(perem_coord[inx][j])<EPS then
+!			var = var + ","
+!		else
+!			var = var + str("%.1mm",perem_coord[inx][j])+","
+!		endif
+!	next j
+!	var = var + "_"
+!	t_perem_marka_sum = t_perem_marka_sum + var
+!next inx
+
+!-----------Формирование контрольной строки для разбивки------------------
+dim param_name_out_t[] : i=1
+perem_note = ""
 t_perem_marka_sum = ""
-for i=inx_start_type to flag_not_use
-	var = ""
-	if perem_qty_type[i]>EPS then
-		var = var + perem_profile[i]+"/"
-		var = var + str("%.0",perem_qty_by_type[i])+"/"
-		if t_perem_type = iType_UG or t_perem_type = iType_UGMIRR or t_perem_type = iType_UGx2 then var = var + str("%.0mm",perem_dlin[i])+"/"
-		if perem_dh[i]>EPS then var = var + str("%.0mm",perem_dh[i])+"/"
+for i=1 to 4
+	qty = 0
+	var = "" : if abs(perem_zazor_type[i])>EPS then var = str("%.0mm",perem_zazor_type[i])+","
+	ted = ""
+	if perem_qty_by_type[i]>EPS and perem_type[i]>0 then
+		qty = perem_qty_by_type[i]
+		if perem_type[i]=iType_UGx2 then qty=qty*2
+		ted = t_perem_naen[i]+ " ("+str("%.0", qty)+"шт.)"
+		if perem_type[i]=iType_UTEPL then
+			if perem_utepl_spec=1 or perem_utepl_spec=4 then !Толщина и площадь
+				qty = perem_dlin[i]*perem_h[i]
+				ted = t_perem_naen[i]+ " ("+str("%.2", qty)+"кв.м.)"
+			endif
+			if perem_utepl_spec=2 or perem_utepl_spec=3 then !Толщина и объём
+				qty = perem_dlin[i]*perem_h[i]*perem_t[i]
+				ted = t_perem_naen[i]+ " ("+str("%.2", qty)+"куб.м.)"
+			endif
+			if perem_utepl_spec=5 then qty = 1
+			if perem_utepl_spec=0 then qty = 0
+		endif
+		if strlen(perem_note)=0 then
+			perem_note = ted
+		else
+			perem_note = perem_note + "; " + ted
+		endif
+		var = var + ted + ":"
+		var = var + str("%.0mm",perem_dh[i])+","
+		var = var + str("%.0mm",perem_zazor[i])+","
+		var = var + str("%.0mm",perem_dhe[i])+","
+		var = var + str("%.0mm",perem_dhf[i])+","
 		var = var + "_"
 	endif
 	t_perem_marka_sum = t_perem_marka_sum + var
+	t_perem_nagr[i] = qty
+	param_name_out_t[i] = perem_pos[i]
 next i
+
 if strlen(t_perem_marka_sum)>EPS then
 	_newChar = ""
 	for i=1 to vardim1(del_ch)
@@ -884,17 +956,6 @@ if strlen(t_perem_marka_sum)>EPS then
 		t_perem_marka_sum=_newStr
 	next i
 endif
-!-----------Формирование контрольной строки для разбивки------------------
-dim param_name_out_t[] : i=1
-for i=1 to 4
-	qty = 0
-	if perem_qty_by_type[i]>EPS and perem_type[i]>0 then
-		qty = perem_qty_by_type[i]
-		if perem_type[i]=iType_UGx2 then qty=qty*2
-	endif
-	t_perem_nagr[i] = qty
-	param_name_out_t[i] = perem_pos[i]
-next i
 
 parameters param_name_out = param_name_out_t
 PARAMETERS perem_nagr_max = t_perem_nagr_max
@@ -906,6 +967,7 @@ PARAMETERS perem_ves = t_perem_ves
 PARAMETERS perem_dlin = t_perem_dlin
 PARAMETERS perem_tug = t_perem_tug
 PARAMETERS perem_marka_sum = t_perem_marka_sum
+PARAMETERS perem_note = perem_note
 hideparameter "perem_marka_sum" : LOCK "perem_marka_sum"
 
 goto 20
@@ -953,6 +1015,8 @@ goto 20
 		if th>EPS then
 			t_perem_qty_by_type = int(th/t_perem_t[inx])
 			if t_perem_qty_by_type-1>EPS then t_perem_zazor = (th - t_perem_qty_by_type*t_perem_t[inx])/(t_perem_qty_by_type-1)
+		else
+			t_perem_qty_by_type = 0
 		endif
 	endif
 	!Монолитная
@@ -1013,7 +1077,31 @@ goto 20
 		t_perem_dlin[inx] = t_dlin
 		t_perem_naen[inx] = t_perem_profile+" L="+str("%.0mm",t_dlin)+"мм."
 	endif
+	!Утеплитель
+	if t_perem_type = iType_UTEPL then
+		if th>EPS then t_perem_togr = th-perem_zazor_type[inx]
+		t_dlin = round_int((ac_wallhole_width + 2*t_perem_min_opir+perem_dl[inx])*50)/50
+		t_ves = t_dlin * t_perem_hogr * t_perem_togr * 120
+		t_perem_naen[inx] = t_perem_profile
+		if perem_utepl_spec=1 or perem_utepl_spec=2 then !Толщина
+			t_perem_naen[inx] = t_perem_profile + " t=" + str("%.0mm", t_perem_togr)+"мм"
+		endif
+		if perem_utepl_spec=1 or perem_utepl_spec=4 then !Толщина и площадь
+			t_perem_naen[inx] = t_perem_naen[inx] + " S=кв.м."
+		endif
+		if perem_utepl_spec=2 or perem_utepl_spec=3 then !Толщина и объём
+			t_perem_naen[inx] = t_perem_naen[inx] + " V=куб.м."
+		endif
+		if perem_utepl_spec=5 then t_perem_naen[inx] = t_perem_profile + " " + str("%.0mm",t_perem_hogr)+"(H)x"+str("%.0mm",t_perem_togr)+"(B)x"+str("%.0mm",t_dlin)+"(L)"
+		if perem_utepl_spec=0 then t_perem_naen[inx] = ""
+		t_perem_h[inx] = t_perem_hogr
+		t_perem_t[inx] = t_perem_togr
+		t_perem_ves[inx] = t_ves
+		t_perem_dlin[inx] = t_dlin
+		PARAMETERS perem_obozn[inx] = "-"
+	endif
 return
+
 
 "get_sort":
 	naen_type = emp1t
@@ -1071,8 +1159,19 @@ return
 	for i=1 to vardim1(tdlin_m)
 		diff = tdlin_m[i]-ac_wallhole_width!-t_perem_min_opir*2
 		if (diff-min_diff)<EPS and diff>EPS and (abs(tvis_m[i]-t_perem_hogr)<EPS or t_perem_hogr<EPS) and (abs(ttolsh_m[i]-t_perem_togr)<EPS or t_perem_togr<EPS) then 
-			min_diff = diff
-			t_perem_podbor_flag = i
+			th_less_ = 1
+			if th>EPS then
+				if ((ttolsh_m[i]-th)>EPS or abs(ttolsh_m[i]-th)<EPS) then
+					th_less_ = 0
+				else
+					t_perem_ = int(th/ttolsh_m[i])
+					if ttolsh_m[i]*t_perem_-th<EPS then th_less_ = 0
+				endif
+			endif
+			if th_less_=1 then
+				min_diff = diff
+				t_perem_podbor_flag = i
+			endif
 		endif
 	next i
 return

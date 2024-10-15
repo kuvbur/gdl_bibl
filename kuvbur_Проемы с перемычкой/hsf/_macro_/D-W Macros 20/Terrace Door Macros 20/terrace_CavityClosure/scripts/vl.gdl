@@ -1,0 +1,236 @@
+
+! Contact person: <JT, TZs>
+
+! ==============================================================================
+! This macro draws the cavity closure and turned plasters
+! ------------------------------------------------------------------------------
+! Input parameters:
+!	gs_maxPlasterThk:	wall skin classification parameter (length)
+!						consider Skin as Plaster if it is thinner this
+!	gs_bAutoTurnIn:		automatic plaster return at Outside Face (0 / 1)
+!	gs_bAutoTurnOut:	automatic plaster return at Inside Face (0 / 1)
+!	gs_bOverIn:			number of turned plaster skins at Outside Face (integer)
+!	gs_bOverOut:		number of turned plaster skins at Inside Face (integer)
+!	gs_closureMethod:	controls the method being used for internal cavity closure
+!	gs_nTurn:			number of turned skins in traditional mode (integer value)
+!	gs_bJoint:			is there an insulation strip at the front
+!						 side of the turned skins (0 / 1) [MODE1]
+!	stClosureMethod:	string table for gs_closureMethod
+! ==============================================================================
+
+
+bDisablePrefabClosure = 0
+
+bDefaultElem	= (GLOB_INTGUID = "" | GLOB_INTGUID = "{00000000-0000-0000-0000-000000000000}")
+bCompositeWall	= (WALL_SKINS_NUMBER > 0)
+if not(bDefaultElem) then
+	isCoreSkin = 0
+	for i = 1 to WALL_SKINS_NUMBER
+		if abs(WALL_SKINS_PARAMS[i][SKIN_CORE_STATUS] - 3) < EPS then
+			isCoreSkin = 1
+			i = WALL_SKINS_NUMBER
+		endif
+	next i
+	if not(isCoreSkin) then
+		bDisablePrefabClosure	= 1
+		if iClosureMethod = CLOSURE_METHOD_PREFABRICATED then
+			iClosureMethod		= CLOSURE_METHOD_NONE	! None
+			gs_closureMethod	= gs_stCavityClosure[1]	! None
+			parameters iClosureMethod = iClosureMethod
+			parameters gs_closureMethod = gs_closureMethod
+		endif
+	endif
+endif
+
+if not(bDefaultElem) & not(bCompositeWall) then
+	iClosureMethod		= CLOSURE_METHOD_NONE	! No Closure
+	gs_closureMethod	= gs_stCavityClosure[1]	! None
+	parameters iClosureMethod = iClosureMethod
+	parameters gs_closureMethod = gs_closureMethod
+
+	lock "gs_closureMethod", "iClosureMethod"
+endif
+
+if bDisablePrefabClosure then
+	values "gs_closureMethod"	gs_stCavityClosure[1], gs_stCavityClosure[2]
+	values "iClosureMethod"	CLOSURE_METHOD_NONE, CLOSURE_METHOD_TRADITIONAL
+else
+	values "gs_closureMethod"	gs_stCavityClosure[1], gs_stCavityClosure[2], gs_stCavityClosure[3]
+	values "iClosureMethod"	CLOSURE_METHOD_NONE, CLOSURE_METHOD_TRADITIONAL, CLOSURE_METHOD_PREFABRICATED
+endif
+
+if GLOB_MODPAR_NAME = "gs_closureMethod" then
+	iClosureMethod = CLOSURE_METHOD_NONE
+	if gs_closureMethod = gs_stCavityClosure[2] then	iClosureMethod = CLOSURE_METHOD_TRADITIONAL
+	if gs_closureMethod = gs_stCavityClosure[3] then	iClosureMethod = CLOSURE_METHOD_PREFABRICATED
+	parameters iClosureMethod = iClosureMethod
+else
+	gs_closureMethod = gs_stCavityClosure[1]
+	if iClosureMethod = CLOSURE_METHOD_TRADITIONAL then gs_closureMethod = gs_stCavityClosure[2]
+	if iClosureMethod = CLOSURE_METHOD_PREFABRICATED then gs_closureMethod = gs_stCavityClosure[3]
+	parameters gs_closureMethod = gs_closureMethod
+endif
+
+values "gs_cavity_side"		gs_stCavityClosure[6], gs_stCavityClosure[7], gs_stCavityClosure[8]
+values "iCavityClosureSide"		CAVITY_SIDE_BOTH, CAVITY_SIDE_LEFT, CAVITY_SIDE_RIGHT
+
+if GLOB_MODPAR_NAME = "gs_cavity_side" then
+	iCavityClosureSide = CAVITY_SIDE_BOTH
+	if gs_cavity_side = gs_stCavityClosure[7] then	iCavityClosureSide = CAVITY_SIDE_LEFT
+	if gs_cavity_side = gs_stCavityClosure[8] then	iCavityClosureSide = CAVITY_SIDE_RIGHT
+	parameters iCavityClosureSide = iCavityClosureSide
+else
+	gs_cavity_side = gs_stCavityClosure[6]
+	if iCavityClosureSide = CAVITY_SIDE_LEFT then gs_cavity_side = gs_stCavityClosure[7]
+	if iCavityClosureSide = CAVITY_SIDE_RIGHT then gs_cavity_side = gs_stCavityClosure[8]
+	parameters gs_cavity_side = gs_cavity_side
+endif
+
+values "gs_nTurnDir"		gs_stCavityClosure[4], gs_stCavityClosure[5]
+values "iCavityClosureTurnDir" CAVITY_TURN_REFERENCE, CAVITY_TURN_OPPOSITE
+if GLOB_MODPAR_NAME = "gs_nTurnDir" then
+	iCavityClosureTurnDir = CAVITY_TURN_REFERENCE
+	if gs_nTurnDir = gs_stCavityClosure[5] then	iCavityClosureTurnDir = CAVITY_TURN_OPPOSITE
+	parameters iCavityClosureTurnDir = iCavityClosureTurnDir
+else
+	gs_nTurnDir = gs_stCavityClosure[4]
+	if iCavityClosureTurnDir = CAVITY_TURN_OPPOSITE then gs_nTurnDir = gs_stCavityClosure[5]
+	parameters gs_nTurnDir = gs_nTurnDir
+endif
+
+values "gs_nTurn"			range [0, )
+values "gs_thkJoint"		range (0, )
+
+! ==============================================================================
+! Cavity Closure Parameters
+! ==============================================================================
+
+if iClosureMethod = CLOSURE_METHOD_NONE then			! None
+	hideparameter	"gs_cavity_side", "iCavityClosureSide"
+	lock			"gs_cavity_side", "iCavityClosureSide"
+endif
+
+if iClosureMethod = CLOSURE_METHOD_TRADITIONAL then			! Traditional
+	if gs_nTurn = 0 then
+		hideparameter	"gs_bJoint"
+		lock			"gs_bJoint"
+		hideparameter	"gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+		lock			"gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+	else
+		if not(gs_bJoint) then
+			hideparameter	"gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+			lock			"gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+		endif
+	endif
+else
+	lock			"gs_nTurnDir", "iCavityClosureTurnDir", "gs_nTurn", "gs_bJoint",
+					"gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+
+	hideparameter	"gs_nTurnDir", "iCavityClosureTurnDir", "gs_nTurn", "gs_bJoint",
+					"gs_thkJoint", "gs_penJoint", "gs_ltJoint", "gs_fillJoint", "gs_penJointFg", "gs_penJointBg"
+endif
+
+if iClosureMethod = CLOSURE_METHOD_PREFABRICATED then			! Prefabricated
+else
+	lock			"gs_widthPlug", "gs_penPlug", "gs_ltPlug", "gs_fillPlug", "gs_penPlugFg", "gs_penPlugBg"
+	hideparameter	"gs_widthPlug", "gs_penPlug", "gs_ltPlug", "gs_fillPlug", "gs_penPlugFg", "gs_penPlugBg"
+endif
+
+bDefaultElem = (GLOB_INTGUID = "" or GLOB_INTGUID = "{00000000-0000-0000-0000-000000000000}")
+bDefaultElem = 1	! GLOB_INTGUID always 0 !
+
+
+! ==============================================================================
+! Auto Turn Plaster
+! ==============================================================================
+
+values "gs_maxPlasterThk" range [0,]
+
+if gs_useWallFinishSkin then
+	lock "gs_maxPlasterThk"
+	hideparameter "gs_maxPlasterThk"
+endif
+
+if gs_bAutoTurnIn then
+	lock "gs_bOverIn"
+	hideparameter "gs_bOverIn"
+	parameters gs_bOverIn = maxSkinTurnIn
+else
+	if bDefaultElem then
+		values "gs_bOverIn" range[0, ]
+	else
+!		for i=0 to maxSkinTurnIn		! INFO: A Settings Dialogban nem mukodik, mert a
+!			put i						! SYMB_MIRRORED, WIDO_REVEAL_SIDE es SYMB_ROTANGLE
+!		next i							! mindig nulla
+!		values "gs_bOverIn" get(nsp)
+		values "gs_bOverIn" range[0, ]
+	endif
+endif
+
+if gs_bAutoTurnOut then
+	lock "gs_bOverOut"
+	hideparameter "gs_bOverOut"
+	parameters gs_bOverOut = maxSkinTurnOut
+else
+	if bDefaultElem then
+		values "gs_bOverOut" range[0, ]
+	else
+!		for i=0 to maxSkinTurnOut
+!			put i
+!		next i
+!		values "gs_bOverOut" get(nsp)
+		values "gs_bOverOut" range[0, ]
+	endif
+endif
+
+
+! ==============================================================================
+! Show / Hide Parameters
+! ==============================================================================
+
+showTurnPlaster		= 1
+showCavityClosure	= 1
+
+if not(bDefaultElem) then
+	if WALL_SKINS_NUMBER < 2 then showTurnPlaster	= 0
+	if WALL_SKINS_NUMBER = 0 then showCavityClosure	= 0
+endif
+
+if not(showTurnPlaster) then
+	lock	"gs_turn_plaster",
+			"gs_bAutoTurnIn",
+			"gs_bAutoTurnOut",
+			"gs_bOverIn",
+			"gs_bOverOut"
+endif
+
+if not(showCavityClosure) then
+	lock	"gs_closureMethod",
+			"iClosureMethod",
+			"gs_cavity_side",
+			"iCavityClosureSide",
+			"gs_nTurn",
+			"gs_nTurnDir",
+			"iCavityClosureTurnDir",
+			"gs_bJoint",
+			"gs_thkJoint",
+			"gs_penJoint",
+			"gs_ltJoint",
+			"gs_fillJoint",
+			"gs_penJointFg",
+			"gs_penJointBg",
+			"gs_widthPlug",
+			"gs_penPlug",
+			"gs_ltPlug",
+			"gs_fillPlug",
+			"gs_penPlugFg",
+			"gs_penPlugBg"
+endif
+
+if not(showTurnPlaster) & not(showCavityClosure) then
+	lock "gs_maxPlasterThk"
+endif
+
+! --- WIDO_REVEAL_SIDE and WIDO_ORIG_DIST globals don't working in the settings dialog
+
+

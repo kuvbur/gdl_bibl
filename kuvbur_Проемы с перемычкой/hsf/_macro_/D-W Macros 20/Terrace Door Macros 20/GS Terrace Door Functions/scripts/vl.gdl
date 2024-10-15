@@ -1,0 +1,253 @@
+
+! =============================================================================
+! Hide All parameters list
+! =============================================================================
+hideparameter all
+
+
+values "gs_ui_sub_tabpage2"	1, 2
+
+! =============================================================================
+! 3D Based 2D Symbol Support
+! =============================================================================
+
+if AC_Hole_Display_Option = 3 then
+	parameters AC_WallContours = 0
+else
+	parameters AC_WallContours = 1
+endif
+
+
+hideparameter "ac_details"
+
+
+! =============================================================================
+! Nominal Sizes
+! =============================================================================
+
+_revealDiffWidth	= WIDO_REVEAL_ON * (WIDO_SILL > EPS) * (WIDO_RIGHT_JAMB + WIDO_LEFT_JAMB)
+_revealDiffHeight	= WIDO_REVEAL_ON * (WIDO_SILL > EPS) * (WIDO_HEAD_DEPTH)
+
+ac_wallhole_width	= A + gs_lich * _revealDiffWidth
+ac_reveal_width		= ac_wallhole_width - _revealDiffWidth
+ac_unit_width		= ac_wallhole_width - 2 * gs_tolerance
+
+ac_wallhole_height	= B + gs_lich * _revealDiffHeight
+ac_reveal_height	= ac_wallhole_height - _revealDiffHeight
+ac_unit_height		= ac_wallhole_height - gs_tolerance
+
+parameters	ac_wallhole_width	= ac_wallhole_width,
+			ac_reveal_width		= ac_reveal_width,
+			ac_unit_width		= ac_unit_width,
+			ac_wallhole_height	= ac_wallhole_height,
+			ac_reveal_height	= ac_reveal_height,
+			ac_unit_height		= ac_unit_height
+
+
+! =============================================================================
+! Show / Hide 2D Fills
+! =============================================================================
+
+if not(gs_bFills) then	! Hide
+	hideparameter	"gs_wallhole_fill",
+					"gs_wallhole_pen_fg",
+					"gs_wallhole_pen_bg"
+
+	lock	"gs_wallhole_fill",
+			"gs_wallhole_pen_fg",
+			"gs_wallhole_pen_bg"
+endif
+
+
+values "gs_wcont_line_w"	gs_stWindowSillTrim[12], gs_stWindowSillTrim[13], gs_stWindowSillTrim[14], gs_stWindowSillTrim[15]
+values "gs_wcont_line_d"	gs_stWindowSillTrim[12], gs_stWindowSillTrim[13], gs_stWindowSillTrim[14], gs_stWindowSillTrim[15]
+
+
+! =============================================================================
+! Defining sill and board sizes
+! =============================================================================
+
+values "gs_fbl" range [AC_wido_sill, )
+
+if GLOB_MODPAR_NAME = "gs_fbl" then
+	gs_sill_nosing = gs_fbl - AC_wido_sill
+	parameters gs_sill_nosing = gs_sill_nosing
+else
+	gs_fbl = AC_wido_sill + gs_sill_nosing
+	parameters gs_fbl = gs_fbl
+endif
+
+values "gs_siv" range [WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL, )
+
+if GLOB_MODPAR_NAME = "gs_siv" then
+	gs_board_nosing = gs_siv + WIDO_FRAME_THICKNESS + WIDO_SILL - WALL_THICKNESS
+	parameters gs_board_nosing = gs_board_nosing
+else
+	gs_siv = gs_board_nosing + WALL_THICKNESS - WIDO_FRAME_THICKNESS - WIDO_SILL
+	parameters gs_siv = gs_siv
+endif
+
+
+
+! =============================================================================
+! Do Cavity Closure Parameter Logic
+! =============================================================================
+
+call "terrace_CavityClosure" parameters gs_macro_version	= 12,
+		gs_useWallFinishSkin= gs_useWallFinishSkin,
+		gs_bAutoTurnIn		= gs_bAutoTurnIn,
+		gs_bAutoTurnOut		= gs_bAutoTurnOut,
+		gs_bOverIn			= gs_bOverIn,
+		gs_bOverOut			= gs_bOverOut,
+		gs_maxPlasterThk	= gs_maxPlasterThk,
+		gs_closureMethod	= gs_closureMethod,
+		iClosureMethod		= iClosureMethod,
+		gs_cavity_side		= gs_cavity_side,
+		iCavityClosureSide	= iCavityClosureSide,
+		gs_nTurnDir			= gs_nTurnDir,
+		iCavityClosureTurnDir = iCavityClosureTurnDir,
+		gs_nTurn			= gs_nTurn,
+		gs_bJoint			= gs_bJoint,
+	! --- String Resource ---
+		gs_stCavityClosure	= gs_stCavityClosure
+
+
+! =============================================================================
+! Do Wallhole Cut Parameter Logic
+! =============================================================================
+
+call "terrace_WallholeCut" parameters gs_macro_version = 12,
+	gs_parapet_wall_inset = 0
+
+
+
+! =============================================================================
+! Demolition / New construction
+! =============================================================================
+
+if gs_bFills = 0 then
+	lock "iTypeDemolitionFill"
+endif
+
+values{2} "iTypeDemolitionFill" 	RENOVATION_FILL_EXIST, `Нет`,
+									RENOVATION_FILL_DEMOLISHED, `Демонтаж`,
+									RENOVATION_FILL_NEW, `Новая Конструкция - Пустой Символ`,
+									RENOVATION_FILL_NEW_FULL, `Новая Конструкция - Полный Символ`
+
+if iTypeDemolitionFill = RENOVATION_FILL_DEMOLISHED then
+	lock "gs_wallhole_fill"
+	lock "gs_wallhole_pen_fg"
+	lock "gs_wallhole_pen_bg"
+endif
+
+if iTypeDemolitionFill = RENOVATION_FILL_NEW then
+	lock "gs_wallhole_fill"
+	lock "gs_wallhole_pen_fg"
+	lock "gs_wallhole_pen_bg"
+endif
+
+if not(gs_bShowDemolitionPar) then hideparameter	"iTypeDemolitionFill"
+
+if not(gs_bShowNewOnCC) then
+	hideparameter	"gs_new_symb_fill",
+					"gs_new_symb_pen_Fg",
+					"gs_new_symb_pen_bg",
+					"gs_new_symb_width_r",
+					"gs_new_symb_width_l"
+endif
+
+
+! =============================================================================
+! 2D Detail Level
+! =============================================================================
+
+if gs_2DDetEnable = 0 then
+	values{2} "iDWDet2D" 	DETLEVEL_DW2D_MVO,		stDetail2D[1],
+							DETLEVEL_DW2D_SCSENS,	stDetail2D[2],
+							DETLEVEL_DW2D_50,		stDetail2D[3],
+							DETLEVEL_DW2D_100,		stDetail2D[4],
+							DETLEVEL_DW2D_200,		stDetail2D[5],
+							DETLEVEL_DW2D_OFF,		stDetail2D[6]
+else
+	dim n2DScaleValueMask[]
+	dim in2DScaleValueMask[]
+
+	i=1
+	if bittest( gs_2DDetEnable, 7) then                                             ! by MVO, 128
+				n2DScaleValueMask[i]	= stDetail2D[1]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_MVO
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 0) then                                              ! Scale Sensitive in Value list, 1
+				n2DScaleValueMask[i]	= stDetail2D[2]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_SCSENS
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 1) then                                              ! Detailed in Value list, 2
+				n2DScaleValueMask[i]	= stDetail2D[3]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_50
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 2) then                                              ! Middle in Value list, 4
+				n2DScaleValueMask[i]	= stDetail2D[4]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_100
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 3) then                                              ! Simple in Value list, 8
+				n2DScaleValueMask[i]	= stDetail2D[5]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_200
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 4) then                                              ! Off in Value list, 16
+				n2DScaleValueMask[i]	= stDetail2D[6]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_OFF
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 5) then                                              ! Chinese Simple in Value list, 32
+				n2DScaleValueMask[i]	= stDetail2D[7]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_CHISMPL
+				i = i + 1
+	endif
+	if bittest( gs_2DDetEnable, 6) then                                              ! Chinese Detailed in Value list, 64
+				n2DScaleValueMask[i]	= stDetail2D[8]
+				in2DScaleValueMask[i]	= DETLEVEL_DW2D_CHIDET
+				i = i + 1
+	endif
+
+	values{2} "iDWDet2D" in2DScaleValueMask, n2DScaleValueMask
+endif
+
+! =============================================================================
+! Opline Parameters
+! =============================================================================
+
+call "OpeningOptions" parameters all	bWindow						= 1,
+										iLineShapeCategory			= iLineShapeCategory,
+										iLineShapeSwingEnable		= iLineShapeSwingEnable,
+										gs_leaf_optype_m			= gs_leaf_optype_m,
+										bEnableSecondaryOpLineTypes = 0
+
+
+! =============================================================================
+! NED Fire Rating
+! =============================================================================
+if bEnableNEDFireRating then
+	values "gs_list_firerating"			`Нет`, `30 минут`, `60 минут`, CUSTOM
+
+	if GLOB_MODPAR_NAME = "gs_list_firerating" then
+		iNEDFireRating = 0
+		if gs_list_firerating = `30 минут` then iNEDFireRating = 2
+		if gs_list_firerating = `60 минут` then iNEDFireRating = 3
+		parameters iNEDFireRating = iNEDFireRating
+	else
+		if iNEDFireRating = 2 then gs_list_firerating = `30 минут`
+		if iNEDFireRating = 3 then gs_list_firerating = `60 минут`
+		parameters gs_list_firerating = gs_list_firerating
+	endif
+
+	values "NEDFireRatingPos" range [-A/2, A/2]
+endif
+
+! =============================================================================
+
+

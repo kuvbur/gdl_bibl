@@ -21,10 +21,11 @@ cd "%hsf_dir%"
 
 cd "%lcf_dir%"
 "%converter%" createcontainer "%lcf_1%" -compress 9 "%gdl_1_dir%">"%tool_dir%\log\_ArchiBibl_log.txt"
-
-python "%tool_dir%\hsf2text.py">"%tool_dir%\log\_copy_log.txt"
 TIMEOUT /T 1
-python "%tool_dir%\build_lcf.py">"%tool_dir%\log\_copy_log.txt"
+python "%tool_dir%\build_lcf.py">"%tool_dir%\log\_copy_log.txt">"%tool_dir%\log\_ArchiBibl_log.txt"
+TIMEOUT /T 1
+python "%tool_dir%\hsf2text.py">"%tool_dir%\log\_copy_log.txt">"%tool_dir%\log\_ArchiBibl_log.txt"
+
 cd ..
 cd ..
 

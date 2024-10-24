@@ -68,7 +68,7 @@ def CreateGSM(folders: dict):
     gsm_folder = folders['GSM']
     xml_folder = folders['XML_TEMP']
     devKit = folders['DEVKIT']
-    param = [f'"{devKit}"', 'x2l',
+    param = [f'"{devKit}"', 'x2l -l CYR',
              f'"{xml_folder}"', f'"{gsm_folder}"']
     return run_shell_command(param)
 

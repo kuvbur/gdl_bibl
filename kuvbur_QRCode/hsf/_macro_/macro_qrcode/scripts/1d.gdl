@@ -1,8 +1,51 @@
 
-!!!CALL "macro_qrcode" parameters macro_qr_ifc_property_name = macro_qr_ifc_property_name, macro_qr_A = macro_qr_A, macro_qr_module_size=macro_qr_module_size, is_show3d=is_show3d
+!!!!Для отрисовки в 3д добавить в объект текстовый параметр macro_qr_txt и код:
+!!!---------------------------------------------
+!!!-----------Основной скрипт (в начало)--------
+!!!---------------------------------------------
+!if strlen(macro_qr_ifc_property_name)<1 then macro_qr_ifc_property_name = "QRCode"
+!
+!if strlen(macro_qr_ifc_property_name)>0 then
+!	DIM parNamesArray[]
+!	n = APPLICATION_QUERY ("OwnCustomParameters", "GetParameterNames(IFC.Folder)", parNamesArray)
+!	ifc_id = ""
+!	for i=1 to vardim1(parNamesArray) step 3
+!		if parNamesArray[i+1]=macro_qr_ifc_property_name then
+!			ifc_id = parNamesArray[i]
+!			i=vardim1(parNamesArray)
+!		endif
+!	next i
+!	if strlen(ifc_id)>0 then
+!		ifc_id = "GetParameter("+ifc_id+")"
+!		n = APPLICATION_QUERY ("OwnCustomParameters", ifc_id , parValue)
+!		macro_qr_txt = parValue
+!	endif
+!endif
+!if strlen(macro_qr_txt)>0 then parameters macro_qr_txt=macro_qr_txt
+!!!---------------------------------------------
+!!!-----------3д скрипт (в начало)--------
+!!!---------------------------------------------
+!show=0 : n = REQUEST ("window_show_dim", "", show)
+!if show and GLOB_PREVIEW_MODE=2 and GLOB_SCRIPT_TYPE=3 then
+!	CALL "macro_qrcode" parameters macro_qr_txt = macro_qr_txt, macro_qr_A = 1, is_show3d=1
+!	end
+!endif
 
-!!!CALL "macro_qrcode" parameters all
+!!!!Для отрисовки в 2д добавить код, дополнительные параметры можно не создавать
+!!!---------------------------------------------
+!!!-----------2д скрипт (в начало)--------
+!!!---------------------------------------------
+!show=0 : n = REQUEST ("window_show_dim", "", show)
+!if show and GLOB_PREVIEW_MODE=2 then
+!	CALL "macro_qrcode" parameters all, is_show3d=1
+!	end
+!endif
 
+error_str = ""
+size_m = 0.05
+EPS = 0.00001
+is_error = 0
+dim mask[][]
 if strlen(macro_qr_txt)<1 and strlen(macro_qr_ifc_property_name)<1 then macro_qr_ifc_property_name = "QRCode"
 
 if strlen(macro_qr_ifc_property_name)>0 then
@@ -20,16 +63,19 @@ if strlen(macro_qr_ifc_property_name)>0 then
 		n = APPLICATION_QUERY ("OwnCustomParameters", ifc_id , parValue)
 		macro_qr_txt = parValue
 	else
+		error_str = error_str + "Err strlen(ifc_id)<0"
 		is_error = 1
 		goto "m_end"
 	endif
 endif
-
-EPS = 0.00001
-is_error = 0
+if strlen(macro_qr_txt)<EPS then
+	error_str = error_str + "Err strlen(macro_qr_txt)<EPS"
+	is_error = 1
+	goto "m_end"
+endif
 n = STRSTR(macro_qr_txt, ";")
 if n<1 then
-	text2 0,0,"!!ERR - no ;"
+	error_str = error_str + "Err no ;"
 	is_error = 1
 	goto "m_end"
 endif
@@ -39,12 +85,10 @@ str_ = strsub(str_, 1, strlen(str_))
 n_module = 0
 n = split(str_, "%n", n_module)
 if n_module<1 then
-	text2 0,0,"!!ERR n_module<1 " + str_
+	error_str = error_str + "Err n_module<1"
 	is_error = 1
 	goto "m_end"
-endif 
-
-size_m = 0.05
+endif
 if macro_qr_A>EPS then
 	size_m = macro_qr_A/n_module
 else
@@ -52,5 +96,51 @@ else
 	macro_qr_A = size_m*n_module
 endif
 
+for i=1 to n_module
+	n = STRSTR(module_str, "=")
+	module_ = strsub(module_str, 1, n-1)
+	module_str = strsub(module_str, n+1, strlen(module_str))
+	n_pos = 0
+	for k=1 to strlen(module_)
+		module = 0
+		digit_str = strsub(module_, k, 1)
+		if digit_str = "A" then
+		module = 10
+		else
+		if digit_str = "B" then
+		module = 11
+		else
+		if digit_str = "C" then
+		module = 12
+		else
+		if digit_str = "D" then
+		module = 13
+		else
+		if digit_str = "E" then
+		module = 14
+		else
+		if digit_str = "F" then
+		module = 15
+		else
+		n = split(digit_str, "%n", module)
+		endif
+		endif
+		endif
+		endif
+		endif
+		endif
+		for j=1 to 4
+			if n_pos<n_module then
+				n_pos = n_pos+1
+				if module MOD 2 then
+					mask[i][n_pos] = 1
+				else
+					mask[i][n_pos] = 0
+				endif
+				module = int(module/2)
+			endif
+		next j
+	next k
+next i
 "m_end":
 

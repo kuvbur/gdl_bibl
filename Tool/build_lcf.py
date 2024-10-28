@@ -489,6 +489,9 @@ def run(configPath: pathlib.WindowsPath, gdl_root: pathlib.WindowsPath):
                                       [lcfName], "utf-8-sig", "utf-8")
                     shutil.rmtree(folders['XML_TEMP'], ignore_errors=False,
                                   onerror=handleRemoveReadonly)
+                    shutil.rmtree(folders['GSM'], ignore_errors=False,
+                                  onerror=handleRemoveReadonly)
+
     for v, f in configData['XML_ROOT'].items():
         if f.exists():
             shutil.rmtree(f, ignore_errors=False,

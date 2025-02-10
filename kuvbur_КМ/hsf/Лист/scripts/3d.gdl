@@ -6,63 +6,110 @@ if strlen(syst_name)>1 then
 endif
 
 if not(show) then end
-success = LIBRARYGLOBAL ("Libraryflobals-km", "mat_by_type_code", mat_by_type_code)
-is_mat_set = 0
-if (show_spec or type_spec = "Не специфицировать") and not(is_mat_set) and mat_by_type_code<>1 then
-	ignore_mat = 0
-	success = LIBRARYGLOBAL ("Libraryflobals-km", "ignore_mat", ignore_mat)
-	col_mat = ignore_mat
-	is_mat_set = 1
-endif
-if mat_by_type_code<>1 and not(is_mat_set) then
-	if mat_by_type_code=2 then 
-		name_mat_arr = "cov_mat_arr"
-		inx_mat = cov_mat
-	endif
-	if mat_by_type_code=3 then
-		name_mat_arr = "fire_keep_mat_arr"
-		inx_mat = fire_keep_mat
-	endif
-	if mat_by_type_code=4 then
-		name_mat_arr = "konstr_mat_arr"
-		inx_mat = type_mat
-	endif
-	if mat_by_type_code=5 then
-		name_mat_arr = "fire_mat_arr"
-		inx_mat = fire_mat
-	endif
-	if mat_by_type_code=6 then
-		name_mat_arr = "stal_mat_arr"
-		inx_mat = stal_mat
-	endif
-	if mat_by_type_code=7 then
-		name_mat_arr = "type_spec_mat_arr"
-		inx_mat = type_spec_mat
-	endif
-	if mat_by_type_code=8 then
-		name_mat_arr = "connect_mat_arr"
-		inx_mat = upr_mat
-	endif
-	if inx_mat=99 or inx_mat<1 then 
-		col_mat = 0
+
+if GLOB_PREVIEW_MODE=1 or GLOB_PREVIEW_MODE=2 or GLOB_FEEDBACK_MODE=1 then
+	gs_resol = 3
+	det_lvl_3d = 1
+	gs_shadow=0
+	cutplane_enable = 0
+else
+	if GLOB_SEO_TOOL_MODE = 1 then
+		gs_resol = 9
+		show_empty = 0
+		gs_shadow=0
+		cutplane_enable = 0
 	else
-		dim cov_mat_arr[]
-		success = LIBRARYGLOBAL ("Libraryflobals-km", name_mat_arr, cov_mat_arr)
-		col_mat = cov_mat_arr[inx_mat]
+		if gs_resol<10 then gs_resol=12
 	endif
-	is_mat_set = 1
 endif
+
+call "macro_get_mat" parameters all, RETURNED_PARAMETERS tcol_mat, tbmat
+if tcol_mat>1 then col_mat = tcol_mat
 if strlen(syst_name)>1 then col_mat = sMat
-pen gs_cont_pen
-fill gs_fill_type_sec
-line_type gs_line_type
-SECT_ATTRS gs_fill_type_sec, gs_back_pen, gs_fill_pen, gs_sec_pen, gs_line_type
-material col_mat
 if gs_shadow=0 then
 	shadow off
 else
 	shadow on
 endif
+
+if strlen(syst_name)>1 then col_mat = sMat
+pen gs_cont_pen
+if tbmat>0 then
+	BUILDING_MATERIAL tbmat
+	SECT_ATTRS{2} gs_cont_pen, gs_line_type
+else
+	SECT_ATTRS gs_fill_type_sec, gs_back_pen, gs_fill_pen, gs_sec_pen, gs_line_type
+	fill gs_fill_type_sec
+	line_type gs_line_type
+endif
+material col_mat
+
+if show_mvo_proj=2 then
+	show_mvo_proj = 0
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_mvo_proj", show_mvo_proj)
+	if show_mvo_proj then
+		use_mvo_h = 0 : success = LIBRARYGLOBAL ("Libraryflobals-km", "use_mvo_h", use_mvo_h)
+		if use_mvo_h then
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "t_proj_down", t_proj_down)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "t_proj_up", t_proj_up)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "h_proj_down", h_proj_down)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "h_proj_up", h_proj_up)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "is_show_lower", is_show_lower)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "is_show_upper", is_show_upper)
+		endif
+	endif
+endif
+
+If GLOB_VIEW_TYPE = 2 and cutplane_enable and show_mvo_proj THEN
+	if t_proj_down="Низ элемента" and t_proj_up="Верх элемента" then
+		cutplane_enable = 0
+	else
+		show_axsis = 0
+		show_line = 0
+	
+		if t_proj_down = "Низ элемента" then h_proj_down = -2
+		if t_proj_down = "Низ диапазона этажа" then h_proj_down = GLOB_CUTPLANES_INFO[3] + GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV
+		if t_proj_down = "П. сечения этажа" then h_proj_down = GLOB_CUTPLANES_INFO[1] + GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV
+	
+		if t_proj_up = "Верх элемента" then h_proj_up = c_m+2
+		if t_proj_up = "Верх диапазона этажа" then h_proj_up = GLOB_CUTPLANES_INFO[2] + GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV
+		if t_proj_up = "П. сечения этажа" then h_proj_up = GLOB_CUTPLANES_INFO[1] + GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV
+	
+		if n_part_show = -1 then !Ниже сечения
+			pen gs_cont_pen_down
+			fill gs_fill_type_down
+			line_type gs_line_type_down
+			SECT_ATTRS gs_fill_type_down, gs_back_pen_down, gs_fill_pen_down, gs_cont_pen_down, gs_line_type_down
+			addz h_proj_down
+			CUTPLANE 0
+			del 1
+			cutplane_enable = 1
+		endif
+		if n_part_show = 0 then !В сечении
+			addz h_proj_up
+			CUTPLANE 0
+			del 1
+			if t_proj_down <> "Низ элемента" then 
+				addz h_proj_down
+				mulz -1
+				CUTPLANE 0
+				del 2
+				cutplane_enable = 2
+			endif
+		endif
+		if n_part_show = 1 then !Выше сечения
+			pen gs_cont_pen_up
+			fill gs_fill_type_up
+			line_type gs_line_type_up
+			SECT_ATTRS gs_fill_type_up, gs_back_pen_up, gs_fill_pen_up, gs_cont_pen_up, gs_line_type_up
+			addz h_proj_up
+			mulz -1
+			CUTPLANE 0
+			del 2
+			cutplane_enable = 1
+		endif
+	endif
+endIf
 
 rotx angle_1
 roty angle_2

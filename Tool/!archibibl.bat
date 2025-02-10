@@ -22,13 +22,17 @@ cd "%hsf_dir%"
 cd "%lcf_dir%"
 "%converter%" createcontainer "%lcf_1%" -compress 9 "%gdl_1_dir%">"%tool_dir%\log\_ArchiBibl_log.txt"
 TIMEOUT /T 1
-python "%tool_dir%\build_lcf.py">"%tool_dir%\log\_copy_log.txt">"%tool_dir%\log\_ArchiBibl_log.txt"
-TIMEOUT /T 1
-python "%tool_dir%\hsf2text.py">"%tool_dir%\log\_copy_log.txt">"%tool_dir%\log\_ArchiBibl_log.txt"
 
 cd ..
 cd ..
 
 ROBOCOPY "%cd%\gdl_macro\lcf" "%lcf_dir%" /E>"%tool_dir%\log\_copy_log.txt"
-ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF24" /E>"%tool_dir%\log\_copy_log.txt"
-ROBOCOPY "%lcf_dir%" "%cd%\LCF24" archbib24.lcf /E>"%tool_dir%\log\_copy_log.txt"
+ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF25" /E>"%tool_dir%\log\_copy_log.txt"
+ROBOCOPY "%lcf_dir%" "%cd%\LCF25" archbib24.lcf /E>"%tool_dir%\log\_copy_log.txt"
+
+cd "%lcf_dir%"
+TIMEOUT /T 1
+python "%tool_dir%\build_lcf.py">"%tool_dir%\log\_copy_log.txt">"%tool_dir%\log\_ArchiBibl_log.txt"
+TIMEOUT /T 1
+python "%tool_dir%\hsf2text.py">"%tool_dir%\log\_copy_log.txt">"%tool_dir%\log\_ArchiBibl_log.txt"
+

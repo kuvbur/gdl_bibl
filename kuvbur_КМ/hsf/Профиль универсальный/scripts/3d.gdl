@@ -5,13 +5,10 @@ gosub "get_mat"
 gosub "set_mat"
 show_empty=1
 
-!HOTSPOT 0, 0,	0.6*l_pos_prof, unID, rot_surf,	4+128: unID=unID+1
-!HOTSPOT 0,	0,	0,	unID,	rot_surf,	6: unID=unID+1
-!HOTSPOT 0,	1,	0,	unID,	rot_surf,	7: unID=unID+1
-!roty rot_surf
-
-IF GLOB_CONTEXT=2 and not(iscall) and not(show_all_proj) THEN det_lvl_3d = 1
-if show_only_axsis then det_lvl_3d = 1
+if show_only_axsis then 
+	det_lvl_3d = 1
+	gs_shadow=0
+endif
 if show_only_axsis and el_type_view=1 then
 	show_axsis = 1
 	show_only_axsis = 0
@@ -19,14 +16,86 @@ endif
 if GLOB_PREVIEW_MODE=1 or GLOB_PREVIEW_MODE=2 or GLOB_FEEDBACK_MODE=1 then
 	gs_resol = 3
 	det_lvl_3d = 1
+	gs_shadow=0
+	cutplane_enable = 0
 else
 	if GLOB_SEO_TOOL_MODE = 1 then
 		gs_resol = 9
 		show_empty = 0
+		gs_shadow=0
+		cutplane_enable = 0
 	else
 		if gs_resol<10 then gs_resol=12
 	endif
 endif
+
+if show_mvo_proj=2 then
+	show_mvo_proj = 0
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_mvo_proj", show_mvo_proj)
+	if show_mvo_proj then
+		use_mvo_h = 0 : success = LIBRARYGLOBAL ("Libraryflobals-km", "use_mvo_h", use_mvo_h)
+		if use_mvo_h then
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "t_proj_down", t_proj_down)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "t_proj_up", t_proj_up)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "h_proj_down", h_proj_down)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "h_proj_up", h_proj_up)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "is_show_lower", is_show_lower)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "is_show_upper", is_show_upper)
+		endif
+	endif
+endif
+
+If GLOB_VIEW_TYPE = 2 then SHADOW OFF, OFF
+
+If GLOB_VIEW_TYPE = 2 and not(show_only_axsis) and cutplane_enable and show_mvo_proj THEN
+	if t_proj_down="Низ элемента" and t_proj_up="Верх элемента" then
+		cutplane_enable = 0
+	else
+		show_axsis = 0
+		show_line = 0
+		if t_proj_down = "Низ элемента" then h_proj_down = min(pos_prof[ie][iz], pos_prof[is][iz])-2
+		if t_proj_down = "Низ диапазона этажа" then h_proj_down = GLOB_CUTPLANES_INFO[3] + GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV
+		if t_proj_down = "П. сечения этажа" then h_proj_down = GLOB_CUTPLANES_INFO[1] + GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV
+	
+		if t_proj_up = "Верх элемента" then h_proj_up = max(pos_prof[ie][iz], pos_prof[is][iz])+2
+		if t_proj_up = "Верх диапазона этажа" then h_proj_up = GLOB_CUTPLANES_INFO[2] + GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV
+		if t_proj_up = "П. сечения этажа" then h_proj_up = GLOB_CUTPLANES_INFO[1] + GLOB_CSTORY_ELEV - GLOB_HSTORY_ELEV
+	
+		if n_part_show = -1 then !Ниже сечения
+			pen gs_cont_pen_down
+			fill gs_fill_type_down
+			line_type gs_line_type_down
+			SECT_ATTRS gs_fill_type_down, gs_back_pen_down, gs_fill_pen_down, gs_cont_pen_down, gs_line_type_down
+			addz h_proj_down
+			CUTPLANE 0
+			del 1
+			cutplane_enable = 1
+		endif
+		if n_part_show = 0 then !В сечении
+			addz h_proj_up
+			CUTPLANE 0
+			del 1
+			if t_proj_down <> "Низ элемента" then 
+				addz h_proj_down
+				mulz -1
+				CUTPLANE 0
+				del 2
+				cutplane_enable = 2
+			endif
+		endif
+		if n_part_show = 1 then !Выше сечения
+			pen gs_cont_pen_up
+			fill gs_fill_type_up
+			line_type gs_line_type_up
+			SECT_ATTRS gs_fill_type_up, gs_back_pen_up, gs_fill_pen_up, gs_cont_pen_up, gs_line_type_up
+			addz h_proj_up
+			mulz -1
+			CUTPLANE 0
+			del 2
+			cutplane_enable = 1
+		endif
+	endif
+endIf
 ws = ws / 1000
 ds = ds / 1000
 wt = wt / 1000
@@ -37,7 +106,8 @@ dbf = dbf / 1000
 add pos_prof_call_xyz[ix], pos_prof_call_xyz[iy], pos_prof_call_xyz[iz]
 rotz phi_call
 roty etta_call
-if show_only_axsis=0 then
+
+if show_only_axsis=0 and GLOB_VIEW_TYPE <> 2 then
 	if type_coord=1 then gosub "hotspot3d_coord"
 	if type_coord=2 then gosub "hotspot3d_rphi"
 endif
@@ -58,14 +128,16 @@ max_0 = max(max_cut,offset_body_s,offset_body_e)+0.1 !Длина операто�
 ho = max(aa, bb)*2+0.1 !Высота оператора, с запасом
 
 !Отступы начала и конца
-HOTSPOT	aa/2,	bb/2,	0,	unID,	offset_s,	1+128: unID=unID+1
-HOTSPOT	aa/2,	bb/2,	offset_s,	unID,	offset_s,	2: unID=unID+1
-HOTSPOT	aa/2,	bb/2,	offset_s-1,	unID,	offset_s,	3: unID=unID+1
-HOTSPOT	aa/2,	bb/2,	offset_r,	unID,	offset_e,	1+128: unID=unID+1
-HOTSPOT	aa/2,	bb/2,	offset_r-offset_e,	unID,	offset_e,	2: unID=unID+1
-HOTSPOT	aa/2,	bb/2,	offset_r*2,	unID,	offset_e,	3: unID=unID+1
+if GLOB_VIEW_TYPE <> 2 then
+	HOTSPOT	aa/2,	bb/2,	0,	unID,	offset_s,	1+128: unID=unID+1
+	HOTSPOT	aa/2,	bb/2,	offset_s,	unID,	offset_s,	2: unID=unID+1
+	HOTSPOT	aa/2,	bb/2,	offset_s-1,	unID,	offset_s,	3: unID=unID+1
+	HOTSPOT	aa/2,	bb/2,	offset_r,	unID,	offset_e,	1+128: unID=unID+1
+	HOTSPOT	aa/2,	bb/2,	offset_r-offset_e,	unID,	offset_e,	2: unID=unID+1
+	HOTSPOT	aa/2,	bb/2,	offset_r*2,	unID,	offset_e,	3: unID=unID+1
+endif
 
-if type_fin_s=3 then
+if type_fin_s=TYPE_FIN_ZAGLFAS and GLOB_VIEW_TYPE <> 2 then
 	if zagf_flange_left=1 then rotz -180
 	HOTSPOT	z_th_left,	0,	offset_s,	unID,	zagf_h_left,	1+128: unID=unID+1
 	HOTSPOT	z_th_left,	0,	zagf_h_left+offset_s,	unID,	zagf_h_left,	2: unID=unID+1
@@ -73,7 +145,7 @@ if type_fin_s=3 then
 	if zagf_flange_left=1 then del 1
 endif
 
-if type_fin_e=3 then
+if type_fin_e=TYPE_FIN_ZAGLFAS and GLOB_VIEW_TYPE <> 2 then
 	if zagf_flange_right=1 then rotz -180
 	HOTSPOT	z_th_right,	0,	offset_r-offset_e,	unID,	zagf_h_right,	1+128: unID=unID+1
 	HOTSPOT	z_th_right,	0,	offset_r-zagf_h_right-offset_e,	unID,	zagf_h_right,	2: unID=unID+1
@@ -81,11 +153,13 @@ if type_fin_e=3 then
 	if zagf_flange_right=1 then del 1
 endif
 
-if type_fin_s=5 and det_lvl_3d=2 then
+if type_fin_s=TYPE_FIN_BASE and det_lvl_3d=2 then
 	addz offset_body_s
-	call "База колонн" parameters all type_base = fin_base_s_type_base,
+	a_base = bb*2
+	b_base = aa*2
+	call "База колонн" parameters all cornerZ = fin_base_s_cornerZ,
+										type_base = fin_base_s_type_base,
 										type_traverse = fin_base_s_type_traverse,
-										type_edge = fin_base_s_type_edge,
 										consol_plate_left_L = fin_base_s_consol_plate_left_L,
 										consol_plate_right_L = fin_base_s_consol_plate_right_L,
 										consol_plate_left_B = fin_base_s_consol_plate_left_B,
@@ -98,17 +172,23 @@ if type_fin_s=5 and det_lvl_3d=2 then
 										edge_n = fin_base_s_edge_n,
 										edge_h = fin_base_s_edge_h,
 										gravy_t = fin_base_s_gravy_t,
-										gravy_L = fin_base_s_gravy_L, A=aa*2, B=bb*2
+										gravy_L = fin_base_s_gravy_L,
+										mater_plate = fin_base_s_mater_plate,
+										stal_gost_plate = fin_base_s_stal_gost_plate,
+										mater_travers = fin_base_s_mater_travers,
+										stal_gost_travers = fin_base_s_stal_gost_travers, A=a_base, B=b_base, col_mat=col_mat, gs_cont_pen=gs_cont_pen, gs_fill_type_sec=gs_fill_type_sec, gs_line_type=gs_line_type
+
 	del 1
 endif
 
-
-if type_fin_e=5 and det_lvl_3d=2 then
+if type_fin_e=TYPE_FIN_BASE and det_lvl_3d=2 then
 	addz offset_r-offset_body_e
 	mulz -1
-	call "База колонн" parameters all type_base = fin_base_e_type_base,
+	a_base = bb*2
+	b_base = aa*2
+	call "База колонн" parameters all cornerZ = fin_base_e_cornerZ,
+										type_base = fin_base_e_type_base,
 										type_traverse = fin_base_e_type_traverse,
-										type_edge = fin_base_e_type_edge,
 										consol_plate_left_L = fin_base_e_consol_plate_left_L,
 										consol_plate_right_L = fin_base_e_consol_plate_right_L,
 										consol_plate_left_B = fin_base_e_consol_plate_left_B,
@@ -121,30 +201,71 @@ if type_fin_e=5 and det_lvl_3d=2 then
 										edge_n = fin_base_e_edge_n,
 										edge_h = fin_base_e_edge_h,
 										gravy_t = fin_base_e_gravy_t,
-										gravy_L = fin_base_e_gravy_L, A=aa*2, B=bb*2
+										gravy_L = fin_base_e_gravy_L,
+										mater_plate = fin_base_e_mater_plate,
+										stal_gost_plate = fin_base_e_stal_gost_plate,
+										mater_travers = fin_base_e_mater_travers,
+										stal_gost_travers = fin_base_e_stal_gost_travers, A=a_base, B=b_base, col_mat=col_mat, gs_cont_pen=gs_cont_pen, gs_fill_type_sec=gs_fill_type_sec, gs_line_type=gs_line_type
 	del 2
 endif
-
-if type_fin_s=6 and det_lvl_3d=2 then
+if type_fin_s=TYPE_FIN_SHARN and det_lvl_3d=2 then
 	addz offset_body_s
-	call "Шарнирный узел крепления" parameters type_corner = fin_krep_s_type_corner
-												type_plate = fin_krep_s_type_plate
-												t_plate = fin_krep_s_t_plate
-												t_sten = fin_krep_s_t_sten
-												n_bolt = fin_krep_s_n_bolt
-												bolt_type = fin_krep_s_bolt_type
-												diaB = fin_krep_s_diaB
+	fin_krep_s_t_sten = t_sten_1
+	if mirror_axis=1 then mulx -1
+	if mirror_axis=2 then muly -1
+	if name_prof_i = 3 or name_prof_i = 9 then
+		addx -aa+t_sten_1/2
+	endif
+	call "Шарнирный узел крепления" parameters all type_corner = fin_krep_s_type_corner,
+													type_plate = fin_krep_s_type_plate,
+													t_plate = fin_krep_s_t_plate,
+													t_sten = fin_krep_s_t_sten,
+													weld = fin_krep_s_weld,
+													n_bolt = fin_krep_s_n_bolt,
+													bolt_type = fin_krep_s_bolt_type,
+													diaB = fin_krep_s_diaB,
+													Xrot = fin_krep_s_Xrot,
+													Xadd = fin_krep_s_Xadd,
+													mater = fin_krep_s_mater,
+													stal_gost = fin_krep_s_stal_gost, col_mat=col_mat, gs_cont_pen=gs_cont_pen, gs_fill_type_sec=gs_fill_type_sec, gs_line_type=gs_line_type
 	del 1
+	if name_prof_i = 3 or name_prof_i = 9 then
+		del 1
+	endif
+	if mirror_axis=1 then del 1
+	if mirror_axis=2 then del 1
 endif
-!
-!if type_fin_e=6 and det_lvl_3d=2 then
-!	addz offset_r-offset_body_e
-!	mulz -1
-!	call "Шарнирный узел крепления" parameters
-!	del 2
-!endif
 
-if type_fin_s=3 and det_lvl_3d=2 then 
+if type_fin_e=TYPE_FIN_SHARN and det_lvl_3d=2 then
+	addz offset_r-offset_body_e
+	mulz -1
+	if mirror_axis=1 then mulx -1
+	if mirror_axis=2 then muly -1
+	fin_krep_e_t_sten = t_sten_1
+	if name_prof_i = 3 or name_prof_i = 9 then
+		addx -aa+t_sten_1/2
+	endif
+	call "Шарнирный узел крепления" parameters all type_corner = fin_krep_e_type_corner,
+													type_plate = fin_krep_e_type_plate,
+													t_plate = fin_krep_e_t_plate,
+													t_sten = fin_krep_e_t_sten,
+													weld = fin_krep_e_weld,
+													n_bolt = fin_krep_e_n_bolt,
+													bolt_type = fin_krep_e_bolt_type,
+													diaB = fin_krep_e_diaB,
+													Xrot = fin_krep_e_Xrot,
+													Xadd = fin_krep_e_Xadd,
+													mater = fin_krep_e_mater,
+													stal_gost = fin_krep_e_stal_gost, col_mat=col_mat, gs_cont_pen=gs_cont_pen, gs_fill_type_sec=gs_fill_type_sec, gs_line_type=gs_line_type
+	del 2
+	if name_prof_i = 3 or name_prof_i = 9 then
+		del 1
+	endif
+	if mirror_axis=1 then del 1
+	if mirror_axis=2 then del 1
+endif
+
+if type_fin_s=TYPE_FIN_ZAGLFAS and det_lvl_3d=2 then 
 	group "zagfs"
 		if zagf_flange_left=1 and type_cutf_s = 1 then rotz 180
 		if zagf_flange_left=2 and type_cutf_s = 2 then rotz 180
@@ -225,6 +346,7 @@ if type_fin_s=3 and det_lvl_3d=2 then
 				gosub "set_weld"
 			endif
 		endif
+		tmater = z_mater_left : gosub "set_mat_fas"
 		PRISM_ nsp/3, -zagf_th_left, get(nsp)
 		if zagf_flange_left then
 			roty 90
@@ -260,6 +382,7 @@ if type_fin_s=3 and det_lvl_3d=2 then
 				pos_weld[ie][ix]=zf_b_left-zagf_th_left: pos_weld[ie][iy]=z_th_left : pos_weld[ie][iz]=zagf_th_left
 				gosub "set_weld"
 			endif
+			tmater = z_mater_left : gosub "set_mat_fas"
 			PRISM_ nsp/3, zagf_th_left, get(nsp)
 			del 3
 		endif
@@ -269,20 +392,20 @@ if type_fin_s=3 and det_lvl_3d=2 then
 	endgroup
 endif
 
-if type_fin_s=4 and det_lvl_3d=2 then
+if type_fin_s=TYPE_FIN_WELD and det_lvl_3d=2 then
 	addz offset_body_s
 	gosub "zags_weld"
 	del 1
 endif
 
-if type_fin_e=4 and det_lvl_3d=2 then
+if type_fin_e=TYPE_FIN_WELD and det_lvl_3d=2 then
 	addz offset_r-offset_body_e
 	gosub "zage_weld"
 	del 1
 endif
 
 
-if (type_fin_s=1 or (type_fin_s=3 and not(zagf_zag_left))) and det_lvl_3d=2 then
+if (type_fin_s=TYPE_FIN_ZAGL or (type_fin_s=TYPE_FIN_ZAGLFAS and not(zagf_zag_left))) and det_lvl_3d=2 then
 	group "zags"
 		addz offset_body_s
 		gosub "zags_weld"
@@ -313,6 +436,7 @@ if (type_fin_s=1 or (type_fin_s=3 and not(zagf_zag_left))) and det_lvl_3d=2 then
 		endif
 		hotspot 0,d_z_th_left,0
 		addz -t_z
+		tmater = z_mater_left : gosub "set_mat_fas"
 		PRISM_ nsp/3, t_z*2, get(nsp)
 		del 4
 	endgroup
@@ -326,7 +450,7 @@ if (type_fin_s=1 or (type_fin_s=3 and not(zagf_zag_left))) and det_lvl_3d=2 then
 	killgroup "zags"
 endif
 
-if type_fin_s=2 and det_lvl_3d=2 then 
+if type_fin_s=TYPE_FIN_PODR and det_lvl_3d=2 then 
 	group "pod_s"
 		addz offset_body_s
 		if type_cutf_s = 1 then
@@ -396,7 +520,7 @@ if type_fin_s=2 and det_lvl_3d=2 then
 	endgroup
 endif
 
-if type_fin_e=2 and det_lvl_3d=2 then 
+if type_fin_e=TYPE_FIN_PODR and det_lvl_3d=2 then 
 	group "pod_e"
 		addz offset_r-offset_body_e
 		rotx 180
@@ -466,7 +590,7 @@ if type_fin_e=2 and det_lvl_3d=2 then
 	endgroup
 endif
 
-if type_fin_e=3 and det_lvl_3d=2 then 
+if type_fin_e=TYPE_FIN_ZAGLFAS and det_lvl_3d=2 then 
 	group "zagfe"
 		type_weld = type_weld_e
 		if zagf_flange_right=1 then rotz 180
@@ -544,6 +668,7 @@ if type_fin_e=3 and det_lvl_3d=2 then
 				gosub "set_weld"
 			endif
 		endif
+		tmater = z_mater_right : gosub "set_mat_fas"
 		PRISM_ nsp/3, -zagf_th_right, get(nsp)
 		if zagf_flange_right then
 			roty 90
@@ -579,6 +704,7 @@ if type_fin_e=3 and det_lvl_3d=2 then
 				pos_weld[ie][ix]=zf_b_right-zagf_th_right: pos_weld[ie][iy]=z_th_right : pos_weld[ie][iz]=zagf_th_right
 				gosub "set_weld"
 			endif
+			tmater = z_mater_right : gosub "set_mat_fas"
 			PRISM_ nsp/3, zagf_th_right, get(nsp)
 			del 3
 		endif
@@ -589,7 +715,7 @@ if type_fin_e=3 and det_lvl_3d=2 then
 endif
 
 
-if (type_fin_e=1 or (type_fin_e=3 and not(zagf_zag_right))) and det_lvl_3d=2 then 
+if (type_fin_e=TYPE_FIN_ZAGL or (type_fin_e=TYPE_FIN_ZAGLFAS and not(zagf_zag_right))) and det_lvl_3d=2 then 
 	group "zage"
 		addz offset_r-offset_body_e
 		gosub "zage_weld"
@@ -620,6 +746,7 @@ if (type_fin_e=1 or (type_fin_e=3 and not(zagf_zag_right))) and det_lvl_3d=2 the
 		endif
 		hotspot 0,z_th_right,0
 		addz -t_z
+		tmater = z_mater_right : gosub "set_mat_fas"
 		PRISM_ nsp/3, t_z*2, get(nsp)
 		del 2
 	endgroup
@@ -645,6 +772,7 @@ group "body"
 		TUBE n_form, n_path, mask, USE(n_form*3+n_path*4)
 		if show_3d_hotspot then
 			xs = 0 : ys = 0 : xe=0 : ye = 0
+			s1=-20 : s2 = 0
 			for i=1 to n_form*3 step 3
 				x2=get(1) :	y2=get(1) :	s2=get(1)
 				if s2=jt then 
@@ -670,7 +798,7 @@ endgroup
 if type_cutf_e = 1 then
 	rotz 180
 	addz offset_r-start_cut_e
-	gosub "cut3d_epl"
+	if GLOB_VIEW_TYPE <> 2 then gosub "cut3d_epl"
 	del 2
 	group "eop1"
 		addz offset_r-offset_body_e
@@ -685,7 +813,7 @@ endif
 if type_cutf_s = 1 then
 	addz start_cut_s
 	rotx -angle_path/2
-	gosub "cut3d_spl"
+	if GLOB_VIEW_TYPE <> 2 then gosub "cut3d_spl"
 	del 2
 	group "sop1"
 		addz offset_body_s
@@ -701,7 +829,7 @@ if type_cutf_e = 2 then
 	rotz 180
 	addz offset_r-start_cut_e
 	rotx angle_path/2
-	gosub "cut3d_evn"
+	if GLOB_VIEW_TYPE <> 2 then gosub "cut3d_evn"
 	del 3
 	group "eop2"
 		addz offset_r-offset_body_e
@@ -717,7 +845,7 @@ endif
 if type_cutf_s = 2 then
 	addz start_cut_s
 	rotx -angle_path/2
-	gosub "cut3d_svn"
+	if GLOB_VIEW_TYPE <> 2 then gosub "cut3d_svn"
 	del 2
 	group "sop2"
 		addz offset_body_s
@@ -761,27 +889,27 @@ if tshow_op then placegroup group_op
 
 Group_out = SUBGROUP("body", group_op)
 
-if type_fin_s=3 and det_lvl_3d=2 and show_list then
+if type_fin_s=TYPE_FIN_ZAGLFAS and det_lvl_3d=2 and show_list then
 	group_zagfs = SUBGROUP(Group_out, "zagfs")
 	Group_out = ADDGROUP(Group_out, "zagfs")
 	killgroup "zagfs"
 	killgroup group_zagfs
 endif
 
-if type_fin_e=3 and det_lvl_3d=2 and show_list then 
+if type_fin_e=TYPE_FIN_ZAGLFAS and det_lvl_3d=2 and show_list then 
 	group_zagfe = SUBGROUP(Group_out, "zagfe")
 	Group_out = ADDGROUP(Group_out, "zagfe")
 	killgroup "zagfe"
 	killgroup group_zagfe
 endif
 
-if type_fin_s=2 and det_lvl_3d=2 then 
+if type_fin_s=TYPE_FIN_PODR and det_lvl_3d=2 then 
 	Group_out = SUBGROUP(Group_out, "pod_s")
 	if tshow_op then placegroup "pod_s"
 	killgroup "pod_s"
 endif
 
-if type_fin_e=2 and det_lvl_3d=2 then 
+if type_fin_e=TYPE_FIN_PODR and det_lvl_3d=2 then 
 	Group_out = SUBGROUP(Group_out, "pod_e")
 	if tshow_op then placegroup "pod_e"
 	killgroup "pod_e"
@@ -793,8 +921,6 @@ killgroup "body"
 killgroup group_op
 gosub "clear_buff"
 
-
-
 if mirror_axis=1 then mulx -1
 if mirror_axis=2 then muly -1
 gosub "axis3d" !Отображение оси в 3д
@@ -802,6 +928,9 @@ gosub "axis3d" !Отображение оси в 3д
 gosub "weld_edge"
 
 del top
+If cutplane_enable>0 THEN CUTEND
+If cutplane_enable>1 THEN CUTEND
+If cutplane_enable>2 THEN CUTEND
 end
 
 "zags_weld":
@@ -918,19 +1047,21 @@ return
 	HOTSPOT 0, weld_coord[i],0, unID, weld_coord[i], 2, weld_side_3: unID=unID+1
 	del 2
 	if weld_side_3>EPS then
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s, unID, weld_offset[i][1], 1+128: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s-1, unID, weld_offset[i][1], 3: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],weld_offset[i][1], unID, weld_offset[i][1], 2: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e, unID, weld_offset[i][2], 1+128: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e+1, unID, weld_offset[i][2], 3: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e-weld_offset[i][2], unID, weld_offset[i][2], 2: unID=unID+1
-
-		add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
-		HOTSPOT 0,	0, 0,	unID,	weld_side_ang_3,	6: unID=unID+1
-		HOTSPOT k, 0, 0,	unID,	weld_side_ang_3,	4+128: unID=unID+1
-		HOTSPOT -k*sin(weld_side_ang_3), -k*cos(weld_side_ang_3),0,	unID,	weld_side_ang_3, 5: unID=unID+1
-		HOTSPOT 0,	0, -1,	unID,	weld_side_ang_3,	7 : unID=unID+1
-		del 1
+		if GLOB_VIEW_TYPE <> 2 then
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s, unID, weld_offset[i][1], 1+128: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s-1, unID, weld_offset[i][1], 3: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],weld_offset[i][1], unID, weld_offset[i][1], 2: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e, unID, weld_offset[i][2], 1+128: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e+1, unID, weld_offset[i][2], 3: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e-weld_offset[i][2], unID, weld_offset[i][2], 2: unID=unID+1
+			
+			add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
+			HOTSPOT 0,	0, 0,	unID,	weld_side_ang_3,	6: unID=unID+1
+			HOTSPOT k, 0, 0,	unID,	weld_side_ang_3,	4+128: unID=unID+1
+			HOTSPOT -k*sin(weld_side_ang_3), -k*cos(weld_side_ang_3),0,	unID,	weld_side_ang_3, 5: unID=unID+1
+			HOTSPOT 0,	0, -1,	unID,	weld_side_ang_3,	7 : unID=unID+1
+			del 1
+		endif
 		pos_weld[is][ix]=offset_prof_arr[inx][ix] : pos_weld[is][iy]=offset_prof_arr[inx][iy] : pos_weld[is][iz]=offset_body_s+weld_offset[i][1]
 		pos_weld[ie][ix]=offset_prof_arr[inx][ix] : pos_weld[ie][iy]=offset_prof_arr[inx][iy] : pos_weld[ie][iz]=offset_r-offset_body_e-weld_offset[i][2]
 		calltype_weld = weld_side_3
@@ -947,20 +1078,21 @@ return
 	HOTSPOT 0, weld_coord[i],0, unID, weld_coord[i], 2, weld_side_5: unID=unID+1
 	del 2
 	if weld_side_5>EPS then
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s, unID, weld_offset[i][1], 1+128: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s-1, unID, weld_offset[i][1], 3: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],weld_offset[i][1], unID, weld_offset[i][1], 2: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e, unID, weld_offset[i][2], 1+128: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e+1, unID, weld_offset[i][2], 3: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e-weld_offset[i][2], unID, weld_offset[i][2], 2: unID=unID+1
-
-		add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
-		HOTSPOT 0,	0, 0,	unID,	weld_side_ang_5,	6: unID=unID+1
-		HOTSPOT k, 0, 0,	unID,	weld_side_ang_5,	4+128: unID=unID+1
-		HOTSPOT -k*sin(weld_side_ang_5), -k*cos(weld_side_ang_5),0,	unID,	weld_side_ang_5, 5: unID=unID+1
-		HOTSPOT 0,	0, -1,	unID,	weld_side_ang_5,	7 : unID=unID+1
-		del 1
-
+		if GLOB_VIEW_TYPE <> 2 then
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s, unID, weld_offset[i][1], 1+128: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s-1, unID, weld_offset[i][1], 3: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],weld_offset[i][1], unID, weld_offset[i][1], 2: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e, unID, weld_offset[i][2], 1+128: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e+1, unID, weld_offset[i][2], 3: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e-weld_offset[i][2], unID, weld_offset[i][2], 2: unID=unID+1
+	
+			add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
+			HOTSPOT 0,	0, 0,	unID,	weld_side_ang_5,	6: unID=unID+1
+			HOTSPOT k, 0, 0,	unID,	weld_side_ang_5,	4+128: unID=unID+1
+			HOTSPOT -k*sin(weld_side_ang_5), -k*cos(weld_side_ang_5),0,	unID,	weld_side_ang_5, 5: unID=unID+1
+			HOTSPOT 0,	0, -1,	unID,	weld_side_ang_5,	7 : unID=unID+1
+			del 1
+		endif
 		calltype_weld = weld_side_5
 		ang_axis_weld = weld_side_ang_5
 		pos_weld[is][ix]=offset_prof_arr[inx][ix] : pos_weld[is][iy]=offset_prof_arr[inx][iy] : pos_weld[is][iz]=offset_body_s
@@ -977,19 +1109,21 @@ return
 	HOTSPOT 0, weld_coord[i],0, unID, weld_coord[i], 2, weld_side_7: unID=unID+1
 	del 2
 	if weld_side_7>EPS then
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s, unID, weld_offset[i][1], 1+128: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s-1, unID, weld_offset[i][1], 3: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],weld_offset[i][1], unID, weld_offset[i][1], 2: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e, unID, weld_offset[i][2], 1+128: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e+1, unID, weld_offset[i][2], 3: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e-weld_offset[i][2], unID, weld_offset[i][2], 2: unID=unID+1
-
-		add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
-		HOTSPOT 0,	0, 0,	unID,	weld_side_ang_7,	6: unID=unID+1
-		HOTSPOT k, 0, 0,	unID,	weld_side_ang_7,	4+128: unID=unID+1
-		HOTSPOT -k*sin(weld_side_ang_7), -k*cos(weld_side_ang_7),0,	unID,	weld_side_ang_7, 5: unID=unID+1
-		HOTSPOT 0,	0, -1,	unID,	weld_side_ang_7,	7 : unID=unID+1
-		del 1
+		if GLOB_VIEW_TYPE <> 2 then
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s, unID, weld_offset[i][1], 1+128: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s-1, unID, weld_offset[i][1], 3: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],weld_offset[i][1], unID, weld_offset[i][1], 2: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e, unID, weld_offset[i][2], 1+128: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e+1, unID, weld_offset[i][2], 3: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e-weld_offset[i][2], unID, weld_offset[i][2], 2: unID=unID+1
+	
+			add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
+			HOTSPOT 0,	0, 0,	unID,	weld_side_ang_7,	6: unID=unID+1
+			HOTSPOT k, 0, 0,	unID,	weld_side_ang_7,	4+128: unID=unID+1
+			HOTSPOT -k*sin(weld_side_ang_7), -k*cos(weld_side_ang_7),0,	unID,	weld_side_ang_7, 5: unID=unID+1
+			HOTSPOT 0,	0, -1,	unID,	weld_side_ang_7,	7 : unID=unID+1
+			del 1
+		endif
 		calltype_weld = weld_side_7
 		ang_axis_weld = weld_side_ang_7
 		pos_weld[is][ix]=offset_prof_arr[inx][ix] : pos_weld[is][iy]=offset_prof_arr[inx][iy] : pos_weld[is][iz]=offset_body_s
@@ -999,26 +1133,30 @@ return
 	
 	i=4 : inx = 6
 	l = offset_r-offset_body_e-offset_body_s-weld_offset[i][1]-weld_offset[i][2]
-	add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
-	rotz weld_side_ang_9
-	HOTSPOT 0, 0,0, unID, weld_coord[i], 1+128, weld_side_9: unID=unID+1
-	HOTSPOT 0, -1,0, unID, weld_coord[i], 3, weld_side_9: unID=unID+1
-	HOTSPOT 0, weld_coord[i],0, unID, weld_coord[i], 2, weld_side_9: unID=unID+1
-	del 2
-	if weld_side_9>EPS then
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s, unID, weld_offset[i][1], 1+128: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s-1, unID, weld_offset[i][1], 3: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],weld_offset[i][1], unID, weld_offset[i][1], 2: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e, unID, weld_offset[i][2], 1+128: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e+1, unID, weld_offset[i][2], 3: unID=unID+1
-		HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e-weld_offset[i][2], unID, weld_offset[i][2], 2: unID=unID+1
-
+	if GLOB_VIEW_TYPE <> 2 then
 		add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
-		HOTSPOT 0,	0, 0,	unID,	weld_side_ang_9,	6: unID=unID+1
-		HOTSPOT k, 0, 0,	unID,	weld_side_ang_9,	4+128: unID=unID+1
-		HOTSPOT -k*sin(weld_side_ang_9), -k*cos(weld_side_ang_9),0,	unID,	weld_side_ang_9, 5: unID=unID+1
-		HOTSPOT 0,	0, -1,	unID,	weld_side_ang_9,	7 : unID=unID+1
-		del 1
+		rotz weld_side_ang_9
+		HOTSPOT 0, 0,0, unID, weld_coord[i], 1+128, weld_side_9: unID=unID+1
+		HOTSPOT 0, -1,0, unID, weld_coord[i], 3, weld_side_9: unID=unID+1
+		HOTSPOT 0, weld_coord[i],0, unID, weld_coord[i], 2, weld_side_9: unID=unID+1
+		del 2
+	endif
+	if weld_side_9>EPS then
+		if GLOB_VIEW_TYPE <> 2 then
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s, unID, weld_offset[i][1], 1+128: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_body_s-1, unID, weld_offset[i][1], 3: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],weld_offset[i][1], unID, weld_offset[i][1], 2: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e, unID, weld_offset[i][2], 1+128: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e+1, unID, weld_offset[i][2], 3: unID=unID+1
+			HOTSPOT offset_prof_arr[inx][ix], offset_prof_arr[inx][iy],offset_r-offset_body_e-weld_offset[i][2], unID, weld_offset[i][2], 2: unID=unID+1
+	
+			add offset_prof_arr[inx][ix], offset_prof_arr[inx][iy], offset_body_s+weld_offset[i][1]+l/3
+			HOTSPOT 0,	0, 0,	unID,	weld_side_ang_9,	6: unID=unID+1
+			HOTSPOT k, 0, 0,	unID,	weld_side_ang_9,	4+128: unID=unID+1
+			HOTSPOT -k*sin(weld_side_ang_9), -k*cos(weld_side_ang_9),0,	unID,	weld_side_ang_9, 5: unID=unID+1
+			HOTSPOT 0,	0, -1,	unID,	weld_side_ang_9,	7 : unID=unID+1
+			del 1
+		endif
 		calltype_weld = weld_side_9
 		ang_axis_weld = weld_side_ang_9
 		pos_weld[is][ix]=offset_prof_arr[inx][ix] : pos_weld[is][iy]=offset_prof_arr[inx][iy] : pos_weld[is][iz]=offset_body_s
@@ -1054,6 +1192,7 @@ return
 	HOTSPOT	0,	0,	l_pos_prof,	unID,	l_pos_prof,	2: unID=unID+1
 	HOTSPOT	0,	0,	-1,	unID,	l_pos_prof,	3: unID=unID+1
 	del 3
+
 	HOTSPOT	pos_prof[is][ix],	pos_prof[is][iy],	pos_prof[is][iz]
 	HOTSPOT	pos_prof[ie][ix],	pos_prof[ie][iy],	pos_prof[ie][iz]
 return
@@ -1103,7 +1242,7 @@ return
 "axis3d":
 !Отступы начала и конца
 	if show_empty = 0 then return
-	if show_only_axsis or show_axsis then
+	if (show_only_axsis or show_axsis) and GLOB_VIEW_TYPE <> 2 then
 		HOTSPOT	0,	0,	0,	unID,	add_l_axis_s,	1+128: unID=unID+1
 		HOTSPOT	0,	0,	add_l_axis_s,	unID,	add_l_axis_s,	2: unID=unID+1
 		HOTSPOT	0,	0,	add_l_axis_s-1,	unID,	add_l_axis_s,	3: unID=unID+1
@@ -1716,52 +1855,8 @@ return
 return
 
 "get_mat":
-	success = LIBRARYGLOBAL ("Libraryflobals-km", "mat_by_type_code", mat_by_type_code)
-	is_mat_set = 0
-	if (show_spec or type_spec = "Не специфицировать") and not(is_mat_set) and mat_by_type_code<>1 then
-		ignore_mat = 0
-		success = LIBRARYGLOBAL ("Libraryflobals-km", "ignore_mat", ignore_mat)
-		col_mat = ignore_mat
-		is_mat_set = 1
-	endif
-	if mat_by_type_code<>1 and not(is_mat_set) then
-		if mat_by_type_code=2 then 
-			name_mat_arr = "cov_mat_arr"
-			inx_mat = cov_mat
-		endif
-		if mat_by_type_code=3 then
-			name_mat_arr = "fire_keep_mat_arr"
-			inx_mat = fire_keep_mat
-		endif
-		if mat_by_type_code=4 then
-			name_mat_arr = "konstr_mat_arr"
-			inx_mat = type_mat
-		endif
-		if mat_by_type_code=5 then
-			name_mat_arr = "fire_mat_arr"
-			inx_mat = fire_mat
-		endif
-		if mat_by_type_code=6 then
-			name_mat_arr = "stal_mat_arr"
-			inx_mat = stal_mat
-		endif
-		if mat_by_type_code=7 then
-			name_mat_arr = "type_spec_mat_arr"
-			inx_mat = type_spec_mat
-		endif
-		if mat_by_type_code=8 then
-			name_mat_arr = "connect_mat_arr"
-			inx_mat = upr_mat
-		endif
-		if inx_mat=99 or inx_mat<1 then 
-			col_mat = 0
-		else
-			dim cov_mat_arr[]
-			success = LIBRARYGLOBAL ("Libraryflobals-km", name_mat_arr, cov_mat_arr)
-			col_mat = cov_mat_arr[inx_mat]
-		endif
-		is_mat_set = 1
-	endif
+	call "macro_get_mat" parameters all, RETURNED_PARAMETERS tcol_mat, tbmat
+	if tcol_mat>1 then col_mat = tcol_mat
 	if strlen(syst_name)>1 then col_mat = sMat
 	if gs_shadow=0 then
 		shadow off
@@ -1772,11 +1867,32 @@ return
 
 "set_mat":
 	model solid
+	if tbmat>0 then
+		BUILDING_MATERIAL tbmat
+		SECT_ATTRS{2} gs_cont_pen, gs_line_type
+	else
+		SECT_ATTRS gs_fill_type_sec, gs_back_pen, gs_fill_pen, gs_sec_pen, gs_line_type
+		fill gs_fill_type_sec
+		line_type gs_line_type
+	endif
 	material col_mat
 	pen gs_cont_pen
-	fill gs_fill_type_sec
-	line_type gs_line_type
-	SECT_ATTRS gs_fill_type_sec, gs_back_pen, gs_fill_pen, gs_sec_pen, gs_line_type
+return
+
+"set_mat_fas":
+	tcol_mat = col_mat : tbmat = 0
+	call "macro_get_mat" parameters all mater=tmater, RETURNED_PARAMETERS tcol_mat, tbmat
+	if tbmat>0 then
+		BUILDING_MATERIAL tbmat
+		SECT_ATTRS{2} gs_cont_pen, gs_line_type
+	else
+		SECT_ATTRS gs_fill_type_sec, gs_back_pen, gs_fill_pen, gs_sec_pen, gs_line_type
+		fill gs_fill_type_sec
+		line_type gs_line_type
+	endif
+	pen gs_cont_pen
+	if tcol_mat<1 then tcol_mat = col_mat
+	material tcol_mat
 return
 
 "coord_cut":

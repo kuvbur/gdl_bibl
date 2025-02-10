@@ -12,28 +12,47 @@ if GLOB_CONTEXT=6 then
 endif
 gosub "set_show_2d"
 if not(show) or det_lvl_2d=0 then end
+
+if show_mvo_proj=2 then
+	show_mvo_proj = 0
+	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_mvo_proj", show_mvo_proj)
+	if show_mvo_proj then
+		use_mvo_h = 0 : success = LIBRARYGLOBAL ("Libraryflobals-km", "use_mvo_h", use_mvo_h)
+		if use_mvo_h then
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "t_proj_down", t_proj_down)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "t_proj_up", t_proj_up)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "h_proj_down", h_proj_down)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "h_proj_up", h_proj_up)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "is_show_lower", is_show_lower)
+			success = LIBRARYGLOBAL ("Libraryflobals-km", "is_show_upper", is_show_upper)
+		endif
+	endif
+endif
+
 if show_only_axsis then
 	only_axis_line = gs_line_type
 else
-	chStoryDist = GLOB_CH_STORY_DIST
-	IF gs_StorySensitive = 0 THEN chStoryDist = 0
-	if chStoryDist > EPS then !"Этажом выше"
-		gs_cont_pen = gs_cont_pen_up
-		gs_fill_type = gs_fill_type_up
-		gs_fill_pen = gs_fill_pen_up
-		gs_back_pen = gs_back_pen_up
-		gs_line_type = gs_line_type_up
-		mark = mark_up
-	endif
-	if chStoryDist < EPS then
-		if abs(chStoryDist) < EPS then !"Собственный этаж"
-		else !"Этажом ниже"
-			gs_cont_pen = gs_cont_pen_down
-			gs_fill_type = gs_fill_type_down
-			gs_fill_pen = gs_fill_pen_down
-			gs_back_pen = gs_back_pen_down
-			gs_line_type = gs_line_type_down
-			mark = mark_down
+	if show_mvo_proj<1 then
+		chStoryDist = GLOB_CH_STORY_DIST
+		IF gs_StorySensitive = 0 THEN chStoryDist = 0
+		if chStoryDist > EPS then !"Этажом выше"
+			gs_cont_pen = gs_cont_pen_up
+			gs_fill_type = gs_fill_type_up
+			gs_fill_pen = gs_fill_pen_up
+			gs_back_pen = gs_back_pen_up
+			gs_line_type = gs_line_type_up
+			mark = mark_up
+		endif
+		if chStoryDist < EPS then
+			if abs(chStoryDist) < EPS then !"Собственный этаж"
+			else !"Этажом ниже"
+				gs_cont_pen = gs_cont_pen_down
+				gs_fill_type = gs_fill_type_down
+				gs_fill_pen = gs_fill_pen_down
+				gs_back_pen = gs_back_pen_down
+				gs_line_type = gs_line_type_down
+				mark = mark_down
+			endif
 		endif
 	endif
 endif
@@ -42,7 +61,11 @@ pen gs_cont_pen
 fill gs_fill_type
 line_type gs_line_type
 SECT_ATTRS gs_fill_type, gs_back_pen, gs_fill_pen, gs_cont_pen, gs_line_type
-IF GLOB_FEEDBACK_MODE=1 THEN det_lvl_2d = 1
+IF GLOB_FEEDBACK_MODE=1 THEN
+	det_lvl_2d = 1
+	show3dhotspot2d = 0
+	show_mvo_proj = 1
+endif
 
 add2 pos_prof_call_xyz[ix], pos_prof_call_xyz[iy]
 rot2 phi_call
@@ -73,9 +96,18 @@ if abs(ang + etta_call) mod 90>EPS or iscall or (abs(abs(ang + etta_call) mod 18
 	fill gs_fill_type
 	line_type gs_line_type
 	SECT_ATTRS gs_fill_type, gs_back_pen, gs_fill_pen, gs_cont_pen, gs_line_type
-	if show_only_axsis=0 then
+	if show_only_axsis=0 and show_mvo_proj<1 then
 		if show_proj then
-			project2{2} 3, 270, 32+3, gs_back_pen, 0, 0, 90
+			same_pen = (gs_fill_pen = gs_cont_pen)
+			pen gs_fill_pen
+			fill gs_fill_type
+			line_type gs_line_type
+			SECT_ATTRS gs_fill_type, gs_back_pen, gs_fill_pen, gs_cont_pen, gs_line_type
+			PROJECT2{3} 3, 270, 3+32, 1+4+(2+8)*same_pen, gs_back_pen, 0, 0, 90
+			if not(same_pen) then
+				pen gs_cont_pen
+				PROJECT2{3} 3, 270, 3+32, 2+8, 0, 0, 0, 90
+			endif
 		else
 			POLY2_B 4, 1+2+4,gs_fill_pen, gs_back_pen,
 							pos_prof[is][ix]-offset_body_2d_s,pos_prof[is][iy]-aa_plane,1,
@@ -90,11 +122,47 @@ endif
 if type_coord=1 then gosub "hotspot2d_coord"
 if type_coord=2 then gosub "hotspot2d_rphi"
 
+if show_mvo_proj and show_only_axsis=0 then 
+	if is_show_lower then
+		same_pen = (gs_fill_pen_down = gs_cont_pen_down)
+		pen gs_fill_pen_down
+		fill gs_fill_type_down
+		line_type gs_line_type_down
+		SECT_ATTRS gs_fill_type_down, gs_back_pen_down, gs_fill_pen_down, gs_cont_pen_down, gs_line_type_down
+		PROJECT2{3} 3, 270, 3+32, 1+4+(2+8)*same_pen, gs_back_pen_down, 0, 0, 90, PARAMETERS cutplane_enable = 1, n_part_show = -1
+		if not(same_pen) then
+			pen gs_cont_pen_down
+			PROJECT2{3} 3, 270, 3+32, 2+8, 0, 0, 0, 90, PARAMETERS cutplane_enable = 1, n_part_show = -1
+		endif
+	endif
+	same_pen = (gs_fill_pen = gs_cont_pen)
+	pen gs_fill_pen
+	fill gs_fill_type
+	line_type gs_line_type
+	SECT_ATTRS gs_fill_type, gs_back_pen, gs_fill_pen, gs_cont_pen, gs_line_type
+	PROJECT2{3} 3, 270, 3+32, 1+4+(2+8)*same_pen, gs_back_pen, 0, 0, 90, PARAMETERS cutplane_enable = 1, n_part_show = 0
+	if not(same_pen) then
+		pen gs_cont_pen
+		PROJECT2{3} 3, 270, 3+32, 2+8, 0, 0, 0, 90, PARAMETERS cutplane_enable = 1, n_part_show = 0
+	endif
+	if is_show_upper then
+		same_pen = (gs_fill_pen_up = gs_cont_pen_up)
+		pen gs_fill_pen_up
+		fill gs_fill_type_up
+		line_type gs_line_type_up
+		SECT_ATTRS gs_fill_type_up, gs_back_pen_up, gs_fill_pen_up, gs_cont_pen_up, gs_line_type_up
+		PROJECT2{3} 3, 270, 3+32, 1+4+(2+8)*same_pen, gs_back_pen_up, 0, 0, 90, PARAMETERS cutplane_enable = 1, n_part_show = 1
+		if not(same_pen) then
+			pen gs_cont_pen_up
+			PROJECT2{3} 3, 270, 3+32, 2+8, 0, 0, 0, 90, PARAMETERS cutplane_enable = 1, n_part_show = 1
+		endif
+	endif
+endif
 pen gs_cont_pen
 fill gs_fill_type
 line_type gs_line_type
 SECT_ATTRS gs_fill_type, gs_back_pen, gs_fill_pen, gs_cont_pen, gs_line_type
-!if show_all_proj and show_only_axsis=0 then project2{2} 3, 270, 32+3, gs_back_pen, 0, 0, 90
+if show3dhotspot2d and show_only_axsis=0 then PROJECT2{3} 3, 270, 1, 16+32, 0, 0, 0, 90, PARAMETERS cutplane_enable = 0
 
 if show_axsis or show_only_axsis then gosub "axis2d"
 
@@ -157,7 +225,7 @@ if abs(ang + etta_call) mod 180 < EPS then
 !	rot2 -offset_ang_pl
 	if mirror_axis=1 then mul2 -1,1
 	if mirror_axis=2 then mul2 1,-1
-	gosub "top_view"
+	if not(show_mvo_proj) then gosub "top_view"
 endif
 
 del 4
@@ -357,7 +425,7 @@ return
 		pen gs_cont_pen
 		fill gs_fill_type
 		line_type gs_line_type
-		if not(show_all_proj) then POLY2_b nsp/3, 7, gs_fill_pen, gs_back_pen,use(nsp)
+		if not(show_mvo_proj) then POLY2_b nsp/3, 7, gs_fill_pen, gs_back_pen,use(nsp)
 		for i=1 to nsp step 3
 			x1=get(1)
 			y1=get(1)

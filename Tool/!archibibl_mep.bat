@@ -38,7 +38,7 @@ cd ..
 cd ..
 
 ROBOCOPY "%cd%\gdl_macro\lcf" "%lcf_dir%" /E>"%tool_dir%\log\_copy_log.txt"
-ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF24" /E>"%tool_dir%\log\_copy_log.txt"
+ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF25" /E>"%tool_dir%\log\_copy_log.txt"
 
-ROBOCOPY "%lcf_dir%" "%cd%\LCF24" archbib24.lcf /E>"%tool_dir%\log\_copy_log.txt"
-ROBOCOPY "%lcf_dir%" "%cd%\LCF24" mep24.lcf /E>"%tool_dir%\log\_copy_log.txt"
+ROBOCOPY "%lcf_dir%" "%cd%\LCF25" archbib24.lcf /E>"%tool_dir%\log\_copy_log.txt"
+ROBOCOPY "%lcf_dir%" "%cd%\LCF25" mep24.lcf /E>"%tool_dir%\log\_copy_log.txt"

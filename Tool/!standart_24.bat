@@ -22,6 +22,4 @@ TIMEOUT /T 5
 cd ..
 cd ..
 
-ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF24" /E>"%tool_dir%\log\_copy_log.txt"
-ROBOCOPY "%cd%\gdl_macro\lcf" "%cd%\LCF24" /E>"%tool_dir%\log\_copy_log.txt"
-ROBOCOPY "%lcf_dir%" "%cd%\LCF24" standart24.lcf /E>"%tool_dir%\log\_copy_log.txt"
+ROBOCOPY "%lcf_dir%" "%cd%\LCF25" standart24.lcf /E>"%tool_dir%\log\_copy_log.txt"

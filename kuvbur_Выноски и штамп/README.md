@@ -1,5 +1,1 @@
-#### В РАЗРАБОТКЕ
-
-##### [Пример использования штампа](https://www.youtube.com/watch?v=Bo4JFFIpBo4 "##### Пример использования")
-##### [Справка к выноске](https://docs.google.com/document/d/e/2PACX-1vQSWSuZ6Yx13igD4XAak "##### Справка к выноске")
-##### [Видео про выноску от Александра Пушкарёва](https://youtu.be/YfxWgJC21JA?si=OXODLgmxKnzHeYwH) [Rutube](https://rutube.ru/video/2032d51b7708622da48077d36b17938a/?r=wd)
+Пакет содержит элементы для оформления листов и выноски. Выключает в себя пакеты [kuvbur_Выноска BeArt Label mod](https://github.com/kuvbur/gdl_bibl/tree/master/kuvbur_%D0%92%D1%8B%D0%BD%D0%BE%D1%81%D0%BA%D0%B0%20BeArt%20Label%20mod) и [kuvbur_Формат по ГОСТ](https://github.com/kuvbur/gdl_bibl/tree/master/kuvbur_%D0%A4%D0%BE%D1%80%D0%BC%D0%B0%D1%82%20%D0%BF%D0%BE%20%D0%93%D0%9E%D0%A1%D0%A2)

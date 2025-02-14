@@ -148,6 +148,7 @@ _LABEL_CUSTOM_ARROW = 0
 aversion = 0 : aname =  ""
 LABEL_ALWAYS_READABLE = AC_bLabelAlwaysReadable
 _LABEL_TEXT_WRAP = AC_bLabelTextWrap
+if AC_LabelTextBgrPen < 0 then AC_LabelTextBgrPen = GLOB_DRAWING_BGD_PEN
 _LABEL_TEXT_BG_PEN = AC_bLabelOpaqueFill*AC_LabelTextBgrPen
 _LABEL_FRAME_ON = AC_bLabelFrame
 _LABEL_FRAME_OFFSET = AC_LabelFrameOffset
@@ -170,6 +171,7 @@ else
 	endif
 endif
 
+LINE_TYPE AC_LabelPointerLineType
 If not(_LABEL_CUSTOM_ARROW) or _LABEL_ARROWHEAD_PEN<1 or _LABEL_ARROWHEAD_PEN>255 Then _LABEL_ARROWHEAD_PEN = LABEL_ARROWHEAD_PEN
 
 if STRSTR(unittype,"Из глобальных настроек")>0 then
@@ -1188,7 +1190,7 @@ If _LABEL_CUSTOM_ARROW Then
 		HOTSPOT2 -1, 0, unID, PosA, 3+128, PosA: unID=unID+1
 		HOTSPOT2 PosA, 0, unID, PosA, 2, PosA: unID=unID+1
 	endif
-	if param_name = tparam_name[SHOW_FLAG] then 
+	if param_name = tparam_name[SHOW_FLAG] and thk_alg then
 		HOTSPOT2 PosA-sgn(PosA)*PAPER_TO_MODEL, 0.1, unID, thk_alg_out, 1+128, thk_alg_out:	unID=unID+1
 		HOTSPOT2 -1*sgn(PosA), 0.1, unID, thk_alg_out, 3+128, thk_alg_out: unID=unID+1
 		HOTSPOT2 PosA+thk_alg_out*sgn(PosA)-sgn(PosA)*PAPER_TO_MODEL, 0.1, unID, thk_alg_out, 2, thk_alg_out: unID=unID+1
@@ -1211,6 +1213,7 @@ If _LABEL_CUSTOM_ARROW Then
 			add_for_prof_sign=0
 		endif
 		If anchor = 4 Then txtPos = 0
+		skinThktxtpos = 0
 	else
 		If anchor = 7 Then 
 			txtPos = add_for_prof_r
@@ -1226,6 +1229,7 @@ If _LABEL_CUSTOM_ARROW Then
 		endif
 		If anchor = 6 Then txtPos = 0
 		If anchor = 4 Then txtPos = 0
+		skinThktxtpos = thk_alg_out
 	endif
 	PEN arrowpen
 	gosub "alg"
@@ -1243,9 +1247,9 @@ If _LABEL_CUSTOM_ARROW Then
 					if nPos=1 and prof_fist_str then gosub "profile"
 					if nPos=2 and prof_sec_str then gosub "profile"
 				endif
-				text2 txtPos+add_for_prof_r*(nstr <> 1), n+dx, str_txt[nPos][nstr]
+				text2 txtPos+add_for_prof_r*(nstr <> 1)-thk_alg_out*(PosA<0), n+dx, str_txt[nPos][nstr]
 				if nstr = kol_vo_str[nPos] then
-					if param_name = tparam_name[SHOW_FLAG] then text2 PosA*(PosA>0)-stw(skinThktxtarr[nPos])*PAPER_TO_MODEL+thk_alg_out, n+dx, skinThktxtarr[nPos]
+					if param_name = tparam_name[SHOW_FLAG] then text2 PosA*(PosA>0)-stw(skinThktxtarr[nPos])*PAPER_TO_MODEL+skinThktxtpos, n+dx, skinThktxtarr[nPos]
 				endif
 				n = n + text_hgt
 			next nstr
@@ -1356,7 +1360,7 @@ endif
 _LABEL_FRAME_OFFSET = _LABEL_FRAME_OFFSET*PAPER_TO_MODEL
 If _LABEL_CUSTOM_ARROW Then
 	x1 = -_LABEL_FRAME_OFFSET*sgn(PosA)
-	y1 = n + _LABEL_FRAME_OFFSET
+	y1 = n+dx + _LABEL_FRAME_OFFSET
 	y2 = 0 - _LABEL_FRAME_OFFSET
 	x2 = PosA+(PosA=0)*0.1+(add_for_prof_r+thk_alg_out-(thk_alg_out<>0)*PAPER_TO_MODEL)*sgn(PosA)+_LABEL_FRAME_OFFSET*sgn(PosA)
 	if n<>0 then y2 = 0 - _LABEL_FRAME_OFFSET
@@ -1374,9 +1378,19 @@ else
 	if y2=0 then y2 = -text_hgt
 endif
 
-if abs(x1-x2)>EPS and abs(y1-y2)>EPS and (AC_bLabelFrame or AC_bLabelOpaqueFill) then
-	fill  GLOB_FILL_INDEX_SOLID
-	ffil = AC_bLabelFrame + 2 * AC_bLabelOpaqueFill + 4
+if abs(x1-x2)>EPS and abs(y1-y2)>EPS and (_LABEL_FRAME_ON or AC_bLabelOpaqueFill) then
+	if percentage>0 and percentage<100 and AC_LabelTextBgrPen > 0 then
+		percentage = 100-percentage
+		DEFINE TRANSLUCENT_FILL gs_fill_type 1, 1, 1, 1, 1, 1, 1, 1, percentage
+		fill gs_fill_type
+	else
+		if AC_LabelTextBgrPen = 0 or percentage = 100 then 
+			fill GLOB_FILL_INDEX_BACKGROUND
+		else
+			fill  GLOB_FILL_INDEX_SOLID
+		endif
+	endif
+	ffil = _LABEL_FRAME_ON + 2 * AC_bLabelOpaqueFill + 4
 	hotspot2 x1, y1
 	hotspot2 x1, y2
 	hotspot2 x2, y2
@@ -1384,12 +1398,11 @@ if abs(x1-x2)>EPS and abs(y1-y2)>EPS and (AC_bLabelFrame or AC_bLabelOpaqueFill)
 	PEN arrowpen
 	DRAWINDEX 10
 	POLY2_B    5, ffil, _LABEL_TEXT_BG_PEN, 0,
-		 x1, y1,0,
-		 x1, y2,0,
-		 x2, y2,0,
-		 x2, y1,0,
+		 x1, y1,_LABEL_FRAME_ON,
+		 x1, y2,_LABEL_FRAME_ON,
+		 x2, y2,_LABEL_FRAME_ON,
+		 x2, y1,_LABEL_FRAME_ON,
 		 x1, y1,-1
-	PEN arrowpen
 endif
 
 PEN arrowpen
@@ -1398,7 +1411,7 @@ end
 
 "lin":
 	if napd then return
-	for i = 1 to vardim1(pxx)
+	for i = 1 to n_str_px
 		HOTSPOT2 0, pxx[i][2], unID, pxx[i][1], 1+128: unID=unID+1
 		HOTSPOT2 pxx[i][1], pxx[i][2], unID, pxx[i][1], 2: unID=unID+1
 		HOTSPOT2 -1, pxx[i][2], unID, pxx[i][1], 3: unID=unID+1
@@ -1559,7 +1572,7 @@ return
 		HOTSPOT2  -ptx*sgn(PosA), 0.1, unID,  ptx,  2    : unID=unID+1
 		HOTSPOT2 1*sgn(PosA), 0.1, unID,  ptx,  3    : unID=unID+1
 		if abs(ptx)>EPS then
-			line2 tx-ptx*sgn(PosA),0,0,0
+			line2 -ptx*sgn(PosA),0,0,0
 			hotline2 tx-ptx*sgn(PosA),0,0,0
 			add2 -ptx*sgn(PosA),0
 		endif

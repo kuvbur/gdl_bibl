@@ -10,6 +10,7 @@
 - **[kuvbur_Проемы с перемычкой](https://github.com/kuvbur/gdl_bibl/tree/master/kuvbur_%D0%9F%D1%80%D0%BE%D0%B5%D0%BC%D1%8B%20%D1%81%20%D0%BF%D0%B5%D1%80%D0%B5%D0%BC%D1%8B%D1%87%D0%BA%D0%BE%D0%B9)** - проём с автоматической перемычкой
 - **[kuvbur_Панель с профилем](https://github.com/kuvbur/gdl_bibl/tree/master/kuvbur_%D0%9F%D0%B0%D0%BD%D0%B5%D0%BB%D1%8C%20%D1%81%20%D0%BF%D1%80%D0%BE%D1%84%D0%B8%D0%BB%D0%B5%D0%BC)** - панель для навесной стены с возможностью включения сложного профиля
 - **[kuvbur_Перемычки](https://github.com/kuvbur/gdl_bibl/tree/master/kuvbur_%D0%9F%D0%B5%D1%80%D0%B5%D0%BC%D1%8B%D1%87%D0%BA%D0%B8)** - перемычка из [видео](https://www.youtube.com/watch?v=-lvLK0MHU-M "Видео с обзором обновлённого объекта перемычки")
+- **[kuvbur_Помещение с отделкой](https://github.com/kuvbur/gdl_bibl/tree/master/kuvbur_%D0%9F%D0%BE%D0%BC%D0%B5%D1%89%D0%B5%D0%BD%D0%B8%D0%B5%20%D1%81%20%D0%BE%D1%82%D0%B4%D0%B5%D0%BB%D0%BA%D0%BE%D0%B9)** - зона, аксессуары и экспликация полов для ведомости отделки
 - **lcf** - полные пакеты библиотек. Если что-либо не вошло в пакеты выше - есть тут.
 - **Tool**- служебная папка, скрипты для сборки библиотек, качать не нужно.
 

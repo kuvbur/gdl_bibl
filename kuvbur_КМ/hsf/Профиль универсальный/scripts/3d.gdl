@@ -392,13 +392,13 @@ if type_fin_s=TYPE_FIN_ZAGLFAS and det_lvl_3d=2 then
 	endgroup
 endif
 
-if type_fin_s=TYPE_FIN_WELD and det_lvl_3d=2 then
+if (type_fin_s=TYPE_FIN_WELD or type_fin_s=TYPE_FIN_BASE) and det_lvl_3d=2 then
 	addz offset_body_s
 	gosub "zags_weld"
 	del 1
 endif
 
-if type_fin_e=TYPE_FIN_WELD and det_lvl_3d=2 then
+if (type_fin_e=TYPE_FIN_WELD or type_fin_e=TYPE_FIN_BASE) and det_lvl_3d=2 then
 	addz offset_r-offset_body_e
 	gosub "zage_weld"
 	del 1
@@ -415,6 +415,7 @@ if (type_fin_s=TYPE_FIN_ZAGL or (type_fin_s=TYPE_FIN_ZAGLFAS and not(zagf_zag_le
 		ji=1+4+8
 		if type_cutf_s = 1 then
 			t_z = aa + out_left_vn
+			t_h = t_z + aa + out_left_v
 			put	0,0,600+ji
 			put	z_b_left_l,-pos_cutf[is][il]*null_ang_s,200+jc
 			put	z_th_left,90-pos_cutf[is][il]*null_ang_s,200+jc
@@ -424,7 +425,8 @@ if (type_fin_s=TYPE_FIN_ZAGL or (type_fin_s=TYPE_FIN_ZAGLFAS and not(zagf_zag_le
 			put	0,0,ji
 		endif
 		if type_cutf_s = 2 then
-			t_z = bb + out_left
+			t_z = bb + out_left_p
+			t_h = t_z + bb + out_left
 			roty 90
 			put	0,0,600+ji
 			put	z_a_left_v,-pos_cutf[is][iv]*null_ang_s,200+jc
@@ -437,7 +439,7 @@ if (type_fin_s=TYPE_FIN_ZAGL or (type_fin_s=TYPE_FIN_ZAGLFAS and not(zagf_zag_le
 		hotspot 0,d_z_th_left,0
 		addz -t_z
 		tmater = z_mater_left : gosub "set_mat_fas"
-		PRISM_ nsp/3, t_z*2, get(nsp)
+		if nsp>3 then PRISM_ nsp/3, t_h, get(nsp)
 		del 4
 	endgroup
 	if type_fin_s=3 then
@@ -937,7 +939,7 @@ end
 	type_weld = type_weld_s
 	type_weld_ang = 0
 	show_weld_line = 0
-	if (out_left>EPS or type_fin_s=4) and type_weld<2 then
+	if (out_left>EPS or type_fin_s=TYPE_FIN_WELD) and type_weld<2 then
 		ang_axis_weld = 90
 		if name_prof_i=2 then ang_axis_weld = 180
 		show_empty_t = show_empty
@@ -951,7 +953,7 @@ end
 			if s2=jt then 
 				if s1=jt then
 					ics = is
-					if type_fin_s<>3 then
+					if type_fin_s<>TYPE_FIN_ZAGLFAS then
 						dxc = x1 : dyc = y1 : gosub "coord_cut" : z1 = dzc
 						dxc = x2 : dyc = y2 : gosub "coord_cut" : z2 = dzc
 					endif
@@ -976,15 +978,13 @@ end
 		endif
 		gosub "clear_buff"
 		show_empty = show_empty_t
-	else
-
 	endif
 return
 "zage_weld":
 	type_weld = type_weld_e
 	type_weld_ang = 0
 	show_weld_line = 0
-	if (out_right>EPS or type_fin_e=4) and type_weld<2 then
+	if (out_right>EPS or type_fin_e=TYPE_FIN_WELD) and type_weld<2 then
 		ang_axis_weld = 0
 		if name_prof_i=2 then ang_axis_weld = 270
 		show_empty_t = show_empty
@@ -995,10 +995,10 @@ return
 		xs = 0 : ys = 0 : xe=0 : ye = 0 : zs = 0 : ze = 0 : s1=0
 		for i=1 to n_form*3 step 3
 			x2=get(1) :	y2=get(1) :	s2=get(1)
-			if s2=jt then 
+			if s2=jt then
 				if s1=jt then
 					ics = ie
-					if type_fin_e<>3 then
+					if type_fin_e<>TYPE_FIN_ZAGLFAS then
 						dxc = x1 : dyc = y1 : gosub "coord_cut" : z1 = dzc
 						dxc = x2 : dyc = y2 : gosub "coord_cut" : z2 = dzc
 					endif
@@ -1023,7 +1023,6 @@ return
 		endif
 		gosub "clear_buff"
 		show_empty = show_empty_t
-	else
 	endif
 return
 
@@ -1032,7 +1031,7 @@ return
 	dy = pos_weld[ie][iy] - pos_weld[is][iy]
 	dz = pos_weld[ie][iz] - pos_weld[is][iz]
 	r = SQR(dx*dx+dy*dy+dz*dz)
-	if r-EPS > t_sten*3-EPS then call "Сварка 3д" parameters type_weld=type_weld, type_weld_ang = type_weld_ang, show_weld_line=0, pos_weld = pos_weld, ang_axis = ang_axis_weld, subpos=subpos, tip_konstr=tip_konstr
+	if r-EPS > t_sten-EPS and r-EPS > t_sten_1-EPS then call "Сварка 3д" parameters type_weld=type_weld, type_weld_ang = type_weld_ang, show_weld_line=0, pos_weld = pos_weld, ang_axis = ang_axis_weld, subpos=subpos, tip_konstr=tip_konstr
 	gosub "set_mat"
 return
 
@@ -1866,6 +1865,13 @@ return
 return
 
 "set_mat":
+	if strstr(error_msg, "Ошибка")>0 then 
+		gs_cont_pen = error_pen
+		gs_fill_pen = error_pen
+		gs_back_pen = error_pen
+		gs_fill_type = GLOB_FILL_INDEX_SOLID
+		col_mat = 0
+	endif
 	model solid
 	if tbmat>0 then
 		BUILDING_MATERIAL tbmat
@@ -1882,6 +1888,14 @@ return
 "set_mat_fas":
 	tcol_mat = col_mat : tbmat = 0
 	call "macro_get_mat" parameters all mater=tmater, RETURNED_PARAMETERS tcol_mat, tbmat
+	if strstr(error_msg, "Ошибка")>0 then 
+		gs_cont_pen = error_pen
+		gs_fill_pen = error_pen
+		gs_back_pen = error_pen
+		gs_fill_type = GLOB_FILL_INDEX_SOLID
+		tcol_mat = 0
+		col_mat = 0
+	endif
 	if tbmat>0 then
 		BUILDING_MATERIAL tbmat
 		SECT_ATTRS{2} gs_cont_pen, gs_line_type

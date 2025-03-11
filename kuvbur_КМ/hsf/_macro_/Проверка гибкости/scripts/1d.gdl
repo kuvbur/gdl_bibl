@@ -1,0 +1,108 @@
+
+EPS=0.0001
+DEBUG = 0
+!==================== Передаваемые переменные и их значения ===================
+
+!IF type_construction <> 1 THEN call "Проверка гибкости" parameters name_prof_i = name_prof_i, type_construction = type_construction, l_pos_prof = l_pos_prof, ds = ds, ws = ws RETURNED_PARAMETERS error_msg , result_msg
+
+!==================== Передаваемые переменные и их значения ===================
+name_prof_i = name_prof_i
+type_construction = type_construction
+l_pos_prof = l_pos_prof*1000	! Длина профиля (в мм)
+ds = ds							! Высота профиля (мм)
+ws = ws							! Ширина профиля (мм)
+ix = ix*1000
+iy = iy*1000
+iyy = iyy*1000
+error_msg = "" : result_msg = ""
+
+!==================== Коэффициенты для подбора по гибкости ====================
+type_construction_1 = 1
+type_construction_2 = 2
+type_construction_3 = 3
+type_construction_4 = 4
+type_construction_5 = 5
+type_construction_6 = 6
+type_construction_7 = 7
+type_construction_8 = 8
+type_construction_9 = 9
+type_construction_10 = 10
+type_construction_11 = 11
+
+dim itype_construction []
+dim ttype_construction []
+dim iix[]						! - Коэффициент расчетной длины в плоскости сечения (больший)
+dim iiy[]						! - Коэффициент расчетной длины из плоскости сечения (меньший)
+dim iiu []  : i=0				! - Предельная гибкость сжатых элементов (растянутых)
+i=i+1 : itype_construction[i]= type_construction_1 : ttype_construction[i] = "Не определено"	 : iix[i] = EPS: iiy[i] = EPS: iiu [i] = EPS
+i=i+1 : itype_construction[i]= type_construction_2 : ttype_construction[i] = "Основная колонна"	 : iix[i] = 2 : iiy[i] = 1 : iiu [i] = 150
+i=i+1 : itype_construction[i]= type_construction_3 : ttype_construction[i] = "Стойка фахверка"	 : iix[i] = 1 : iiy[i] = 1 : iiu [i] = 180
+i=i+1 : itype_construction[i]= type_construction_4 : ttype_construction[i] = "Ригели фахверка"	 : iix[i] = 1 : iiy[i] = 1 : iiu [i] = 150
+i=i+1 : itype_construction[i]= type_construction_5 : ttype_construction[i] = "Связи крестовые"	 : iix[i] = 2 : iiy[i] = 1 : iiu [i] = 200
+i=i+1 : itype_construction[i]= type_construction_6 : ttype_construction[i] = "Связи раскосные"	 : iix[i] = 1 : iiy[i] = 1 : iiu [i] = 200
+i=i+1 : itype_construction[i]= type_construction_7 : ttype_construction[i] = "Распорки"			 : iix[i] = 1 : iiy[i] = 1 : iiu [i] = 200
+i=i+1 : itype_construction[i]= type_construction_8 : ttype_construction[i] = "ВП фермы"			 : iix[i] = 1 : iiy[i] = 1 : iiu [i] = 150
+i=i+1 : itype_construction[i]= type_construction_9 : ttype_construction[i] = "НП фермы"			 : iix[i] = 1 : iiy[i] = 1 : iiu [i] = 300
+i=i+1 : itype_construction[i]= type_construction_10 : ttype_construction[i] = "ОП раскос Фермы"	 : iix[i] = 1 : iiy[i] = 1 : iiu [i] = 150
+i=i+1 : itype_construction[i]= type_construction_11 : ttype_construction[i] = "РР раскос Фермы"	 : iix[i] = 1 : iiy[i] = 1 : iiu [i] = 180
+!===========================================================================================
+IF DEBUG = 1 THEN
+	ds = 100
+	ws = 100
+	name_prof_i = 2
+	type_construction = 3
+ENDIF
+!===========================================================================================
+!==================== Расчет радиусов инерции сечений ======================================
+IF name_prof_i = 1 THEN		! Круглая труба
+	ix = (SQR(ds*ds+(ds-ws)*(ds-ws)))/4
+	iy = ix
+ENDIF
+IF name_prof_i = 2 THEN		! Квадратная труба
+	ix = 0.38*ds
+	iy = 0.4*ws
+ENDIF
+IF name_prof_i = 3 OR name_prof_i = 9 THEN		! Швеллер, гнутый швеллер
+	ix = 0.39*ds
+	iy = 0.29*ws
+ENDIF
+IF name_prof_i = 4 THEN		! Двутавр
+	ix = 0.43*ds
+	iy = 0.24*ws
+ENDIF
+IF name_prof_i = 5 OR name_prof_i = 8 THEN		! Уголок, гнутый уголок
+	if ds-ws < EPS then
+		ix = 0.3*ds
+		iy = 0.3*ws
+	else
+		ix = 0.32*ds
+		iy = 0.28*ws
+	endif
+ENDIF
+
+!===========================================================================================
+!==================== Расчет использования сечения по гибкости ====================
+IF type_construction > 1  THEN
+	yc = 1.1 ! Коэф-нт запаса 10%
+	j = type_construction
+	ikx = iix[j]: iky = iiy[j]: iku = iiu[j]
+	ix_r = ikx * l_pos_prof / ix / iku * yc 
+	iy_r = iky * l_pos_prof / iy / iku * yc
+	ix_t = "ix=" + STR("%m",ix_r)
+	iy_t = "iy=" + STR("%m",iy_r)
+	
+	IF (ix_r-1)>EPS or (iy_r-1)>EPS THEN
+		error_msg = "Ошибка (гибкость):"+" "+ix_t+", "+iy_t
+	ELSE
+		error_msg = ""
+	ENDIF
+
+	result_msg = "Результат (гибкость):"+" "+ix_t+", "+iy_t
+ENDIF
+
+END error_msg , result_msg
+
+
+!===========================================================================================
+
+

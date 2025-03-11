@@ -1,0 +1,312 @@
+
+dim arr_t[]
+values "gs_detlevel_3D" `Простой`,`Детальный`,`Откл.`
+
+if gs_detlevel_3D = `Простой` or gs_detlevel_3D = `Откл.` then
+	LOCK "show_weld", "show_list"
+endif
+
+
+values "t_proj_down" "Низ элемента", "Низ диапазона этажа", "П. сечения этажа", "Пользовательский"
+values "t_proj_up" "Верх элемента", "Верх диапазона этажа", "П. сечения этажа", "Пользовательский"
+if t_proj_down<>"Пользовательский" then LOCK "h_proj_down"
+if t_proj_up<>"Пользовательский" then LOCK "h_proj_up"
+if t_proj_down="Низ элемента" then 
+	parameters is_show_lower = 0
+	LOCK "is_show_lower"
+endif
+if t_proj_up="Верх элемента" then
+	parameters is_show_upper = 0
+	LOCK "is_show_upper"
+endif
+
+if not(use_mvo_h) then LOCK "t_proj_down","t_proj_up","is_show_lower","is_show_upper","h_proj_down","h_proj_up"
+if gs_detlevel_3D <> `Детальный` then LOCK "show_weld", "weld_L_strih_mm", "weld_Step_strih_mm", "weld_mat_arr"
+dim mat_by_type_code_t[] : i=0
+dim mat_by_type_t[] : i=0
+i=i+1 : mat_by_type_t[i] = "Не выделять" : mat_by_type_code_t[i] = 1
+i=i+1 : mat_by_type_t[i] = "По типу антикоррозийной защиты" : mat_by_type_code_t[i] = 2
+i=i+1 : mat_by_type_t[i] = "По типу огнезащиты" : mat_by_type_code_t[i] = 3
+i=i+1 : mat_by_type_t[i] = "По группе(типу) конструкций" : mat_by_type_code_t[i] = 4
+i=i+1 : mat_by_type_t[i] = "По огнестойкости" : mat_by_type_code_t[i] = 5
+i=i+1 : mat_by_type_t[i] = "По марке стали" : mat_by_type_code_t[i] = 6
+i=i+1 : mat_by_type_t[i] = "По типу спецификации" : mat_by_type_code_t[i] = 7
+i=i+1 : mat_by_type_t[i] = "Элементы узлов/основные элементы" : mat_by_type_code_t[i] = 8
+values "mat_by_type" mat_by_type_t
+var = mat_by_type : arr_t = mat_by_type_t : gosub "get_inx"
+if inx>0 then 
+	mat_by_type_code = mat_by_type_code_t[inx]
+else
+	mat_by_type_code = 0
+endif
+parameters mat_by_type_code = mat_by_type_code
+if mat_by_type_code = 1 then LOCK "ignore_mat"
+
+if not(filter_type) then 
+	LOCK "hide_type", "show_type"
+else
+	dim t1[] : t1[1]=" " : j = 0
+	for i=1 to vardim1(hide_type)
+		if hide_type[i]<>" " and hide_type[i]<>"*" and strlen(hide_type[i])>0 then
+			j = j + 1
+			space = " " : var = hide_type[i] : gosub "trim_space"
+			space = " " : var = var : gosub "trim_space"
+			t1[j] = STRTOLOWER(var)
+		endif
+	next i
+	parameters hide_type_clear = t1
+
+	dim t2[] : t2[1]="*" : j = 0
+	for i=1 to vardim1(show_type)
+		if show_type[i]<>" " and show_type[i]<>"*" and strlen(show_type[i])>0 then
+			j = j + 1
+			space = " " : var = show_type[i] : gosub "trim_space"
+			space = " " : var = var : gosub "trim_space"
+			t2[j] = STRTOLOWER(show_type[i])
+		endif
+	next i
+	parameters show_type_clear = t2
+endif
+!!-------------------------------------------------------
+!!--------------- Антикоррозийка ------------------------
+!!-------------------------------------------------------
+dim cov_type_arr[] : i=0
+i=i+1 : cov_type_arr[i] = "Нет"
+i=i+1 : cov_type_arr[i] = "тип 1"
+i=i+1 : cov_type_arr[i] = "тип 2"
+i=i+1 : cov_type_arr[i] = "тип 3"
+i=i+1 : cov_type_arr[i] = "тип 4"
+n_cov = i
+parameters cov_type_arr = cov_type_arr
+if vardim1(cov_mat_arr)<>n_cov then 
+	dim cov_mat_arr_t[]
+	min_n = max(vardim1(cov_mat_arr), n_cov)
+	max_n = max(vardim1(cov_mat_arr), n_cov)
+	for i=1 to min_n
+		cov_mat_arr_t[i] = cov_mat_arr[i]
+	next i
+	for i=min_n+1 to max_n
+		cov_mat_arr_t[i] = 0
+	next i
+	parameters cov_mat_arr = cov_mat_arr_t
+endif
+!!-------------------------------------------------------
+
+!!-------------------------------------------------------
+!!-------------------- Огнезащита -----------------------
+!!-------------------------------------------------------
+dim fire_keep_type_arr[] : i=0
+i = i + 1 : fire_keep_type_arr[i] = "Не требует защиты"
+i = i + 1 : fire_keep_type_arr[i] = "Обеспечивается металлом"
+i = i + 1 : fire_keep_type_arr[i] = "Тонкослойная огнезащита"
+i = i + 1 : fire_keep_type_arr[i] = "Конструктивная огнезащита"
+n_fire_keep = i
+parameters fire_keep_type_arr=fire_keep_type_arr
+if vardim1(fire_keep_mat_arr)<>n_fire_keep then 
+	dim fire_keep_mat_arr_t[]
+	min_n = max(vardim1(fire_keep_mat_arr), n_fire_keep)
+	max_n = max(vardim1(fire_keep_mat_arr), n_fire_keep)
+	for i=1 to min_n
+		fire_keep_mat_arr_t[i] = fire_keep_mat_arr[i]
+	next i
+	for i=min_n+1 to max_n
+		fire_keep_mat_arr_t[i] = 0
+	next i
+	parameters fire_keep_mat_arr = fire_keep_mat_arr_t
+endif
+!!-------------------------------------------------------
+
+!!-------------------------------------------------------
+!!--------------- Типы конструкций ----------------------
+!!-------------------------------------------------------
+dim konstr_type_arr[] : i=0
+i = i + 1 : konstr_type_arr[i] = "Балки"
+i = i + 1 : konstr_type_arr[i] = "Колонны"
+i = i + 1 : konstr_type_arr[i] = "Прогоны"
+i = i + 1 : konstr_type_arr[i] = "Фермы"
+i = i + 1 : konstr_type_arr[i] = "Емкости"
+i = i + 1 : konstr_type_arr[i] = "Связи"
+i = i + 1 : konstr_type_arr[i] = "Фахверки"
+i = i + 1 : konstr_type_arr[i] = "Площадки"
+i = i + 1 : konstr_type_arr[i] = "Лестницы"
+i = i + 1 : konstr_type_arr[i] = "Подкрановые пути"
+i = i + 1 : konstr_type_arr[i] = "Прочее"
+n_konstr = i
+parameters konstr_type_arr=konstr_type_arr
+if vardim1(konstr_mat_arr)<>n_konstr then 
+	dim konstr_mat_arr_t[]
+	min_n = max(vardim1(konstr_mat_arr), n_konstr)
+	max_n = max(vardim1(konstr_mat_arr), n_konstr)
+	for i=1 to min_n
+		konstr_mat_arr_t[i] = konstr_mat_arr[i]
+	next i
+	for i=min_n+1 to max_n
+		konstr_mat_arr_t[i] = 0
+	next i
+	parameters konstr_mat_arr = konstr_mat_arr_t
+endif
+!!-------------------------------------------------------
+
+!!-------------------------------------------------------
+!!------------------ Огнестойкость ----------------------
+!!-------------------------------------------------------
+dim fire_type_arr[] : i=0
+i = i + 1 : fire_type_arr[i] = "Несущие конструкции"
+i = i + 1 : fire_type_arr[i] = "Стены лестничных клеток"
+i = i + 1 : fire_type_arr[i] = "Стропильные конструкции бесчердачного покрытия"
+i = i + 1 : fire_type_arr[i] = "Настил бесчердачного покрытия"
+i = i + 1 : fire_type_arr[i] = "Межэтажные перекрытия"
+i = i + 1 : fire_type_arr[i] = "Марши и площадки лестниц"
+i = i + 1 : fire_type_arr[i] = "Не требует защиты"
+n_fire = i
+parameters fire_type_arr=fire_type_arr
+if vardim1(fire_mat_arr)<>n_fire then 
+	dim fire_mat_arr_t[]
+	min_n = max(vardim1(fire_mat_arr), n_fire)
+	max_n = max(vardim1(fire_mat_arr), n_fire)
+	for i=1 to min_n
+		fire_mat_arr_t[i] = fire_mat_arr[i]
+	next i
+	for i=min_n+1 to max_n
+		fire_mat_arr_t[i] = 0
+	next i
+	parameters fire_mat_arr = fire_mat_arr_t
+endif
+!!-------------------------------------------------------
+
+!!!-------------------------------------------------------
+!!!------------------- Марка стали -----------------------
+!!!-------------------------------------------------------
+dim stal_type_arr[] : stal_type_arr[1] = ""
+dim stal_gost_arr[] : stal_gost_arr[1] = "" : i=0
+
+var1 = " ": var2 = " "
+ch1 = open("text", "Сталь.txt", "separator='\t', mode=ro, LIBRARY")
+i = 1
+11:
+n = input (ch1, i, 1, var1, var2)
+if n <> -1 then
+	if vartype(var1)=2 and vartype(var2)=2 then
+		stal_type_arr[i] = var1
+		stal_gost_arr[i] = var2
+	endif
+	i = i + 1
+	goto 11
+else
+	goto "close1"
+endif
+"close1":
+close ch1
+
+n_stal = i
+parameters stal_type_arr=stal_type_arr, stal_gost_arr=stal_gost_arr
+if vardim1(stal_mat_arr)<>n_stal then 
+	dim stal_mat_arr_t[]
+	min_n = max(vardim1(stal_mat_arr), n_stal)
+	max_n = max(vardim1(stal_mat_arr), n_stal)
+	for i=1 to min_n
+		stal_mat_arr_t[i] = stal_mat_arr[i]
+	next i
+	for i=min_n+1 to max_n
+		stal_mat_arr_t[i] = 0
+	next i
+	parameters stal_mat_arr = stal_mat_arr_t
+endif
+!!!-------------------------------------------------------
+
+!!-------------------------------------------------------
+!!--------------- Тип спецификации ----------------------
+!!-------------------------------------------------------
+dim type_spec_type_arr[] : i=0
+i = i + 1 : type_spec_type_arr[i] = "Металл"
+i = i + 1 : type_spec_type_arr[i] = "Изделие"
+i = i + 1 : type_spec_type_arr[i] = "Не специфицировать"
+n_type_spec = i
+parameters type_spec_type_arr=type_spec_type_arr
+if vardim1(type_spec_mat_arr)<>n_type_spec then 
+	dim type_spec_mat_arr_t[]
+	min_n = max(vardim1(type_spec_mat_arr), n_type_spec)
+	max_n = max(vardim1(type_spec_mat_arr), n_type_spec)
+	for i=1 to min_n
+		type_spec_mat_arr_t[i] = type_spec_mat_arr[i]
+	next i
+	for i=min_n+1 to max_n
+		type_spec_mat_arr_t[i] = 0
+	next i
+	parameters type_spec_mat_arr = type_spec_mat_arr_t
+endif
+parameters type_spec_mat_arr[3] = ignore_mat
+!!-------------------------------------------------------
+
+
+!!-------------------------------------------------------
+!!----------------- Тип элемента ------------------------
+!!-------------------------------------------------------
+dim connect_type_arr[] : i=0
+i = i + 1 : connect_type_arr[i] = "Элемент узла"
+i = i + 1 : connect_type_arr[i] = "Основной элемент"
+parameters connect_type_arr=connect_type_arr
+!!-------------------------------------------------------
+
+!!-------------------------------------------------------
+!!--------------------- Болты ---------------------------
+!!-------------------------------------------------------
+n_type_b = 15
+if vardim1(bolt_ang1)<>n_type_b or bolt_sbr then 
+	dim bolt_ang_t[][]
+	dim bolt_top_t[]
+	for i=1 to n_type_b
+		bolt_ang_t[i][1] = 0
+		bolt_ang_t[i][2] = 0
+		bolt_top_t[i]=0
+	next i
+	parameters bolt_ang1 = bolt_ang_t, bolt_ang2 = bolt_ang_t, bolt_top=bolt_top_t, bolt_side=bolt_top_t, bolt_hide=bolt_top_t, bolt_sbr=0
+endif
+
+if GLOB_MODPAR_NAME = "bolt_top" then
+	for i=1 to n_type_b
+		if bolt_top[i] then
+			bolt_side[i]=0
+			bolt_hide[i]=bolt_hide_inv
+		endif
+	next i
+	parameters bolt_side=bolt_side, bolt_hide=bolt_hide
+endif
+
+if GLOB_MODPAR_NAME = "bolt_side" then
+	for i=1 to n_type_b
+		if bolt_side[i] then
+			bolt_top[i]=0
+			bolt_hide[i]=bolt_hide_inv
+		endif
+	next i
+	parameters bolt_top=bolt_top, bolt_hide=bolt_hide
+endif
+!!-------------------------------------------------------
+
+values{2} "show_weld" ishow_weld, tshow_weld
+
+end
+"get_inx":
+	inx = 0
+	for i=1 to vardim1(arr_t)
+		if var = arr_t[i] then inx = i
+	next i
+return
+
+"trim_space":
+	if vartype(var) = 2 then
+		DO
+			is_trim = 0
+			lvar = strlen(var)
+			is_first_space = (strstr(STRSUB (var, 1, 1),space)>0)
+			is_end_space = (strstr(STRSUB (var, lvar, 1),space)>0)
+			if is_first_space then
+				var = STRSUB (var, 2, lvar-1)
+				lvar = strlen(var)
+			endif
+			if is_end_space then var = STRSUB (var, 1, lvar-1)
+			is_trim = is_first_space + is_end_space
+		WHILE is_trim <> 0
+	endif
+return

@@ -68,7 +68,7 @@ def CreateGSM(folders: dict):
     gsm_folder = folders['GSM']
     xml_folder = folders['XML_TEMP']
     devKit = folders['DEVKIT']
-    param = [f'"{devKit}"', 'x2l -l CYR',
+    param = [f'"{devKit}"', 'finalizelibrary -l CYR -verbose 2',
              f'"{xml_folder}"', f'"{gsm_folder}"']
     return run_shell_command(param)
 
@@ -506,6 +506,8 @@ def run(configPath: pathlib.WindowsPath, gdl_root: pathlib.WindowsPath):
                       onerror=handleRemoveReadonly)
     print('Готово!')
 
+# def g(configPath=None, gdl_root=None):
+#     pass
 
 def main(configPath=None, gdl_root=None):
     if configPath is None:

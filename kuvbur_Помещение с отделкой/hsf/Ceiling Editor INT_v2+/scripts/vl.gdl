@@ -1,0 +1,897 @@
+
+! === Menu settings ===
+values "menuID" 1, 2, 3, 4, 5, 6, 7, 8
+
+if GLOB_UI_BUTTON_ID > 0 and GLOB_UI_BUTTON_ID < 10 then
+	parameters menuID = GLOB_UI_BUTTON_ID
+endif
+if GLOB_UI_BUTTON_ID = 11 or GLOB_UI_BUTTON_ID = 12 then
+	parameters bChainXY = GLOB_UI_BUTTON_ID - 11
+endif
+
+
+! === Design ===
+values "i3Dmode" 1, 2
+
+values "iCeiPanelType" stCeiPanelTypesID
+
+values "xSizCeiPanel" range [defValMinSizCeiPanel, )
+values "ySizCeiPanel" range [defValMinSizCeiPanel, )
+values "thkCeiPanel" range [defValMinThkCeiPanel, defValMaxThkCeiPanel]
+
+if bChainXY then
+	if GLOB_MODPAR_NAME = "ySizCeiPanel" then
+		parameters xSizCeiPanel = ySizCeiPanel
+	else
+		parameters ySizCeiPanel = xSizCeiPanel
+	endif
+endif
+
+
+! === Edges and Borders ===
+values "iWallConnType" 1, 2, 3, 4
+values "hBorder", range [thkCeiPanel, )
+values "thkBorder" range (0, defValMaxThkBorder)
+
+if not(bClosedBorder) then lock "hBorder", "thkBorder", "matBorder"
+
+if GLOB_MODPAR_NAME = "bClosedBorder" then
+	if bClosedBorder then
+		for w = vardim1 (hBorderWall) + 1 to ncont
+			parameters hBorderWall[w] = hBorder
+		next w
+	endif
+	parameters hBorderWall[ncont + 1] = 0
+endif
+if GLOB_MODPAR_NAME = "hBorder" then
+	ww = 0
+	for w = 1 to ncont - 1
+		ww = ww + 1
+		parameters hBorderWall[ww] = hBorder
+	next w
+	for w = 1 to nHoles
+		for q = 1 to n_hpoly[w] - 1
+			ww = ww + 1
+			parameters hBorderWall[ww] = hBorder
+		next q
+	next w
+endif
+for w = 1 to vardim1 (hBorderWall)
+	if hBorderWall[w] < thkCeiPanel then parameters hBorderWall[w] = thkCeiPanel
+next w
+
+values "iEdgeTypeX" 1, 2, 3, 4
+values "iEdgeTypeY" 1, 2, 3, 4
+
+if not(iEdgeTypeX < 3 or iEdgeTypeY < 3) then lock "ltEdgeType1"
+if not(iEdgeTypeX = 3 or iEdgeTypeY = 3) then lock "ltEdgeType2"
+if not(iEdgeTypeX = 4 or iEdgeTypeY = 4) then lock "ltEdgeType3"
+if iEdgeTypeX < 3 and iEdgeTypeY < 3 and iWallConnType < 3 then lock "matEdge"
+
+values "thkEdges" range [min (defValMinThkEdge, thkCeiPanel / 4), )
+values "wEdges" range [max (defValMinWidthEdge, thkCeiPanel / 2), min (defValMaxWidthEdge, xSizCeiPanel / 2, ySizCeiPanel / 2)]
+
+if not(iEdgeTypeX = 3 or iEdgeTypeY = 3) then
+	lock "thkEdges"
+endif
+if iEdgeTypeX = 1 and iEdgeTypeY = 1 then
+	lock "wEdges"
+endif
+
+! === Editing ===
+
+if not(bSetOrigin) then lock "penOriginFill", "penOriginFill_num"
+if GLOB_MODPAR_NAME ="bSetOrigin" and bSetOrigin then
+	parameters bActiveSelection = 0,
+		bShowAccPalette = 0
+endif
+if not(bShowAccPalette) then lock "penAccPalette", "penAccPalette_num"
+
+values "nIntHotspots" 0, 1, 2, 3, 4, 5, 6
+
+if bMovedIntNodes then lock "nIntHotspots"
+
+if GLOB_MODPAR_NAME = "bShowAccPalette" and bShowAccPalette then
+	parameters bSetOrigin = 0,
+		bActiveSelection = 0
+endif
+
+
+! === Accessories (group) ===
+
+values "iAccTypeGroup" 1, 2, 3, 4, 9
+values "iTypeAccVent" stAccVentTypesID
+values "iTypeAccLig" stAccLigTypesID
+values "iTypeAccSaf" stAccSafTypesID
+values "iTypeAccAud" stAccAudTypesID
+
+values "nGridX" 1, 2, 3, range [4, )
+values "nGridY" 1, 2, 3, range [4, )
+
+if nGridX = 1 then
+	parameters bShiftX = 0
+	lock "bShiftX"
+endif
+if nGridY = 1 then
+	parameters bShiftY = 0
+	lock "bShiftY"
+endif
+if GLOB_MODPAR_NAME = "bShiftX" and bShiftX then parameters bShiftY = 0
+if GLOB_MODPAR_NAME = "bShiftY" and bShiftY then parameters bShiftX = 0
+
+values "iAccRotation90" 999, 0, 90, 180, -90
+values "iPanelRotation90" 999, 0, 90, 180, -90
+
+if bActiveSelection then
+	values "iClearAccessories" 1, 2, 3
+else
+	values "iClearAccessories" 2
+endif
+
+if GLOB_MODPAR_NAME ="xPosSelection" or GLOB_MODPAR_NAME ="yPosSelection" then
+	ddx = max (selRect[2][1] - selRect[1][1], defValSelRect)
+	ddy = max (selRect[2][2] - selRect[1][2], defValSelRect)
+	selRect[1][1] = xPosSelection - ddx / 2
+	selRect[2][1] = xPosSelection + ddx / 2
+	selRect[1][2] = yPosSelection - ddy / 2
+	selRect[2][2] = yPosSelection + ddy / 2
+	parameters selRect = selRect
+endif
+if GLOB_MODPAR_NAME = "selRect" then
+	parameters xPosSelection = (selRect[2][1] + selRect[1][1]) / 2,
+		yPosSelection = (selRect[2][2] + selRect[1][2]) / 2
+endif
+
+if GLOB_MODPAR_NAME = "bActiveSelection" and bActiveSelection then
+	parameters bSetOrigin = 0,
+		bShowAccPalette = 0
+endif
+
+if not(bActiveSelection) then
+	lock "nGridX", "nGridY",
+		"bShiftX", "bShiftY"
+	if menuID = 4 then
+!		lock "iAccTypeGroup"
+		lock "iTypeAccVent", "iTypeAccLig", "iTypeAccSaf", "iTypeAccAud",
+			"iChgPattern"
+!		lock "matChgPattern",
+!			"penAccVent", "penAccVent_num", "matAccVent",
+!			"penAccLig", "penAccLig_num", "matAccLig",
+!			"penAccSaf", "penAccSaf_num", "matAccSaf",
+!			"penAccAud", "penAccAud_num", "matAccAud"
+		lock "iAccRotation90", "iPanelRotation90"
+	endif
+endif
+
+
+! === Accessories (unique) ===
+
+values "iChgPattern" stCeiPanelTypesID
+
+values "iChgAttr" 1, 2
+
+if not(bShowAccPalette) and menuID = 5 then
+	lock "iTypeAccVent", "iTypeAccLig", "iTypeAccSaf", "iTypeAccAud",
+		"iChgPattern"
+!	lock "matChgPattern",
+!		"penAccVent", "penAccVent_num", "matAccVent",
+!		"penAccLig", "penAccLig_num", "matAccLig",
+!		"penAccSaf", "penAccSaf_num", "matAccSaf",
+!		"penAccAud", "penAccAud_num", "matAccAud"
+endif
+
+
+! === Appearance ===
+
+if bOverrideMVO[2] then
+	values "gs_detlevel_3d_m", 0, 1, 2
+	values "gs_detlevel_3d" stDet3d
+	if GLOB_MODPAR_NAME = "gs_detlevel_3d_m" then
+		if gs_detlevel_3d_m = 0 then gs_detlevel_3d = stDet3d[1]
+		if gs_detlevel_3d_m = 1 then gs_detlevel_3d = stDet3d[2]
+		if gs_detlevel_3d_m = 2 then gs_detlevel_3d = stDet3d[3]
+		parameters gs_detlevel_3d = gs_detlevel_3d
+	endif
+	
+	values "gs_resol" range [3, )
+	
+	if gs_detlevel_3d_m = 0 then lock "bShowAcc3d", "gs_shadow", "gs_resol"
+	if gs_detlevel_3d_m = 1 then lock "gs_resol"
+else
+	values "gs_resol" gs_resol
+	values "gs_detlevel_3d_m" gs_detlevel_3d_m
+endif
+
+if not(bShowGridX) and not(bShowGridY) then lock "penGrid", "penGrid_num"
+
+if not(bShowPatternSymbol) and menuID <> 5 then lock "penPattSymbol_num", "penPattSymbol"
+!if not(bShowAccPalette) and menuID = 5 then lock "penPattSymbol_num", "penPattSymbol"
+
+
+! == Text Style ===
+
+if bOverrideMVO[3] then
+	if (GLOB_CONTEXT = 1 or GLOB_CONTEXT = 5) and menuID = 7 then
+		dim font_tlst[], fontnames[]
+		qq= request ("FONTNAMES_LIST", "", font_tlst)
+		for w=1 to vardim1 (font_tlst)
+			if strsub (font_tlst[w], 1, 1)<>"@" then fontnames[vardim1 (fontnames)+1]= font_tlst[w]
+		next w
+		gosub "fontlist"
+	!!	values "fontType" fontnames
+	endif
+	
+	if sizFont < 1 then parameters sizFont = 1
+	if sizFontImp < conv then parameters sizFontImp = conv
+	
+	if GLOB_MODPAR_NAME ="sizFont" then
+		parameters sizFontImp = sizFont * conv
+	endif
+	if GLOB_MODPAR_NAME ="sizFontImp" then
+		parameters sizFont = sizFontImp / conv
+	endif
+	
+	if not(bOpaque) then lock "penOpaque_num", "penOpaque"
+	if not(bFrame) then lock "penFrame_num", "penFrame"
+	
+	values "iAlignment" 0-1, 0, 1
+	values "textLeading" range [50, 200]
+else
+	values "fontType" fontType
+endif
+	
+if not(bTextArea) then lock "prfxArea"
+
+for w = 1 to vardim1 (textFields)
+	pos = strstr (textFields[w], "\t")
+	while pos > 0 do
+		textFields[w] = strsub (textFields[w], 1, pos - 1) + strsub (textFields[w], pos + 2, 999)
+		pos = strstr (textFields[w], "\t")
+	endwhile
+	pos = strstr (textFields[w], "\n")
+	while pos > 0 do
+		textFields[w] = strsub (textFields[w], 1, pos - 1) + strsub (textFields[w], pos + 2, 999)
+		pos = strstr (textFields[w], "\n")
+	endwhile
+	parameters textFields[w] = textFields[w]
+next w
+
+
+! === TOOLBOX ===
+
+if bShowAccPalette then
+	values "wTB" range [wminTB, wmaxTB]
+	if GLOB_MODPAR_NAME = "wTB" or GLOB_MODPAR_NAME = "bShowAccPalette" then
+		parameters hTB = hTB
+	else
+		values "hTB" range [hminTB, hmaxTB]
+	endif
+	if GLOB_MODPAR_NAME = "hTB" then
+		parameters wTB = wTB
+	else
+	endif
+	
+	values "openTB" 0, wTBicon
+	values "openTBside" 0, hTBicon / 2
+	
+	if openToolID > 0 then
+		if openTB[openToolID] < eps then
+			parameters openToolID = 0
+		else
+			parameters openToolID = openToolID
+		endif
+	!!else
+	!!	parameters openToolID = openToolID
+	endif
+	
+	parameters openTBside[vardim2 (idTBtools) + 1] = 0
+	
+	if openTBsideID > 0 then
+		if openTBside[openTBsideID] < eps then
+			parameters openTBsideID = 0
+		else
+			parameters openTBsideID = openTBsideID 
+		endif
+	endif
+	
+	if GLOB_MODPAR_NAME <> "openTBside" then
+		openTBsideID = 0
+		parameters openTBsideID = 0
+		if GLOB_MODPAR_NAME <> "openTB" then
+			openToolID = 0
+			parameters openToolID = 0
+		endif
+	endif
+	for w = 1 to nTools
+		if w <> openToolID or GLOB_MODPAR_NAME = "openTBside" then parameters openTB[w] = 0
+	next w
+	if not(bMoving) and openToolID > 0 then parameters openTB[openToolID] = 0
+	
+	if openToolID > 0 then
+		if openTBsideID > 0 then
+			toolid = idTBtools[openToolID][openTBsideID]
+			if toolid <> 0 then
+				parameters idTBtool[openToolID] = toolid
+				if openToolID = 1 then parameters iChgPattern = idTBtool[1]
+				if openToolID = 5 then parameters iTypeAccVent = idTBtool[5]
+				if openToolID = 6 then parameters iTypeAccLig = idTBtool[6]
+				if openToolID = 7 then parameters iTypeAccSaf = idTBtool[7]
+				if openToolID = 8 then parameters iTypeAccAud = idTBtool[8]
+			endif
+		endif
+	endif
+	for w = 1 to vardim1 (openTBside)
+		if w <> openTBsideID then parameters openTBside[w] = 0
+	next w
+	if not(bMoving) or openToolID <> openToolID_0 then
+		if openTBsideID>0 and openTBsideID<=vardim1(openTBside) then parameters openTBside[openTBsideID] = 0
+	endif
+	
+	parameters activeToolID = activeToolID
+	for w = 1 to nTools
+		if w <> activeToolID then
+			parameters xPosTBtool[w] = 0,
+				yPosTBtool[w] = 0
+		endif
+	next w
+	if not(GLOB_MODPAR_NAME = "xPosTBtool" or GLOB_MODPAR_NAME = "yPosTBtool") and activeToolID > 0 then
+		parameters xPosTBtool[activeToolID] = 0
+		parameters yPosTBtool[activeToolID] = 0
+	endif
+	
+	qq = APPLICATION_QUERY ("parameter_script", "firstoccasion_in_progress", isFirstRun)
+	if isFirstRun then
+		if GLOB_MODPAR_NAME = "xPosTBtool" or GLOB_MODPAR_NAME = "yPosTBtool" then
+			if activeToolID > 0 and actXgrid >= 1 and actXgrid <= dimx and actYgrid >=1 and actYgrid <= dimy then
+				if typTBtool[activeToolID] = "P" then
+					parameters iPanelType[actXgrid][actYgrid] = idTBtool[activeToolID]
+				endif
+				if typTBtool[activeToolID] = "A" then
+					parameters accType[actXgrid][actYgrid] = idTBtool[activeToolID]
+				endif
+				if typTBtool[activeToolID] = "Z" then
+					iFunc = idTBtool[activeToolID]
+					if accType[actXgrid][actYgrid] > 0 then
+						angA = accRot[actXgrid][actYgrid]
+						if iFunc = 1 then
+							angA = (angA + 90 / 2) mod 360
+							if angA > 180 then angA = -360 + angA
+							if angA < -180 then angA = 360 + angA
+							parameters accRot[actXgrid][actYgrid] = angA
+						endif
+						if iFunc = 2 then
+							angA = (angA - 90 / 2) mod 360
+							if angA > 180 then angA = -360 + angA
+							if angA < -180 then angA = 360 + angA
+							parameters accRot[actXgrid][actYgrid] = angA
+						endif
+						if iFunc = 3 then
+							parameters accType[actXgrid][actYgrid] = 0
+						endif
+					endif
+					if iPanelType[actXgrid][actYgrid] > -0.5 then
+						angP = panelRot[actXgrid][actYgrid]
+						if iFunc = 11 then
+							angP = (angP + 90 / 2) mod 360
+							if angP > 180 then angP = -360 + angP
+							if angP < -180 then angP = 360 + angP
+							parameters panelRot[actXgrid][actYgrid] = angP
+						endif
+						if iFunc = 12 then
+							angP = (angP - 90 / 2) mod 360
+							if angP > 180 then angP = -360 + angP
+							if angP < -180 then angP = 360 + angP
+							parameters panelRot[actXgrid][actYgrid] = angP
+						endif
+						if iFunc = 13 then
+							parameters iPanelType[actXgrid][actYgrid] = 0
+						endif
+					endif
+				endif
+			endif
+		endif
+	endif
+endif
+
+if GLOB_MODPAR_NAME = "iChgPattern" then
+	parameters idTBtool[1] = iChgPattern
+endif
+if GLOB_MODPAR_NAME = "iTypeAccVent" then
+	parameters idTBtool[5] = iTypeAccVent
+endif
+if GLOB_MODPAR_NAME = "iTypeAccLig" then
+	parameters idTBtool[6] = iTypeAccLig
+endif
+if GLOB_MODPAR_NAME = "iTypeAccSaf" then
+	parameters idTBtool[7] = iTypeAccSaf
+endif
+if GLOB_MODPAR_NAME = "iTypeAccAud" then
+	parameters idTBtool[8] = iTypeAccAud
+endif
+
+! === Pen Index Control ===
+if GLOB_MODPAR_NAME = "penOriginFill" then
+	if penOriginFill < 1 or penOriginFill > 255 then
+		penOriginFill = min (max (penOriginFill, 1), 255)
+		parameters penOriginFill = penOriginFill
+	endif
+	parameters penOriginFill_num = penOriginFill
+endif
+if GLOB_MODPAR_NAME = "penOriginFill_num" then
+	if penOriginFill_num < 1 or penOriginFill_num > 255 then
+		penOriginFill_num = min (max (penOriginFill_num, 1), 255)
+		parameters penOriginFill_num = penOriginFill_num
+	endif
+	parameters penOriginFill = penOriginFill_num
+endif
+
+if GLOB_MODPAR_NAME = "penAccPalette" then
+	if penAccPalette < 1 or penAccPalette > 255 then
+		penAccPalette = min (max (penAccPalette, 1), 255)
+		parameters penAccPalette = penAccPalette
+	endif
+	parameters penAccPalette_num = penAccPalette
+endif
+if GLOB_MODPAR_NAME = "penAccPalette_num" then
+	if penAccPalette_num < 1 or penAccPalette_num > 255 then
+		penAccPalette_num = min (max (penAccPalette_num, 1), 255)
+		parameters penAccPalette_num = penAccPalette_num
+	endif
+	parameters penAccPalette = penAccPalette_num
+endif
+
+if GLOB_MODPAR_NAME = "penAccVent" then
+	if penAccVent < 1 or penAccVent > 255 then
+		penAccVent = min (max (penAccVent, 1), 255)
+		parameters penAccVent = penAccVent
+	endif
+	parameters penAccVent_num = penAccVent
+endif
+if GLOB_MODPAR_NAME = "penAccVent_num" then
+	if penAccVent_num < 1 or penAccVent_num > 255 then
+		penAccVent_num = min (max (penAccVent_num, 1), 255)
+		parameters penAccVent_num = penAccVent_num
+	endif
+	parameters penAccVent = penAccVent_num
+endif
+
+if GLOB_MODPAR_NAME = "penAccLig" then
+	if penAccLig < 1 or penAccLig > 255 then
+		penAccLig = min (max (penAccLig, 1), 255)
+		parameters penAccLig = penAccLig
+	endif
+	parameters penAccLig_num = penAccLig
+endif
+if GLOB_MODPAR_NAME = "penAccLig_num" then
+	if penAccLig_num < 1 or penAccLig_num > 255 then
+		penAccLig_num = min (max (penAccLig_num, 1), 255)
+		parameters penAccLig_num = penAccLig_num
+	endif
+	parameters penAccLig = penAccLig_num
+endif
+
+if GLOB_MODPAR_NAME = "penAccSaf" then
+	if penAccSaf < 1 or penAccSaf > 255 then
+		penAccSaf = min (max (penAccSaf, 1), 255)
+		parameters penAccSaf = penAccSaf
+	endif
+	parameters penAccSaf_num = penAccSaf
+endif
+if GLOB_MODPAR_NAME = "penAccSaf_num" then
+	if penAccSaf_num < 1 or penAccSaf_num > 255 then
+		penAccSaf_num = min (max (penAccSaf_num, 1), 255)
+		parameters penAccSaf_num = penAccSaf_num
+	endif
+	parameters penAccSaf = penAccSaf_num
+endif
+
+if GLOB_MODPAR_NAME = "penAccAud" then
+	if penAccAud < 1 or penAccAud > 255 then
+		penAccAud = min (max (penAccAud, 1), 255)
+		parameters penAccAud = penAccAud
+	endif
+	parameters penAccAud_num = penAccAud
+endif
+if GLOB_MODPAR_NAME = "penAccAud_num" then
+	if penAccAud_num < 1 or penAccAud_num > 255 then
+		penAccAud_num = min (max (penAccAud_num, 1), 255)
+		parameters penAccAud_num = penAccAud_num
+	endif
+	parameters penAccAud = penAccAud_num
+endif
+
+if GLOB_MODPAR_NAME = "gs_cont_pen" then
+	if gs_cont_pen < 1 or gs_cont_pen > 255 then
+		gs_cont_pen = min (max (gs_cont_pen, 1), 255)
+		parameters gs_cont_pen = gs_cont_pen
+	endif
+	parameters gs_cont_pen_num = gs_cont_pen
+endif
+if GLOB_MODPAR_NAME = "gs_cont_pen_num" then
+	if gs_cont_pen_num < 1 or gs_cont_pen_num > 255 then
+		gs_cont_pen_num = min (max (gs_cont_pen_num, 1), 255)
+		parameters gs_cont_pen_num = gs_cont_pen_num
+	endif
+	parameters gs_cont_pen = gs_cont_pen_num
+endif
+
+if GLOB_MODPAR_NAME = "gs_fill_pen" then
+	if gs_fill_pen < 1 or gs_fill_pen > 255 then
+		gs_fill_pen = min (max (gs_fill_pen, 1), 255)
+		parameters gs_fill_pen = gs_fill_pen
+	endif
+	parameters gs_fill_pen_num = gs_fill_pen
+endif
+if GLOB_MODPAR_NAME = "gs_fill_pen_num" then
+	if gs_fill_pen_num < 1 or gs_fill_pen_num > 255 then
+		gs_fill_pen_num = min (max (gs_fill_pen_num, 1), 255)
+		parameters gs_fill_pen_num = gs_fill_pen_num
+	endif
+	parameters gs_fill_pen = gs_fill_pen_num
+endif
+
+if GLOB_MODPAR_NAME = "gs_back_pen" then
+	if gs_back_pen < -1 or gs_back_pen > 255 then
+		gs_back_pen = min (max (gs_back_pen, -1), 255)
+		parameters gs_back_pen = gs_back_pen
+	endif
+	parameters gs_back_pen_num = gs_back_pen
+endif
+if GLOB_MODPAR_NAME = "gs_back_pen_num" then
+	if gs_back_pen_num < 1 or gs_back_pen_num > 255 then
+		gs_back_pen_num = min (max (gs_back_pen_num, 1), 255)
+		parameters gs_back_pen_num = gs_back_pen_num
+	endif
+	parameters gs_back_pen = gs_back_pen_num
+endif
+
+if GLOB_MODPAR_NAME = "penGrid" then
+	if penGrid < 1 or penGrid > 255 then
+		penGrid = min (max (penGrid, 1), 255)
+		parameters penGrid = penGrid
+	endif
+	parameters penGrid_num = penGrid
+endif
+if GLOB_MODPAR_NAME = "penGrid_num" then
+	if penGrid_num < 1 or penGrid_num > 255 then
+		penGrid_num = min (max (penGrid_num, 1), 255)
+		parameters penGrid_num = penGrid_num
+	endif
+	parameters penGrid = penGrid_num
+endif
+
+if GLOB_MODPAR_NAME = "penPattSymbol" then
+	if penPattSymbol < 1 or penPattSymbol > 255 then
+		penPattSymbol = min (max (penPattSymbol, 1), 255)
+		parameters penPattSymbol = penPattSymbol
+	endif
+	parameters penPattSymbol_num = penPattSymbol
+endif
+if GLOB_MODPAR_NAME = "penPattSymbol_num" then
+	if penPattSymbol_num < 1 or penPattSymbol_num > 255 then
+		penPattSymbol_num = min (max (penPattSymbol_num, 1), 255)
+		parameters penPattSymbol_num = penPattSymbol_num
+	endif
+	parameters penPattSymbol = penPattSymbol_num
+endif
+
+if GLOB_MODPAR_NAME = "penCeiPanel3d" then
+	if penCeiPanel3d < 1 or penCeiPanel3d > 255 then
+		penCeiPanel3d = min (max (penCeiPanel3d, 1), 255)
+		parameters penCeiPanel3d = penCeiPanel3d
+	endif
+	parameters penCeiPanel3d_num = penCeiPanel3d
+endif
+if GLOB_MODPAR_NAME = "penCeiPanel3d_num" then
+	if penCeiPanel3d_num < 1 or penCeiPanel3d_num > 255 then
+		penCeiPanel3d_num = min (max (penCeiPanel3d_num, 1), 255)
+		parameters penCeiPanel3d_num = penCeiPanel3d_num
+	endif
+	parameters penCeiPanel3d = penCeiPanel3d_num
+endif
+
+if GLOB_MODPAR_NAME = "penText" then
+	if penText < 1 or penText > 255 then
+		penText = min (max (penText, 1), 255)
+		parameters penText = penText
+	endif
+	parameters penText_num = penText
+endif
+if GLOB_MODPAR_NAME = "penText_num" then
+	if penText_num < 1 or penText_num > 255 then
+		penText_num = min (max (penText_num, 1), 255)
+		parameters penText_num = penText_num
+	endif
+	parameters penText = penText_num
+endif
+
+if GLOB_MODPAR_NAME = "penOpaque" then
+	if penOpaque < -1 or penOpaque > 255 then
+		penOpaque = min (max (penOpaque, -1), 255)
+		parameters penOpaque = penOpaque
+	endif
+	parameters penOpaque_num = penOpaque
+endif
+if GLOB_MODPAR_NAME = "penOpaque_num" then
+	if penOpaque_num < -1 or penOpaque_num > 255 then
+		penOpaque_num = min (max (penOpaque_num, -1), 255)
+		parameters penOpaque_num = penOpaque_num
+	endif
+	parameters penOpaque = penOpaque_num
+endif
+
+if GLOB_MODPAR_NAME = "penFrame" then
+	if penFrame < 1 or penFrame > 255 then
+		penFrame = min (max (penFrame, 1), 255)
+		parameters penFrame = penFrame
+	endif
+	parameters penFrame_num = penFrame
+endif
+if GLOB_MODPAR_NAME = "penFrame_num" then
+	if penFrame_num < 1 or penFrame_num > 255 then
+		penFrame_num = min (max (penFrame_num, 1), 255)
+		parameters penFrame_num = penFrame_num
+	endif
+	parameters penFrame = penFrame_num
+endif
+
+! === Override MVO ===
+if not(bOverrideMVO[1]) then	! 2D representation
+	lock "gs_fill_type",
+		"gs_cont_pen", 
+		"gs_cont_pen_num",
+		"gs_fill_pen",
+		"gs_fill_pen_num",
+		"gs_back_pen",
+		"gs_back_pen_num",
+		"bShowGridX",
+		"bShowGridY",
+		"penGrid",
+		"penGrid_num",
+		"bShowPatternSymbol",
+!		"penPattSymbol",
+!		"penPattSymbol_num",
+		"bShowAcc2d"
+endif
+if not(bOverrideMVO[2]) then	! 3D representation
+	lock "gs_detlevel_3d_m",
+		"bShowAcc3d",
+		"gs_shadow",
+		"gs_resol",
+		"penCeiPanel3d",
+		"penCeiPanel3d_num"
+endif
+if not(bOverrideMVO[3]) then	! Text style
+	lock "fontType",
+		"sizFont",
+		"sizFontImp",
+		"penText",
+		"penText_num",
+		"penOpaque",
+		"penOpaque_num",
+		"penFrame",
+		"penFrame_num",
+		"bBold",
+		"bItalic",
+		"bUnderline",
+		"bOpaque",
+		"bFrame",
+		"iAlignment",
+		"textLeading",
+		"bHorizontalText"
+endif
+if not(bOverrideMVO[4]) then	! Text block content
+	lock "bTextArea",
+		"bTextPanelQty",
+		"bTextAccType",
+		"prfxArea",
+		"bTextFields"
+endif
+
+! ---------------------------------------------------------------------------
+
+if not(bIntWiz) and not(bMovedIntNodes) then
+	parameters field_poly = field_poly,
+		field_poly_st = field_poly_st
+endif
+
+
+if GLOB_UI_BUTTON_ID = 21 then 		! add accessories (group)
+	for w = 1 to dimx
+		for q = 1 to dimy
+			if accSel[w][q] then
+				acctyp = 0
+				if iAccTypeGroup = 1 then acctyp = iTypeAccVent
+				if iAccTypeGroup = 2 then acctyp = iTypeAccLig
+				if iAccTypeGroup = 3 then acctyp = iTypeAccSaf
+				if iAccTypeGroup = 4 then acctyp = iTypeAccAud
+				if acctyp > 0 then
+					parameters accType[w][q] = acctyp
+				endif
+				paneltyp = -2
+				if iAccTypeGroup = 9 then paneltyp = iChgPattern
+				if paneltyp > -1.5 then
+					parameters iPanelType[w][q] = paneltyp
+				endif
+			endif
+		next q
+	next w
+endif
+
+if GLOB_UI_BUTTON_ID = 22 then		! clear
+	if iClearAccessories = 1 then	! clear selected (area)
+		for w = nsx1 to nsx2 - 1
+			for q = nsy1 to nsy2 - 1
+				parameters accType[w - ddimx][q - ddimy] = 0,
+					accRot[w - ddimx][q - ddimy] = 0,
+					iPanelType[w - ddimx][q - ddimy] = 0
+			next q
+		next w
+	endif
+	if iClearAccessories = 2 then	! clear all
+		for w = 1 to vardim1 (accType)
+			for q = 1 to vardim2 (accType)
+				parameters accType[w][q] = 0,
+					accRot[w][q] = 0,
+					iPanelType[w][q] = 0
+			next q
+		next w
+	endif
+	if iClearAccessories = 3 then	! clear selected (panel)
+		for w = 1 to dimx
+			for q = 1 to dimy
+				if accSel[w][q] then
+					parameters accType[w][q] = 0,
+						accRot[w][q] = 0,
+						iPanelType[w][q] = 0
+				endif
+			next q
+		next w
+	endif
+endif
+
+if GLOB_UI_BUTTON_ID = 23 then		! rotation accessories / ceiling panel
+	for w = 1 to dimx
+		for q = 1 to dimy
+			if accSel[w][q] then
+				if iAccRotation90 < 999 then parameters accRot[w][q] = iAccRotation90
+				if iPanelRotation90 < 999 then parameters panelRot[w][q] = iPanelRotation90
+			endif
+		next q
+	next w
+endif
+
+
+
+end
+
+! ---------------------------------------------------------------------------
+! ======= Font List ======
+"fontlist":
+dim fontSep[][], nFontSep[], nSameName[], fontSet[]
+fontSep[1][1] = ""
+for w=1 to vardim1 (fontnames)
+	nFontSep[w]= 1
+	fontSep[w][1]= fontnames[w]
+	actFont= fontnames[w]+" "
+	pos= strstr (actFont, " ")
+	ww= 0
+	while pos>0 DO
+		ww= ww+1
+		fontSep[w][ww]= strsub (actFont, 1, pos-1)
+		actFont= strsub (actFont, pos+1, 999)
+		pos= strstr (actFont, " ")
+	endwhile
+	nFontSep[w]= ww
+next w
+for w=1 to vardim1 (fontSep)-1
+	n= 0
+	sameName= 1
+	while n< min (nFontSep[w], nFontSep[w+1]) and n>-0.5 DO
+		if fontSep[w][n+1]=fontSep[w+1][n+1] then
+			n= n+1
+		else
+			nSameName[w]= n
+			n= -1
+		endif
+	endwhile
+next w
+
+dim fcod[], nFcod[]
+fcod[1]= ""
+for w=2 to vardim1 (fontnames)
+	ftxt= ""
+	if nSameName[w-1]>0 then
+		for q=nSameName[w-1]+1 to nFontSep[w]
+			ftxt= ftxt+" "+fontSep[w][q]
+		next q
+		ctrl= 0
+		for q=1 to vardim1 (fcod)
+			if fcod[q]= ftxt then
+				ctrl= 1
+				nFcod[q]= nFcod[q]+1
+			endif
+		next q
+		if ctrl=0 then
+			fcod[vardim1 (nFcod)+1]= ftxt
+			nFcod[vardim1 (nFcod)+1]= 1
+		endif
+	endif
+next w
+
+dim fcod2[], nFcod2[], fcod3[], nFcod3[]
+ww= 0
+for w=1 to vardim1 (fcod)
+	if nFcod[w]>1 then
+		ww= ww+1
+		fcod2[ww]= fcod[w]
+		nFcod2[ww]= nFcod[w]
+	endif
+next w
+
+for w=1 to vardim1 (fcod2)
+	for q=w+1 to vardim1 (fcod2)
+		if nFcod2[w]<nFcod2[q] then
+			qq= nFcod2[w]
+			nFcod2[w]= nFcod2[q]
+			nFcod2[q]= qq
+			qq= fcod2[w]
+			fcod2[w]= fcod2[q]
+			fcod2[q]= qq
+		endif
+	next q
+next w
+
+for w=1 to vardim1 (fcod2)
+	for q=w+1 to vardim1 (fcod2)
+		pos= strstr (fcod2[q], fcod2[w])
+		if pos>0 then
+			fcod2[q]=""
+			nFcod2[w]= nFcod2[w]+nFcod2[q]
+		endif
+	next q
+next w
+ww= 0
+for w=1 to vardim1 (fcod2)
+	if fcod2[w]<>"" then
+		ww= ww+1
+		fcod3[ww]= fcod2[w]
+		nFcod3[ww]= nFcod2[w]
+	endif
+next w
+
+for w=1 to vardim1 (fcod3)
+	for q=w+1 to vardim1 (fcod3)
+		if nFcod3[w]<nFcod3[q] then
+			qq= nFcod3[w]
+			nFcod3[w]= nFcod3[q]
+			nFcod3[q]= qq
+			qq= fcod3[w]
+			fcod3[w]= fcod3[q]
+			fcod3[q]= qq
+		endif
+	next q
+next w
+
+dim fontset2[]
+ww= 0
+for w=1 to vardim1 (fontnames)
+	for q=1 to vardim1 (fcod3)
+		pos= strstr (fontnames[w], fcod3[q])
+		if pos>0 then
+			fontnames[w]= strsub (fontnames[w], 1, pos-1)
+		endif
+	next q
+next w
+
+actFn= ""
+for w=1 to vardim1 (fontnames)
+	if actFn<>fontnames[w] then
+		ww= ww+1
+		actFn= fontnames[w]
+		fontset2[ww]= actFn
+	endif
+next w
+values "fontType" fontset2
+return
+

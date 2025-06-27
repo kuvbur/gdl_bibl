@@ -1,0 +1,1881 @@
+
+scal = GLOB_SCALE / 1000
+! === Model View Option ===
+if not(bOverrideMVO[2]) then	! 3D representation
+	qq = LIBRARYGLOBAL ("Libraryflobals-pokr", "gs_detlevel_3d_m", tmp)
+	if qq > 0 then gs_detlevel_3d_m = tmp
+	qq = LIBRARYGLOBAL ("Libraryflobals-pokr", "bShowAcc3d", tmp)
+	if qq > 0 then bShowAcc3d = tmp
+	qq = LIBRARYGLOBAL ("Libraryflobals-pokr", "gs_shadow", tmp)
+	if qq > 0 then gs_shadow = tmp
+	qq = LIBRARYGLOBAL ("Libraryflobals-pokr", "gs_resol", tmp)
+	if qq > 0 then gs_resol = tmp
+	qq = LIBRARYGLOBAL ("Libraryflobals-pokr", "penCeiPanel3d", tmp)
+	if qq > 0 then penCeiPanel3d = tmp
+	qq = LIBRARYGLOBAL ("Libraryflobals-pokr", "penCeiPanel3d_num", tmp)
+	if qq > 0 then penCeiPanel3d_num = tmp
+endif
+
+! --- Model View Option ---
+
+
+if gs_detlevel_3d_m = 0 then end
+
+if not(gs_shadow) then shadow off
+
+if gs_detlevel_3d_m = 1 then gs_resol = 8
+
+resol gs_resol
+
+
+if bIntWiz then addz ac_ref_height
+
+! === Material definitions with texture ===
+for w = 1 to vardim1 (stCeiPanelTypes)
+	stID = str (stCeiPanelTypesID[w], 1, 0)
+!!	textureFileName = "#" + stID + "_texture_" + stCeiPanelTypes[w]
+	textureFileName = stCeiPanelTypesID[w]
+	if textureFileName > -0.5 then
+		for q = 0 to 3
+			qang = "0"
+			if q = 1 then qang = "90"
+			if q = 2 then qang = "180"
+			if q = 3 then qang = "-90"
+			textureName = "cptexture_" + stID + "_" + qang
+			matName = "mat_" + stID + "_" + qang
+			x0 = xSizCeiPanel
+			y0 = ySizCeiPanel
+			if q mod 2 = 1 then
+				x0 = ySizCeiPanel
+				y0 = xSizCeiPanel
+			endif
+			define texture textureName textureFileName, x0, y0, 574, 90 * q
+	
+			define material matName 20,
+				0.999, 0.999, 0.999,
+				0.71, 0.95, 0.08, 0,
+				1.8, 0,
+				1, 1, 1,
+				0.30, 0.30, 0.30, 0.2,
+				0, -1, ind (texture, textureName)
+		next q
+	endif
+next w
+
+define material "darkglass" 4,
+	0.3, 0.02, 0.02
+
+define material "lampglass" 0,
+	0.98, 0.98, 0.98,
+	1.0, 0.5, 0.5, 0.2,
+	2, 1,
+	0, 0, 0,
+	0.6, 0.6, 0.6, 0
+
+define material "securityglass" 0,
+	0.98, 0.98, 0.98,
+	1.0, 0.5, 0.5, 0.02,
+	2, 1,
+	0, 0, 0,
+	0, 0, 0, 0
+
+mat = ind (material, "mat_100_0")
+if i3Dmode = 2 then
+	if matCeiPanel > 0 then mat = matCeiPanel
+endif
+if matEdge = 0 then matEdge = mat
+
+iDir = 0
+iDirection = 0
+for w = 1 to ncont
+	idx = 2 * w - 1
+	put field_poly[1][idx], field_poly[1][idx + 1]
+next w
+npoli = nsp / 2
+gosub 100
+iDirection = iDir
+
+iDirectionHoles = 0
+if nHoles > 0 then
+	for w = 1 to n_hpoly[1]
+		idx = 2 * w - 1
+		put hole_poly[1][idx], hole_poly[1][idx + 1]
+	next w
+	npoli = nsp / 2
+	gosub 100
+	iDirectionHoles = -iDir
+endif
+
+unID = 10000
+
+!!! === for simple model ===
+!!if gs_detlevel_3d_m = 1 then
+!!	if iEdgeTypeX = 2 then iEdgeTypeX = 1
+!!	if iEdgeTypeX = 4 then iEdgeTypeX = 3
+!!	if iEdgeTypeY = 2 then iEdgeTypeY = 1
+!!	if iEdgeTypeY = 4 then iEdgeTypeY = 3
+!!	if iWallConnType = 2 then iWallConnType = 1
+!!	if iWallConnType = 4 then iWallConnType = 3
+!!endif
+
+! --- fixed parameters ---
+thkEdgesX = min (0.005, thkCeiPanel / 4)
+thkEdgesY = thkEdgesX
+if iEdgeTypeX = 3 then
+	thkEdgesY = thkEdges
+endif 
+if iEdgeTypeY = 3 then
+	thkEdgesX = thkEdges
+endif 
+hEdges = max (min (thkEdgesX, thkEdgesY), thkCeiPanel / 2)
+!!wEdges = min (max (0.03, thkCeiPanel / 2), 0.10)
+zEdgesX = -thkEdgesX + hEdges * (iEdgeTypeY = 4)
+zEdgesY = -thkEdgesY + hEdges * (iEdgeTypeX = 4)
+hCutEdgesX = thkCeiPanel / 2 * (iEdgeTypeY = 2 or iEdgeTypeY = 4)
+hCutEdgesY = thkCeiPanel / 2 * (iEdgeTypeX = 2 or iEdgeTypeX = 4)
+if iWallConnType = 2 or iWallConnType = 4 then
+	zBorder = -min (thkEdgesX, thkEdgesY) + hEdges
+else
+	zBorder = -max (thkEdgesX, thkEdgesY)
+endif
+hCutBorder = thkCeiPanel / 2 * (iWallConnType = 2 or iWallConnType = 4)
+
+! --- polygon angles calculate and hotspots on all vertex ---
+dim angs[], angConns[][2]
+ww = 0
+for w = 1 to ncont - 1
+	ww = ww + 1
+	idx = 2 * w - 1
+	x1 = field_poly[1][idx]
+	y1 = field_poly[1][idx + 1]
+	x2 = field_poly[1][idx + 2]
+	y2 = field_poly[1][idx + 3]
+	dx = x2 - x1
+	dy = y2 - y1
+	lenSegm = sqr (dx ^ 2 + dy ^ 2)
+	alf = -1
+	if lenSegm > eps then
+		if abs (dy) < eps then
+			alf = 180 * (x2 < x1)
+		else
+			alf = acs (dx / lenSegm) * sgn (dy)
+		endif
+		alf = (alf + 360) mod 360
+	endif
+	angs[ww] = alf
+	unID = unID + 1 : hotspot x1, y1, 0, unID
+next w
+for w = 1 to nHoles
+	for q = 1 to n_hpoly[w] - 1
+		ww = ww + 1
+		idx = 2 * q - 1
+		x1 = hole_poly[w][idx]
+		y1 = hole_poly[w][idx + 1]
+		x2 = hole_poly[w][idx + 2]
+		y2 = hole_poly[w][idx + 3]
+		dx = x2 - x1
+		dy = y2 - y1
+		lenSegm = sqr (dx ^ 2 + dy ^ 2)
+		alf = -1
+		if lenSegm > eps then
+			if abs (dy) < eps then
+				alf = 180 * (x2 < x1)
+			else
+				alf = acs (dx / lenSegm) * sgn (dy)
+			endif
+			alf = (alf + 360) mod 360
+		endif
+		angs[ww] = alf
+		unID = unID + 1 : hotspot x1, y1, 0, unID
+	next q
+next w
+ww = 0
+for w = 1 to ncont - 1
+	ww = ww + 1
+	if w > 1 then angConns[ww][1] = 360 - (180 - angs[ww] + angs[ww - 1] + 360) mod 360
+	if w < ncont - 1 then angConns[ww][2] = 360 - (180 - angs[ww + 1] + angs[ww] + 360) mod 360
+next w
+angConns[1][1] = 360 - (180 - angs[1] + angs[ww] + 360) mod 360
+angConns[ww][2] = 360 - (180 - angs[1] + angs[ww] + 360) mod 360
+for w = 1 to nHoles
+	ww0 = ww
+	for q = 1 to n_hpoly[w] - 1
+		ww = ww + 1
+		if q > 1 then angConns[ww][1] = 360 - (180 - angs[ww] + angs[ww - 1] + 360) mod 360
+		if q < n_hpoly[w] - 1 then angConns[ww][2] = 360 - (180 - angs[ww + 1] + angs[ww] + 360) mod 360
+	next q
+	angConns[ww0 + 1][1] = 360 - (180 - angs[ww0 + 1] + angs[ww] + 360) mod 360
+	angConns[ww][2] = 360 - (180 - angs[ww0 + 1] + angs[ww] + 360) mod 360
+next w
+
+
+group "contour"
+	for w = 1 to ncont
+		idx = 2 * w - 1
+		put field_poly[1][idx], field_poly[1][idx + 1], field_poly_st[1][w]
+	next w
+	for w = 1 to nHoles
+		for q = 1 to n_hpoly[w]
+			idx = 2 * q - 1
+			put hole_poly[w][idx], hole_poly[w][idx + 1], hole_poly_st[w][q]
+		next q
+	next w
+	addz -thkCeiPanel - max (thkEdgesX, thkEdgesY) - eps
+		prism_ nsp / 3, thkCeiPanel * 2 + max (thkEdgesX, thkEdgesY) + 2 * eps,
+			get (nsp)
+	del 1
+endgroup
+
+group "panels"
+	add fieldOrig[1][1], fieldOrig[1][2], 0
+	rotz fieldRot[1]
+		for w = 1 TO dimx
+			for q = 1 to dimy
+				add (ddimx + w) * xSizCeiPanel, (ddimy + q) * ySizCeiPanel, 0
+					ncut3 = 0
+					add xSizCeiPanel / 2, ySizCeiPanel / 2, 0
+						if accType[w][q] > 100 and bShowAcc3d and bInPoly[w][q] and iPanelType[w][q] > -0.5 then
+							rotz accRot[w][q]
+							mulx sgnMirr
+								xCP = xSizCeiPanel - wEdges * (iEdgeTypeY > 1)
+								yCP = ySizCeiPanel - wEdges * (iEdgeTypeX > 1)
+								if abs (abs (accRot[w][q]) - 90) < eps then
+									xCP = ySizCeiPanel - wEdges * (iEdgeTypeX > 1)
+									yCP = xSizCeiPanel - wEdges * (iEdgeTypeY > 1)
+								endif
+								bCut = 1
+								gosub 10000 + accType[w][q]
+								if nsp > 0 then ncut3 = get (1)
+								for ww = 1 TO ncut3
+									nn = get (1)
+									cutpolya nn, 2, 0,
+										get (nn * 3)
+								next ww
+							del 2
+						endif
+						material mat
+						pen penCeiPanel3d
+						if gs_detlevel_3d_m = 1 then
+							if iPanelType[w][q] > -0.5 then
+								prism 4, thkCeiPanel,
+									-xSizCeiPanel / 2 + eps, -ySizCeiPanel / 2 + eps,
+									-xSizCeiPanel / 2 + eps, ySizCeiPanel / 2 - eps,
+									xSizCeiPanel / 2 - eps, ySizCeiPanel / 2 - eps,
+									xSizCeiPanel / 2 - eps, -ySizCeiPanel / 2 + eps
+							endif
+						endif
+						if gs_detlevel_3d_m = 2 then
+							xCP = xSizCeiPanel
+							yCP = ySizCeiPanel
+							if abs (abs (panelRot[w][q]) - 90) < eps then
+								xCP = ySizCeiPanel
+								yCP = xSizCeiPanel
+							endif
+							if iPanelType[w][q] <> 0 then
+								if iPanelType[w][q] > 0 then gosub 20000 + 10 * iPanelType[w][q] * (i3Dmode = 2)
+							else
+								if iCeiPanelType > -0.5 then gosub 20000 + 10 * iCeiPanelType * (i3Dmode = 2)
+							endif
+							rotz panelRot[w][q]
+								gosub 1100
+							del 1
+						endif
+						for ww = 1 to ncut3
+							cutend
+						next ww
+					del 1
+				del 1
+			next q
+		next w
+	del 2
+endgroup
+
+group "edgesCut"
+	add fieldOrig[1][1], fieldOrig[1][2], 0
+	rotz fieldRot[1]
+		for w = 1 TO dimx * (iEdgeTypeY = 2 or iEdgeTypeY = 4)
+			add (ddimx + w) * xSizCeiPanel - wEdges / 2, (ddimy + 1) * ySizCeiPanel, -thkCeiPanel - eps
+				block wEdges, dimy * ySizCeiPanel, thkCeiPanel + hCutEdgesX + eps
+			del 1
+		next w
+		for q = 1 to dimy * (iEdgeTypeX = 2 or iEdgeTypeX = 4)
+			add (ddimx + 1) * xSizCeiPanel, (ddimy + q) * ySizCeiPanel - wEdges / 2, -thkCeiPanel - eps
+				block dimx * xSizCeiPanel, wEdges, thkCeiPanel + hCutEdgesY + eps
+			del 1
+		next q
+	del 2
+endgroup
+
+group "edgesx"
+	material matEdge
+	add fieldOrig[1][1], fieldOrig[1][2], 0
+	rotz fieldRot[1]
+		for w = 1 TO dimx * (iEdgeTypeY > 2)
+			add (ddimx + w) * xSizCeiPanel - wEdges / 2, (ddimy + 1) * ySizCeiPanel, zEdgesX
+				block wEdges, dimy * ySizCeiPanel, thkEdgesX
+			del 1
+		next w
+	del 2
+endgroup
+
+group "edgesy"
+	material matEdge
+	add fieldOrig[1][1], fieldOrig[1][2], 0
+	rotz fieldRot[1]
+		for q = 1 to dimy * (iEdgeTypeX > 2)
+			add (ddimx + 1) * xSizCeiPanel, (ddimy + q) * ySizCeiPanel - wEdges / 2, zEdgesY
+				block dimx * xSizCeiPanel, wEdges, thkEdgesY
+			del 1
+		next q
+	del 2
+endgroup
+
+group "bordersCut"
+	material mat
+	if iWallConnType = 2 or iWallConnType = 4 then
+		addz -max (thkEdgesX, thkEdgesY) - eps
+			ww = 0
+			for w = 1 to ncont - 1
+				ww = ww + 1
+				idx = 2 * w - 1
+				x1 = field_poly[1][idx]
+				y1 = field_poly[1][idx + 1]
+				x2 = field_poly[1][idx + 2]
+				y2 = field_poly[1][idx + 3]
+		
+				gosub 910
+			next w
+			for w = 1 to nHoles
+				for q = 1 to n_hpoly[w] - 1
+					ww = ww + 1
+					idx = 2 * q - 1
+					x1 = hole_poly[1][idx]
+					y1 = hole_poly[1][idx + 1]
+					x2 = hole_poly[1][idx + 2]
+					y2 = hole_poly[1][idx + 3]
+			
+					gosub 910
+				next q
+			next w
+		del 1
+	endif
+endgroup
+
+group "borders"
+	material matEdge
+	if iWallConnType > 2 then
+		addz zBorder
+			ww = 0
+			for w = 1 to ncont - 1
+				ww = ww + 1
+				idx = 2 * w - 1
+				x1 = field_poly[1][idx]
+				y1 = field_poly[1][idx + 1]
+				x2 = field_poly[1][idx + 2]
+				y2 = field_poly[1][idx + 3]
+		
+				gosub 920
+			next w
+			for w = 1 to nHoles
+				for q = 1 to n_hpoly[w] - 1
+					ww = ww + 1
+					idx = 2 * q - 1
+					x1 = hole_poly[1][idx]
+					y1 = hole_poly[1][idx + 1]
+					x2 = hole_poly[1][idx + 2]
+					y2 = hole_poly[1][idx + 3]
+			
+					gosub 920
+				next q
+			next w
+		del 1
+	endif
+endgroup
+
+
+if bMoving then
+	placegroup isectgroup{2} ("panels", "contour", 0, mat, mat)
+else
+	grPanels = isectgroup{2} (subgroup{2} ("panels", "bordersCut", 0, mat, mat), "contour", 0, mat, mat)
+	grEdgesCut = isectgroup{2} ("edgesCut", "contour", 0, mat, mat)
+	grEdgesx = isectgroup{2} ("edgesx", "contour", 0, matEdge, matEdge)
+	grEdgesy = isectgroup{2} ("edgesy", "contour", 0, matEdge, matEdge)
+	if (iWallConnType = 2 or iWallConnType = 4) and gs_detlevel_3d_m = 2 then
+		grEdgesx = subgroup{2} (grEdgesx, "bordersCut", 0, matEdge, matEdge)
+		grEdgesy = subgroup{2} (grEdgesy, "bordersCut", 0, matEdge, matEdge)
+	endif
+
+	placegroup subgroup (grPanels, grEdgesCut)
+	if (iEdgeTypeX = 3) + (iEdgeTypeY = 3) + (iWallConnType = 3) >= 2 and gs_detlevel_3d_m = 2 then
+		if iWallConnType = 3 then
+			grEdgesall = addgroup (addgroup (grEdgesx, grEdgesy), "borders")
+			placegroup grEdgesall
+			killgroup grEdgesall
+		else
+			placegroup addgroup (grEdgesx, grEdgesy)
+			placegroup "borders"
+		endif
+	else
+		placegroup grEdgesx
+		placegroup grEdgesy
+		placegroup "borders"
+	endif
+	
+	killgroup grPanels
+	killgroup grEdgesCut
+	killgroup grEdgesx
+	killgroup grEdgesy
+endif
+
+killgroup "contour"
+killgroup "panels"
+killgroup "edgesCut"
+killgroup "edgesx"
+killgroup "edgesy"
+killgroup "bordersCut"
+killgroup "borders"
+
+! === Accessories ===
+add fieldOrig[1][1], fieldOrig[1][2], 0
+rotz fieldRot[1]
+	for w = 1 TO dimx
+		for q = 1 to dimy
+			dzAcc = -thkCeiPanel / 2 * (iPanelType[w][q] <> 100 and iCeiPanelType <> 100) * (i3Dmode = 2)
+			add (ddimx + w) * xSizCeiPanel, (ddimy + q) * ySizCeiPanel, 0
+			add xSizCeiPanel / 2, ySizCeiPanel / 2, dzAcc
+				if accType[w][q] > 100 and bShowAcc3d and bInPoly[w][q] then
+					rotz accRot[w][q]
+					mulx sgnMirr
+						xCP = xSizCeiPanel - wEdges * (iEdgeTypeY > 1)
+						yCP = ySizCeiPanel - wEdges * (iEdgeTypeX > 1)
+						if abs (abs (accRot[w][q]) - 90) < eps then
+							xCP = ySizCeiPanel - wEdges * (iEdgeTypeX > 1)
+							yCP = xSizCeiPanel - wEdges * (iEdgeTypeY > 1)
+						endif
+						bCut = 0
+						gosub 10000 + accType[w][q]
+					del 2
+				endif
+			del 2
+		next q
+	next w
+del 2
+
+
+
+! ==================================================================================
+
+! Borderwall
+if bClosedBorder then
+	unID = 20000
+	material matBorder
+	dim angBorder[], angConnBorder[][2]
+	angBorder = angs
+	angConnBorder = angConns
+
+	ww = 0
+	for w = 1 to ncont - 1
+		ww = ww + 1
+		idx = 2 * w - 1
+		x1 = field_poly[1][idx]
+		y1 = field_poly[1][idx + 1]
+		x2 = field_poly[1][idx + 2]
+		y2 = field_poly[1][idx + 3]
+
+		gosub 900
+	next w
+	for w = 1 to nHoles
+		for q = 1 to n_hpoly[w] - 1
+			ww = ww + 1
+			idx = 2 * q - 1
+			x1 = hole_poly[1][idx]
+			y1 = hole_poly[1][idx + 1]
+			x2 = hole_poly[1][idx + 2]
+			y2 = hole_poly[1][idx + 3]
+	
+			gosub 900
+		next q
+	next w
+endif
+
+
+end
+
+! ==================================================================================
+! ==================================================================================
+! ==================================================================================
+
+100:
+! clockwise direction around the polygon (x, y)
+	sums = 0
+	x00 = get (1)
+	y00 = get (1)
+	x000 = x00
+	y000 = y00
+	for s = 1 to npoli - 1
+		x01 = get (1)
+		y01 = get (1)
+		sums = sums + (x01 + x00) * (y01 - y00)
+		x00 = x01
+		y00 = y01
+	next s
+	iDir = sgn (sums)
+	RETURN
+	
+	1100:
+	base
+	vert 0, 0, 0
+	vert 0.1, 0, 0
+	vert 0, 0.1, 0
+	vert 0, 0, 0.1
+	coor 258, -1, -2, -3, -4
+	body -1
+return
+
+900:
+	lenBWall = sqr ((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
+	if lenBWall > eps then
+		add (x1 + x2) / 2, (y1 + y2) / 2, 0
+			addz thkCeiPanel
+				hWall = hBorderWall[ww] - thkCeiPanel
+				if hWall > eps then
+					rotz angBorder[ww]
+						prism 4, hWall,
+							-lenBWall / 2, 0,
+							lenBWall / 2, 0,
+							lenBWall / 2 + thkBorder / tan (angConnBorder[ww][2] / 2), thkBorder,
+							-lenBWall / 2 - thkBorder / tan (angConnBorder[ww][1] / 2), thkBorder
+					del 1
+				endif
+			del 1
+			unID = unID + 1 : hotspot 0, 0, 0, unID, hBorderWall[ww], 1 + 128
+			unID = unID + 1 : hotspot 0, 0, -0.1, unID, hBorderWall[ww], 3
+			unID = unID + 1 : hotspot 0, 0, hBorderWall[ww], unID, hBorderWall[ww], 2
+		del 1
+	endif
+return
+
+910:
+	lenSegm = sqr ((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
+	if lenSegm > eps then
+		add (x1 + x2) / 2, (y1 + y2) / 2, 0
+			hSegm = hCutBorder + max (thkEdgesX, thkEdgesY) + eps
+			if hSegm > eps then
+				rotz angs[ww]
+					thk = iDirection * wEdges / 2
+					prism 4, hSegm,
+						-lenSegm / 2, 0,
+						lenSegm / 2, 0,
+						lenSegm / 2 + thk / tan (angConns[ww][2] / 2), thk,
+						-lenSegm / 2 - thk / tan (angConns[ww][1] / 2), thk
+				del 1
+			endif
+		del 1
+	endif
+return
+
+920:
+	lenSegm = sqr ((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
+	if lenSegm > eps then
+		add (x1 + x2) / 2, (y1 + y2) / 2, 0
+			hSegm = max (thkEdgesX, thkEdgesY)
+			if hSegm > eps then
+				rotz angs[ww]
+					thk = iDirection * wEdges / (1 + (iWallConnType = 4))
+					prism 4, hSegm,
+						-lenSegm / 2, 0,
+						lenSegm / 2, 0,
+						lenSegm / 2 + thk / tan (angConns[ww][2] / 2), thk,
+						-lenSegm / 2 - thk / tan (angConns[ww][1] / 2), thk
+				del 1
+			endif
+		del 1
+	endif
+return
+
+! ===================================================================================
+! ============ A C C E S S O R I E S ================================================
+! ===================================================================================
+! --- ventilation ---
+10101:
+	pen penAccVent
+	if bCut then
+		put 1
+		put 4
+		put -xCp/2, -yCp/2, 15,
+			xCp/2, -yCp/2, 15,
+			xCp/2, yCp/2, 15,
+			-xCp/2, yCp/2, 15
+		return
+	endif
+
+	thk = 0.03		   	! Panel thickness
+	tLem = 0.005 		! Plate thickness
+	wPer = 0.04  		! Rim width
+	numLem = 6   		! Plate number
+	alfa = 25    		! Plate angle
+	beta = 45
+
+	material matAccVent
+	dim edgeWidthX[]
+	for i = 1 to numLem
+		edgeWidthX[i] = i * (yCp - 2 * wPer - 2 * (tLem + thk/TAN(alfa))) / numLem
+	next i
+	dim edgeWidthY[]
+	for i = 1 to numLem
+		edgeWidthY[i] = i * (xCp - 2 * wPer - 2 * (tLem + thk/TAN(alfa))) / numLem
+	next i
+
+	addz thk-dzAcc
+	mulz -1
+		add -xCp / 2, -yCp / 2, 0
+			prism_ 10, thk, 
+				0, 0, 15,
+				xCp, 0, 15,
+				xCp, yCp, 15,
+				0, yCp, 15,
+				0, 0, -1,
+		
+				wPer, wPer, 15,
+				xCp-wPer, wPer, 15,
+				xCp-wPer, yCp-wPer, 15,
+				wPer, yCp-wPer, 15,
+				wPer, wPer, -1
+		del 1
+	
+		add -edgeWidthY[1]/2, -edgeWidthX[1]/2, -tLem
+			prism_ 5, tLem, 
+				0, 0, 15,
+				edgeWidthY[1], 0, 15,
+				edgeWidthY[1], edgeWidthX[1], 15,
+				0, edgeWidthX[1], 15,
+				0, 0, -1
+		del 1
+
+		for wv = -1 to 1 step 2
+			mulx wv
+			for i = 1 to numLem
+		
+				addx edgeWidthY[i] / 2
+				addy -edgeWidthX[i] / 2
+				rotz -beta
+				rotx 90
+				cutplane
+				del 4
+	
+				addx edgeWidthY[i] / 2
+				addy edgeWidthX[i] / 2
+				rotz beta-180
+				rotx 90
+				cutplane
+				del 4
+	
+				addx edgeWidthY[i] / 2
+				addy edgeWidthX[i] / 2 + (tLem + thk/TAN(alfa))
+				rotx 90
+				prism_ 5, edgeWidthX[i] + 2 * (tLem + thk/TAN(alfa)),
+					0, 0, 15,
+					tLem, 0, 15,
+					tLem + thk/TAN(alfa), thk, 15,
+					thk/TAN(alfa), thk, 15,
+					0, 0, -1
+				del 3
+	
+				cutend
+				cutend
+	
+			next i
+			del 1
+		next wv
+
+		for wv = -1 to 1 step 2
+			muly wv
+				for i = 1 to numLem
+		
+					addy edgeWidthX[i] / 2
+					addx -edgeWidthY[i] / 2
+					rotz -beta
+					rotx 90
+						cutplane
+					del 4
+		
+					addy edgeWidthX[i] / 2
+					addx edgeWidthY[i] / 2
+					rotz beta
+					rotx 90
+						cutplane
+					del 4
+		
+					addy edgeWidthX[i] / 2
+					addx -edgeWidthY[i] / 2 - (tLem + thk/TAN(alfa))
+					rotz 90
+					rotx 90
+						prism_ 5, edgeWidthY[i] + 2 * (tLem + thk/TAN(alfa)),
+							0, 0, 15,
+							tLem, 0, 15,
+							tLem + thk/TAN(alfa), thk, 15,
+							thk/TAN(alfa), thk, 15,
+							0, 0, -1
+					del 4
+		
+					cutend
+					cutend
+				next i
+			del 1
+		next wv
+	del 2
+	body -1
+return
+
+10102:
+	pen penAccVent
+	thk = 0.03   		! Panel thickness
+	tLem = 0.005 		! Plate thickness
+	wPer = 0.06 		! Rim width
+	alfa = 25    		! Plate angle
+	numLem = 10   		! Plate number
+	if bCut then
+		put 1
+		put 4
+		put -xCp/2, -yCp/2, 15,
+			xCp/2, -yCp/2, 15,
+			xCp/2, yCp/2, 15,
+			-xCp/2, yCp/2, 15
+		return
+	endif
+
+	material matAccVent
+	dim distX[10]
+	for i = 1 to numLem
+		distX[i] = i * (yCp - 2 * wPer) / numLem
+	next i
+	addz -dzAcc
+		add -xCp / 2, -yCp / 2, 0
+			prism_ 10, thk, 
+				0, 0, 15,
+				xCp, 0, 15,
+				xCp, yCp, 15,
+				0, yCp, 15,
+				0, 0, -1,
+		
+				wPer, wPer, 15,
+				xCp-wPer, wPer, 15,
+				xCp-wPer, yCp-wPer, 15,
+				wPer, yCp-wPer, 15,
+				wPer, wPer, -1
+		del 1
+	
+		for i = 1 to numLem
+			addy -(yCp - 2*wPer) / 2 + distX[i] - distX[1]
+			addx -(xCp - 2*wPer) / 2
+			rotz 90
+			rotx 90
+				prism_ 5, xCp - 2*wPer,
+					0, 0, 15,
+					tLem, 0, 15,
+					tLem + thk/TAN(alfa), thk, 15,
+					thk/TAN(alfa), thk, 15,
+					0, 0, -1
+			del 4
+		next i
+	del 1
+	body -1
+return
+
+10111:
+	pen penAccVent
+	thk = 0.03-dzAcc   	! Panel thickness
+	xVen = min (xCP, yCP, 0.25)  		! width
+	if bCut then
+		put 1
+		put 4
+		put -xVen/2, -xVen/2, 15,
+			xVen/2, -xVen/2, 15,
+			xVen/2, xVen/2, 15,
+			-xVen/2, xVen/2, 15
+		return
+	endif
+
+	material matAccVent
+	prism_ 12, thk,
+		xVen/2,       -xVen/2,      15, 
+		xVen/2,        xVen/2,      15, 
+		-xVen/2,        xVen/2,      15, 
+		-xVen/2,       -xVen/2,      15, 
+		xVen/2,       -xVen/2,     -1, 
+		-0.8*xVen/2,            0,      15+64, 
+		0,            0,    900, 
+		0,         -180,   4001, 
+		0.8*xVen/2,            0,      15+64, 
+		0,            0,    900, 
+		0,         -180,   4001, 
+		-0.8*xVen/2,            0,     -1
+
+	for i = 1 to 5 
+		prism_ 14, thk,
+			(0.9-i*0.15)*xVen/2,            0,      15+64, 
+			0, 							0,    900, 
+			0,          				180,   4001, 
+			-(0.9-i*0.15)*xVen/2, 			0,      15+64, 
+			0, 						0,    900, 
+			0,         				 180,   4001, 
+			(0.9-i*0.15)*xVen/2,            0,     -1, 
+			
+			(0.9-i*0.15)*xVen/2 - 0.002,            0,      15+64, 
+			0, 									0,    900, 
+			0,         					-180,   4001, 
+			-(0.9-i*0.15)*xVen/2 + 0.002, 0,      15+64, 
+			0, 							0,    900, 
+			0,         					-180,   4001, 
+			(0.9-i*0.15)*xVen/2 - 0.002,            0,     -1
+	next i
+	body -1
+return
+
+10112:
+	pen penAccVent
+	thk = 0.03-dzAcc   	! Panel thickness
+	rVent = min (xCP / 2, yCP / 2, 0.15)  		! radius
+	hVent = 0.15		! height
+	if bCut then
+		put 1
+		put 2
+		put 0, 0, 979,
+			rVent, 360, 4079
+		return
+	endif
+
+	material matAccVent
+	roty -90
+	rotx -90
+	addx -0.015
+		revolve 6, 360, 4,
+			thk, rVent, 0,
+			0, rVent, 0,
+			0, rVent - 0.03, 0,
+			hVent, 0.07, 0,
+			hVent, 0.09, 0,
+			thk, rVent, 0
+		revolve 3, 360, 63,
+			-0.02, 0.03, 1,
+			0, rVent - 0.07, 0,
+			hVent, 0.03, 0
+	del 3
+	body -1
+return
+
+10121:
+	pen penAccVent
+	r2 = max (min (xCP, yCP) * 0.90, 0.25) / 2
+	r1= r2 * 0.3
+	r20 = r2 * 1.1
+	vv = 0.02 / 2
+	if bCut then
+		put 1
+		put 4
+		put -r20, -r20, 15,
+			r20, -r20, 15,
+			r20, r20, 15,
+			-r20, r20, 15
+		return
+	endif
+
+	material matAccVent
+	for wv = 0 to 11
+		rotz wv * 30
+			cutpoly 4,
+				-vv, r1,
+				-vv, r2,
+				vv, r2,
+				vv, r1
+		del 1
+	next wv
+	prism 4, 0.006-dzAcc,
+		-r20, -r20,
+		r20, -r20,
+		r20, r20,
+		-r20, r20
+	for wv = 0 to 11
+		cutend
+	next wv
+	body -1
+return
+
+
+! --- lighting ---
+10201:
+	pen penAccLig
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 2, 0.20)
+	r2 = rr / 2 + 0.015
+	if bCut then
+		put 1
+		put 2
+		put 0, 0, 979,
+			rr / 2, 360, 4079
+		return
+	endif
+102010:
+	material matAccLig
+	addz -0.003
+		prism_ 3, 0.003-dzAcc,
+			0, 0, 979,
+			r2, 360, 4079,
+			rr / 2, 360, 4079
+		body -1
+		material "lampglass"
+		prism_ 2, 0.05,
+			0, 0, 979,
+			rr / 2, 360, 4079
+	del 1
+	body -1
+return
+
+10202:
+	pen penAccLig
+	xy = max (min (xSizCeiPanel, ySizCeiPanel) / 2, 0.20)
+	xy2 = xy / 2 + 0.015
+	if bCut then
+		put 1
+		put 4
+		put -xy / 2, -xy / 2, 15,
+			-xy / 2, xy / 2, 15,
+			xy / 2, xy / 2, 15,
+			xy / 2, -xy / 2, 15
+		return
+	endif
+
+	material matAccLig
+	addz -0.003
+		prism_ 10, 0.003-dzAcc,
+			-xy2, -xy2, 15,
+			-xy2, xy2, 15,
+			xy2, xy2, 15,
+			xy2, -xy2, 15,
+			-xy2, -xy2, -1,
+			-xy / 2, -xy / 2, 15,
+			xy / 2, -xy / 2, 15,
+			xy / 2, xy / 2, 15,
+			-xy / 2, xy / 2, 15,
+			-xy / 2, -xy / 2, -1
+		body -1
+		material "lampglass"
+		prism_ 4, 0.05,
+			-xy / 2, -xy / 2, 15,
+			-xy / 2, xy / 2, 15,
+			xy / 2, xy / 2, 15,
+			xy / 2, -xy / 2, 15
+	del 1
+	body -1
+return
+
+10203:
+	pen penAccLig
+	x1 = xCP - 0.04
+	y1 = yCP - 0.04
+	x2 = x1 / 2 + 0.015
+	y2 = y1 / 2 + 0.015
+	if bCut then
+		put 1
+		put 4
+		put -x1 / 2, -y1 / 2, 15,
+			-x1 / 2, y1 / 2, 15,
+			x1 / 2, y1 / 2, 15,
+			x1 / 2, -y1 / 2, 15
+		return
+	endif
+
+	material matAccLig
+	addz -0.003 - dzAcc
+		prism_ 10, 0.003,
+			-x2, -y2, 15,
+			-x2, y2, 15,
+			x2, y2, 15,
+			x2, -y2, 15,
+			-x2, -y2, -1,
+			-x1 / 2, -y1 / 2, 15,
+			x1 / 2, -y1 / 2, 15,
+			x1 / 2, y1 / 2, 15,
+			-x1 / 2, y1 / 2, 15,
+			-x1 / 2, -y1 / 2, -1
+		body -1
+		material "lampglass"
+		prism_ 4, 0.05,
+			-x1 / 2, -y1 / 2, 15,
+			-x1 / 2, y1 / 2, 15,
+			x1 / 2, y1 / 2, 15,
+			x1 / 2, -y1 / 2, 15
+	del 1
+	body -1
+return
+
+10204:
+	pen penAccLig
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 2, 0.30)
+	if bCut then
+		put 0
+		return
+	endif
+
+	material matAccLig
+	mulz -1
+		cylind 0.03, rr / 2
+		body -1
+		addz 0.03
+			material "lampglass"
+			ellips rr / 6, rr / 2 - 0.01
+		del 1
+	del 1
+	body -1
+return
+
+10211:
+	pen penAccLig
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 3, 0.15)
+	r2 = rr / 2 + 0.015
+	if bCut then
+		put 2
+		put 2
+		put -xCP / 4, -yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put xCP / 4, yCP / 4, 979,
+			rr / 2, 360, 4079
+		return
+	endif
+
+	add -xCP / 4, -yCP / 4, 0
+		gosub 102010
+	del 1
+	add xCP / 4, yCP / 4, 0
+		gosub 102010
+	del 1
+return
+
+10221:
+	pen penAccLig
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 6, 0.10)
+	if bCut then
+		put 1
+		put 2
+		put 0, 0, 979,
+			rr / 2, 360, 4079
+		return
+	endif
+102210:
+	material matAccLig
+	hL = 0.08
+	roty -90
+	rotx -90
+	addx -0.002
+		revolve 5, 360, 4,
+			0, rr / 2, 0,
+			hL, 0.01, 0,
+			hL - 0.01, 0.01, 0,
+			0, rr / 2 - 0.01, 0,
+			0, rr / 2, 0
+		body -1
+		material "lampglass"
+		revolve 2, 360, 63,
+			0, rr / 2 - 0.01, 0,
+			hL - 0.01, 0.01, 0
+	del 3
+	body -1
+return
+
+10222:
+	pen penAccLig
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 6, 0.10)
+	if bCut then
+		put 2
+		put 2
+		put -xCP / 4, 0, 979,
+			rr / 2, 360, 4079
+		put 2
+		put xCP / 4, 0, 979,
+			rr / 2, 360, 4079
+		return
+	endif
+
+	addx -xCP / 4
+		gosub 102210
+	del 1
+	addx xCP / 4
+		gosub 102210
+	del 1
+return
+
+10223:
+	pen penAccLig
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 6, 0.10)
+	if bCut then
+		put 3
+		put 2
+		put -xCP / 4, -yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put xCP / 4, -yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put 0, yCP / 4, 979,
+			rr / 2, 360, 4079
+		return
+	endif
+
+	add -xCP / 4, -yCP / 4, 0
+		gosub 102210
+	del 1
+	add xCP / 4, -yCP / 4, 0
+		gosub 102210
+	del 1
+	add 0, yCP / 4, 0
+		gosub 102210
+	del 1
+return
+
+10224:
+	pen penAccLig
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 6, 0.10)
+	if bCut then
+		put 4
+		put 2
+		put -xCP / 4, -yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put xCP / 4, -yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put -xCP / 4, yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put xCP / 4, yCP / 4, 979,
+			rr / 2, 360, 4079
+		return
+	endif
+
+	add -xCP / 4, -yCP / 4, 0
+		gosub 102210
+	del 1
+	add xCP / 4, -yCP / 4, 0
+		gosub 102210
+	del 1
+	add -xCP / 4, yCP / 4, 0
+		gosub 102210
+	del 1
+	add xCP / 4, yCP / 4, 0
+		gosub 102210
+	del 1
+return
+
+10226:
+	pen penAccLig
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 6, 0.10)
+	if bCut then
+		put 6
+		put 2
+		put -xCP / 3, -yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put 0, -yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put xCP / 3, -yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put -xCP / 3, yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put 0, yCP / 4, 979,
+			rr / 2, 360, 4079
+		put 2
+		put xCP / 3, yCP / 4, 979,
+			rr / 2, 360, 4079
+		return
+	endif
+
+	add -xCP / 3, -yCP / 4, 0
+		gosub 102210
+	del 1
+	add -xCP / 3, yCP / 4, 0
+		gosub 102210
+	del 1
+	add 0, -yCP / 4, 0
+		gosub 102210
+	del 1
+	add 0, yCP / 4, 0
+		gosub 102210
+	del 1
+	add xCP / 3, -yCP / 4, 0
+		gosub 102210
+	del 1
+	add xCP / 3, yCP / 4, 0
+		gosub 102210
+	del 1
+return
+
+10231:
+	pen penAccLig
+	xCP = xCP - 0.04
+	wv = min (yCP / 4, 0.15)
+	dwv = 0.015
+	thk = 0.10
+	if bCut then
+		put 1
+		put 4
+		put -xCP / 2, -wv / 2, 15,
+			-xCP / 2, wv / 2, 15,
+			xCP / 2, wv / 2, 15,
+			xCP / 2, -wv / 2, 15
+		return
+	endif
+
+	material matAccLig
+	addx -xCP / 2
+	rotz 90
+	rotx 90
+		prism_ 6, dwv,
+			-wv / 2, 0, 11,
+			-wv / 2, thk, 11,
+			wv / 2, thk, 11,
+			wv / 2, 0, 11,
+			wv / 2 - dwv, 0, 13,
+			-wv / 2 + dwv, 0, 8
+		addz xCP - dwv
+			prism_ 6, dwv,
+				-wv / 2, 0, 14,
+				-wv / 2, thk, 14,
+				wv / 2, thk, 14,
+				wv / 2, 0, 14,
+				wv / 2 - dwv, 0, 13,
+				-wv / 2 + dwv, 0, 8
+		del 1
+		addz dwv
+			prism_ 8, xCP - 2 * dwv,
+				-wv / 2, 0, 10,
+				-wv / 2, thk, 10,
+				wv / 2, thk, 10,
+				wv / 2, 0, 10,
+				wv / 2 - dwv, 0, 15,
+				wv / 2 - 2 * dwv, thk - dwv, 15,
+				-wv / 2 + 2 * dwv, thk - dwv, 15,
+				-wv / 2 + dwv, 0, 10
+		del 1
+		body -1
+		material "lampglass"
+		nL = int ((xCP - 2 * dwv) / 0.06)
+		dL = (xCP - 2 * dwv) / nL
+		for wa = 0.5 to nL
+			addz dwv + wa * dL
+				plane 4,
+					-wv / 2 + dwv, 0, 0,
+					-wv / 2 + 1.5 * dwv, (thk - dwv) / 2, 0,
+					wv / 2 - 1.5 * dwv, (thk - dwv) / 2, 0,
+					wv / 2 - dwv, 0, 0
+			del 1
+		next wa
+		add 0, thk - dwv - 0.025, 2 * dwv
+			cylind xCP - 4 * dwv, 0.015
+		del 1
+	del 3
+	body -1
+return
+
+10236:
+	pen penAccLig
+	xCP = xCP - 0.04
+	wv = yCP - 0.04
+	dwv = 0.015
+	thk = 0.10
+	if bCut then
+		put 1
+		put 4
+		put -xCP / 2, -wv / 2, 15,
+			-xCP / 2, wv / 2, 15,
+			xCP / 2, wv / 2, 15,
+			xCP / 2, -wv / 2, 15
+		return
+	endif
+
+	material matAccLig
+	addx -xCP / 2
+	rotz 90
+	rotx 90
+		prism_ 6, dwv,
+			-wv / 2, 0, 11,
+			-wv / 2, thk, 11,
+			wv / 2, thk, 11,
+			wv / 2, 0, 11,
+			wv / 2 - dwv, 0, 13,
+			-wv / 2 + dwv, 0, 8
+		addz xCP - dwv
+			prism_ 6, dwv,
+				-wv / 2, 0, 14,
+				-wv / 2, thk, 14,
+				wv / 2, thk, 14,
+				wv / 2, 0, 14,
+				wv / 2 - dwv, 0, 13,
+				-wv / 2 + dwv, 0, 8
+		del 1
+		addz dwv
+			prism_ 8, xCP - 2 * dwv,
+				-wv / 2, 0, 10,
+				-wv / 2, thk, 10,
+				wv / 2, thk, 10,
+				wv / 2, 0, 10,
+				wv / 2 - dwv, 0, 15,
+				wv / 2 - 2 * dwv, thk - dwv, 15,
+				-wv / 2 + 2 * dwv, thk - dwv, 15,
+				-wv / 2 + dwv, 0, 10
+		del 1
+		body -1
+		material "lampglass"
+		nL = round_int ((xCP - 2 * dwv) / 0.06)
+		dL = (xCP - 2 * dwv) / nL
+		for wa = 0.5 to nL
+			addz dwv + wa * dL
+				plane 4,
+					-wv / 2 + dwv, 0, 0,
+					-wv / 2 + 1.5 * dwv, (thk - dwv) / 2, 0,
+					wv / 2 - 1.5 * dwv, (thk - dwv) / 2, 0,
+					wv / 2 - dwv, 0, 0
+			del 1
+		next wa
+		material "lampglass"
+		nL = int ((yCP - 4 * dwv) / 0.10)
+		dL = (yCP - 4 * dwv) / nL
+		for wa = -(nL - 1) / 2 to (nL - 1) / 2 + eps
+			add wa * dL, thk - dwv - 0.025, 2 * dwv
+				cylind xCP - 4 * dwv, 0.015
+			del 1
+		next wa
+		for wa = -(nL - 2) / 2 to (nL - 2) / 2 + eps
+			add wa * dL, 0, dwv
+				plane 4, 
+					0, 0, 0,
+					0, (thk - dwv) / 2, 0,
+					0, (thk - dwv) / 2, xCP - 2 * dwv,
+					0, 0, xCP - 2 * dwv
+			del 1
+		next wa
+	del 3
+	body -1
+return
+
+
+! --- safety ---
+10301:
+	pen penAccSaf
+	if bCut then
+		put 1
+		put 2
+		put 0, 0, 979,
+			0.04, 360, 4079
+		return
+	endif
+
+	material matAccSaf
+	addz -0.005
+		prism_ 3, 0.005-dzAcc,
+			0, 0, 979,
+			0.06, 360, 4079,
+			0.04, 360, 4079
+	del 1
+	prism_ 2, 0.03,
+		0, 0, 979,
+		0.05, 360, 4079
+	addz -0.10
+		cylind 0.01, 0.05 / 3
+		rotx 90
+		addz -0.005
+			prism 6, 0.01,
+				-0.015, 0.01,
+				-0.035, 0.04,
+				-0.035, 0.10,
+				-0.03, 0.10,
+				-0.03, 0.04,
+				-0.01, 0.01
+			prism 6, 0.01,
+				0.015, 0.01,
+				0.035, 0.04,
+				0.035, 0.10,
+				0.03, 0.10,
+				0.03, 0.04,
+				0.01, 0.01
+		del 2
+		for ws = 0 to 15
+			rotz ws * 22.5
+			add -0.002, 0.05 / 3, 0
+				block 0.004, 0.05 / 3, 0.006
+			del 2
+		next ws
+		addz 0.01
+			cylind 0.02, 0.006
+			addz 0.02
+				addz 0.04
+					cylind 0.03, 0.006
+				del 1
+				material "darkglass"
+				cylind 0.04, 0.006
+			del 1
+		del 1
+	del 1
+	body -1
+return
+
+10302:
+	pen penAccSaf
+	r1 = 0.06
+	r2 = 0.04
+	if bCut then
+		put 0
+		return
+	endif
+
+	material matAccSaf
+	addz -dzAcc
+	mulz -1
+		cylind 0.04-dzAcc, r1
+		addz 0.04
+			cone 0.02, r1, r2, 90, 90
+			addz 0.03
+				cylind 0.01, r2
+				for ws = 0 to 5
+					rotz ws * 60
+					add -0.002, r2 - 0.005, -0.01
+						block 0.004, 0.004, 0.01
+					del 2
+				next ws
+			del 1
+		del 1
+	del 2
+	body -1
+return
+
+10303:
+	pen penAccSaf
+	r1 = 0.06
+	r2 = 0.025
+	thk1 = 0.015
+	thke = 0.025
+	thkecut = 0.022
+	if bCut then
+		put 0
+		return
+	endif
+	
+	material matAccSaf
+	mulz -1
+		cylind thk1, r1
+		addz thk1
+			addz thkecut
+				cutplane
+			del 1
+			ellips thke, r1
+			cutend
+			material "securityglass"
+			addz thkecut
+				ellips r2 * 0.75, r2
+			del 1
+		del 1
+	del 1
+	body -1
+return
+
+10311:
+	pen penAccSaf
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 2, 0.20)
+	ii = rr / 3
+	if bCut then
+		put 0
+		return
+	endif
+
+	material matAccSaf
+	addz -0.05+dzAcc
+		prism_ 3, 0.05-dzAcc,
+			0, 0, 979,
+			rr / 2, 360, 4079,
+			rr / 2 - 0.02, 360, 4079
+		material "darkglass"
+		mulz -1
+			ellips rr / 2 - 0.03, rr / 2 - 0.01
+		del 1
+	del 1
+	body -1
+return
+
+
+! --- audio ---
+10401:
+	pen penAccAud
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 2, 0.20)
+	if bCut then
+		put 1
+		put 2
+		put 0, 0, 979,
+			rr / 2, 360, 4079
+		return
+	endif
+
+	material matAccAud
+	prism_ 2, 0.05+dzAcc,
+		0, 0, 979,
+		rr / 2, 360, 4079
+	body -1
+return
+
+10402:
+	pen penAccAud
+	xy = max (min (xSizCeiPanel, ySizCeiPanel) / 2, 0.20)
+	if bCut then
+		put 1
+		put 4
+		put -xy / 2, -xy / 2, 15,
+			-xy / 2, xy / 2, 15,
+			xy / 2, xy / 2, 15,
+			xy / 2, -xy / 2, 15
+		return
+	endif
+
+	material matAccAud
+	prism_ 4, 0.05+dzAcc,
+		-xy / 2, -xy / 2, 15,
+		-xy / 2, xy / 2, 15,
+		xy / 2, xy / 2, 15,
+		xy / 2, -xy / 2, 15
+	body -1
+return
+
+10403:
+	pen penAccAud
+	xy = max (min (xSizCeiPanel, ySizCeiPanel) * 0.80, 0.20)
+	rr = max (min (xSizCeiPanel, ySizCeiPanel) / 4, 0.10)
+	if bCut then
+		put 0
+		return
+	endif
+
+	material matAccAud
+	for wa = 0 to 3
+		rotz 90 * wa
+		add 0, rr, -rr / 2 * tan (10)
+		rotx 10
+			prism_ 2, 0.05+dzAcc,
+				0, 0, 979,
+				rr / 2, 360, 4079
+		del 3
+	next wa
+	body -1
+return
+
+! ===================================================================================
+! ============ P A T T E R N S ======================================================
+! ===================================================================================
+20000:		! for textures
+pType = iPanelType[w][q]
+if pType < 100 then pType = iCeiPanelType
+matCP = "mat_" + str (pType, 1, 0) + "_" + str (panelRot[w][q], 1, 0)
+	cprism_ "mat_100_0", matCP,  "mat_100_0",
+		5, thkCeiPanel,
+		-xSizCeiPanel / 2 + eps, -ySizCeiPanel / 2 + eps, 15,
+		-xSizCeiPanel / 2 + eps, ySizCeiPanel / 2 - eps, 15,
+		xSizCeiPanel / 2 - eps, ySizCeiPanel / 2 - eps, 15,
+		xSizCeiPanel / 2 - eps, -ySizCeiPanel / 2 + eps, 15,
+		-xSizCeiPanel / 2 + eps, -ySizCeiPanel / 2 + eps, -1
+base
+add -xSizCeiPanel / 2, -ySizCeiPanel / 2, 0
+	vert 0, 0, 0
+	vert 1, 0, 0
+	vert 0, -1, 0
+	vert 0, 0, 1
+del 1
+coor 256, -1, -2, -3, -4
+body -1
+return
+
+! for models
+21000:
+	prism 4, thkCeiPanel,
+		-xSizCeiPanel / 2 + eps, -ySizCeiPanel / 2 + eps,
+		-xSizCeiPanel / 2 + eps, ySizCeiPanel / 2 - eps,
+		xSizCeiPanel / 2 - eps, ySizCeiPanel / 2 - eps,
+		xSizCeiPanel / 2 - eps, -ySizCeiPanel / 2 + eps
+return
+21010:
+	gosub 21000
+	s0 = 0.03
+	xx = xCP / 2 - s0
+	yy = yCP / 2 - s0
+	mulz -1
+	rotz panelRot[w][q]
+		fprism_ mat, mat, mat, mat,
+			4, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+			-xx, -yy, 15,
+			xx, -yy, 15,
+			xx, yy, 15,
+			-xx, yy, 15
+	del 2
+return
+21020:
+	gosub 21000
+	s0 = 0.03
+	xx = xCP / 4
+	yy = yCP / 4
+	mulz -1
+	rotz panelRot[w][q]
+		fprism_ mat, mat, mat, mat,
+			4, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+			-xx, -yy, 15,
+			xx, -yy, 15,
+			xx, yy, 15,
+			-xx, yy, 15
+	del 2
+return
+21120:
+	gosub 21000
+	s0 = 0.03
+	xx = xCP / 2 - s0
+	yy = yCP / 2 - s0
+	xx2 = xx - s0
+	yy2 = yy - s0
+	xx3 = xx2 - 2 * s0
+	yy3 = yy2 - 2 * s0
+	mulz -1
+	rotz panelRot[w][q]
+		fprism_ mat, mat, mat, mat,
+			10, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+			-xx, -yy, 15,
+			xx, -yy, 15,
+			xx, yy, 15,
+			-xx, yy, 15,
+			-xx, -yy, -1,
+			-xx2, -yy2, 15,
+			-xx2, yy2, 15,
+			xx2, yy2, 15,
+			xx2, -yy2, 15,
+			-xx2, -yy2, -1
+		fprism_ mat, mat, mat, mat,
+			5, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+			-xx3, -yy3, 15,
+			xx3, -yy3, 15,
+			xx3, yy3, 15,
+			-xx3, yy3, 15,
+			-xx3, -yy3, -1
+	del 2
+return
+
+21210:
+bitSegm = 1
+goto 212100
+
+21220:
+bitSegm = 1 + 4
+goto 212100
+
+21240:
+bitSegm = 1 + 2 + 4 + 8
+goto 212100
+
+21250:
+bitSegm = 1 + 8
+goto 212100
+
+212100:
+	gosub 21000
+	s0 = 0.03
+	xx = xCP / 2 - s0
+	yy = yCP / 2 - s0
+	for wp = 0 to 3
+		if bittest (bitSegm, wp) then
+			rotz wp * 90 + panelRot[w][q]
+			mulz -1
+			add xCP / 2 * (wp mod 2 = 0) + yCP / 2 * (wp mod 2 = 1), xCP / 2 * (wp mod 2 = 1) + yCP / 2 * (wp mod 2 = 0), 0
+				fprism_ mat, mat, mat, mat,
+					4, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+					-xx, -yy, 15,
+					-s0, -yy, 15,
+					-s0, -s0, 15,
+					-xx, -s0, 15
+			del 3
+		endif
+		qq = xx
+		xx = yy
+		yy = qq
+	next wp
+return
+
+22020:
+	gosub 21000
+	s0 = 0.03
+	xx = xCP / 2 - s0
+	yy = yCP / 2 - s0
+	xx3 = xx - 3 * s0
+	yy3 = yy - 3 * s0
+	rr3 = min (xx3, yy3)
+	mulz -1
+	rotz panelRot[w][q]
+		if rr3 > thkCeiPanel / 2 + eps then
+			fprism_ mat, mat, mat, mat,
+				2, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+				0, 0, 979,
+				rr3, 360, 4079
+		endif
+	del 2
+return
+22120:
+	gosub 21000
+	s0 = 0.03
+	xx = xCP / 2 - s0
+	yy = yCP / 2 - s0
+	xx2 = xx - s0
+	yy2 = yy - s0
+	xx3 = xx2 - 2 * s0
+	yy3 = yy2 - 2 * s0
+	rr3 = min (xx3, yy3)
+	mulz -1
+	rotz panelRot[w][q]
+		fprism_ mat, mat, mat, mat,
+			10, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+			-xx, -yy, 15,
+			xx, -yy, 15,
+			xx, yy, 15,
+			-xx, yy, 15,
+			-xx, -yy, -1,
+			-xx2, -yy2, 15,
+			-xx2, yy2, 15,
+			xx2, yy2, 15,
+			xx2, -yy2, 15,
+			-xx2, -yy2, -1
+		if rr3 > thkCeiPanel / 2 + eps then
+			fprism_ mat, mat, mat, mat,
+				2, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+				0, 0, 979,
+				rr3, 360, 4079
+		endif
+	del 2
+return
+
+22210:
+bitSegm = 1
+goto 222100
+
+22220:
+bitSegm = 1 + 4
+goto 222100
+
+22240:
+bitSegm = 1 + 2 + 4 + 8
+goto 222100
+
+22250:
+bitSegm = 1 + 8
+goto 222100
+
+222100:
+	gosub 21000
+	s0 = 0.03
+	xx = xCP / 2 - s0
+	yy = yCP / 2 - s0
+	rr3 = min (xx, yy)
+	for wp = 0 to 3
+		if bittest (bitSegm, wp) then
+			rotz wp * 90 + panelRot[w][q]
+			mulz -1
+			add xCP / 2 * (wp mod 2 = 0) + yCP / 2 * (wp mod 2 = 1), xCP / 2 * (wp mod 2 = 1) + yCP / 2 * (wp mod 2 = 0), 0
+				if rr3 > thkCeiPanel / 2 + eps then
+					roty 90
+						cutplane
+					del 1
+					rotx -90
+						cutplane
+					del 1
+					fprism_ mat, mat, mat, mat,
+						2, thkCeiPanel / 2, 45, thkCeiPanel / 2,
+						0, 0, 979,
+						rr3, 360, 4079
+					cutend
+					cutend
+				endif
+			del 3
+		endif
+	next wp
+return
+
+28010:
+s0 = 0.025
+rPerf = 0.010 / 2
+dPerf = 0.030
+npx = round_int ((xCP - 2 * s0) / dPerf)
+npy = round_int ((yCP - 2 * s0) / dPerf)
+dPerfx = (xCP - 2 * s0) / npx
+dPerfy = (yCP - 2 * s0) / npy
+for wpx = 0 to npx
+	dpx =  -xCP / 2 + s0 + wpx * dPerfx
+	for wpy = 0 to npy
+		dpy =  -yCP / 2 + s0 + wpy * dPerfy
+		put dpx, dpy, 979,
+			rPerf, 360, 4079
+	next wpy
+next wpx
+280100:
+resol max (gs_resol / 3, 3)
+rotz panelRot[w][q]
+	prism_ 5 + nsp / 3, thkCeiPanel,
+		-xCP / 2 + eps, -yCP / 2 + eps, 15,
+		-xCP / 2 + eps, yCP / 2 - eps, 15,
+		xCP / 2 - eps, yCP / 2 - eps, 15,
+		xCP / 2 - eps, -yCP / 2 + eps, 15,
+		-xCP / 2 + eps, -yCP / 2 + eps, -1,
+		get (nsp)
+del 1
+resol gs_resol
+return
+
+28110:
+s0 = 0.025
+rPerf = 0.010 / 2
+dPerf = 0.030
+npx = round_int ((xCP - 2 * s0) / dPerf)
+npy = round_int ((yCP - 2 * s0) / dPerf)
+dPerfx = (xCP - 2 * s0) / npx
+dPerfy = (yCP - 2 * s0) / npy
+for wpx = 0 to npx
+	dpx =  -xCP / 2 + s0 + wpx * dPerfx
+	for wpy = 0 to npy / 3
+		dpy =  -yCP / 2 + s0 + wpy * dPerfy
+		put dpx, dpy, 979,
+			rPerf, 360, 4079
+	next wpy
+	for wpy = ceil (npy * 2 / 3) to npy
+		dpy =  -yCP / 2 + s0 + wpy * dPerfy
+		put dpx, dpy, 979,
+			rPerf, 360, 4079
+	next wpy
+next wpx
+gosub 280100
+return
+
+28210:
+s0 = 0.020
+nsx = round_int (xCP / 0.15)
+nsy = round_int (yCP / 0.15)
+xs = xCP / nsx - 2 * s0
+ys = yCP / nsy - 2 * s0
+ds = ys / 11
+for wpy = 0 to nsy - 1
+	for wpx = 0 to nsx - 1
+		dpx = -xCP / 2 + wpx * (2 * s0 + xs) + s0
+		dpy = -yCP / 2 + wpy * (2 * s0 + ys) + s0
+		for qp = 0 to 5
+			put dpx, 	 	dpy + qp * ds * 2, 		15,
+				dpx,		dpy + qp * ds * 2 + ds, 	15,
+				dpx + xs, 	dpy + qp * ds * 2 + ds, 	15,
+				dpx + xs, 	dpy + qp * ds * 2, 		15,
+				dpx,		dpy + qp * ds * 2,	    -1
+		next qp
+	next wpx
+next wpy
+gosub 280100
+return
+
+
+

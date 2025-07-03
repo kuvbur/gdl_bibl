@@ -1,0 +1,206 @@
+
+!   Параметры геометрии размера:
+! type_razm - Тип размера (0 - Параллельно линии между точками, 1 - Вериткальный размер, 2 - Горизонтальный размер)
+! inx_razm - индекс размера
+! fstr_razm - Первая строка размера. Если пусто - подставляется расстойние между точками
+! fstr_razm - Вторая строка размера
+! Для автоматического вычисления количества по заданному шагу строка должна иметь вид 'sШАГ', например 's200'
+! Для автоматического вычисления шага по заданному количеству строка должна иметь вид 'nКОЛ-ВО', например 'n10'
+!   Для редактирования положения всех размеров используется общий массив координат
+! coord_razm[inx_razm][1] - X начала, в мм модели
+! coord_razm[inx_razm][2] - Y начала, в мм модели
+! coord_razm[inx_razm][3] - X конца, в мм модели
+! coord_razm[inx_razm][4] - Y конца, в мм модели
+! coord_razm[inx_razm][5] - Отступ размерной линии от первой точки, в мм макета. Если пусто - читается из ПМВ
+! coord_razm[inx_razm][6] - X середины первого текста, в мм макета. По умолчанию - по центру размера
+! coord_razm[inx_razm][7] - Y середины первого текста, в мм макета. По умолчанию - над линией
+! coord_razm[inx_razm][8] - X середины второго текста, в мм макета. По умолчанию - под линией
+! coord_razm[inx_razm][9] - Y середины второго текста, в мм макета. По умолчанию - по центру размера
+! coord_razm[inx_razm][10] - Отступ выносных линий от точек начала/конца, в мм макета
+!   Настройки отображения размера:
+! zasechka - Размер засечки, в мм макета
+! vistup - Размер выступа выносной линии за линию размера, в мм макета
+! Shrift - Имя шрифта, если пусто - читается из ПМВ (LibraryGlobals_param_razm)
+! Shrift_razm - Размер шрифта, если пусто - читается из ПМВ (LibraryGlobals_param_razm) 
+! Shrift_tip - Тип написания шрифта - читается из ПМВ (LibraryGlobals_param_razm)
+! use_hotspot - показ точек редактирования
+! Использование:
+!inx_razm = 1
+!type_razm = 1
+!dim coord_razm[][]
+!coord_razm[inx_razm][1]=0 !Начало, X
+!coord_razm[inx_razm][2]=0 !Начало, Y
+!coord_razm[inx_razm][3]=0 !Конец, X
+!coord_razm[inx_razm][4]=1 !Конец, Y
+!coord_razm[inx_razm][5]=10 !Отступ размера от первой точки
+!coord_razm[inx_razm][10]=3 !Отступ выносных линий от первой точки
+!Shrift = "ISOCPEUR" : Shrift_razm = 3 : Shrift_razmr = 2.5 : Shrift_tip = 0 !Настройки шрифта
+!call 'macro_razm' parameters coord_razm=coord_razm,
+!							type_razm=type_razm,
+!							inx_razm=inx_razm,
+!							Shrift_tip=Shrift_tip,
+!							Shrift=Shrift,
+!							Shrift_razm=Shrift_razmr
+
+dbg = 0 !Для отладки установить 1
+if inx_razm=0 then inx_razm=1
+EPS = 0.0001
+unID = 700*inx_razm
+
+dim ttype_razm[]
+dim itype_razm[] : i=0
+i=i+1 : itype_razm[i]=0 : ttype_razm[i] = "Перпендикулярно"
+i=i+1 : itype_razm[i]=1 : ttype_razm[i] = "По Х"
+i=i+1 : itype_razm[i]=2 : ttype_razm[i] = "По У"
+i=i+1 : itype_razm[i]=3 : ttype_razm[i] = "Угловой размер (меньший)"
+
+dim hotspotname[]
+hotspotname[1] = "Начало размера X"
+hotspotname[2] = "Начало размера Y"
+hotspotname[3] = "Конец размера X"
+hotspotname[4] = "Конец размера Y"
+hotspotname[5] = "Отступ размера"
+hotspotname[6] = "Выноска первой строки X"
+hotspotname[7] = "Выноска первой строки Y"
+hotspotname[8] = "Выноска второй строки X"
+hotspotname[9] = "Выноска второй строки Y"
+hotspotname[10] = "Отступ размерных линий"
+
+!Если имя шрифта пустое, то читаем его из ПМВ
+if strlen(Shrift)<EPS then
+	Shrift_t = "" : success = LIBRARYGLOBAL ("Libraryflobals-as", "Shrift", Shrift_t)
+	Shrift_razm_t = 0 : success = LIBRARYGLOBAL ("Libraryflobals-as", "Shrift_razm_razm", Shrift_razm_t)
+	Shrift_tip_t = 0 : success = LIBRARYGLOBAL ("Libraryflobals-as", "Shrift_razm_tip", Shrift_tip_t)
+	!Если прочитать не удалось - применим значения по умолчанию
+	if strlen(Shrift_t)<EPS then Shrift_t = "ISOCPEUR"
+	if Shrift_razm_t<EPS then Shrift_razm_t = 3
+	Shrift = Shrift_t
+	Shrift_razm = Shrift_razm_t
+	Shrift_tip = Shrift_tip_t
+endif
+
+!Если прилетел массив, не соответствующий по размеру индексу - обновим его размер
+n_param = 10
+
+if vardim2(coord_razm)<n_param or vardim1(coord_razm)<inx_razm then
+	dim coord_razm_t[][]
+	for i=1 to inx_razm
+		for j=1 to vardim2(coord_razm)
+			coord_razm_t[i][j]=coord_razm[i][j]
+		next j
+		for j=vardim2(coord_razm)+1 to n_param
+			coord_razm_t[i][j]=0.1*j
+		next j
+	next i
+	coord_razm=coord_razm_t
+	parameters coord_razm=coord_razm
+endif
+
+if vardim2(coord_razms)<vardim2(coord_razm) or vardim1(coord_razm)<vardim1(coord_razms) then
+	dim coord_razm_ts[][]
+	for i=1 to vardim1(coord_razm)
+		for j=1 to vardim2(coord_razm)
+			coord_razm_ts[i][j]=coord_razm[i][j]
+		next j
+	next i
+	coord_razms=coord_razm_ts
+	parameters coord_razms=coord_razms
+endif
+
+
+!Направление и расстояние между точками
+dx = coord_razm[inx_razm][1]-coord_razm[inx_razm][3]
+dy = coord_razm[inx_razm][2]-coord_razm[inx_razm][4]
+gosub "torphi"
+razm_l_abs = razm_l
+ang_razm_abs = ang_razm
+
+!Вычисляем длину размера и его поворот
+razm_l = 0
+if type_razm = 0 then
+	dx = coord_razm[inx_razm][1]-coord_razm[inx_razm][3]
+	dy = coord_razm[inx_razm][2]-coord_razm[inx_razm][4]
+	gosub "torphi"
+	end_x = 0
+endif
+if type_razm = 1 then
+	dx = coord_razm[inx_razm][1]-coord_razm[inx_razm][3]
+	dy = 0
+	gosub "torphi"
+endif
+if type_razm = 2 then
+	dx = 0
+	dy = coord_razm[inx_razm][2]-coord_razm[inx_razm][4]
+	gosub "torphi"
+endif
+!Выступ последней линии
+end_x = SQR(razm_l_abs*razm_l_abs - razm_l*razm_l)
+
+!Автоматическое вычисление размера
+if fstr_razm = "0" or fstr_razm = "" then fstr_razm = str("%.0mm",razm_l)
+! Размер 1
+!Вычисляем количество и округлённую длину
+if STRSTR(fstr_razm,"s")=1 then
+	shag = 0
+	n = SPLIT (fstr_razm, "%s%n", t,shag)
+	nsh=round_int((razm_l*1000)/shag)
+	razm_n = nsh*shag
+	fstr_razm = str("%.0",nsh)+"x"+str("%.0",shag)+"="+str("%.0m",razm_n)
+endif
+!Вычисляем шаг с округлением до 5 мм.
+if STRSTR(fstr_razm,"n")=1 then
+	nsh = 0
+	n = SPLIT (fstr_razm, "%s%n", t, nsh)
+	shag = round_int((razm_l/nsh)*500)/500
+	razm_n = nsh*shag
+	fstr_razm = str("%.0",nsh)+"x"+str("%.0mm",shag)+"="+str("%.0mm",razm_n)
+endif
+!Размер 2
+!Вычисляем количество и округлённую длину
+if STRSTR(sstr_razm,"s")=1 then
+	shag = 0
+	n = SPLIT (sstr_razm, "%s%n", t,shag)
+	nsh=round_int((razm_l*1000)/shag)
+	razm_n = nsh*shag
+	sstr_razm = str("%.0",nsh)+"x"+str("%.0",shag)+"="+str("%.0m",razm_n)
+endif
+!Вычисляем шаг с округлением до 5 мм.
+if STRSTR(sstr_razm,"n")=1 then
+	nsh = 0
+	n = SPLIT (sstr_razm, "%s%n", t, nsh)
+	shag = round_int((razm_l/nsh)*500)/500
+	razm_n = nsh*shag
+	sstr_razm = str("%.0",nsh)+"x"+str("%.0mm",shag)+"="+str("%.0mm",razm_n)
+endif
+
+goto 2010
+
+"torphi":
+	razm_l = SQR(dx*dx+dy*dy)
+	if dx>EPS and (abs(dy)<EPS or dy>EPS) then 
+		ang_razm = atn(dy/dx)
+		angle_txt = -90
+	endif
+	if dx>EPS and dy<EPS and abs(dx)>EPS and abs(dy)>EPS then
+		ang_razm = atn(dy/dx)+360
+		angle_txt = -90
+	endif
+	if dx<EPS and abs(dx)>EPS then 
+		ang_razm = atn(dy/dx)+180
+		angle_txt = 90
+	endif
+	if abs(dx)<EPS and dy>EPS then 
+		ang_razm = 90
+		angle_txt = -90
+	endif
+	if abs(dx)<EPS and dy<EPS and abs(dy)>EPS then 
+		ang_razm = 270
+		angle_txt = 90
+	endif
+	if abs(dx)<EPS and abs(dy)<EPS then
+		ang_razm = 0
+		angle_txt = 0
+	endif
+return
+
+2010:

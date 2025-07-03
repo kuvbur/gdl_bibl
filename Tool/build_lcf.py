@@ -3,6 +3,7 @@ import pathlib
 import string
 from colorama import init
 from lxml import etree
+from pyparsing import C
 from download_and_unzip import DownloadAndUnzip
 import shutil
 from subprocess import Popen, PIPE, STDOUT, CalledProcessError
@@ -12,8 +13,28 @@ import sys
 import errno
 import os
 import stat
+import logging
 
+DEBUG_MODE = False
 
+warningmacro = ["GS Door Functions", "dw_minimalspace", "Shutter_Panel_Collection"]
+
+logger = logging.getLogger("test")
+logger.setLevel(logging.DEBUG)  # Минимальный уровень сообщений
+
+# Создаем форматтер для сообщений
+formatter = logging.Formatter(
+    fmt='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+file_handler = logging.FileHandler(pathlib.Path(__file__).parent/'build.log', encoding='utf-8')
+file_handler.setLevel(logging.INFO)  # В файл пишем от INFO и выше
+file_handler.setFormatter(formatter)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.DEBUG)  # В консоль выводим от DEBUG и выше
+console_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 def handleRemoveReadonly(func, path, exc):
     excvalue = exc[1]
     if func in (os.rmdir, os.remove) and excvalue.errno == errno.EACCES:
@@ -26,7 +47,7 @@ def handleRemoveReadonly(func, path, exc):
 def run_shell_command(command_line: list) -> bool:
     command_line = " ".join(command_line)
     command_line_args = shlex.split(command_line)
-    print(f'Start - {command_line}')
+    logger.info(f'Start - {command_line}')
     try:
         command_line_process = Popen(
             command_line_args,
@@ -36,11 +57,11 @@ def run_shell_command(command_line: list) -> bool:
         for line in command_line_process.stdout:
             log_txt = line.decode('utf-8', errors='ignore')
             if 'Transcode' not in log_txt and 'Copy' not in log_txt and 'Revert' not in log_txt and 'Convert' not in log_txt:
-                print(log_txt)
+                logger.info(log_txt)
     except (OSError, CalledProcessError) as exception:
-        print(exception)
+        logger.error(exception)
         return False
-    print(f'Done - {command_line}')
+    logger.info(f'Done - {command_line}')
     return True
 
 
@@ -70,6 +91,11 @@ def CreateGSM(folders: dict):
     devKit = folders['DEVKIT']
     param = [f'"{devKit}"', 'finalizelibrary -l CYR -verbose 2',
              f'"{xml_folder}"', f'"{gsm_folder}"']
+    run_shell_command(param)
+    gsm_folder = folders['GSM_N']
+    xml_folder = folders['XML_TEMP_N']
+    param = [f'"{devKit}"', 'finalizelibrary -l CYR -verbose 2',
+             f'"{xml_folder}"', f'"{gsm_folder}"']
     return run_shell_command(param)
 
 
@@ -77,6 +103,11 @@ def CreateLCF(folders: dict):
     gsm_folder = folders['GSM']
     lcf_name = folders['LCF']
     devKit = folders['DEVKIT']
+    param = [f'"{devKit}"', 'createcontainer',
+             f'"{lcf_name}"', '-compress 9',  f'"{gsm_folder}"']
+    run_shell_command(param)
+    gsm_folder = folders['GSM_N']
+    lcf_name = folders['LCF_N']
     param = [f'"{devKit}"', 'createcontainer',
              f'"{lcf_name}"', '-compress 9',  f'"{gsm_folder}"']
     return run_shell_command(param)
@@ -98,16 +129,16 @@ def DownloadLP_XMLConverters(configData: dict):
         'LP_XMLConverter' / f'LP_XMLConverter{version}'
     configData['LP_XMLConverter']['path'] = {}
     if not devKitFolderVersion.exists():
-        print(f"Download LP_XMLConverter {version}")
+        logger.info(f"Download LP_XMLConverter {version}")
         DownloadAndUnzip(
             configData['LP_XMLConverter'][version], devKitFolder)
         if not devKitFolderVersion.exists():
-            print(f"ERROR, folder for LP_XMLConverter {version} not exists")
+            logger.error(f"ERROR, folder for LP_XMLConverter {version} not exists")
             return False
         else:
             configData['LP_XMLConverter']['path'][version] = devKitFolderVersion.absolute()
     else:
-        print(f"LP_XMLConverter {version} exist")
+        logger.info(f"LP_XMLConverter {version} exist")
         configData['LP_XMLConverter']['path'][version] = devKitFolderVersion
     for version in configData["VersionList"]:
         if version in configData['LP_XMLConverter']:
@@ -118,24 +149,28 @@ def DownloadLP_XMLConverters(configData: dict):
             devKitFolderVersion = toolfolder / \
                 'LP_XMLConverter' / f'LP_XMLConverter{version}'
             if not devKitFolderVersion.exists():
-                print(f"Download LP_XMLConverter {version}")
+                logger.info(f"Download LP_XMLConverter {version}")
                 DownloadAndUnzip(
                     configData['LP_XMLConverter'][version], devKitFolder)
                 if not devKitFolderVersion.exists():
-                    print(
+                    logger.error(
                         f"ERROR, folder for LP_XMLConverter {version} not exists")
                     return False
                 else:
                     configData['LP_XMLConverter']['path'][version] = devKitFolderVersion.absolute(
                     )
             else:
-                print(f"LP_XMLConverter {version} exist")
+                logger.info(f"LP_XMLConverter {version} exist")
                 configData['LP_XMLConverter']['path'][version] = devKitFolderVersion.absolute(
                 )
     return True
 
 
 def prepfolder(folder):
+    if DEBUG_MODE:
+        if not folder.exists():
+            folder.mkdir(parents=True)
+        return folder
     if folder.exists():
         shutil.rmtree(folder, ignore_errors=False,
                       onerror=handleRemoveReadonly)
@@ -185,6 +220,7 @@ def PrepareDirectories(configData: dict, gdl_root: pathlib.WindowsPath):
                 gsm_folder = prepfolder(buildFolder / 'gsm')
                 lcf_name = lcfName+version+'.lcf'
                 # Словарь с папками
+
                 configData['LCF'][lcfName][version] = {}
                 configData['LCF'][lcfName][version]['XML_TEMP'] = xml_folder
                 configData['LCF'][lcfName][version]['MACRO'] = macro_folder
@@ -193,6 +229,16 @@ def PrepareDirectories(configData: dict, gdl_root: pathlib.WindowsPath):
                 configData['LCF'][lcfName][version]['XML_ROOT'] = configData['XML_ROOT'][version]
                 configData['LCF'][lcfName][version]['DEVKIT'] = configData['TOOL'] / \
                     f'LP_XMLConverter{version}'/'WIN'/'LP_XMLConverter.EXE'
+                xml_folder = prepfolder(buildFolder / f'xml_ext')
+                # Путь к макросам
+                macro_folder = prepfolder(xml_folder / '_macro_')
+                # Путь к gsm
+                gsm_folder = prepfolder(buildFolder / 'gsm_ext')
+                lcf_name = lcfName+version+'_nocommon.lcf'
+                configData['LCF'][lcfName][version]['XML_TEMP_N'] = xml_folder
+                configData['LCF'][lcfName][version]['MACRO_N'] = macro_folder
+                configData['LCF'][lcfName][version]['GSM_N'] = gsm_folder
+                configData['LCF'][lcfName][version]['LCF_N'] = buildFolder / lcf_name
 
 
 def GetGUID(filename: pathlib.WindowsPath) -> str:
@@ -211,8 +257,8 @@ def GetGUID(filename: pathlib.WindowsPath) -> str:
         croot = root.getroot()
         GUIDelem = croot.attrib['MainGUID']
     except Exception as e:
-        print(f'В файле {filename} возникла ошибка при получении GUID')
-        print(e)
+        logger.error(f'В файле {filename} возникла ошибка при получении GUID')
+        logger.error(e)
     return GUIDelem
 
 
@@ -241,6 +287,8 @@ def GetCalledMacro(filename: pathlib.WindowsPath) -> dict:
                         namemacro = namemacro.text.strip('"')
                         if namemacro not in macro_dict:
                             macro_dict[namemacro] = guidemacro
+                            if namemacro in warningmacro:
+                                logger.info(namemacro, )
         subtypes = croot.find('Ancestry')
         if subtypes is not None:
             for subtype in subtypes:
@@ -248,7 +296,7 @@ def GetCalledMacro(filename: pathlib.WindowsPath) -> dict:
                 if guidesubtype not in macro_dict:
                     macro_dict[guidesubtype] = guidesubtype
     except Exception as e:
-        print(f'В файле {filename} возникла ошибка при поиске макросов')
+        logger.error(f'В файле {filename} возникла ошибка при поиске макросов')
     return macro_dict
 
 
@@ -285,7 +333,6 @@ def GetGUIDDict(xml_folder: pathlib.WindowsPath) -> dict:
                 'filename': filename, 'GUID': GUIDelem, 'name': name}
             xml_dict['GUID'][GUIDelem] = {
                 'filename': filename, 'GUID': GUIDelem, 'name': name}
-
     return xml_dict
 
 
@@ -302,12 +349,14 @@ def CopyXML(config: dict, folders: dict, xml_dict: dict) -> list:
     copied_file = []
     for hsf in config["Include"]:
         if hsf in xml_dict['Name']:
-            fname = xml_dict['Name'][hsf]['filename'].name
-            shutil.copy(xml_dict['Name'][hsf]['filename'],
-                        folders['XML_TEMP'] / fname)
+            path = xml_dict['Name'][hsf]['filename']
+            fname = path.name
+            shutil.copy(path, folders['XML_TEMP'] / fname)
             copied_file.append(hsf)
+            if 'CommonLib_temp' not in str(path):
+                shutil.copy(path, folders['XML_TEMP_N'] / fname)
         else:
-            print(f'Не найден объект {hsf}')
+            logger.error(f'Не найден объект {hsf}')
     return copied_file
 
 
@@ -320,7 +369,7 @@ def find(xml_dict: dict, k, v):
         return xml_dict['Name'][v]['name'], xml_dict['Name'][v]['GUID'], True
     if v in xml_dict['GUID']:
         return xml_dict['GUID'][v]['name'], xml_dict['GUID'][v]['GUID'], True
-    print(f'Не найден макрос {k}, GUID {v}')
+    logger.error(f'Не найден макрос {k}, GUID {v}')
     return "", "", False
 
 
@@ -332,14 +381,18 @@ def CopyMacro(config: dict, folders: dict, xml_dict: dict, copied_file: list):
         if findflag and name not in config["Ignore"] and name not in copied_file:
             include_macro[name] = GUID
     if len(include_macro) == 0:
-        print('Макросы скопированы')
+        logger.info('Макросы скопированы')
         return copied_file, True
     for name_macro in include_macro.keys():
         fname = xml_dict['Name'][name_macro]['filename'].name
-        shutil.copy(xml_dict['Name'][name_macro]['filename'],
+        path = xml_dict['Name'][name_macro]['filename']
+        shutil.copy(path,
                     folders['MACRO'] / fname)
-        print(f'Скопирован макрос {name_macro}')
+        logger.info(f'Скопирован макрос {name_macro}')
         copied_file.append(name_macro)
+        if 'CommonLib_temp' not in str(path):
+            shutil.copy(path,
+                        folders['MACRO_N'] / fname)
     return copied_file, False
 
 
@@ -351,6 +404,9 @@ def CopyIncludeFolder(folders: dict, include_dict: dict, copied_file: list, lcfN
             for p in sorted(pathlib.Path(folder).glob('**/*.*')):
                 if p.is_file():
                     copied_file.append(p.stem)
+            if 'CommonLib_temp' not in str(folder):
+                shutil.copytree(folder,
+                            folders['MACRO_N'] / folder.parts[-1], dirs_exist_ok=True)
     for file in copied_file:
         if file in include_dict['File']:
             for folder in include_dict['File'][file]:
@@ -359,6 +415,9 @@ def CopyIncludeFolder(folders: dict, include_dict: dict, copied_file: list, lcfN
                 for p in sorted(pathlib.Path(folder).glob('**/*.*')):
                     if p.is_file():
                         copied_file.append(p.stem)
+                if 'CommonLib_temp' not in str(folder):
+                    shutil.copytree(folder,
+                                folders['MACRO_N'] / folder.parts[-1], dirs_exist_ok=True)
     return copied_file
 
 
@@ -386,6 +445,9 @@ def CopyUsedFile(folders: dict, copied_file: list) -> list:
             if len(paths) > 0:
                 shutil.copy(paths[0], folders['MACRO'])
                 copied_file.append(file)
+                if 'CommonLib_temp' not in str(paths[0]):
+                    shutil.copytree(paths[0],
+                                folders['MACRO_N'], dirs_exist_ok=True)
     return copied_file
 
 
@@ -425,12 +487,13 @@ def ConvertGDL2XML(configData: dict, version: string):
     gdl_root = configData['GSM']
     XML_ROOT = configData['XML_ROOT'][version]
     maxversion = configData['MaxVersion']
+    if DEBUG_MODE and XML_ROOT.exists():
+        return True
     devKit = configData['TOOL'] / \
         f'LP_XMLConverter{maxversion}'/'WIN'/'LP_XMLConverter.EXE'
     param = [f'"{devKit}"', f'l2x -l CYR -compatibility {version}',
              f'"{gdl_root}"', f'"{XML_ROOT}"']
     return run_shell_command(param)
-
 
 def run(configPath: pathlib.WindowsPath, gdl_root: pathlib.WindowsPath):
     configFile = open(configPath, encoding="utf-8")
@@ -450,6 +513,15 @@ def run(configPath: pathlib.WindowsPath, gdl_root: pathlib.WindowsPath):
                 dst = addsourse / f'{folder.name}_{i}'
                 shutil.copytree(folder,
                                 dst, dirs_exist_ok=True)
+    if 'CommonLib' in configData:
+        addsourse = prepfolder(gdl_root / 'CommonLib_temp')
+        for source in configData['CommonLib']:
+            folder = pathlib.Path(source)
+            if folder.is_dir():
+                dst = addsourse / folder.name
+                shutil.copytree(folder,
+                                dst, dirs_exist_ok=True)
+                
     PrepareDirectories(configData, gdl_root)
     ConvertAllLCF(configData)
     ConvertGDL2AllXML(configData)
@@ -460,7 +532,7 @@ def run(configPath: pathlib.WindowsPath, gdl_root: pathlib.WindowsPath):
             xml_dict = GetGUIDDict(XML_ROOT)
             include_dict = GetIncludeFileDict(XML_ROOT)
             if len(include_dict) < 1:
-                print(f'Не найден список файлов для {XML_ROOT}')
+                logger.error(f'Не найден список файлов для {XML_ROOT}')
             for lcfName in configData["Package"]:
                 is_skip = False
                 if "SkipVersion" in configData['Package'][lcfName]:
@@ -491,23 +563,30 @@ def run(configPath: pathlib.WindowsPath, gdl_root: pathlib.WindowsPath):
                                   onerror=handleRemoveReadonly)
                     shutil.rmtree(folders['GSM'], ignore_errors=False,
                                   onerror=handleRemoveReadonly)
+                    shutil.rmtree(folders['XML_TEMP_N'], ignore_errors=False,
+                                  onerror=handleRemoveReadonly)
+                    shutil.rmtree(folders['GSM_N'], ignore_errors=False,
+                                  onerror=handleRemoveReadonly)
 
-    for v, f in configData['XML_ROOT'].items():
-        if f.exists():
-            shutil.rmtree(f, ignore_errors=False,
-                          onerror=handleRemoveReadonly)
-    lcf_folder = gdl_root / 'LCF2GSM'
-    if lcf_folder.exists():
-        shutil.rmtree(lcf_folder, ignore_errors=False,
-                      onerror=handleRemoveReadonly)
-    add_folder = gdl_root / 'AddSourse_temp'
-    if add_folder.exists():
-        shutil.rmtree(add_folder, ignore_errors=False,
-                      onerror=handleRemoveReadonly)
-    print('Готово!')
+    if not DEBUG_MODE:
+        for v, f in configData['XML_ROOT'].items():
+            if f.exists():
+                shutil.rmtree(f, ignore_errors=False,
+                            onerror=handleRemoveReadonly)
+        lcf_folder = gdl_root / 'LCF2GSM'
+        if lcf_folder.exists():
+            shutil.rmtree(lcf_folder, ignore_errors=False,
+                        onerror=handleRemoveReadonly)
+        add_folder = gdl_root / 'AddSourse_temp'
+        if add_folder.exists():
+            shutil.rmtree(add_folder, ignore_errors=False,
+                        onerror=handleRemoveReadonly)
+        add_folder = gdl_root / 'CommonLib_temp'
+        if add_folder.exists():
+            shutil.rmtree(add_folder, ignore_errors=False,
+                        onerror=handleRemoveReadonly)
+        logger.info('Готово!')
 
-# def g(configPath=None, gdl_root=None):
-#     pass
 
 def main(configPath=None, gdl_root=None):
     if configPath is None:

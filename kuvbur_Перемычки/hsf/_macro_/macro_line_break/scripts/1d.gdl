@@ -1,0 +1,124 @@
+
+!Разбивка по словам
+!mlb_in_str = "  stringxxstring  " : mlb_l_max = 0.6
+!dim mlb_out_str_arr[]
+!call "macro_line_break" parameters mlb_in_str=mlb_in_str, mlb_l_max=mlb_l_max, mlb_in_scale=1,
+!									RETURNED_PARAMETERS mlb_n_row, mlb_out_str, mlb_out_str_arr
+
+!DEFINE STYLE{2} "macro_line_break" AC_TextFont_1, AC_TextSize_1, AC_TextStyle_1
+!STYLE "macro_line_break"
+rs = 1
+dim text_w[] : text_w[1] = ""
+dim text_r[] : text_r[1] = ""
+
+!Чтоб на разрывать обозначение ГОСТа, ТУ или серий
+dim unbreak[] : i=0
+i=i+1 : unbreak[i] = "ГОСТ"
+i=i+1 : unbreak[i] = "ТУ"
+i=i+1 : unbreak[i] = "Серия"
+i=i+1 : unbreak[i] = "Серии"
+i=i+1 : unbreak[i] = "ОСТ"
+
+EPS = 0.0001
+FILE_DEPENDENCE "macro_trim_space", "macro_replace_char", "macro_replace_word"
+
+
+if strlen(mlb_in_str)<EPS then goto "m_end"
+k = mlb_in_scale : if mlb_in_scale<EPS then k = 1000 / GLOB_SCALE
+ns = 0
+aft = mlb_in_str
+
+mrc_newChar = " " : mrc_charToReplace = "\n" : mrc_in_str = aft : mrc_out_str = ""
+call "macro_replace_char" parameters mrc_in_str=mrc_in_str, mrc_charToReplace=mrc_charToReplace, mrc_newChar = mrc_newChar, RETURNED_PARAMETERS mrc_out_str
+if vartype(mrc_out_str)=2 then aft = mrc_out_str
+
+if (STW(aft) / k) <= mlb_l_max then 
+	rs = 1
+	text_r[rs] = aft
+	goto "m_end"
+endif
+
+for inx = 1 to vardim1(unbreak)
+	mrw_wordToReplace = unbreak[inx]+" "
+	mrw_in_str = aft
+	mrw_newWord = unbreak[inx]+"@"
+	mrw_out_str = ""
+	call "macro_replace_word" parameters mrw_in_str=mrw_in_str,
+										mrw_newWord=mrw_newWord,
+										mrw_wordToReplace = mrw_wordToReplace,
+										RETURNED_PARAMETERS mrw_out_str
+	if vartype(mrw_out_str)=2 then aft = mrw_out_str
+next inx
+
+pos_prob = STRSTR(aft, " ", 1)
+WHILE pos_prob>0 DO
+	word = STRSUB(aft, 1, pos_prob-1)
+	if strlen(word)>0 then
+		ns = ns + 1
+		text_w[ns] = word
+	endif
+	aft = STRSUB(aft, pos_prob+1, strlen(aft) - pos_prob)
+	pos_prob = STRSTR(aft, " ", 1)
+ENDWHILE
+
+ns = ns + 1
+text_w[ns] = aft
+rs = 0 : ns = 1
+for is = 1 to 100
+	txt = ""
+	w_txt = 0
+	w_txt_next = 0
+	WHILE w_txt<=mlb_l_max and w_txt_next<=mlb_l_max and ns <= vardim1(text_w) DO
+		if txt = "" then
+			txt = text_w[ns]
+		else
+			txt = txt + " " + text_w[ns]
+		endif
+		w_txt = STW (txt) / k
+		if ns<vardim1(text_w) then 
+			w_txt_next = STW (txt + " " + text_w[ns+1]) / k
+		else
+			w_txt_next = 0
+		endif
+		ns = ns + 1
+	ENDWHILE
+	if txt<>"" then
+		rs = rs + 1
+		text_r[rs] = txt
+	else
+		goto "m_end"
+	endif
+next is
+
+"m_end":
+
+mlb_out_str_ = ""
+for is=1 to rs
+	txt = text_r[is]
+	call "macro_trim_space" parameters mts_in_str=txt,
+										RETURNED_PARAMETERS mts_out_str
+	if vartype(mts_out_str)=2 then txt = mts_out_str
+	for inx = 1 to vardim1(unbreak)
+		mrw_wordToReplace = unbreak[inx]+"@"
+		mrw_in_str = txt
+		mrw_newWord = unbreak[inx]+" "
+		mrw_out_str = ""
+		call "macro_replace_word" parameters mrw_in_str=mrw_in_str,
+											mrw_newWord=mrw_newWord,
+											mrw_wordToReplace = mrw_wordToReplace,
+											RETURNED_PARAMETERS mrw_out_str
+		if vartype(mrw_out_str)=2 then txt = mrw_out_str
+	next inx
+	call "macro_trim_space" parameters mts_in_str=txt,
+										RETURNED_PARAMETERS mts_out_str
+	if vartype(mts_out_str)=2 then txt = mts_out_str
+	text_r[is] = txt
+	mlb_out_str_ = mlb_out_str_ + text_r[is]+"\n"
+next is
+if mlb_out_str_ = "" then mlb_out_str_ = "ОШИБКА"
+
+mlb_out_str_arr = text_r
+mlb_n_row = rs
+mlb_out_str = mlb_out_str_
+!!!parameters mlb_out_str_arr=mlb_out_str_arr, mlb_n_row=mlb_n_row, mlb_out_str=mlb_out_str
+EXIT mlb_n_row, mlb_out_str, mlb_out_str_arr

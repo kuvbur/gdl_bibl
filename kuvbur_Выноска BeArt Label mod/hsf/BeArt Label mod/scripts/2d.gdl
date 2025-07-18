@@ -274,6 +274,13 @@ else
 	endif
 endif
 
+comp_name = ""
+if GLOB_ELEM_TYPE=5 then comp_name = WALL_COMPS_NAME
+if GLOB_ELEM_TYPE=7 then SLAB_COMPS_NAME
+if GLOB_ELEM_TYPE=8 then ROOF_COMPS_NAME
+if GLOB_ELEM_TYPE=18 then SHELLBASE_COMPS_NAME
+out_var_n[16] = comp_name
+
 !<---------------- Вытаскиваем данные из аксессуаров -----------
 pol=0
 n_sloi=0
@@ -347,7 +354,8 @@ if strlen(property_layer)>0 and (SkiN<EPS or property_layer_force) then
 	endif
 endif
 
-if somestuff_read_type>0 and not(strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyValue, "m[")>0 or STRSTR(_stPropertyValue, "b[")>0) and STRSTR(_stPropertyValue, "]")>0) then
+
+if (somestuff_prop_1>0 or somestuff_prop_2>0) and somestuff_read_type>0 and not(strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyValue, "m[")>0 or STRSTR(_stPropertyValue, "b[")>0) and STRSTR(_stPropertyValue, "]")>0) then
 	_stPropertyValue = ""
 	if SkiN=0 then
 		skinThk = WALL_THICKNESS+SLAB_THICKNESS+ROOF_THICKNESS+SHELLBASE_THICKNESS
@@ -513,8 +521,8 @@ if strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyV
 				bmatm[n_sloi] = material_txt
 				bmatinx[n_sloi] = 0
 				if bmat_delim = "b[" then
-					bmatinx_int = 0 : rez_1 = SPLIT(material_txt,"%n",bmatinx_int)
-					if rez_1*bmatinx_int>EPS then bmatinx[n_sloi] = bmatinx_int
+					var = material_txt : gosub "tonum"
+					if rez*var_num>EPS then bmatinx[n_sloi] = var_num
 				endif
 				tolsh[n_sloi] = th
 			endif
@@ -611,27 +619,36 @@ endif
 !<---------- Выноска с составом конструкций --------------------
 dim kol_vo_str[]
 if vin = 0 then
-	SkiN=WALL_SKINS_NUMBER*(GLOB_ELEM_TYPE=5)+\
+	SkiN=(WALL_SKINS_NUMBER*(GLOB_ELEM_TYPE=5)+\
 	SLAB_SKINS_NUMBER*(GLOB_ELEM_TYPE=7)+\
-	ROOF_SKINS_NUMBER*(GLOB_ELEM_TYPE=8)+(n_sloi+1)*(pol=1)+(GLOB_ELEM_TYPE=18)*SHELLBASE_SKINS_NUMBER + (n_sloi)*(property=1)
+	ROOF_SKINS_NUMBER*(GLOB_ELEM_TYPE=8)+(n_sloi+1)*(pol=1)+(GLOB_ELEM_TYPE=18)*SHELLBASE_SKINS_NUMBER)*(property=0) + (n_sloi)*(property=1)
 else
 	SkiN=0
 endif
-
 
 if GLOB_ELEM_TYPE=0 then min_lay_thk = -1
 if GLOB_ELEM_TYPE=0 and SkiN=0 then SkiN=-1
 if not(vin) then
 	if strlen(add_param)>EPS and add_param<>stringarr[LCODE][1] and GLOB_ELEM_TYPE<>0 then
-		call "macro_get_param" parameters mgp_in_str=add_param,
-											mgp_prim1=par_prim1,
-											mgp_prim2=par_prim2,
-											mgp_prim3=par_prim3,
-											mgp_prim4=par_prim4,
-											mgp_prim5=par_prim5,
-											mgp_qty=n_str_px*_LABEL_CUSTOM_ARROW,
-											mgp_ld=ld, mgp_ignore_id=ignore_id, RETURNED_PARAMETERS mgp_out_str
-		add_param = mgp_out_str
+		out_str = ""
+		for kkk=1 to vardim1(out_var)
+			if strstr(add_param, out_var_temp[kkk])>0 then
+				in_str = add_param : find_str = out_var_temp[kkk] : replace_str = out_var_n[kkk] : gosub "str_replace" : add_param = out_str
+			endif
+		next kkk
+		if vartype(add_param)=2 then
+			if STRSTR(add_param, "%")>0 then
+				call "macro_get_param" parameters mgp_in_str=add_param,
+													mgp_prim1=par_prim1,
+													mgp_prim2=par_prim2,
+													mgp_prim3=par_prim3,
+													mgp_prim4=par_prim4,
+													mgp_prim5=par_prim5,
+													mgp_qty=n_str_px*_LABEL_CUSTOM_ARROW,
+													mgp_ld=ld, mgp_ignore_id=ignore_id, RETURNED_PARAMETERS mgp_out_str
+				add_param = mgp_out_str
+			endif
+		endif
 	else
 		add_param = ""
 	endif
@@ -771,6 +788,7 @@ if not(vin) then
 					isCore = SHELLBASE_SKINS_PARAMS [i-flag_ins_bef][6]
 					isFinish = SHELLBASE_SKINS_PARAMS [i-flag_ins_bef][15]
 				endif
+				isShow = 0
 				if show_by_type = 0 then isShow = 1
 				if show_by_type = 1 and isFinish = 0 then isShow = 1
 				if show_by_type = 2 and isCore>0 then isShow = 1
@@ -834,8 +852,7 @@ if not(vin) then
 				endif
 			next mm
 		endif
-!		if (show_by_type-1)>isShow and isShow<>-1 then goto 22
-
+		if isShow<EPS then goto 22
 		if ((not(flag_zap) or (skinThk*1000-min_lay_thk)<EPS)) and not(mun_txt) then 
 			goto 22
 		else
@@ -1111,29 +1128,41 @@ if GLOB_VIEW_TYPE=2 then type_view = 0
 dim label_posxy[2]
 dim label_posxyz[3]
 dim label_posang[2]
-label_posxyz[1] = 0: label_posang[1] = 0 : label_posset = 0
-nd2 = request("Assoclp_parvalue", "label_posset", namindd1, typed1, flagd1, dim1d1, dim2d1, label_posset)
-if label_posset and use_pos then
-	nd1 = request("Assoclp_parvalue", "label_posxyz", namindd1, typed1, flagd1, dim1d1, dim2d1, label_posxyz)
-	nd2 = request("Assoclp_parvalue", "label_posang", namindd1, typed1, flagd1, dim1d1, dim2d1, label_posang)
-	if type_view = 0 then
-		label_posxy[1] = label_posxyz[1]
-		label_posxy[2] = label_posxyz[2]
-		if parall then ang_rot = label_posang[1]
-	endif
-	if type_view = 1 then
-		label_posxy[1] = label_posxyz[1]
-		label_posxy[2] = label_posxyz[3]
-		if parall then ang_rot = label_posang[2]
-	endif	
-	if type_view = 2 then
-		label_posxy[1] = label_posxyz[2]
-		label_posxy[2] = label_posxyz[3]
-		if parall then ang_rot = label_posang[2]
+label_posxyz[1] = 0: label_posang[1] = 0 : label_posset = 0 : label_posset_prop = 0
+
+if use_prop then
+	_stPropertyID = prop_pos_x : gosub "getPropertyValue" : label_posxy[1] = _value_num
+	_stPropertyID = prop_pos_y : gosub "getPropertyValue"	 : label_posxy[2] = _value_num
+	_stPropertyID = prop_pos_ang : gosub "getPropertyValue" : ang_rot = _value_num
+	label_posset_prop = 1
+endif
+
+if use_pos and label_posset_prop=0 then
+	nd2 = request("Assoclp_parvalue", "label_posset", namindd1, typed1, flagd1, dim1d1, dim2d1, label_posset)
+	if label_posset then
+		nd1 = request("Assoclp_parvalue", "label_posxyz", namindd1, typed1, flagd1, dim1d1, dim2d1, label_posxyz)
+		nd2 = request("Assoclp_parvalue", "label_posang", namindd1, typed1, flagd1, dim1d1, dim2d1, label_posang)
+		if type_view = 0 then
+			label_posxy[1] = label_posxyz[1]
+			label_posxy[2] = label_posxyz[2]
+			if parall then ang_rot = label_posang[1]
+		endif
+		if type_view = 1 then
+			label_posxy[1] = label_posxyz[1]
+			label_posxy[2] = label_posxyz[3]
+			if parall then ang_rot = label_posang[2]
+		endif	
+		if type_view = 2 then
+			label_posxy[1] = label_posxyz[2]
+			label_posxy[2] = label_posxyz[3]
+			if parall then ang_rot = label_posang[2]
+		endif
 	endif
 else
-	parall = 0
-	chent = 0
+	if label_posset_prop=0 then
+		parall = 0
+		chent = 0
+	endif
 endif
 !Читаемость выноски
 sgnp = 1 : if SYMB_MIRRORED then sgnp = -1
@@ -1370,12 +1399,12 @@ else
 	PEN arrowpen
 	if cos(LABEL_ROTANGLE)>0 then
 		If anchor = 4 Then
-			txtPos = -StrMax*cos(LABEL_ROTANGLE)
-			add_for_prof_sign=0
+			txtPos = -(StrMax)*cos(LABEL_ROTANGLE)
+			add_for_prof_sign=-add_for_prof_r
 		endif
 		If anchor = 5 Then
-			txtPos = -StrMax*cos(LABEL_ROTANGLE)/2
-			add_for_prof_sign=-0.03*k-StrMax/2
+			txtPos = -(StrMax)*cos(LABEL_ROTANGLE)/2
+			add_for_prof_sign=-add_for_prof_r
 		endif
 		If anchor = 6 Then
 			txtPos = 0
@@ -1384,19 +1413,18 @@ else
 	else
 		If anchor = 4 Then
 			txtPos = 0
-			add_for_prof_sign=0
+			add_for_prof_sign=add_for_prof_r
 		endif
 		If anchor = 5 Then
-			txtPos = -StrMax*cos(LABEL_ROTANGLE)/2
-			add_for_prof_sign=0
+			txtPos = -(StrMax)*cos(LABEL_ROTANGLE)/2
+			add_for_prof_sign=add_for_prof_r
 		endif
 		If anchor = 6 Then
-			txtPos = -StrMax*cos(LABEL_ROTANGLE)
-			add_for_prof_sign=0
+			txtPos = -(StrMax)*cos(LABEL_ROTANGLE)
+			add_for_prof_sign=add_for_prof_r
 		endif
 	endif
 	linex = -StrMax*cos(LABEL_ROTANGLE)
-	add_for_prof_sign = add_for_prof_sign*(prof_fist_str or prof_sec_str)*show_prof
 	gosub "alg"
 	define style  "textstyle_add1"  _LABEL_FONT_NAME, Shrift_add_param_size, anchor, Shrift_add_param
 	rrr = request("Height_of_style","textstyle_add1", text_hgt_add)
@@ -1414,7 +1442,7 @@ else
 			SET STYLE "textstyle_add"
 			popr_add = text_hgt - text_hgt_add - dx
 		endif
-		text2 txtPos+add_for_prof_sign, n+text_hgt/2-dx+popr_add, str_txt[nPos][1]
+		text2 txtPos, n+text_hgt/2-dx+popr_add, str_txt[nPos][1]
 		if param_name = tparam_name[SHOW_FLAG] then text2 txtPos*(abs(txtPos)<EPS) - stw(skinThktxtarr[nPos])*PAPER_TO_MODEL, n+text_hgt/2+dx, skinThktxtarr[nPos]
 		PEN arrowpen
 		if not(vin) then 
@@ -1426,12 +1454,32 @@ else
 	next nPos
 	if not(vin) then
 		PEN arrowpen
-		line2 linex, 0, linex, n-kol_vo_str[SkinFinish]*text_hgt
-		hotline2 linex, 0, linex, n-kol_vo_str[SkinFinish]*text_hgt
+		line2 linex+add_for_prof_sign, 0, linex+add_for_prof_sign, n-kol_vo_str[SkinFinish]*text_hgt
+		hotline2 linex+add_for_prof_sign, 0, linex+add_for_prof_sign, n-kol_vo_str[SkinFinish]*text_hgt
 		if _LABEL_ANCHOR_POS=1 then
-			line2 linex, SkinBegin*text_hgt, linex, (SkinBegin+St)*text_hgt
-			hotline2 linex, SkinBegin*text_hgt, linex, (SkinBegin+St)*text_hgt
+			line2 linex+add_for_prof_sign, SkinBegin*text_hgt, linex+add_for_prof_sign, (SkinBegin+St)*text_hgt
+			hotline2 linex+add_for_prof_sign, SkinBegin*text_hgt, linex+add_for_prof_sign, (SkinBegin+St)*text_hgt
 		endif
+	endif
+
+	if strlen(add_param)>0 and add_param<>" " and param_name = tparam_name[SHOW_FLAG] then
+		SET STYLE "textstyle_add" 
+		rrr = request("Height_of_style","textstyle_add", txt_hgt_add)
+		text_hgt_add = (txt_hgt_add*PAPER_TO_MODEL)
+		text_hgt_add = text_hgt_add+text_hgt_add*0.3
+		if not(napd) then
+			PEN arrowpen
+			line2 linex+add_for_prof_sign,n,linex+add_for_prof_sign, n-kol_vo_str[SkinFinish]*text_hgt
+			if abs(txtPos)<EPS or anchor=5 or anchor=6 then
+				line2 0,n,linex+add_for_prof_sign, n
+			else
+				line2 linex+add_for_prof_sign,n,linex+add_for_prof_sign-(add_for_prof_r+STW(add_param)*PAPER_TO_MODEL)*sgn(txtPos), n
+			endif
+		endif
+		PEN txtpen
+		text2 txtPos, n+text_hgt/2, add_param
+		n = n + text_hgt_add
+		SET STYLE rrt1
 	endif
 	if is_add then del 1
 endif
@@ -1660,9 +1708,9 @@ return
 
 "profile":
 if flag_mul2 then 
-	add2 -txtPos-add_for_prof_sign, nprof+0.005*k
+	add2 -txtPos-add_for_prof_sign, nprof+0.005*k+dx
 else
-	add2 txtPos+add_for_prof_sign, nprof+0.005*k
+	add2 txtPos+add_for_prof_sign, nprof+0.005*k+dx
 endif
 !!Прямоугольная труба
 	if pr2 or name_prof_i=2 then:
@@ -1931,7 +1979,7 @@ return
 return
 
 "getPropertyValue":
-	_stPropertyValue = ""
+	_stPropertyValue = "" : _value_num = 0
 	propInputIds.propertyIds[1].id = _stPropertyID
 	if HASKEY(propOutputVals.propertyValues) then t = REMOVEKEY(propOutputVals.propertyValues)
 	n = REQUEST ("Property_Values_Of_Parent", propInputIds, propOutputVals)
@@ -1943,6 +1991,7 @@ return
 			_value = propOutputVals.propertyValues[1].value[j]
 			flag_empty=0
 			if vartype(_value)=1 and _typeValue <> 1 then
+				_value_num = _value
 				if abs(_value)<EPS then
 					flag_empty=1
 				else
@@ -1981,15 +2030,15 @@ return
 	var_num = 0
 	rez = 0
 	if VARTYPE(var) = 2 then
-		if STRSTR(var, " ")> 0 then
-			!Чистим от пробелов-разделителей
-			var_t=""
-			for ll=1 to STRLEN(var)
-				z = strsub(var,ll,1)
-				if z<>" " then var_t=var_t+z
-			next ll
-			var = var_t
-		endif
+		!Чистим от пробелов-разделителей
+		var_t=""
+		for ll=1 to STRLEN(var)
+			z = strsub(var,ll,1)
+			if z="0" or z="1" or z="2" or z="3" or  z="4" or z="5" or  z="6" or z="7" or  z="8" or z="9" or  z="," or z="." then
+				var_t = var_t + z
+			endif
+		next ll
+		var = var_t
 		!Если дробное - ищем разделитель
 		razd_ceil = ""
 		if STRSTR(var, ".")> 0 then razd_ceil = "."

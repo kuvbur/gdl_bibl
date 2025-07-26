@@ -70,7 +70,6 @@ if param_name = tparam_name[SHOW_STRUCT] or param_name = tparam_name[SHOW_PARAM]
 		endif
 	endif
 
-
 	dim el_views[20] : el_views[1]=""
 	nd1 = request("Assoclp_parvalue", "el_views", namindd1, typed1, flagd1, dim1d1, dim2d1, el_views)
 	if nd1 then
@@ -191,7 +190,6 @@ else
 	endif
 endif
 
-
 total_thk = 0
 show_prof = 0
 
@@ -276,9 +274,9 @@ endif
 
 comp_name = ""
 if GLOB_ELEM_TYPE=5 then comp_name = WALL_COMPS_NAME
-if GLOB_ELEM_TYPE=7 then SLAB_COMPS_NAME
-if GLOB_ELEM_TYPE=8 then ROOF_COMPS_NAME
-if GLOB_ELEM_TYPE=18 then SHELLBASE_COMPS_NAME
+if GLOB_ELEM_TYPE=7 then comp_name = SLAB_COMPS_NAME
+if GLOB_ELEM_TYPE=8 then comp_name = ROOF_COMPS_NAME
+if GLOB_ELEM_TYPE=18 then comp_name = SHELLBASE_COMPS_NAME
 out_var_n[16] = comp_name
 
 !<---------------- Вытаскиваем данные из аксессуаров -----------
@@ -328,32 +326,50 @@ if GLOB_ELEM_TYPE = 1 and param_name = tparam_name[SHOW_FLAG] then
 	endif
 endif
 !>---------------- Вытаскиваем данные из аксессуаров -----------
-
-SkiN=WALL_SKINS_NUMBER*(GLOB_ELEM_TYPE=5)+\
+SkiN = WALL_SKINS_NUMBER*(GLOB_ELEM_TYPE=5)+\
 	SLAB_SKINS_NUMBER*(GLOB_ELEM_TYPE=7)+\
-	ROOF_SKINS_NUMBER*(GLOB_ELEM_TYPE=8)
+	ROOF_SKINS_NUMBER*(GLOB_ELEM_TYPE=8)+(GLOB_ELEM_TYPE=18)*SHELLBASE_SKINS_NUMBER+n_sloi*(GLOB_ELEM_TYPE = 1)
+SkiN_n = vardim1(WALL_SKINS_PARAMS)*(GLOB_ELEM_TYPE=5)+\
+	vardim1(SLAB_SKINS_PARAMS)*(GLOB_ELEM_TYPE=7)+\
+	vardim1(ROOF_SKINS_PARAMS)*(GLOB_ELEM_TYPE=8)+vardim1(SHELLBASE_SKINS_PARAMS)*(GLOB_ELEM_TYPE=18)+n_sloi*(GLOB_ELEM_TYPE = 1)
+SkiN_ = 0
+for i=1 to SkiN_n
+	if GLOB_ELEM_TYPE=5 then 
+		if WALL_SKINS_PARAMS [i][18]>EPS then SkiN_ = SkiN_ + 1 
+	endif
+	if GLOB_ELEM_TYPE=7 then 
+		if SLAB_SKINS_PARAMS [i][18]>EPS then SkiN_ = SkiN_ + 1 
+	endif
+	if GLOB_ELEM_TYPE=8 then
+		if ROOF_SKINS_PARAMS [i][18]>EPS then SkiN_ = SkiN_ + 1 
+
+	endif
+	if GLOB_ELEM_TYPE=18 then
+		if SHELLBASE_SKINS_PARAMS [i][18]>EPS then SkiN_ = SkiN_ + 1 
+	endif
+next i
+hasComp = ((GLOB_ELEM_TYPE=5)+(GLOB_ELEM_TYPE=7)+(GLOB_ELEM_TYPE=8)+(GLOB_ELEM_TYPE=18))*(SkiN_>EPS)+(n_sloi > 0)
 !!!<---------------- Вытаскиваем данные из свойств -----------
 property = 0 : _stPropertyValue = ""
-if strlen(property_layer)>0 and (SkiN<EPS or property_layer_force) then
-	if property_layer_name <> stringarr[LCODE][58] and strlen(property_layer_name)>0 then
-		call "macro_get_param" parameters mgp_in_str="%"+property_layer_name+"%",
-											mgp_prim1=par_prim1,
-											mgp_prim2=par_prim2,
-											mgp_prim3=par_prim3,
-											mgp_prim4=par_prim4,
-											mgp_prim5=par_prim5,
-											mgp_qty=n_str_px*_LABEL_CUSTOM_ARROW,
-											mgp_ld=ld, mgp_ignore_id=ignore_id RETURNED_PARAMETERS mgp_out_str
-		if strlen(mgp_out_str)>1 then
-			_stPropertyValue = mgp_out_str	
-		else
-			_stPropertyID = property_layer : gosub "getPropertyValue"	
-		endif
+if property_layer_name <> stringarr[LCODE][58] and strlen(property_layer_name)>0 and (property_layer_force or not(hasComp)) and param_name = tparam_name[SHOW_FLAG] then
+	call "macro_get_param" parameters mgp_in_str="%"+property_layer_name+"%",
+										mgp_prim1=par_prim1,
+										mgp_prim2=par_prim2,
+										mgp_prim3=par_prim3,
+										mgp_prim4=par_prim4,
+										mgp_prim5=par_prim5,
+										mgp_qty=n_str_px*_LABEL_CUSTOM_ARROW,
+										mgp_ld=ld, mgp_ignore_id=ignore_id RETURNED_PARAMETERS mgp_out_str
+	if strlen(mgp_out_str)>1 then
+		_stPropertyValue = mgp_out_str	
 	else
 		_stPropertyID = property_layer : gosub "getPropertyValue"	
 	endif
+else
+	if (property_layer_force or not(hasComp)) then
+		_stPropertyID = property_layer : gosub "getPropertyValue"	
+	endif
 endif
-
 
 if (somestuff_prop_1>0 or somestuff_prop_2>0) and somestuff_read_type>0 and not(strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyValue, "m[")>0 or STRSTR(_stPropertyValue, "b[")>0) and STRSTR(_stPropertyValue, "]")>0) then
 	_stPropertyValue = ""
@@ -391,11 +407,11 @@ if (somestuff_prop_1>0 or somestuff_prop_2>0) and somestuff_read_type>0 and not(
 				isFinish = SHELLBASE_SKINS_PARAMS [i][15]
 			endif
 			isShow = 0
-			if show_by_type = 0 then isShow = 1
-			if show_by_type = 1 and isFinish = 0 then isShow = 1
-			if show_by_type = 2 and isCore>0 then isShow = 1
-			if show_by_type = 3 and isCore = 3 then isShow = 1
-			if isShow and matinx>0 then _stPropertyValue = _stPropertyValue + "b["+str("%.0", matinx)+"]t["+str(ld, skinThk)+"]@"
+			if abs(show_by_type) < EPS then isShow = 1
+			if abs(show_by_type - 1) < EPS and abs(isFinish) < EPS then isShow = 1
+			if abs(show_by_type - 2) < EPS and isCore > EPS then isShow = 1
+			if abs(show_by_type - 3) < EPS and abs(isCore) - 3 < EPS then isShow = 1
+			if isShow and matinx > EPS then _stPropertyValue = _stPropertyValue + "b["+str("%.0", matinx)+"]t["+str(ld, skinThk)+"]@"
 		next i
 	endif
 endif
@@ -533,7 +549,6 @@ if strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyV
 endif
 !!>---------------- Вытаскиваем данные из свойств -----------
 
-
 !<---------------- Выноска с параметрами -----------------------
 if param_name = tparam_name[SHOW_STRUCT] or param_name = tparam_name[SHOW_PARAM] or param_name = tparam_name[SHOW_BYMVO] then
 	334:
@@ -626,9 +641,103 @@ else
 	SkiN=0
 endif
 
+if str_format_from_mvo and param_name = tparam_name[SHOW_FLAG] then
+	str_format_ = ""
+	n = LIBRARYGLOBAL ("Libraryflobals-as", "str_format", str_format_)
+	if n>0 and strlen(str_format_)>0 then str_format = str_format_
+endif
+
 if GLOB_ELEM_TYPE=0 then min_lay_thk = -1
 if GLOB_ELEM_TYPE=0 and SkiN=0 then SkiN=-1
 if not(vin) then
+	if param_name = tparam_name[SHOW_FLAG] and ((GLOB_ELEM_TYPE=5)+(GLOB_ELEM_TYPE=7)+(GLOB_ELEM_TYPE=8)+(GLOB_ELEM_TYPE=18))>EPS then
+		dict compPropInput
+		DIM parentComponentProperties[]
+		n = REQUEST ("Component_Properties_Of_Parent", "", parentComponentProperties)
+		n = 0
+		DIM props[]
+		for i=1 to vardim1(parentComponentProperties) step 4
+			gname = parentComponentProperties[i+2]
+			name = parentComponentProperties[i+3]
+			full_name = gname + "/" + name
+			if strstr(str_format, "%" + full_name + "%")>EPS then
+				n = n + 1
+				compPropInput.propertyIds[n].id = parentComponentProperties[i]
+				props[n] = full_name
+			else
+				if strstr(str_format, "%" + name + "%")>EPS and strlen(gname)>EPS then
+					n = n + 1
+					compPropInput.propertyIds[n].id = parentComponentProperties[i]
+					props[n] = name
+				endif
+			endif
+		next i
+		if n > EPS then
+			dict collectComponents : collectComponents.collectMode = 2 : dict outputCompIds
+			n = REQUEST ("Component_IDs_Of_Parent", collectComponents, outputCompIds)
+			for i=1 to SkiN_n
+				if haskey(outputCompIds.componentIds[i].id) then
+					if GLOB_ELEM_TYPE=5 then matinx = WALL_SKINS_PARAMS [i][18]
+					if GLOB_ELEM_TYPE=7 then matinx = SLAB_SKINS_PARAMS [i][18]
+					if GLOB_ELEM_TYPE=8 then matinx = ROOF_SKINS_PARAMS [i][18]
+					if GLOB_ELEM_TYPE=18 then matinx = SHELLBASE_SKINS_PARAMS [i][18]
+					dict compPropVals
+     				compPropInput.componentId.id = outputCompIds.componentIds[i].id
+					n = REQUEST ("Component_Property_Values_Of_Parent", compPropInput, compPropVals)
+					property_by_inx.mat[i].inx = matinx
+					for j=1 to vardim1(compPropVals.propertyValues)
+						if j<=vardim1(props) then
+							property_by_inx.mat[i].prop[j].name = props[j]
+							if abs(compPropVals.propertyValues[j].value_status - 1)>EPS then
+								property_by_inx.mat[i].prop[j].val = ""
+							else
+								_typeValue = compPropVals.propertyValues[j].type
+								_value = 0
+								for m = 1 to vardim1(compPropVals.propertyValues[j].value)
+									_value = compPropVals.propertyValues[j].value[m]
+									flag_empty=0
+									if vartype(_value)=1 and _typeValue <> 1 then
+										_value_num = _value
+										if abs(_value)<EPS then
+											flag_empty=1
+										else
+											if _typeValue = 2 then _value = str("%.0", _value)
+											if _typeValue = 3 then _value = str("%.2", _value)
+											if _typeValue = 5 then _value = str("%.3", _value)
+											if _typeValue = 6 then _value = str("%.2", _value)
+											if _typeValue = 7 then _value = str("%.2", _value)
+										endif
+									endif
+									if _typeValue = 1 then
+										if propOutputVals.propertyValues[j].value[m]>EPS then
+											_value = stringarr[LCODE][80]
+										else
+											_value = stringarr[LCODE][1]
+										endif
+									endif
+									if vartype(_value)=2 then
+										if strlen(_value)=0 or _value=" " then
+											flag_empty=1
+										endif
+									endif
+									if not(flag_empty) then
+										if m > 1 then
+											property_by_inx.mat[i].prop[j].val = property_by_inx.mat[i].prop[j].val + "; " + _value
+										else
+											property_by_inx.mat[i].prop[j].val = _value
+										endif
+									else
+										property_by_inx.mat[i].prop[j].val = ""
+									endif
+								next m
+							endif
+						endif
+					next j
+				endif
+			next i
+		endif
+	endif
+
 	if strlen(add_param)>EPS and add_param<>stringarr[LCODE][1] and GLOB_ELEM_TYPE<>0 then
 		out_str = ""
 		for kkk=1 to vardim1(out_var)
@@ -715,16 +824,21 @@ if not(vin) then
 			matName = "-"
 			fill_from_mat = 0
 			flag_ch = 0
+			matinx = 0
+			isFinish = 1
+			isCore = 3
 			if SkiN=0 then
 				SkinPar=WALL_FILL*(GLOB_ELEM_TYPE=5)+SLAB_FILL*(GLOB_ELEM_TYPE=7)+\
 						ROOF_FILL*(GLOB_ELEM_TYPE=8)+(GLOB_ELEM_TYPE=18)*SHELLBASE_FILL+(GLOB_ELEM_TYPE=9)*FILL_FILL
 				skinThk =WALL_THICKNESS+SLAB_THICKNESS+ROOF_THICKNESS+SHELLBASE_THICKNESS
 				matName = SHELLBASE_BMAT_NAME+FILL_BMAT_NAME+SLAB_BMAT_NAME+WALL_BMAT_NAME+ROOF_BMAT_NAME+bmatm[1]
+				matinx = SHELLBASE_BMAT+FILL_BMAT+SLAB_BMAT+WALL_BMAT+ROOF_BMAT+bmatinx[1]
+				isShow = 1
 				if property=1 then
 					skinThk = tolsh[1]
 					if bmatinx[1]>EPS then
 						matName_ = ""
-						n = request("Name_of_building_material", bmatinx[i-flag_ins_bef], matName_)
+						n = request("Name_of_building_material", bmatinx[1], matName_)
 						if strlen(matName_)>0 then
 							fill_from_mat = 1
 							matName = matName_
@@ -738,6 +852,7 @@ if not(vin) then
 					SkinPar = strih[i-flag_ins_bef]
 					skinThk = tolsh[i-flag_ins_bef]
 					matName = bmatm[i-flag_ins_bef]
+					matinx = bmatinx[i-flag_ins_bef]
 					if bmatinx[i-flag_ins_bef]>EPS then
 						matName_ = ""
 						n = request("Name_of_building_material", bmatinx[i-flag_ins_bef], matName_)
@@ -764,6 +879,7 @@ if not(vin) then
 					SkinPar = WALL_SKINS_PARAMS [i-flag_ins_bef][1]
 					skinThk = WALL_SKINS_PARAMS [i-flag_ins_bef][2]
 					matName = WALL_SKINS_BMAT_NAMES [i-flag_ins_bef][1]
+					matinx = WALL_SKINS_PARAMS [i-flag_ins_bef][18]
 					isCore = WALL_SKINS_PARAMS [i-flag_ins_bef][6]
 					isFinish = WALL_SKINS_PARAMS [i-flag_ins_bef][15]
 				endif
@@ -771,6 +887,7 @@ if not(vin) then
 					SkinPar = SLAB_SKINS_PARAMS [i-flag_ins_bef][1]
 					skinThk = SLAB_SKINS_PARAMS [i-flag_ins_bef][2]
 					matName = SLAB_SKINS_BMAT_NAMES [i-flag_ins_bef][1]
+					matinx = SLAB_SKINS_PARAMS [i-flag_ins_bef][18]
 					isCore = SLAB_SKINS_PARAMS [i-flag_ins_bef][6]
 					isFinish = SLAB_SKINS_PARAMS [i-flag_ins_bef][15]
 				endif
@@ -778,6 +895,7 @@ if not(vin) then
 					SkinPar = ROOF_SKINS_PARAMS [i-flag_ins_bef][1]
 					skinThk = ROOF_SKINS_PARAMS [i-flag_ins_bef][2]
 					matName = ROOF_SKINS_BMAT_NAMES [i-flag_ins_bef][1]
+					matinx = ROOF_SKINS_PARAMS [i-flag_ins_bef][18]
 					isCore = ROOF_SKINS_PARAMS [i-flag_ins_bef][6]
 					isFinish = ROOF_SKINS_PARAMS [i-flag_ins_bef][15]
 				endif
@@ -787,21 +905,22 @@ if not(vin) then
 					matName = SHELLBASE_SKINS_BMAT_NAMES [i-flag_ins_bef][1]
 					isCore = SHELLBASE_SKINS_PARAMS [i-flag_ins_bef][6]
 					isFinish = SHELLBASE_SKINS_PARAMS [i-flag_ins_bef][15]
+					matinx = SHELLBASE_SKINS_PARAMS [i-flag_ins_bef][18]
 				endif
 				isShow = 0
-				if show_by_type = 0 then isShow = 1
-				if show_by_type = 1 and isFinish = 0 then isShow = 1
-				if show_by_type = 2 and isCore>0 then isShow = 1
-				if show_by_type = 3 and isCore = 3 then isShow = 1
+				if show_by_type < EPS then isShow = 1
+				if abs(show_by_type) - 1 < EPS and isFinish < EPS then isShow = 1
+				if abs(show_by_type) - 2 < EPS and isCore > EPS then isShow = 1
+				if abs(show_by_type) - 3 < EPS and abs(isCore - 3) < EPS then isShow = 1
 			endif
 			total_thk = total_thk + skinThk
 			bmat_id="" : bmat_surf="" : bmat_desc="" : bmat_man="" : bmat_Fill="" : mat_Fill="" : skin_Fill="" : dens = 0
-			n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_id", bmat_id)
-			n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_surface", bmat_surf)
-			n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_description", bmat_desc)			
-			n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_manufacturer", bmat_man)
-			n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_cutFill_properties", bmat_Fill_prop)
-			n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_physical_properties", thCond, dens, htCap, embodiedEnergy, embodiedCarbon)
+			n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_id", bmat_id)
+			n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_surface", bmat_surf)
+			n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_description", bmat_desc)			
+			n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_manufacturer", bmat_man)
+			n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_cutFill_properties", bmat_Fill_prop)
+			n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_physical_properties", thCond, dens, htCap, embodiedEnergy, embodiedCarbon)
 			if vartype(bmat_surf)=1 then 
 				n = REQUEST{2} ("Material_info", bmat_surf, "gs_mat_fill_ind", mat_fill_ind)
 				n = request("Name_of_fill", mat_fill_ind, mat_Fill)
@@ -852,6 +971,7 @@ if not(vin) then
 				endif
 			next mm
 		endif
+
 		if isShow<EPS then goto 22
 		if ((not(flag_zap) or (skinThk*1000-min_lay_thk)<EPS)) and not(mun_txt) then 
 			goto 22
@@ -873,16 +993,16 @@ if not(vin) then
 				out_var_n[7] = skin_Fill
 				out_var_n[8] = skin_Fill
 			endif
-
 			if use_bmat[flag_ins] then
 				n = request("Name_of_building_material", bmat_ins_after[flag_ins], matName)
+				matinx = bmat_ins_after[flag_ins]
 				bmat_id="" : bmat_surf="" : bmat_desc="" : bmat_man="" : bmat_Fill="" : mat_Fill="" : skin_Fill="" : dens = 0
-				n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_id", bmat_id)
-				n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_surface", bmat_surf)
-				n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_description", bmat_desc)			
-				n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_manufacturer", bmat_man)
-				n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_cutFill_properties", bmat_Fill_prop)
-				n = REQUEST{2}("Building_Material_info", matName, "gs_bmat_physical_properties", thCond, dens, htCap, embodiedEnergy, embodiedCarbon)
+				n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_id", bmat_id)
+				n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_surface", bmat_surf)
+				n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_description", bmat_desc)			
+				n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_manufacturer", bmat_man)
+				n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_cutFill_properties", bmat_Fill_prop)
+				n = REQUEST{2}("Building_Material_info", matinx, "gs_bmat_physical_properties", thCond, dens, htCap, embodiedEnergy, embodiedCarbon)
 				if vartype(bmat_surf)=1 then 
 					n = REQUEST{2} ("Material_info", bmat_surf, "gs_mat_fill_ind", mat_fill_ind)
 					n = request("Name_of_fill", mat_fill_ind, mat_Fill)
@@ -904,6 +1024,13 @@ if not(vin) then
 		else
 			out_var_n[12] = ""
 		endif
+		out_var_n[18] = out_var_n[3] : out_var_n[27] = out_var_n[3] 
+		out_var_n[17] = out_var_n[5] : out_var_n[26] = out_var_n[5]
+		out_var_n[22] = out_var_n[10] : out_var_n[23] = out_var_n[10] : out_var_n[23] = out_var_n[10]  : out_var_n[24] = out_var_n[10]
+		out_var_n[19] = out_var_n[4] : out_var_n[29] = out_var_n[4]
+		out_var_n[20] = out_var_n[6] : out_var_n[28] = out_var_n[6]
+		out_var_n[21] = out_var_n[9]
+
 		skinThktxtarr[n_rec]=""
 		out_var_n[10] = " "
 		out_var_n[11] = "**n**"
@@ -919,6 +1046,29 @@ if not(vin) then
 		endif
 		if STRSTR(isnum,stringarr[LCODE][53])=0 and STRSTR(par_fist_str_t,"%n%")=0 then par_fist_str_t = isnum + " " + par_fist_str_t
 		npr = 0
+
+		property_by_inx_flag = 0
+		if haskey(property_by_inx.mat) then
+			for kkk=1 to vardim1(property_by_inx.mat)
+				if haskey(property_by_inx.mat[kkk]) then
+					if property_by_inx.mat[kkk].inx = matinx then
+						property_by_inx_flag = kkk
+						kkk = vardim1(property_by_inx.mat)
+					endif
+				endif
+			next kkk
+		endif
+		if property_by_inx_flag>0 then
+			if haskey(property_by_inx.mat[property_by_inx_flag]) then
+				for kkk=1 to vardim1(property_by_inx.mat[property_by_inx_flag].prop)
+					name = "%"+property_by_inx.mat[property_by_inx_flag].prop[kkk].name+"%"
+					if strstr(par_fist_str_t, name) then
+						var_param = property_by_inx.mat[property_by_inx_flag].prop[kkk].val
+						in_str = par_fist_str_t : find_str = name : replace_str = var_param : gosub "str_replace" : par_fist_str_t = out_str
+					endif
+				next kkk
+			endif
+		endif
 		43:
 		n_sh = STRSTR(par_fist_str_t, "%", 1)
 		if n_sh>0 then
@@ -926,22 +1076,23 @@ if not(vin) then
 			var_param = ""
 			if STRLEN(param_name_str)>0 then
 				for kkk=1 to vardim1(out_var)
-					if out_var[kkk][1]=param_name_str then
+					if STRTOLOWER(out_var[kkk][1])=STRTOLOWER(param_name_str) then
 						var_param = out_var_n[kkk]
 						kkk=vardim1(out_var)
 					endif
 				next kkk
-				if STRSTR(param_name_str,"thk")>0 then
+				is_thk = STRSTR(STRTOLOWER(param_name_str),"th")=1 or STRSTR(STRTOLOWER(param_name_str),"толщина")=1 or STRSTR(STRTOLOWER(param_name_str),"layer_thickness")=1
+				if is_thk then
 					var_param = skinThk
 					if mun_txt then var_param = 0
 				endif
 				if vartype(var_param)=1 then
-					if STRLEN(unit_name_str) then 
+					if STRLEN(unit_name_str) then
 						unstr = "%" + unit_name_str
 					else
 						unstr = ld
 					endif
-					if STRSTR(param_name_str,"thk")>0 then
+					if is_thk then
 						thk_unit = unstr
 						tThk = var_param
 						gosub "get_thk_txt"
@@ -958,7 +1109,7 @@ if not(vin) then
 					param_name_str = param_name_str + unit_name_str
 				endif
 				find_str = "%" + param_name_str + "%"
-				if STRSTR(param_name_str,"thk")>0 then
+				if is_thk then
 					if flag_ins>0 then 
 						if STRSTR(txt_ins_after[flag_ins][2], "*")=1 then
 							var_param=STRSUB (txt_ins_after[flag_ins][2], 2, STRLEN (txt_ins_after[flag_ins][2]))
@@ -1079,7 +1230,6 @@ if param_name = tparam_name[SHOW_BYMVO] and inxpar<vardim1(param_otobr) then
 	goto 334
 endif
 
-
 335:
 
 if abs(PosA)<EPS Then
@@ -1192,7 +1342,7 @@ if label_posset and type_view < 4 and use_pos then
 		if zerk_b then rot2 180
 	endif
 	if type_view = 1 then
-		isvert = 1 : if abs(_totalRotate_ mod 180)=90 then isvert = -1
+		isvert = 1 : if abs(abs(_totalRotate_ mod 180)-90)<EPS then isvert = -1
 		if chent then add2 SYMB_POS_X, SYMB_POS_Z
 		sgnp1 = 1 : if (_totalRotate_ > (90 + EPS) & _totalRotate_ < (270 + EPS)) then sgnp1 = -1
 		sgnp2 = 1 : if (label_posang[1] > (90 + EPS) & label_posang[1] < (270 + EPS)) then sgnp2 = -1
@@ -1334,8 +1484,8 @@ If _LABEL_CUSTOM_ARROW Then
 	for nPos=SkinBegin to SkinFinish step St
 		PEN arrowpen
 		if not(napd) and (not(vin) or (nPos=SkinFinish)) and type_f=0 then 
-			line2 0,n,PosA+(add_for_prof_r+thk_alg_out-(thk_alg_out<>0)*PAPER_TO_MODEL)*sgn(PosA), n
-			hotline2 0,n,PosA+(add_for_prof_r+thk_alg_out-(thk_alg_out<>0)*PAPER_TO_MODEL)*sgn(PosA), n
+			line2 0,n,PosA+(add_for_prof_r+thk_alg_out-(abs(thk_alg_out)>EPS)*PAPER_TO_MODEL)*sgn(PosA), n
+			hotline2 0,n,PosA+(add_for_prof_r+thk_alg_out-(abs(thk_alg_out)>EPS)*PAPER_TO_MODEL)*sgn(PosA), n
 		endif
 		PEN txtpen
 		SET STYLE rrt1
@@ -1382,10 +1532,13 @@ If _LABEL_CUSTOM_ARROW Then
 		text_hgt_add = text_hgt_add+text_hgt_add*0.3
 		if not(napd) then
 			PEN arrowpen
+			hotline2 0,n,0, n-kol_vo_str[SkinFinish]*text_hgt
 			line2 0,n,0, n-kol_vo_str[SkinFinish]*text_hgt
 			if abs(txtPos)>abs(STW(add_param)*PAPER_TO_MODEL) then
-				line2 0,n,PosA+(add_for_prof_r+thk_alg_out-(thk_alg_out<>0)*PAPER_TO_MODEL)*sgn(PosA), n
+				hotline2 0,n,PosA+(add_for_prof_r+thk_alg_out-(abs(thk_alg_out)>EPS)*PAPER_TO_MODEL)*sgn(PosA), n
+				line2 0,n,PosA+(add_for_prof_r+thk_alg_out-(abs(thk_alg_out)>EPS)*PAPER_TO_MODEL)*sgn(PosA), n
 			else
+				hotline2 0,n,add_for_prof_r+STW(add_param)*PAPER_TO_MODEL*sgn(PosA), n
 				line2 0,n,add_for_prof_r+STW(add_param)*PAPER_TO_MODEL*sgn(PosA), n
 			endif
 		endif
@@ -1446,7 +1599,7 @@ else
 		text2 txtPos, n+text_hgt/2-dx+popr_add, str_txt[nPos][1]
 		if param_name = tparam_name[SHOW_FLAG] then text2 txtPos*(abs(txtPos)<EPS) - stw(skinThktxtarr[nPos])*PAPER_TO_MODEL, n+text_hgt/2+dx, skinThktxtarr[nPos]
 		PEN arrowpen
-		if not(vin) then 
+		if not(vin) then
 			line2 0, n, linex+add_for_prof_sign, n
 			hotline2 0, n, linex+add_for_prof_sign, n
 		endif
@@ -1470,10 +1623,13 @@ else
 		text_hgt_add = text_hgt_add+text_hgt_add*0.3
 		if not(napd) then
 			PEN arrowpen
+			hotline2 linex+add_for_prof_sign,n,linex+add_for_prof_sign, n-kol_vo_str[SkinFinish]*text_hgt
 			line2 linex+add_for_prof_sign,n,linex+add_for_prof_sign, n-kol_vo_str[SkinFinish]*text_hgt
 			if abs(txtPos)<EPS or anchor=5 or anchor=6 then
+				hotline2 0,n,linex+add_for_prof_sign, n
 				line2 0,n,linex+add_for_prof_sign, n
 			else
+				hotline2 linex+add_for_prof_sign,n,linex+add_for_prof_sign-(add_for_prof_r+STW(add_param)*PAPER_TO_MODEL)*sgn(txtPos), n
 				line2 linex+add_for_prof_sign,n,linex+add_for_prof_sign-(add_for_prof_r+STW(add_param)*PAPER_TO_MODEL)*sgn(txtPos), n
 			endif
 		endif
@@ -1490,7 +1646,7 @@ If _LABEL_CUSTOM_ARROW Then
 	x1 = -_LABEL_FRAME_OFFSET*sgn(PosA)
 	y1 = n + _LABEL_FRAME_OFFSET
 	y2 = 0 - _LABEL_FRAME_OFFSET
-	x2 = PosA+(PosA=0)*0.1+(add_for_prof_r+thk_alg_out-(thk_alg_out<>0)*PAPER_TO_MODEL)*sgn(PosA)+_LABEL_FRAME_OFFSET*sgn(PosA)
+	x2 = PosA+(abs(PosA)<EPS)*0.1+(add_for_prof_r+thk_alg_out-(abs(thk_alg_out)>EPS)*PAPER_TO_MODEL)*sgn(PosA)+_LABEL_FRAME_OFFSET*sgn(PosA)
 	if n<>0 then y2 = 0 - _LABEL_FRAME_OFFSET
 	if vin and str_txt[2][1]<>"" then y2 = -text_hgt_add-_LABEL_FRAME_OFFSET
 else
@@ -1539,7 +1695,7 @@ end
 
 "lin":
 	if napd then return
-	PosA_ = PosA+(add_for_prof_r+thk_alg_out-(thk_alg_out<>0)*PAPER_TO_MODEL)*sgn(PosA)
+	PosA_ = PosA+(add_for_prof_r+thk_alg_out-(abs(thk_alg_out)>EPS)*PAPER_TO_MODEL)*sgn(PosA)
 	for i = 1 to n_str_px
 		HOTSPOT2 0, pxx[i][2], unID, pxx[i][1], 1+128: unID=unID+1
 		HOTSPOT2 pxx[i][1], pxx[i][2], unID, pxx[i][1], 2: unID=unID+1

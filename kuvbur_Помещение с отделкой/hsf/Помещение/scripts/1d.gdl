@@ -19,9 +19,10 @@ iov_norm_in = iov_norm
 i=i+1 : iov_norm_in[i]=99 : tov_norm_in[i] = "Как в вытяжке"
 
 dim ui_page_name[] : i=0
-i=i+1 : ui_page_name[i]="Отделка"
-i=i+1 : ui_page_name[i]="Характеристики ОВ"
-i=i+1 : ui_page_name[i]="Характеристики ПБ"
+i=i+1 : ui_page_name[i]=" Отделка"
+i=i+1 : ui_page_name[i]=" Cоздание отделочных элементов"
+i=i+1 : ui_page_name[i]=" Характеристики ОВ"
+i=i+1 : ui_page_name[i]=" Характеристики ПБ"
 
 dim type_add[] : i=0
 i=i+1 : type_add[i]="кв.м."
@@ -62,6 +63,7 @@ if vardim1(pos_xy)<>SHT_MAX+1 or vardim2(pos_xy)<>(PAR_MAX+1)*2 then
 endif
 if idtonumb then ROOM_NUMBER = GLOB_ID
 max_n = 15
+
 if tip_pol<>"Не задан" or tip_pot<>"Не задан" then
 	n_sloi_r=0
 	use_bmat=0
@@ -82,7 +84,8 @@ if tip_pol<>"Не задан" or tip_pot<>"Не задан" then
 endif
 if tip_pol<>"Не задан" then
 	germ_r = 2
-	CALL "macro_read_tip" PARAMETERS tip_pol=tip_pol, RETURNED_PARAMETERS n_sloi_r, tolsh_r_arr, tolsh_min_r_arr, strih_r_arr, pokaz_arr, mat_r, germ_r, fill_r, fill_pen_r, fill_bac_r, use_bmat, bmat_r_arr
+	no_otd_r = 0
+	CALL "macro_read_tip" PARAMETERS tip_pol=tip_pol, RETURNED_PARAMETERS n_sloi_r, tolsh_r_arr, tolsh_min_r_arr, strih_r_arr, pokaz_arr, mat_r, germ_r, fill_r, fill_pen_r, fill_bac_r, use_bmat, bmat_r_arr, no_otd_r
 	if n_sloi_r > 0 then 
 		isPol = 1
 		germ_pol = germ_r
@@ -99,14 +102,24 @@ else
 	PARAMETERS tolsh_pol = tolsh_pol
 endif
 
+
 if tip_pot<>"Не задан" then
 	germ_r = 2
-	CALL "macro_read_tip" PARAMETERS tip_pol=tip_pot, RETURNED_PARAMETERS n_sloi_r, tolsh_r_arr, tolsh_min_r_arr, strih_r_arr, pokaz_arr, mat_r, germ_r, fill_r, fill_pen_r, fill_bac_r
+	no_otd_r = 0
+	CALL "macro_read_tip" PARAMETERS tip_pol=tip_pot, RETURNED_PARAMETERS n_sloi_r, tolsh_r_arr, tolsh_min_r_arr, strih_r_arr, pokaz_arr, mat_r, germ_r, fill_r, fill_pen_r, fill_bac_r, use_bmat, bmat_r_arr, no_otd_r
 	if n_sloi_r > 0 then 
 		isPot = 1
 		germ_pot = germ_r
+		no_otd = no_otd_r
+		if use_bmat then
+			vots_bmat = bmat_r_arr[1]
+		else
+			vots_fill = strih_r_arr[1]
+		endif
 	endif
 else
+	vots_fill = 0
+	vots_bmat = 0
 	isPot = 0
 endif
 
@@ -161,31 +174,46 @@ if auto_mat then
 		dim finish_mat_pan[]
 		dim finish_h_pan[]
 		dim finish_mat_col[]
+		dim tip_pot_r[]
 		success = LIBRARYGLOBAL ("Libraryflobals-otd", "finish_mat_pot", finish_mat_pot)
 		success = LIBRARYGLOBAL ("Libraryflobals-otd", "finish_mat_wall", finish_mat_wall)
 		success = LIBRARYGLOBAL ("Libraryflobals-otd", "finish_mat_pan", finish_mat_pan)
 		success = LIBRARYGLOBAL ("Libraryflobals-otd", "finish_mat_col", finish_mat_col)
 		success = LIBRARYGLOBAL ("Libraryflobals-otd", "finish_h_pan", finish_h_pan)
+		success = LIBRARYGLOBAL ("Libraryflobals-otd", "tip_pot", tip_pot_r)
 		VOTS = finish_mat_pot[inx]
 		VOTW = finish_mat_wall[inx]
 		VOTP = finish_mat_pan[inx]
 		hpan = finish_h_pan[inx]
 		VOTC = finish_mat_col[inx]
+		if strlen(tip_pot_r[inx])>0 and tip_pot_r[inx]<>"-" and tip_pot_r[inx]<>" " then
+			tip_pot = tip_pot_r[inx]
+			tip_pot_from_rule = 1
+			parameters tip_pot = tip_pot
+			lock 'tip_pot'
+		else
+			tip_pot_from_rule = 0
+		endif
 		read_msg = "Правила загружены"
 		use_flag = 1
 		parameters use_flag = use_flag
+		if no_otd then VOTS = 0
 		parameters VOTS = VOTS
 		parameters VOTW = VOTW
 		parameters VOTP = VOTP
 		parameters hpan = hpan
 		parameters VOTC = VOTC
+		parameters tip_pot_from_rule = tip_pot_from_rule
 	else
 		if use_flag then
 			read_msg = "Вид не используется"
 		else
 			read_msg = "Ошибка, правила не загружены"
 		endif
+		parameters tip_pot_from_rule = 0
 	endif
 	lock 'VOTS', 'VOTW', 'VOTP', 'hpan', 'VOTC', 'use_flag'
+else
+	parameters tip_pot_from_rule = 0
 endif
 parameters read_msg = read_msg

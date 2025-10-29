@@ -1,4 +1,5 @@
-##### [Общий обзор](https://www.youtube.com/watch?v=KpgAdBZ7WdE "##### Общий обзор")
+##### [Общий обзор Youtube](https://www.youtube.com/watch?v=KpgAdBZ7WdE "##### Общий обзор Youtube") 
+##### [Общий обзор Rutube](https://rutube.ru/video/942e5ea0d5b636ed490a3e4c3a141823/ "##### Общий обзор Rutube") 
 ##### [Ссылка на спецификацию](https://github.com/kuvbur/material-specification "##### Ссылка на спецификацию")
 ##### [Добавление сортамента](https://kuvbur.blogspot.com/2019/11/archicad.html "##### Добавление сортамента")
 

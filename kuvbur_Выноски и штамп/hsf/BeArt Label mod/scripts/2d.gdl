@@ -286,13 +286,10 @@ dim strih[] : strih[1] = 0
 dim bmatm[] : bmatm[1] = ""
 dim bmatinx[] : bmatinx[1] = 0
 dim tolsh[] : tolsh[1] = 0
+dim tolsh_min[] : tolsh_min[1] = 0
 if GLOB_ELEM_TYPE = 1 and param_name = tparam_name[SHOW_FLAG] then
 	if (strstr(name,"Пол") <> 0 or strstr(name,"Потолок") <> 0 or strstr(name,"Ceiling Editor INT_v2+") <> 0 or strstr(name,"Лестница ЖБ") <> 0) then
 		pol = 1
-		dim tolsh_min[10]
-		dim strih_r[10]
-		dim tolsh_r[10]
-		dim tolsh_min_r[10]
 		if strstr(name,"v2") <> 0 then
 			ver = 1
 		else
@@ -312,6 +309,9 @@ if GLOB_ELEM_TYPE = 1 and param_name = tparam_name[SHOW_FLAG] then
 			strih[j]=sloi_n[15]
 			tolsh[j]=sloi_n[16]/100
 		else
+			dim strih_r[10]
+			dim tolsh_r[10]
+			dim tolsh_min_r[10]
 			nd1 = request("Assoclp_parvalue", "strih", namindd1, typed1, flagd1, dim1d1, dim2d1, strih_r)
 			nd1 = request("Assoclp_parvalue", "tolsh", namindd1, typed1, flagd1, dim1d1, dim2d1, tolsh_r)
 			nd1 = request("Assoclp_parvalue", "tolsh_min", namindd1, typed1, flagd1, dim1d1, dim2d1, tolsh_min_r)
@@ -415,7 +415,6 @@ if (somestuff_prop_1>0 or somestuff_prop_2>0) and somestuff_read_type>0 and not(
 		next i
 	endif
 endif
-
 !!!============== Обработка данных от аддона =============================
 if somestuff_read_type=2 then
 	if somestuff_read then
@@ -524,10 +523,16 @@ if strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyV
 			_onestring = onestring
 			var = onestring : char_start = bmat_delim : char_end = "]" : gosub "get_substring"
 			material_txt = var
-			in_str = onestring : find_str = char_start+var+char_end : replace_str = "" : gosub "str_replace" : onestring = out_str
 			var = onestring : char_start = "t[" : char_end = "]" : gosub "get_substring"
 			gosub "tonum"
 			th = 0 : if rez>EPS then th = var_num/1000
+			thmin = th
+			if vartype(onestring)=1 then onestring = ""
+			if strstr(onestring,"tm[")>0 then
+				var = onestring : char_start = "tm[" : char_end = "]" : gosub "get_substring"
+				gosub "tonum"
+				if rez>EPS then thmin = var_num/1000
+			endif
 			_stPropertyValue = STRSUB(_stPropertyValue,strlen(_onestring)+2, strlen(_stPropertyValue))
 			if STRLEN(material_txt)>0 then
 				property = 1
@@ -541,6 +546,7 @@ if strlen(_stPropertyValue)>0 and _stPropertyValue<>" " and (STRSTR(_stPropertyV
 					if rez*var_num>EPS then bmatinx[n_sloi] = var_num
 				endif
 				tolsh[n_sloi] = th
+				tolsh_min[n_sloi]=thmin
 			endif
 		else
 			i = max_ins
@@ -814,7 +820,7 @@ if not(vin) then
 	dob_th=0
 	old_string = "" : old_thk = 0 : old_thktxt = "" : thk_unit = ""
 	!!! - Отключение нумерации для одного слоя
-	if abs(SkinBegin - SkinFinish)<EPS then isnum = "Откл"
+	if abs(SkinBegin - SkinFinish)<EPS and not(num_one_lay) then isnum = "Откл"
 	for i = SkinBegin to SkinFinish step St
 		isShow = -1
 		if i>flag_ins_bef and i<=(SkiN+flag_ins_bef+(SkiN<=0)) then
@@ -851,6 +857,12 @@ if not(vin) then
 				if property=1 and flag_ch = 0 then
 					SkinPar = strih[i-flag_ins_bef]
 					skinThk = tolsh[i-flag_ins_bef]
+					if tolsh_min[i-flag_ins_bef]>EPS and abs(tolsh[i-flag_ins_bef]-tolsh_min[i-flag_ins_bef])>EPS then
+						dob_th = min(tolsh[i-flag_ins_bef],tolsh_min[i-flag_ins_bef])
+						skinThk = max(tolsh[i-flag_ins_bef],tolsh_min[i-flag_ins_bef])
+					else
+						dob_th = 0
+					endif
 					matName = bmatm[i-flag_ins_bef]
 					matinx = bmatinx[i-flag_ins_bef]
 					if bmatinx[i-flag_ins_bef]>EPS then
@@ -938,9 +950,13 @@ if not(vin) then
 			out_var_n[5] = matName
 			out_var_n[6] = str("%.1",dens)+" кг/м³"
 			if LCODE = 2 then out_var_n[6] = str("%.1",dens)+" kg/m³"
+			if dens<EPS then out_var_n[6] = ""
 			out_var_n[7] = bmat_Fill
 			out_var_n[8] = mat_Fill
 			out_var_n[9] = skin_Fill
+			out_var_n[30] = str("%.3",thCond)+" Вт/(м·К)"
+			if LCODE = 2 then out_var_n[30] = str("%.3",thCond)+" W/(m·K)"
+			if thCond<EPS then out_var_n[30] = ""
 			n_str = i-flag_ins_bef
 		else
 			mun_txt=1
@@ -1017,9 +1033,13 @@ if not(vin) then
 				out_var_n[5] = matName
 				out_var_n[6] = str("%.1",dens)+" кг/м³"
 				if LCODE = 2 then out_var_n[6] = str("%.1",dens)+" kg/m³"
+				if dens<EPS then out_var_n[6] = ""
 				out_var_n[7] = bmat_Fill
 				out_var_n[8] = mat_Fill
 				out_var_n[9] = skin_Fill
+				out_var_n[30] = str("%.3",thCond)+" Вт/(м·К)"
+				if LCODE = 2 then out_var_n[30] = str("%.3",thCond)+" W/(m·K)"
+				if thCond<EPS then out_var_n[30] = ""
 			endif
 		else
 			out_var_n[12] = ""
@@ -1030,7 +1050,7 @@ if not(vin) then
 		out_var_n[19] = out_var_n[4] : out_var_n[29] = out_var_n[4]
 		out_var_n[20] = out_var_n[6] : out_var_n[28] = out_var_n[6]
 		out_var_n[21] = out_var_n[9]
-
+		out_var_n[31] = out_var_n[30]
 		skinThktxtarr[n_rec]=""
 		out_var_n[10] = " "
 		out_var_n[11] = "**n**"
@@ -1098,7 +1118,8 @@ if not(vin) then
 						gosub "get_thk_txt"
 						var_param = tskinThktxt
 						if dob_th>0 then
-							skinThk = dob_th
+							tskinThktxt = ""
+							tThk = dob_th
 							gosub "get_thk_txt"
 							if STRLEN(tskinThktxt)>0 then var_param = tskinThktxt + "..." + var_param
 						endif
@@ -1210,12 +1231,9 @@ for i = 1 to n_rec
 		endif
 	endif
 	if vartype(str_txt[i][inxpar])=2 then
-		if STRSTR (str_txt[i][inxpar], "\n") > 0 then
-			one = STRSUB (str_txt[i][inxpar], 1, STRSTR (string, "\n")-1)
-			two = STRSUB (str_txt[i][inxpar], strlen(one)+3, STRLEN (str_txt[i][inxpar]) - STRSTR (str_txt[i][inxpar], "\n"))
-			str_txt[i][inxpar] = one +" "+ two
-		endif
-		StrMax = max(StrMax,stw(str_txt[i][inxpar])/1000*GLOB_SCALE)
+		out_str = str_txt[i][inxpar]
+		in_str = str_txt[i][inxpar] : find_str = "\n" : replace_str = " " : gosub "str_replace"
+		StrMax = max(StrMax,stw(out_str)/1000*GLOB_SCALE)
 	endif
 	kol_vo_str[i] = 1
 next i
@@ -1483,7 +1501,7 @@ If _LABEL_CUSTOM_ARROW Then
 	is_add = 0 : if n_rec<>0 then gosub "marker"
 	for nPos=SkinBegin to SkinFinish step St
 		PEN arrowpen
-		if not(napd) and (not(vin) or (nPos=SkinFinish)) and type_f=0 then 
+		if (not(vin) or (nPos=SkinFinish)) and type_f=0 then 
 			line2 0,n,PosA+(add_for_prof_r+thk_alg_out-(abs(thk_alg_out)>EPS)*PAPER_TO_MODEL)*sgn(PosA), n
 			hotline2 0,n,PosA+(add_for_prof_r+thk_alg_out-(abs(thk_alg_out)>EPS)*PAPER_TO_MODEL)*sgn(PosA), n
 		endif
@@ -1519,7 +1537,7 @@ If _LABEL_CUSTOM_ARROW Then
 				hotline2 0,0,0,n-kol_vo_str[SkinFinish]*text_hgt
 			endif
 		else
-			if n_rec<>1 and not(napd) then
+			if n_rec<>1 then
 				line2 0,0,0,n-kol_vo_str[SkinFinish]*text_hgt
 				hotline2 0,0,0,n-kol_vo_str[SkinFinish]*text_hgt
 			endif
@@ -1530,7 +1548,6 @@ If _LABEL_CUSTOM_ARROW Then
 		rrr = request("Height_of_style","textstyle_add", txt_hgt_add)
 		text_hgt_add = (txt_hgt_add*PAPER_TO_MODEL)
 		text_hgt_add = text_hgt_add+text_hgt_add*0.3
-		if not(napd) then
 			PEN arrowpen
 			hotline2 0,n,0, n-kol_vo_str[SkinFinish]*text_hgt
 			line2 0,n,0, n-kol_vo_str[SkinFinish]*text_hgt
@@ -1541,7 +1558,6 @@ If _LABEL_CUSTOM_ARROW Then
 				hotline2 0,n,add_for_prof_r+STW(add_param)*PAPER_TO_MODEL*sgn(PosA), n
 				line2 0,n,add_for_prof_r+STW(add_param)*PAPER_TO_MODEL*sgn(PosA), n
 			endif
-		endif
 		PEN txtpen
 		text2 txtPos, n+dx, add_param
 		n = n + text_hgt_add
@@ -2227,6 +2243,10 @@ return
 	endif
 	if strlen(char_end)>0 then
 		nend = STRSTR(var, char_end)
+		if nend<=nstart then
+			tmp_str_ = STRSUB(var, nstart, STRLEN(var))
+			nend = STRSTR(tmp_str_, char_end)+nstart-strlen(char_end)
+		endif
 	else
 		nend = STRLEN(var)
 	endif

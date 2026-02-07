@@ -1,11 +1,11 @@
 
-version = "2"
+version = "3"
 help_url = "https://github.com/kuvbur/gdl_bibl/wiki/%D0%9F%D0%B5%D1%80%D0%B5%D0%BC%D1%8B%D1%87%D0%BA%D0%B0"
 FILE_DEPENDENCE "Сортамент_арматуры.txt"
 FILE_DEPENDENCE "Libraryflobals-perem"
 EPS=0.0001
 unIDR = 9000 : unID = 120
-
+mirrored = -1
 !----- Нужно бы это в параметры вынести --------------------------------
 min_opir = 0.12 !Минимально возможное опирание
 max_opir = 1	!Максимально возможное опирание
@@ -59,6 +59,15 @@ dim t_type_spec[6] : dim itype_spec[6]
 	t_type_spec[5] = "Площадь"				: itype_spec[5] = 4
 	t_type_spec[6] = "Как элемент"			: itype_spec[6] = 5
 
+!Учёт нагрузки
+NAGR_NO = 0
+NAGR_SELF = 1
+NAGR_LOAD = 2
+dim t_perem_nagr_type[]: dim i_perem_nagr_type[]
+t_perem_nagr_type[1]="Подбор по длине" : i_perem_nagr_type[1]=NAGR_NO
+t_perem_nagr_type[2]="Самонесущая" : i_perem_nagr_type[2]=NAGR_SELF
+t_perem_nagr_type[3]="НЕСУЩАЯ" : i_perem_nagr_type[3]=NAGR_LOAD
+
 !Префиксы к наименованиям в спецификации
 dim t_perem_naen_prefix[]
 	t_perem_naen_prefix[1] = "Брусковая "
@@ -94,10 +103,11 @@ dim perem_podbor[4]
 dim perem_mh[4]
 dim perem_mt[4]
 dim plast[4][]
-
+dim perem_load[4][4]
 for i=1 to 4
 	for j=1 to 4
 		plast[i][j] = 0
+		perem_load[i][j] = 0
 	next j
 next i
 
@@ -217,7 +227,12 @@ perem_mt[4]=perem_t_4
 !--------- Используются ли перемычки и каковы границы типов ------------
 flag_not_use = 0 : inx_start_type = 0 	!Конец и начало
 has_SB = 0 : has_ARM = 0 : has_CONC = 0 : has_UG = 0 : has_PROF = 0 : has_DVUT=0 : has_SHVEL=0!Какие типы испольуются
+has_NAGR = 0 : t_sum = 0 : n_NAGR = 0
 for i=1 to vardim1(perem_qty_type)
+	perem_load[i][1] = 0
+	perem_load[i][2] = 0
+	perem_load[i][3] = 0
+	perem_load[i][4] = 0
 	if perem_qty_type[i]>EPS then 
 		flag_not_use = i
 		if perem_type[i]=iType_SB then has_SB = 1
@@ -225,11 +240,37 @@ for i=1 to vardim1(perem_qty_type)
 		if perem_type[i]=iType_CONC or perem_type[i]=iType_UTEPL then has_CONC = 1
 		if perem_type[i]=iType_UG or perem_type[i]=iType_UGMIRR or perem_type[i]=iType_UGx2 or perem_type[i]=iType_UGx2_PL then has_UG = 1
 		if perem_type[i]=iType_PROF and perem_archprofile[i]>EPS then has_PROF = 1
-
 		if perem_type[i]=iType_UG or perem_type[i]=iType_UGMIRR or perem_type[i]=iType_UGx2 then has_UG = 1
+		if perem_h_type = 0 then perem_load[i][1] = ac_wallhole_width/3
+		if perem_h_type = 1 then perem_load[i][1] = ac_wallhole_width
+		if perem_h_type = 2 then perem_load[i][1] = perem_h_wall
+		perem_load[i][2] = min(perem_h_wall, perem_load[i][1]) !Расчётная высота кладки
+		if perem_dlin[i]>EPS then perem_load[i][4] = 1.1*perem_ves[i]/perem_dlin[i]
 		isShow[i]=1
 	endif
 	if perem_qty_type[i]>EPS and inx_start_type<EPS then inx_start_type = i
+	if perem_type[i]<>iType_SB then 
+		perem_nagr_type[i]=NAGR_NO
+		parameters perem_nagr_type[i]=NAGR_NO
+	endif
+	if perem_nagr_type[i]<>NAGR_NO and perem_qty_type[i]>EPS then
+		if perem_nagr_type[i]=NAGR_LOAD then
+			perem_load[i][2] = perem_h_wall !Расчётная высота кладки
+			n_NAGR = n_NAGR + perem_qty_by_type[i]
+		endif
+		t_sum = t_sum + perem_t[i]*perem_qty_by_type[i]+perem_zazor[i]*(perem_qty_by_type[i]-1)
+		has_NAGR = 1
+	endif
+next i
+
+for i=1 to vardim1(perem_qty_type)
+	if perem_qty_type[i]>EPS then
+		perem_load[i][3] = perem_t[i]+perem_zazor[i]*(perem_qty_by_type[i]>1)
+		perem_load[i][4] = perem_load[i][4] + perem_dens_wall * perem_load[i][3] * perem_load[i][2] * 1.1
+		if perem_nagr_type[i]=NAGR_LOAD and n_NAGR>0 then
+			perem_load[i][4] = perem_load[i][4] + 1.2*(perem_load_up / n_NAGR)
+		endif
+	endif
 next i
 
 !--------- Используются ли перемычки и каковы границы типов ------------
@@ -237,6 +278,7 @@ next i
 main_name = "" : n = REQUEST ("Name_of_main", "", main_name)
 isPrew = (GLOB_PREVIEW_MODE<>0)
 isEdit = GLOB_FEEDBACK_MODE
+
 
 if main_name="" then
 	if not(isPrew) then

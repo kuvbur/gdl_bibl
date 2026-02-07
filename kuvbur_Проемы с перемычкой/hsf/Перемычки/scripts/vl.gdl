@@ -1,5 +1,6 @@
 
 dim t_perem_nagr[]
+dim t_perem_nagr_elem[]
 dim t_perem_naen[]
 dim param_name_out_t[]
 if not(flag_not_use) then
@@ -8,6 +9,7 @@ if not(flag_not_use) then
 	for i=1 to vardim1(perem_qty_type)
 		perem_pos[i]="!"
 		t_perem_nagr[i] = 0
+		t_perem_nagr_elem[i] = 0
 		t_perem_naen[i] = " "
 		param_name_out_t[i] = perem_pos[i]
 	next i
@@ -23,6 +25,7 @@ if not(flag_not_use) then
 	PARAMETERS perem_note = " "
 	PARAMETERS perem_marka_sum = " "
 	PARAMETERS perem_nagr = t_perem_nagr
+	PARAMETERS perem_nagr_elem = t_perem_nagr_elem
 	PARAMETERS perem_naen = t_perem_naen
 	parameters param_name_out = param_name_out_t
 	end
@@ -35,6 +38,7 @@ dim t_perem_dlin[]
 dim t_perem_tug[]
 for i=1 to 8
 	t_perem_nagr[i] = 0
+	t_perem_nagr_elem[i] = 0
 	t_perem_naen[i] = ""
 	t_perem_h[i] = 0
 	t_perem_t[i] = 0
@@ -49,6 +53,8 @@ dim naen_type[] : naen_type[1]=""
 dim tdlin_m[] : tdlin_m[1]=0
 dim tvis_m[] : tvis_m[1]=0
 dim ttolsh_m[] : ttolsh_m[1]=0
+dim tnagr[] : tnagr[1] = 0
+dim un_nagr[] : un_nagr[1] = 0
 t_perem_podbor=0
 t_perem_podbor_flag=0
 t_perem_tu = 0
@@ -534,6 +540,11 @@ if has_SB then
 endif
 !!!---------------------------Сортамент сборных перемычек -------------------------------------------
 
+values{2} "perem_nagr_type" i_perem_nagr_type, t_perem_nagr_type
+
+
+values{2} "perem_h_type" 0, "1/3 пролёта", 1, "1 пролёт", 2, "Всю высоту"
+
 !--------- ТИП 1 --------------
 inx=1
 if perem_qty_type[inx] then
@@ -969,6 +980,7 @@ endif
 parameters param_name_out = param_name_out_t
 PARAMETERS perem_nagr_max = t_perem_nagr_max
 PARAMETERS perem_nagr = t_perem_nagr
+PARAMETERS perem_nagr_elem = t_perem_nagr_elem
 PARAMETERS perem_naen = t_perem_naen
 PARAMETERS perem_h = t_perem_h
 PARAMETERS perem_t = t_perem_t
@@ -978,7 +990,7 @@ PARAMETERS perem_tug = t_perem_tug
 PARAMETERS perem_marka_sum = t_perem_marka_sum
 PARAMETERS perem_note = perem_note
 hideparameter "perem_marka_sum" : LOCK "perem_marka_sum"
-
+values "perem_nagr_range" un_nagr
 goto 20
 "get_param":
 	th=0
@@ -1015,7 +1027,7 @@ goto 20
 		UNTIL ((t_perem_profile = naen_m[i])+(i=vardim1(naen_m)))
 		t_inx_sub_type = i
 		PARAMETERS perem_obozn[inx] = gost_m[t_inx_sub_type]
-		t_perem_nagr[inx] = nagr_m[t_inx_sub_type]
+		t_perem_nagr_elem[inx] = nagr_m[t_inx_sub_type]
 		t_perem_h[inx] = vis_m[t_inx_sub_type]
 		t_perem_t[inx] = tolsh_m[t_inx_sub_type]
 		t_perem_ves[inx] = ves_m[t_inx_sub_type]
@@ -1119,6 +1131,7 @@ return
 	ttolsh_m = epm1i
 	un_vis = epm1i
 	un_tolsh = epm1i
+	tnagr = epm1i
 	j = 0
 	for i=1 to vardim1(naen_m)
 		fl_type = 0
@@ -1135,6 +1148,7 @@ return
 			if tdlin_m[j]<EPS then tdlin_m[j] = dlin_per_m[i] - t_perem_min_opir*2
 			tvis_m[j] = vis_m[i]
 			ttolsh_m[j] = tolsh_m[i]
+			tnagr[j] = nagr_m[i]
 		endif
 	next i
 	n_type = j
@@ -1160,6 +1174,18 @@ return
 			un_tolsh[j] = ttolsh_m[i]
 		endif
 	next i
+	j=vardim1(un_nagr)
+	if un_nagr[1]<EPS then un_nagr[1] = tnagr[1]
+	for i=1 to n_type
+		flag = 1
+		for k=1 to j
+			if un_nagr[k] = tnagr[i] then flag = 0
+		next k
+		if flag = 1 then
+			j = j + 1
+			un_nagr[j] = tnagr[i]
+		endif
+	next i
 return
 
 "podbor":
@@ -1167,7 +1193,10 @@ return
 	min_diff = ac_wallhole_width*3 !Начальное значение
 	for i=1 to vardim1(tdlin_m)
 		diff = tdlin_m[i]-ac_wallhole_width!-t_perem_min_opir*2
-		if (diff-min_diff)<EPS and diff>EPS and (abs(tvis_m[i]-t_perem_hogr)<EPS or t_perem_hogr<EPS) and (abs(ttolsh_m[i]-t_perem_togr)<EPS or t_perem_togr<EPS) then 
+		load = 1
+		if perem_nagr_type[inx]<>NAGR_NO then load = (tnagr[i]-perem_load[inx][4])>EPS or abs(tnagr[i]-perem_load[inx][4])<EPS
+		if load and (perem_nagr_range-perem_load[inx][4])>EPS then load = (perem_nagr_range-tnagr[i])>EPS or abs(perem_nagr_range-tnagr[i])<EPS 
+		if load and (diff-min_diff)<EPS and diff>EPS and (abs(tvis_m[i]-t_perem_hogr)<EPS or t_perem_hogr<EPS) and (abs(ttolsh_m[i]-t_perem_togr)<EPS or t_perem_togr<EPS) then 
 			th_less_ = 1
 			if th>EPS then
 				if int(th/ttolsh_m[i])<EPS then th_less_ = 0

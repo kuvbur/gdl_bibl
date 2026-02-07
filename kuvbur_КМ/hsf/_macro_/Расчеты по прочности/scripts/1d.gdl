@@ -1,7 +1,6 @@
 
-DEBUG = 0
 EPS=0.0001
-yc = 0.95				! - Коэффициент условий работыпо таб.1 СП6.13330
+yc = 1				! - Коэффициент условий работыпо таб.1 СП16.13330
 Rezult_num = 0
 !===================================================================================================================
 !======================================= Для вызова макроса =====================================
@@ -61,62 +60,51 @@ dim iRbp[] : i=0	! - расчетное сопротивление смятию 
 	i=i+1 : tMarka_s[i]="C390-6": iRyn[i]=380: iRun[i]=500: iRy[i]=370: iRu[i]=480: iRs[i]=215: iRp[i]=467: iRbp[i]=645
 	i=i+1 : tMarka_s[i]="C440-6": iRyn[i]=440: iRun[i]=580: iRy[i]=430: iRu[i]=565: iRs[i]=250: iRp[i]=543: iRbp[i]=750
 
-rezult = ""
-
-!=====================================================================================================
-!========================================== DEBUG ====================================================
-if DEBUG = 1 then
-	err = "": rezult_ok = ""
-	marka_steel = stal_marka
-
-	gosub "steel_get_spec"
-		IF Ryn<>325 or Run<>470 or Ry<>320 or Ru<>460 or Rs<>185 or Rp<>448 or Rbp<>620 then
-			err = err + " error in steel_get_spec"
-		else
-			PRINT 	Ryn, Run, Ry, Ru, Rs, Rp, Rbp
-		ENDIF
-	IF strlen(err)>0 then
-		print err
-!		text2 0,0,err
-	ENDIF
-endif
 
 !=====================================================================================================
 !============== // РАСЧЕТЫ КОНСТРУКТИВНЫХ ЭЛЕМЕНТОВ НА СЖАТИЕ И СЖАТИЕ С ИЗГИБОМ // ==================
 !type_construction = 2
 !stal_marka = "C245"
-!Nx = 400 	!(kH)
-!Mx = 200 	!(kH/cm2)
-!Wx_x = 1200	!(см3)
+!Nx = 100 	!(kH)
+!Mx = 100 	!(kH/cm2)
+!Wx_x = 100	!(см3)
 !Ase= 100 	!(cм2)
 
 gosub "steel_get_spec" ! Характеристики стали
 
 
-!=== Расчет на изгиб ===
-IF type_construction=4 or type_construction=12 AND Mx > EPS THEN ! Балки (прогоны) на изгиб
+!!=== Расчет на изгиб ===
+IF (type_construction=4 or type_construction=12) AND Mx > EPS THEN ! Балки (прогоны) на изгиб
 	gosub "bending_beam"
+	goto "close all"
 ELSE
 	result_msg = "Прочность: Нет усилий"
 ENDIF
 
-!=== Расчет на сжатие ===
-IF type_construction=5 or type_construction=6 or type_construction=7 or type_construction=8 or type_construction=9 or type_construction=10 or type_construction=11  AND Nx > EPS THEN ! Балки (прогоны) на изгиб
+!=== Расчет на сжатие растяжение ===
+IF (type_construction=5 or type_construction=6 or type_construction=7 or type_construction=8 or type_construction=9 or type_construction=10 or type_construction=11)  AND Nx > EPS THEN ! Балки (прогоны) на изгиб
 	gosub "compressed_element"
+	goto "close all"
 ELSE
 	result_msg = "Прочность: Нет усилий"
 ENDIF
 
-!=== Расчет на сжатие с изгибом ===
-IF type_construction=2 or type_construction=3 AND Nx > EPS AND Mx > EPS THEN ! Балки (прогоны) на изгиб
+!!=== Расчет на сжатие с изгибом ===
+IF (type_construction=2 or type_construction=3) AND Nx > EPS AND Mx > EPS THEN ! Балки (прогоны) на изгиб
 	gosub "compressed_bending_element"
+	goto "close all"
 ELSE
 	result_msg = "Прочность: Нет усилий"
 ENDIF
 
-END error_msg , result_msg
+"close all":
+!	PRINT error_msg , result_msg
+	END error_msg , result_msg
+end
+
 !=====================================================================================================
 !==================== Выбор исходных данных по стали ====================
+
 "steel_get_spec": !"Получение характеристик стали"
 	inxs = 0: Ryn=0: Ry=0: Ru=0: Rs=0: Rp=0: Rbp=0
 	FOR inxs_=1 TO VARDIM1(tMarka_s)
@@ -137,30 +125,30 @@ END error_msg , result_msg
 return
 
 "bending_beam": !"Расчет на изгиб от Мx"
-	if Wx_x*Ry*yc>EPS then Rezult_num = Mx/(Wx_x*Ry*yc)
+	if Wx_x*Ry*yc>EPS then Rezult_num = Mx /(Wx_x*Ry*yc)
 	Rez_t = "Коэф. исп. по М:"+" " + STR("%m",Rezult_num)
 	IF (Rezult_num-1)>EPS THEN
-		error_msg = "Ошибка:" + " " + Rez_t
+		error_msg = "Ошибка(прочность):" + " " + Rez_t
 	ENDIF
-		result_msg = "Результат:" + " " + Rez_t
+		result_msg = "Результат(прочность):" + " " + Rez_t
 return
 
 "compressed_element": !"Расчет на сжатие растяжение от Nx"
 	if Ase*Ry*yc>EPS then Rezult_num = Nx/(Ase*Ry*yc)
 	Rez_t = "Коэф. исп. по N:"+" " + STR("%m",Rezult_num)
 	IF (Rezult_num-1)>EPS THEN
-		error_msg = "Ошибка:" + " " + Rez_t
+		error_msg = "Ошибка(прочность):" + " " + Rez_t
 	ENDIF
-		result_msg = "Результат:" + " " + Rez_t
+		result_msg = "Результат(прочность):" + " " + Rez_t
 return
 
 "compressed_bending_element": !"Расчет на сжатие (растяжение) с изгибом от Nx Mx"
 	if Ase*Ry*yc>EPS and Wx_x*Ry*yc>EPS then Rezult_num = Nx/(Ase*Ry*yc) + Mx/(Wx_x*Ry*yc)
 	Rez_t = "Коэф. исп. по N,M:"+" " + STR("%m",Rezult_num)
 	IF (Rezult_num-1)>EPS THEN
-		error_msg = "Ошибка:" + " " + Rez_t
+		error_msg = "Ошибка(прочность):" + " " + Rez_t
 	ENDIF
-		result_msg = "Результат:" + " " + Rez_t
+		result_msg = "Результат(прочность):" + " " + Rez_t
 return
 
 

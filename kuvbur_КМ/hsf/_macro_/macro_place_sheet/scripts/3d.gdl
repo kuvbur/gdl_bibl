@@ -22,8 +22,8 @@ else
 	endif
 endif
 
-if show_mvo_proj=2 then
-	show_mvo_proj = 0
+if show_mvo_proj=SHOW_PROJECT_BYMVO then
+	show_mvo_proj = SHOW_PROJECT_NO
 	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_mvo_proj", show_mvo_proj)
 	if show_mvo_proj then
 		use_mvo_h = 0 : success = LIBRARYGLOBAL ("Libraryflobals-km", "use_mvo_h", use_mvo_h)
@@ -100,11 +100,13 @@ if GLOB_PREVIEW_MODE=1 or GLOB_PREVIEW_MODE=2 or GLOB_FEEDBACK_MODE=1 then
 	gs_resol = 3
 	det_lvl_3d = 1
 	gs_shadow=0
+	DR_EPS = 0.1
 else
 	if GLOB_SEO_TOOL_MODE = 1 then
 		gs_resol = 9
 		show_empty = 0
 		gs_shadow=0
+		DR_EPS = 0.005
 	else
 		if gs_resol<10 then gs_resol=12
 	endif
@@ -121,24 +123,88 @@ group "profile"
 			n_form = (tend - tstart)/3
 			PLANE n_form, get(n_form*3)
 		endif
-	endif
-	if haskey(profile_data.read._3d[det_lvl_3d].unput) then
-		if typesheet = VERT_SHEET then
-			gosub "set_form"
-			gosub "set_path"
-			mask = 1+2+16+32
-			TUBE n_form, n_path, mask, get(n_form*3+n_path*4)
-		endif
-		if typesheet = GOR_SHEET then
-			gosub "set_form"
-			mask = 1+2+16+32
-			EXTRUDE n_form, 0, 0, thickness*sgnth, mask, get(n_form*3)
+	else
+		if haskey(profile_data.read._3d[det_lvl_3d].unput) then
+			if typesheet = VERT_SHEET then
+				gosub "set_form"
+				gosub "set_path"
+				mask = 1+2+16+32
+				TUBE n_form, n_path, mask, get(n_form*3+n_path*4)
+			endif
+			if typesheet = GOR_SHEET then
+				gosub "set_form"
+				mask = 1+2+16+32
+				EXTRUDE n_form, 0, 0, thickness*sgnth, mask, get(n_form*3)
+			endif
 		endif
 	endif
 endgroup
-n_trans = 0
-!Копируем группу скольно надо раз
+
+!Группа с формой листа (рифление, сталь на ребро)
+has_forma = 0
+group "forma"
+	if typesheet = GOR_SHEET and det_lvl_3d = 2 and GLOB_VIEW_TYPE<>2 and GLOB_VIEW_TYPE<>9 and show_rifl_3d="Подробно" then
+		if type_rifl = RIFL_PRESS then
+			stpy = 40/1000
+			stpx = 60/1000
+			t = 3/1000
+			tstart = NSP
+			put 0,0,15
+			put 0,thickness*sgnth,15
+			put -t,thickness*sgnth,15
+			put -t,0,15
+			tend = NSP
+			n_form = (tend - tstart)/3
+			!Определяем максимальные координаты
+			min_x = profile_data.read._3d[det_lvl_3d].unput[1].x : min_y = profile_data.read._3d[det_lvl_3d].unput[1].y
+			max_x = min_x : max_y = min_y
+			n_path = 0
+			tstart = NSP
+			for i=1 to vardim1(profile_data.read._3d[det_lvl_3d].unput)
+				iStatus = profile_data.read._3d[det_lvl_3d].unput[i].s
+				if (iStatus > 0) then iStatus = iStatus - iStatus % 100
+				_d = 1 : if iStatus = 4000 or iStatus = 2000 then _d = 0
+				max_x = max(max_x, profile_data.read._3d[det_lvl_3d].unput[i].x+dx*d)
+				min_x = min(min_x, profile_data.read._3d[det_lvl_3d].unput[i].x+dx*d)
+				max_y = max(max_y, profile_data.read._3d[det_lvl_3d].unput[i].y+dy*d)
+				min_y = min(min_y, profile_data.read._3d[det_lvl_3d].unput[i].y+dy*d)
+				put profile_data.read._3d[det_lvl_3d].unput[i].x+dx*d, profile_data.read._3d[det_lvl_3d].unput[i].y+dy*d, 0, 0
+			next i
+			for i=1 to min(4, vardim1(profile_data.read._3d[det_lvl_3d].unput))
+				put profile_data.read._3d[det_lvl_3d].unput[i].x+dx*d, profile_data.read._3d[det_lvl_3d].unput[i].y+dy*d, 0, 0
+			next i
+			tend = NSP
+			n_path = (tend - tstart)/4
+			TUBE n_form, n_path, 1+2+16+32, get(n_form*3+n_path*4)
+			for y=min_y to max_y step stpy
+				PRISM 4, thickness, min_x, y, min_x, y+t, max_x, y+t, max_x, y
+			next y
+			addz thickness-thickness*0.7
+			for x=min_x to max_x step stpx
+				PRISM 4, thickness*0.7, x, min_y, x+t, min_y, x+t, max_y, x, max_y
+			next x
+			del 1
+			has_forma = 1
+		endif
+	endif
+endgroup
+
+if has_forma = 1 then
+	result=ISECTGROUP("profile", "forma")
+else
+	group "emp"
+	endgroup
+	result=ADDGROUP("profile", "emp")
+	KILLGROUP "emp"
+endif
+
+KILLGROUP "profile"
+KILLGROUP "forma"
+
+n_trans = 0 !Количество именений СК
+!Копируем группу сколько надо раз
 for i=1 to vardim1(profile_data.set.start)
+
 	!Смещение
 	if haskey(profile_data.set.start[i].x) then
 		addx profile_data.set.start[i].x
@@ -152,6 +218,7 @@ for i=1 to vardim1(profile_data.set.start)
 		addz profile_data.set.start[i].z
 		n_trans = n_trans + 1
 	endif
+
 	!Поворот
 	if haskey(profile_data.set.start[i].rx) then
 		rotx profile_data.set.start[i].rx
@@ -165,6 +232,7 @@ for i=1 to vardim1(profile_data.set.start)
 		rotz profile_data.set.start[i].rz
 		n_trans = n_trans + 1
 	endif
+
 	!Отражение
 	if haskey(profile_data.set.start[i].mx) then
 		if abs(profile_data.set.start[i].mx)>EPS and profile_data.set.start[i].mx<EPS then
@@ -184,24 +252,48 @@ for i=1 to vardim1(profile_data.set.start)
 			n_trans = n_trans + 1
 		endif
 	endif
-	placegroup "profile"
+
+	placegroup result
+
 	if n_trans>0 then del n_trans
 next i
-
+KILLGROUP result
 If cutplane_enable>0 THEN CUTEND
 If cutplane_enable>1 THEN CUTEND
 If cutplane_enable>2 THEN CUTEND
 
 end
-
 "set_form":
 	tstart = NSP
+	x1 = 0 : y1 = 0 : x2 = 0 : y2 = 0 : dr = 0 !Для вычисления расстояния между соседними точками
 	for i=1 to vardim1(profile_data.read._3d[det_lvl_3d].unput)
 		if not(haskey(profile_data.read._3d[det_lvl_3d].unput[i].s)) then profile_data.read._3d[det_lvl_3d].unput[i].s = 15
 		iStatus = profile_data.read._3d[det_lvl_3d].unput[i].s
 		if (iStatus > 0) then iStatus = iStatus - iStatus % 100
 		_d = 1 : if iStatus = 4000 or iStatus = 2000 then _d = 0
-		put profile_data.read._3d[det_lvl_3d].unput[i].x+dx*d, profile_data.read._3d[det_lvl_3d].unput[i].y+dy*d, profile_data.read._3d[det_lvl_3d].unput[i].s
+		flag_add = 1
+		if haskey(profile_data.read._3d[det_lvl_3d].unput[i].is_aprox) then
+			!Для горизонтального листа на скруглениях нужно отключить рёбра
+			if typesheet = GOR_SHEET then
+				if profile_data.read._3d[det_lvl_3d].unput[i].is_aprox>EPS then profile_data.read._3d[det_lvl_3d].unput[i].s = 1 ! Делаем ребро скрытым
+			endif
+			!Проверяем, чтоб точки не были слишком близко (на расстоянии DR_EPS)
+			x1 = profile_data.read._3d[det_lvl_3d].unput[i].x+dx*d : y1 = profile_data.read._3d[det_lvl_3d].unput[i].y+dy*d
+			if i>1 and i<vardim1(profile_data.read._3d[det_lvl_3d].unput) then
+				if haskey(profile_data.read._3d[det_lvl_3d].unput[i-1].is_aprox) and haskey(profile_data.read._3d[det_lvl_3d].unput[i+1].is_aprox) then
+					! Если совпадение статусов точек - предыдущей и текущей
+					if profile_data.read._3d[det_lvl_3d].unput[i-1].is_aprox=profile_data.read._3d[det_lvl_3d].unput[i].is_aprox and profile_data.read._3d[det_lvl_3d].unput[i+1].is_aprox=profile_data.read._3d[det_lvl_3d].unput[i].is_aprox then 
+						dr = sqr((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
+						if abs(dr)<DR_EPS and abs(dr)>EPS then flag_add = 0
+					endif
+				endif
+			endif
+		endif
+		if flag_add then
+			x2 = x1 : y2 = y1
+			put profile_data.read._3d[det_lvl_3d].unput[i].x+dx*d, profile_data.read._3d[det_lvl_3d].unput[i].y+dy*d, profile_data.read._3d[det_lvl_3d].unput[i].s
+!			hotspot profile_data.read._3d[det_lvl_3d].unput[i].x+dx*d, profile_data.read._3d[det_lvl_3d].unput[i].y+dy*d, 0 !Для тестов
+		endif
 	next i
 	tend = NSP
 	n_form = (tend - tstart)/3
@@ -212,6 +304,7 @@ return
 	tstart = NSP
 	for i=1 to vardim1(profile_data.set.path)
 		put profile_data.set.path[i].x, profile_data.set.path[i].y, profile_data.set.path[i].z, profile_data.set.path[i].a
+!		hotspot profile_data.set.path[i].x, profile_data.set.path[i].y, profile_data.set.path[i].z !Для тестов
 	next i
 	tend = NSP
 	n_path = (tend - tstart)/4
@@ -274,14 +367,17 @@ return
 	IF gs_detlevel_3D=`Простой` then
 		det_lvl_2d = 1
 		det_lvl_3d = 1
+		DR_EPS = 0.3
 	endif
 	IF gs_detlevel_3D=`Детальный` THEN
 		det_lvl_2d = 2
 		det_lvl_3d = 2
+		DR_EPS = 0.01
 	endif
 	IF gs_detlevel_3D=`Откл` THEN
 		det_lvl_2d = 2
 		det_lvl_3d = 0
+		DR_EPS = 1
 	endif
 	if show then
 		show_if_vert=1 : show_if_gor=1 : show_if_ang=1
@@ -300,10 +396,18 @@ return
 		if show = 1 and show_op < EPS then show = 0
 		if show = 1 then CALL "MEP_m_RequestSystemGlobals" PARAMETERS ALL one_ConID=0 returned_parameters gs_cont_pe, sMat, gs_InsMat
 	endif
+	if type_rifl <> RIFL_NONE then
+		matinx = 0
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "show_rifl_3d", show_rifl_3d)
+		if show_rifl_3d="Подробно" and type_rifl = RIFL_PRESS then
+		else
+			if show_rifl_3d<>"Нет" and matname <> "" then matinx = ind(material, matname)
+			if matinx > 0 then col_mat = matinx
+		endif
+	endif
 return
 
 "get_mat":
-
 	call "macro_get_mat" parameters all, RETURNED_PARAMETERS tcol_mat, tbmat
 	if tcol_mat>1 then col_mat = tcol_mat
 	if strlen(syst_name)>1 then col_mat = sMat
@@ -313,4 +417,5 @@ return
 		shadow on
 	endif
 	if strlen(syst_name)>1 then col_mat = sMat
+	if matinx > 0 then col_mat = matinx
 return

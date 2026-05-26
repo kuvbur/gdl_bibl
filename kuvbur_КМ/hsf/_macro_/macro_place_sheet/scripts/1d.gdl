@@ -45,19 +45,30 @@
 !profile_data.set.start[i].mx
 !profile_data.set.start[i].my
 !profile_data.set.start[i].mz
-
+ix = 1 : iy = 2 : iz = 3
+dim rot_arr[3][3]
+dim _arr[3]
+dim _t[3]
 EPS = 0.0001
 flag = 0
-
-!Смещение оси
-dx = 0
-dy = 0
+unID = 360
 el_type_view = 0
+! Тип показа проекции
+SHOW_PROJECT_NO = 0
+SHOW_PROJECT_ALWAYS = 1
+SHOW_PROJECT_BYMVO = 2
 
+!Тип листа
 VERT_SHEET = 1
 GOR_SHEET = 2
 POLY_SHEET = 3
 
+RIFL_NONE = 0
+RIFL_PROSECH = 1
+RIFL_ROMB = 2
+RIFL_PRESS = 3
+
+show_rifl_3d = "Нет" : show_rifl_2d = "Нет" : matinx = 0
 dict _dataprof
 dict _all
 dict _tmp
@@ -87,20 +98,17 @@ if haskey(profile_data.set.subpos) then subpos = profile_data.set.subpos
 if haskey(profile_data.set.pos) then pos = profile_data.set.pos
 if haskey(profile_data.set.upr) then upr = profile_data.set.upr
 if haskey(profile_data.set.type_spec) then type_spec = profile_data.set.type_spec
+type_rifl = RIFL_NONE : if haskey(profile_data.read.type_rifl) then type_rifl = profile_data.read.type_rifl
+typesheet = VERT_SHEET : if haskey(profile_data.set.typesheet) then typesheet = profile_data.set.typesheet
 
-typesheet = 0
-if haskey(profile_data.set.typesheet) then 
-	typesheet = profile_data.set.typesheet
-else
-	typesheet = VERT_SHEET
-endif
-
+! Для вертикального листа нам нужен путь, по которому будет его гнуть
 if typesheet = VERT_SHEET then
 	if not(haskey(profile_data.set.path)) then 
 		text2 0,0,"mpl - not(haskey(profile_data.set.path))"
 		profile_data.error="mpl - not(haskey(profile_data.set.path))"
 		goto "m_end"
 	else
+		! Заполнение незаданных в словаре данных
 		for i=1 to vardim1(profile_data.set.path)
 			if not(haskey(profile_data.set.path[i].x)) then profile_data.set.path[i].x = 0
 			if not(haskey(profile_data.set.path[i].y)) then profile_data.set.path[i].y = 0
@@ -111,7 +119,8 @@ if typesheet = VERT_SHEET then
 endif
 
 !Если задана точка привязки - получим смещение сечения
-sgnth = 1
+sgnth = 1 !В какую сторону идёт толщина
+dx = 0 : dy = 0 !Смещение оси
 if haskey(profile_data.set.cpoint) then
 	if haskey(profile_data.set.cpoint.x) then dx = profile_data.read.cpoint.x
 	if haskey(profile_data.set.cpoint.y) then dy = profile_data.read.cpoint.y
@@ -121,13 +130,27 @@ if haskey(profile_data.set.cpoint) then
 	endif
 endif
 
-thickness = 0.003
-if haskey(profile_data.set.thickness) then thickness = abs(profile_data.set.thickness)
-
+!Толщина листа
+thickness = 0
+if haskey(profile_data.set.thickness) then 
+	thickness = abs(profile_data.set.thickness)
+else
+	text2 0,0,"mpl - not(haskey(profile_data.set.thickness))"
+	profile_data.error="mpl - not(haskey(profile_data.set.thickness))"
+	goto "m_end"
+endif
+DR_EPS = thickness !Предельное расстояние между точками, переопределяется по детализации
 if not(haskey(profile_data.set.start)) then profile_data.set.start[1].x = 0
 
 !Читаем сортамент, если его не передали
 gosub "read_sort"
+
+matname = ""
+if haskey(sort_data.matname_sheet) and type_rifl > RIFL_NONE then
+	if type_rifl<= vardim1(sort_data.matname_sheet) then matname = sort_data.matname_sheet[type_rifl]
+endif
+
+!Для вертикального листа нужно рассчитать скругления и получить статусы точек пути
 if typesheet = VERT_SHEET then
 	dict coord
 	coord.in = profile_data.set.coord
@@ -151,33 +174,31 @@ if typesheet = VERT_SHEET then
 	else
 		text2 0,0,"mpl - " + coord.error
 		profile_data.error="mpl - " + coord.error
+		goto "m_end"
 	endif
 endif
 
+!Для горизонтального и полилиста (с разными отметками z)
 if typesheet = GOR_SHEET or typesheet = POLY_SHEET then
-	profile_data.read._3d[1].unput = profile_data.set.coord
-	profile_data.read._2d[1].unput = profile_data.read._3d[1].unput
-	for i=1 to vardim1(profile_data.read._3d[1].unput)
-		if not(haskey(profile_data.read._3d[1].unput[i].s)) then
-			profile_data.read._3d[1].unput[i].s = 15
-			profile_data.read._2d[1].unput[i].s = 1
-		endif
-	next i
+	profile_data.read._3d[1].unput = profile_data.set.coord !Полигон в 3д
+	profile_data.read._2d[1].unput = profile_data.read._3d[1].unput !Полигон в 2д
+	! Полигон для детального вида пока такой же, как для упрощённого
 	profile_data.read._3d[2].unput = profile_data.read._3d[1].unput
 	profile_data.read._2d[2].unput = profile_data.read._2d[1].unput
 	profile_data.error="ok"
 endif
 
-
 goto "m_end"
 
 "read_sort":
-	if not(haskey(sort_data.isread)) then call "macro_get_sort" PARAMETERS ALL, RETURNED_PARAMETERS sort_data
+	call "macro_get_sort" PARAMETERS ALL, RETURNED_PARAMETERS sort_data
 	if haskey(sort_data.isread) then 
 		if sort_data.isread = 0 then
 			text2 0,0, "mpl - Сортамент прочитан с ошибкой"
 			profile_data.error="mpl - Сортамент прочитан с ошибкой"
 			goto "m_end"
+		else
+			parameters sort_data = sort_data
 		endif
 	else
 		text2 0,0, "mpl - Сортамент не прочитан"

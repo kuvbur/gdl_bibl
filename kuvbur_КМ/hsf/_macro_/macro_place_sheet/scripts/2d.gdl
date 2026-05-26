@@ -3,6 +3,7 @@ if not(haskey(profile_data.set.path)) and typesheet = VERT_SHEET then end
 if haskey(profile_data.set.is2d) then
 	if not(profile_data.set.is2d) then end
 endif
+
 gosub "set_show_2d"
 if not(show) or det_lvl_2d=0 then end
 chStoryDist = GLOB_CH_STORY_DIST
@@ -44,9 +45,108 @@ if show_mvo_proj=2 then
 	endif
 endif
 
+if show_mvo_proj=SHOW_PROJECT_NO then
+	show_mvo_proj = SHOW_PROJECT_ALWAYS ! Если не сработает код ниже - показываем проекцию
+	if typesheet = GOR_SHEET and haskey(profile_data.read._2d[det_lvl_2d].unput) then
+		for j=1 to vardim1(profile_data.set.start)
+			!Смещение
+			add_x = 0 : if haskey(profile_data.set.start[j].x) then add_x = profile_data.set.start[j].x
+			add_y = 0 : if haskey(profile_data.set.start[j].y) then add_y = profile_data.set.start[j].y
+			add_z = 0 : if haskey(profile_data.set.start[j].z) then add_z = profile_data.set.start[j].z
+			!Поворот
+			rot_x = 0 : if haskey(profile_data.set.start[j].rx) then rot_x = profile_data.set.start[j].rx
+			rot_y = 0 : if haskey(profile_data.set.start[j].ry) then rot_y = profile_data.set.start[j].ry
+			rot_z = 0 : if haskey(profile_data.set.start[j].rz) then rot_z = profile_data.set.start[j].rz
+			!Отражение
+			mul_x = 0
+			if haskey(profile_data.set.start[j].mx) then
+				if abs(profile_data.set.start[j].mx)>EPS and profile_data.set.start[j].mx<EPS then mul_x = -1
+			endif
+			mul_y = 0
+			if haskey(profile_data.set.start[j].my) then
+				if abs(profile_data.set.start[j].my)>EPS and profile_data.set.start[j].my<EPS then mul_y = -1
+			endif
+			mul_z = 0
+			if haskey(profile_data.set.start[j].mz) then
+				if abs(profile_data.set.start[j].mz)>EPS and profile_data.set.start[j].mz<EPS then mul_z = -1
+			endif
+			x2 = 0 : y2 = 0
+			for i=1 to vardim1(profile_data.read._2d[det_lvl_2d].unput)
+				_arr[ix] = profile_data.read._2d[det_lvl_2d].unput[i].x
+				_arr[iy] = profile_data.read._2d[det_lvl_2d].unput[i].y
+				_arr[iz] = profile_data.read._2d[det_lvl_2d].unput[i].z
+				if not(haskey(profile_data.read._2d[det_lvl_2d].unput[i].s)) then profile_data.read._2d[det_lvl_2d].unput[i].s = 1
+				s = profile_data.read._2d[det_lvl_2d].unput[i].s
+				if abs(add_x)>0 then _arr[ix] = _arr[ix] + add_x
+				if abs(add_y)>0 then _arr[iy] = _arr[iy] + add_y
+				if abs(add_z)>0 then _arr[iz] = _arr[iz] + add_z
+				if abs(rot_x)>0 then
+					ang = rot_x : inx=0
+					inx=inx+1 : rot_arr[inx][ix]=1 : rot_arr[inx][iy]=0 : rot_arr[inx][iz]=0
+					inx=inx+1 : rot_arr[inx][ix]=0 : rot_arr[inx][iy]=cos(ang) : rot_arr[inx][iz]=-sin(ang)
+					inx=inx+1 : rot_arr[inx][ix]=0 : rot_arr[inx][iy]=sin(ang) : rot_arr[inx][iz]=cos(ang)
+					gosub "make_rot"
+				endif
+				if abs(rot_y)>0 then
+					ang = rot_y : inx=0
+					inx=inx+1 : rot_arr[inx][ix]=cos(ang)	: rot_arr[inx][iy]=0	: rot_arr[inx][iz]=sin(ang)
+					inx=inx+1 : rot_arr[inx][ix]=0			: rot_arr[inx][iy]=1	: rot_arr[inx][iz]=0
+					inx=inx+1 : rot_arr[inx][ix]=-sin(ang)	: rot_arr[inx][iy]=0	: rot_arr[inx][iz]=cos(ang)
+					gosub "make_rot"
+				endif
+				if abs(rot_z)>0 then
+					ang = rot_z : inx=0
+					inx=inx+1 : rot_arr[inx][ix]=cos(ang) : rot_arr[inx][iy]=-sin(ang) : rot_arr[inx][iz]=0
+					inx=inx+1 : rot_arr[inx][ix]=sin(ang) : rot_arr[inx][iy]=cos(ang) : rot_arr[inx][iz]=0
+					inx=inx+1 : rot_arr[inx][ix]=0 : rot_arr[inx][iy]=0 : rot_arr[inx][iz]=1
+					gosub "make_rot"
+				endif
+				if abs(mul_x)>0 then _arr[ix] = _arr[ix] * mul_x
+				if abs(mul_y)>0 then _arr[iy] = _arr[iy] * mul_y
+				if abs(mul_z)>0 then _arr[iz] = _arr[iz] * mul_z
+
+				!Проверяем, чтоб точки не были слишком близко (на расстоянии DR_EPS)
+				flag_add = 1 : sh = 1
+				if haskey(profile_data.read._2d[det_lvl_2d].unput[i].is_aprox) then
+					if profile_data.read._2d[det_lvl_2d].unput[i].is_aprox then sh = 0
+					if i>1 and i<vardim1(profile_data.read._2d[det_lvl_2d].unput) then
+						if haskey(profile_data.read._2d[det_lvl_2d].unput[i-1].is_aprox) and haskey(profile_data.read._2d[det_lvl_2d].unput[i+1].is_aprox) then
+							if profile_data.read._2d[det_lvl_2d].unput[i-1].is_aprox=profile_data.read._2d[det_lvl_2d].unput[i].is_aprox and profile_data.read._2d[det_lvl_2d].unput[i+1].is_aprox=profile_data.read._2d[det_lvl_2d].unput[i].is_aprox then
+								dr = sqr((x2-_arr[ix])*(x2-_arr[ix]) + (y2-_arr[iy])*(y2-_arr[iy]))
+								if abs(dr)<DR_EPS and abs(dr)>EPS then flag_add = 0
+							endif 
+						endif 						
+					endif 
+				endif 
+				if flag_add then
+					if sh then hotspot2 _arr[ix],_arr[iy], unID : unID=unID+1
+					hotline2 _arr[ix],_arr[iy],x2, y2, unID : unID=unID+1 
+					x2 = _arr[ix] : y2 = _arr[iy]
+					put _arr[ix],_arr[iy],s
+				endif
+			next i
+			frame_fill = 1 + 2 + 4 + 8 + 64
+			fillOrigoX = 0
+			fillOrigoY = 0
+			fillAngle = 0
+			pen gs_cont_pen
+			fill gs_fill_type
+			line_type gs_line_type
+			POLY2_B{2} NSP/3, frame_fill, gs_fill_pen, gs_back_pen, fillOrigoX, fillOrigoY, fillAngle, get(NSP)
+			if show_rifl_2d = "Условный участок" and gs_mat_fill_ind>0 then
+				pen gs_cont_pen
+				fill gs_mat_fill_ind
+				line_type 1
+				POLY2_B 3, 1+2+3+4+64, 1, gs_back_pen, 0,0,901, 1,360,400, 0,0,901
+			endif
+		next j
+		show_mvo_proj=SHOW_PROJECT_NO
+	endif
+endif
+
 if show3dhotspot2d then PROJECT2{3} 3, 270, 1, 32, gs_back_pen, 0, 0, 90
 
-if show_mvo_proj then 
+if show_mvo_proj = SHOW_PROJECT_BYMVO then 
 	if is_show_lower then
 		pen gs_cont_pen_down
 		fill gs_fill_type_down
@@ -69,15 +169,19 @@ if show_mvo_proj then
 	end
 endif
 
-fill gs_fill_type
-line_type gs_line_type
-SECT_ATTRS gs_fill_type, gs_back_pen, gs_fill_pen, gs_cont_pen, gs_line_type
-PEN gs_fill_pen
-PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0
-pen gs_cont_pen
-PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0
+if show_mvo_proj = SHOW_PROJECT_ALWAYS then 
+	fill gs_fill_type
+	line_type gs_line_type
+	SECT_ATTRS gs_fill_type, gs_back_pen, gs_fill_pen, gs_cont_pen, gs_line_type
+	PEN gs_fill_pen
+	PROJECT2{3} 3, 270, 3+32, 4, gs_back_pen, 0, 0, 0
+	pen gs_cont_pen
+	PROJECT2{3} 3, 270, 2, 8, 0, 0, 0, 0
+	end
+endif
 
 end
+
 "set_show_2d":
 	show_connect = 1
 	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_connect", show_connect)
@@ -116,14 +220,17 @@ end
 	success = LIBRARYGLOBAL ("Libraryflobals-km", "show_only_axsis", show_only_axsis)
 	success = LIBRARYGLOBAL ("Libraryflobals-km", "gs_detlevel_3D", gs_detlevel_3D)
 	IF gs_detlevel_3D=`Простой` then
+		DR_EPS = 0.1
 		det_lvl_2d = 1
 		det_lvl_3d = 1
 	endif
 	IF gs_detlevel_3D=`Детальный` THEN
+		DR_EPS = 0.01
 		det_lvl_2d = 2
 		det_lvl_3d = 2
 	endif
 	IF gs_detlevel_3D=`Откл` THEN
+		DR_EPS = 0.1
 		det_lvl_2d = 2
 		det_lvl_3d = 0
 	endif
@@ -143,4 +250,29 @@ end
 		if show = 1 and show_el < EPS then show = 0
 		if show = 1 and show_op < EPS then show = 0
 	endif
+	show_rifl_2d = "Нет" : fillinx = 0
+	if type_rifl <> RIFL_NONE then
+		success = LIBRARYGLOBAL ("Libraryflobals-km", "show_rifl_2d", show_rifl_2d)
+		matinx = 0 : gs_mat_fill_ind = 0 : gs_mat_fillcolor_ind = 0
+		if show_rifl_2d<>"Нет" and matname <> "" then matinx = ind(material, matname)
+		if matinx > 0 then
+			n = REQUEST{2} ("Material_info", matinx, "gs_mat_fill_ind", gs_mat_fill_ind)
+			n = REQUEST{2} ("Material_info", matinx, "gs_mat_fillcolor_ind", gs_mat_fillcolor_ind)
+			if show_rifl_2d = "Штриховка" and gs_mat_fill_ind>0 then
+				gs_fill_type = gs_mat_fill_ind
+				gs_fill_pen = gs_mat_fillcolor_ind
+			endif
+		endif
+	endif
+return
+
+"make_rot":
+!!Умножение на матрицу поворота
+	for inx=1 to 3
+		_t[inx] = 0
+		for k=1 to 3
+			_t[inx] = _t[inx] + _arr[k] * rot_arr[k][inx]
+		next k
+	next inx
+	_arr = _t
 return

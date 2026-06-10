@@ -24,6 +24,12 @@ i=i+1 : icalltype_weld[i]=3 : tcalltype_weld[i] = "Ручной угловой"
 i=i+1 : icalltype_weld[i]=4 : tcalltype_weld[i] = "Ручной стыковой"
 
 
+dim tgeom_type[]
+dim igeom_type[] : i=0
+i=i+1 : igeom_type[i]=0 : tgeom_type[i] = "По прямой"
+i=i+1 : igeom_type[i]=2000 : tgeom_type[i] = "Дуга по началу, углу и радиусу"
+i=i+1 : igeom_type[i]=4000 : tgeom_type[i] = "Дуга по центру углу и радиусу"
+
 if is_call then
 	if calltype_weld>EPS then
 		if calltype_weld=1 then
@@ -53,30 +59,42 @@ if is_call then
 	dy = pos_weld[ie][iy] - pos_weld[is][iy]
 	l_pos_weld_2d = SQR(dx*dx+dy*dy)
 else
-	!-- Перешли в сферичискую систему координат ---
-	if GLOB_MODPAR_NAME="pos_weld" or GLOB_MODPAR_NAME = ""  then
+	if geom_type = 0 then
+		!-- Перешли в сферичискую систему координат ---
+		if GLOB_MODPAR_NAME="pos_weld" or GLOB_MODPAR_NAME = ""  then
+			dx = pos_weld[ie][ix] - pos_weld[is][ix]
+			dy = pos_weld[ie][iy] - pos_weld[is][iy]
+			dz = pos_weld[ie][iz] - pos_weld[is][iz]
+			gosub "xytorphi"
+			parameters l_pos_weld = r, ang_pl = phi, ang = etta
+			dx = pos_weld[ie][ix] - pos_weld[is][ix]
+			dy = pos_weld[ie][iy] - pos_weld[is][iy]
+			l_axis_2d = SQR(dx*dx+dy*dy)
+			parameters l_pos_weld_2d=l_axis_2d
+		else
+			!-- Перешли в радиальную систему координат ---
+			if GLOB_MODPAR_NAME="l_pos_weld" or GLOB_MODPAR_NAME="ang_pl" or GLOB_MODPAR_NAME="ang" then
+				r = l_pos_weld : phi = ang_pl : etta = ang
+				gosub "rphitoxy"
+				pos_weld[ie][ix] = pos_weld[is][ix] + x
+				pos_weld[ie][iy] = pos_weld[is][iy] + y
+				pos_weld[ie][iz] = pos_weld[is][iz] + z
+				parameters pos_weld = pos_weld
+			endif
+		endif
+	else
 		dx = pos_weld[ie][ix] - pos_weld[is][ix]
 		dy = pos_weld[ie][iy] - pos_weld[is][iy]
 		dz = pos_weld[ie][iz] - pos_weld[is][iz]
 		gosub "xytorphi"
-		parameters l_pos_weld = r, ang_pl = phi, ang = etta
+		l_pos_weld = r : ang_pl = phi : ang = etta
 		dx = pos_weld[ie][ix] - pos_weld[is][ix]
 		dy = pos_weld[ie][iy] - pos_weld[is][iy]
-		l_axis_2d = SQR(dx*dx+dy*dy)
-		parameters l_pos_weld_2d=l_axis_2d
-	else
-		!-- Перешли в радиальную систему координат ---
-		if GLOB_MODPAR_NAME="l_pos_weld" or GLOB_MODPAR_NAME="ang_pl" or GLOB_MODPAR_NAME="ang" then
-			r = l_pos_weld : phi = ang_pl : etta = ang
-			gosub "rphitoxy"
-			pos_weld[ie][ix] = pos_weld[is][ix] + x
-			pos_weld[ie][iy] = pos_weld[is][iy] + y
-			pos_weld[ie][iz] = pos_weld[is][iz] + z
-			parameters pos_weld = pos_weld
-		endif
+		l_pos_weld_2d = SQR(dx*dx+dy*dy)
 	endif
 endif
-
+if geom_type = 2000 then gosub "calc_2000"
+if geom_type = 4000 then gosub "calc_4000"
 goto 323
 "xytorphi":
 	r = SQR(dx*dx+dy*dy+dz*dz)
@@ -94,4 +112,52 @@ return
 	y = r * sin(etta) * sin(phi)
 	z = r * cos(etta)
 return
+
+"calc_4000":
+	
+	dx = x_arc - pos_weld[is][ix]
+	dy = y_arc - pos_weld[is][iy]
+	dz = z_arc - pos_weld[is][iz]
+	r_arc = SQR(dx*dx+dy*dy+dz*dz)
+	dim coord_arr[1][3]
+	dim coord_arr_out[1][3]
+	coord_arr[1][1]=x_arc: coord_arr[1][2]=y_arc : coord_arr[1][3]=z_arc
+	call "macro_rotate" parameters coord_arr = coord_arr,ang = ang_pl, axis = 3, bDict=0, RETURNED_PARAMETERS coord_arr_out
+	call "macro_rotate" parameters coord_arr = coord_arr_out,ang = ang, axis = 2, bDict=0, RETURNED_PARAMETERS coord_arr_out
+	_x_arc=coord_arr_out[1][1] : _y_arc=coord_arr_out[1][2] : _z_arc=coord_arr_out[1][3]
+return
+
+"calc_2000":
+	dx =  pos_weld[is][ix] - x_arc
+	dy =  pos_weld[is][iy] - y_arc
+	theta_tangent = 0
+	IF dx > EPS THEN theta_tangent = atn(dy / dx)
+	IF dx < EPS and abs(dx) > EPS THEN
+		IF dy>EPS THEN
+			theta_tangent = atn(dy / dx) + 180
+		ELSE
+			theta_tangent = atn(dy / dx) - 180
+		ENDIF
+	ENDIF
+	IF abs(dx) < EPS THEN
+		IF dy > EPS THEN
+			theta_tangent = 90
+		ELSE
+			IF dy < EPS and abs(dy) > EPS THEN
+				theta_tangent = -90
+			ELSE
+				theta_tangent = 0
+			ENDIF
+		ENDIF
+	ENDIF
+	arc_x_c = -r_arc * sin(theta_tangent)*sgn(ang_arc)
+	arc_y_c = r_arc * cos(theta_tangent)*sgn(ang_arc)
+	dim coord_arr[1][3]
+	dim coord_arr_out[1][3]
+	coord_arr[1][1]=arc_x_c : coord_arr[1][2]=arc_y_c : coord_arr[1][3]=0
+	call "macro_rotate" parameters coord_arr = coord_arr,ang = ang_pl, axis = 3, bDict=0, RETURNED_PARAMETERS coord_arr_out
+	call "macro_rotate" parameters coord_arr = coord_arr_out,ang = ang, axis = 2, bDict=0, RETURNED_PARAMETERS coord_arr_out
+	arc_x_c=coord_arr_out[1][1] : arc_y_c=coord_arr_out[1][2] : arc_z_c=coord_arr_out[1][3]
+return
+
 323:
